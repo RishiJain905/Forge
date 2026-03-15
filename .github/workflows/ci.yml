@@ -2,14 +2,6 @@ name: CI
 
 on:
   pull_request:
-  push:
-    branches:
-      - main
-      - develop
-      - "feature/**"
-      - "feat/**"
-      - "fix/**"
-      - "batch/**"
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
