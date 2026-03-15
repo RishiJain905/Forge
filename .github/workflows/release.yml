@@ -1,0 +1,14 @@
+name: Release (Manual Only - Disabled for Now)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  release:
+    name: Disabled Release Job
+    runs-on: ubuntu-latest
+    steps:
+      - name: Release is intentionally disabled
+        run: |
+          echo "Release workflow is currently manual-only and intentionally disabled for normal development."
+          echo "Enable tag-based publishing later when Forge is installable, versioned, and stable."
