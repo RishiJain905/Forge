@@ -3,4 +3,5 @@ dist/
 dist-tests/
 .forge/
 coverage/
+.worktrees/
 .DS_Store

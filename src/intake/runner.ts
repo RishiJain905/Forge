@@ -3,14 +3,24 @@ import { mkdir, writeFile } from "node:fs/promises";
 
 import { FORGE_INTAKE_COMMAND, STEP1_BOUNDARY_POLICY } from "./constants.js";
 import { createIntakeArtifact } from "./artifact.js";
+import { resolveCandidateTargets } from "./candidate-targets.js";
 import { PersistenceError } from "./errors.js";
+import { resolveTaskSource } from "./input.js";
 import { resolveOutputPaths, resolveRepoRoot } from "./path-policy.js";
+import { scanRepoContext } from "./repo-context.js";
 import { createIntakeReport } from "./report.js";
+import { evaluateSuccessModel } from "./success.js";
+import { createEmptyTaskSpec, normalizeTaskSpec } from "./task-spec.js";
 import type {
+  CandidateTarget,
   IntakeCommandOptions,
   IntakeCommandResult,
   IntakeExecutionContext,
   IntakeFailureDetails,
+  IntakeTaskSpec,
+  NextStepReadiness,
+  RepoContext,
+  ResolvedTaskSource,
 } from "./types.js";
 
 async function ensureParentDirectory(filePath: string): Promise<void> {
@@ -58,6 +68,11 @@ function createFailureDetails(
 
 async function persistResult(
   context: IntakeExecutionContext,
+  taskSpec: IntakeTaskSpec,
+  repoContext: RepoContext,
+  candidateTargets: CandidateTarget[],
+  ambiguities: string[],
+  nextStepReadiness: NextStepReadiness,
   failure: IntakeFailureDetails | null,
   warnings: string[],
 ): Promise<IntakeCommandResult> {
@@ -65,6 +80,11 @@ async function persistResult(
   const artifact = createIntakeArtifact({
     context,
     finishedAt,
+    taskSpec,
+    repoContext,
+    candidateTargets,
+    ambiguities,
+    nextStepReadiness,
     warnings,
     failure,
   });
@@ -89,6 +109,7 @@ async function persistResult(
     reportPath: context.paths.reportPath,
     outputRoot: context.paths.outputRoot,
     summary: artifact.summary,
+    nextStepReadiness: artifact.nextStepReadiness,
     failure,
   };
 }
@@ -117,12 +138,13 @@ export async function runIntakeCommand(
       outputRoot: null,
       summary:
         "Forge intake could not resolve a safe repo root, so no artifact was persisted.",
+      nextStepReadiness: null,
       failure,
     };
   }
 
   const context = await createContext(repoRoot, options);
-  const warnings: string[] = [];
+  let taskSource: ResolvedTaskSource | null = null;
   let failure: IntakeFailureDetails | null = null;
 
   if (context.paths.usedFallbackRoot && context.paths.fallbackReason) {
@@ -133,8 +155,40 @@ export async function runIntakeCommand(
     );
   }
 
+  if (!failure) {
+    const taskSourceResult = await resolveTaskSource(options, currentWorkingDirectory);
+
+    if (taskSourceResult.failure) {
+      failure = createFailureDetails(
+        taskSourceResult.failure.code,
+        taskSourceResult.failure.message,
+      );
+    } else {
+      taskSource = taskSourceResult.taskSource;
+    }
+  }
+
+  const taskSpec = taskSource ? normalizeTaskSpec(taskSource) : createEmptyTaskSpec();
+  const repoContext = await scanRepoContext(repoRoot, context.paths.outputRoot);
+  const candidateTargets = resolveCandidateTargets(taskSource, repoContext);
+  const successEvaluation = evaluateSuccessModel({
+    taskSpec,
+    repoContext,
+    candidateTargets,
+    failure,
+  });
+
   try {
-    return await persistResult(context, failure, warnings);
+    return await persistResult(
+      context,
+      taskSpec,
+      repoContext,
+      candidateTargets,
+      successEvaluation.ambiguities,
+      successEvaluation.nextStepReadiness,
+      failure,
+      successEvaluation.warnings,
+    );
   } catch (error) {
     const persistenceFailure = createFailureDetails(
       error instanceof Error && "code" in error
@@ -153,6 +207,7 @@ export async function runIntakeCommand(
         outputRoot: context.paths.outputRoot,
         summary:
           "Forge intake failed while persisting its fallback output. No durable artifact could be written.",
+        nextStepReadiness: successEvaluation.nextStepReadiness,
         failure: persistenceFailure,
       };
     }
@@ -175,7 +230,16 @@ export async function runIntakeCommand(
     );
 
     try {
-      return await persistResult(fallbackContext, fallbackFailure, warnings);
+      return await persistResult(
+        fallbackContext,
+        taskSpec,
+        repoContext,
+        candidateTargets,
+        successEvaluation.ambiguities,
+        successEvaluation.nextStepReadiness,
+        fallbackFailure,
+        successEvaluation.warnings,
+      );
     } catch {
       return {
         status: "failed",
@@ -185,6 +249,7 @@ export async function runIntakeCommand(
         outputRoot: fallbackContext.paths.outputRoot,
         summary:
           "Forge intake failed while persisting both the configured output root and the default .forge fallback.",
+        nextStepReadiness: successEvaluation.nextStepReadiness,
         failure: fallbackFailure,
       };
     }
