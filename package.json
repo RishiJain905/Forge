@@ -1,0 +1,29 @@
+{
+  "name": "forge-cli",
+  "version": "0.1.0",
+  "description": "Reliability-first CLI for agentic software development.",
+  "type": "module",
+  "bin": {
+    "forge": "./dist/src/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && tsc -p tsconfig.test.json && node dist-tests/tests/intake.boundary.test.js",
+    "smoke": "node ./scripts/smoke.mjs"
+  },
+  "dependencies": {
+    "commander": "^14.0.1",
+    "zod": "^4.1.5"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "typescript": "^5.9.2"
+  }
+}

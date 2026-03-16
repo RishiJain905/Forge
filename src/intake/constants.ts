@@ -1,0 +1,35 @@
+export const FORGE_INTAKE_COMMAND = "intake" as const;
+export const FORGE_STEP_STAGE = "step1" as const;
+export const FORGE_SCHEMA_VERSION = "1.0.0" as const;
+export const DEFAULT_OUTPUT_DIRECTORY = ".forge" as const;
+export const REPORTS_DIRECTORY = "reports" as const;
+export const INTAKE_ARTIFACT_NAME = "intake.json" as const;
+export const INTAKE_REPORT_NAME = "intake-report.md" as const;
+
+export const STEP1_BOUNDARY_POLICY = {
+  command: FORGE_INTAKE_COMMAND,
+  stage: FORGE_STEP_STAGE,
+  purpose:
+    "Define forge intake as a read-only foundation stage that emits durable artifacts without editing source files.",
+  allowedSideEffects: [
+    "create output directories under the configured output root",
+    "write the intake artifact",
+    "write the intake report",
+  ],
+  deferredCapabilities: [
+    "forge plan",
+    "forge verify",
+    "forge split",
+    "forge execute",
+    "forge integrate",
+  ],
+  repoReadOnlyOutsideOutputRoot: true,
+  disallowedCapabilities: [
+    "create plan items",
+    "create execution packets",
+    "modify application source files",
+    "run implementation tasks",
+  ],
+} as const;
+
+export type Step1BoundaryPolicy = typeof STEP1_BOUNDARY_POLICY;
