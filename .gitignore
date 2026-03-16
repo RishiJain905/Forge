@@ -1,0 +1,6 @@
+node_modules/
+dist/
+dist-tests/
+.forge/
+coverage/
+.DS_Store
