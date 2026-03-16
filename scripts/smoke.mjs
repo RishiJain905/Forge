@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL, fileURLToPath } from "node:url";
@@ -15,12 +15,26 @@ async function main() {
 
   try {
     await writeFile(join(tempRepo, "README.md"), "# smoke repo\n", "utf8");
+    await mkdir(join(tempRepo, "src"), { recursive: true });
+    await mkdir(join(tempRepo, "tests"), { recursive: true });
+    await writeFile(join(tempRepo, "src", "app.ts"), "export const smoke = true;\n", "utf8");
+    await writeFile(
+      join(tempRepo, "tests", "app.test.ts"),
+      "import assert from 'node:assert/strict';\n\nassert.equal(1, 1);\n",
+      "utf8",
+    );
 
     const originalCwd = process.cwd();
     process.chdir(tempRepo);
 
     try {
-      const exitCode = await cliModule.runCli(["intake", "--repo", tempRepo]);
+      const exitCode = await cliModule.runCli([
+        "intake",
+        "--repo",
+        tempRepo,
+        "--prompt",
+        "Update src/app.ts and tests/app.test.ts for intake readiness.",
+      ]);
       assert.equal(exitCode, 0);
     } finally {
       process.chdir(originalCwd);
@@ -31,9 +45,11 @@ async function main() {
     const artifact = JSON.parse(await readFile(artifactPath, "utf8"));
     const report = await readFile(reportPath, "utf8");
 
-    assert.equal(artifact.status, "success");
+    assert.equal(artifact.status, "warning");
     assert.equal(artifact.outputRoot, resolve(tempRepo, ".forge"));
+    assert.equal(artifact.nextStepReadiness.ready, true);
     assert.match(report, /Forge Intake Report/);
+    assert.match(report, /Next Step Readiness/);
   } finally {
     await rm(tempRepo, { recursive: true, force: true });
   }

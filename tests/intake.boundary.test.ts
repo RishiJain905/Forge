@@ -43,9 +43,13 @@ await runScenario(
   "forge intake creates default .forge outputs and records boundary metadata",
   async () => {
     const repoRoot = await createTempRepo();
+    const prompt = "Inspect src/app.ts and tests/app.test.ts for the intake boundary.";
 
     try {
-      const result = await runForgeCli(["intake", "--repo", repoRoot], repoRoot);
+      const result = await runForgeCli(
+        ["intake", "--repo", repoRoot, "--prompt", prompt],
+        repoRoot,
+      );
 
       assert.equal(result.code, 0, result.stderr);
 
@@ -60,7 +64,7 @@ await runScenario(
 
       assert.equal(artifact.command, "forge intake");
       assert.equal(artifact.stage, "step1");
-      assert.equal(artifact.status, "success");
+      assert.equal(artifact.status, "warning");
       assert.match(artifact.purpose, /foundation|boundary|intake/i);
       assert.equal(artifact.outputRoot, resolve(repoRoot, ".forge"));
       assert.equal(artifact.writePolicy.repoReadOnlyOutsideOutputRoot, true);
@@ -74,10 +78,11 @@ await runScenario(
 await runScenario("forge intake honors a repo-internal custom output root", async () => {
   const repoRoot = await createTempRepo();
   const customOutputDir = ".forge-custom";
+  const prompt = "Inspect src/app.ts and tests/app.test.ts for the intake boundary.";
 
   try {
     const result = await runForgeCli(
-      ["intake", "--repo", repoRoot, "--output-dir", customOutputDir],
+      ["intake", "--repo", repoRoot, "--output-dir", customOutputDir, "--prompt", prompt],
       repoRoot,
     );
 
@@ -92,7 +97,7 @@ await runScenario("forge intake honors a repo-internal custom output root", asyn
 
     const artifact = await readJsonFile<IntakeArtifact>(customArtifactPath);
 
-    assert.equal(artifact.status, "success");
+    assert.equal(artifact.status, "warning");
     assert.equal(artifact.outputRoot, resolve(repoRoot, customOutputDir));
     assert.ok(
       artifact.requestedOutputRoot === customOutputDir ||
@@ -110,10 +115,19 @@ await runScenario(
     const repoRoot = await createTempRepo();
     const escapedOutputDir = ["..", "outside-root"].join(sep);
     const escapedArtifactPath = resolve(repoRoot, escapedOutputDir, "intake.json");
+    const prompt = "Inspect src/app.ts and tests/app.test.ts for the intake boundary.";
 
     try {
       const result = await runForgeCli(
-        ["intake", "--repo", repoRoot, "--output-dir", escapedOutputDir],
+        [
+          "intake",
+          "--repo",
+          repoRoot,
+          "--output-dir",
+          escapedOutputDir,
+          "--prompt",
+          prompt,
+        ],
         repoRoot,
       );
 
@@ -142,10 +156,11 @@ await runScenario(
   async () => {
     const repoRoot = await createTempRepo();
     const externalRoot = await createTempRepo("forge-external-");
+    const prompt = "Inspect src/app.ts and tests/app.test.ts for the intake boundary.";
 
     try {
       const result = await runForgeCli(
-        ["intake", "--repo", repoRoot, "--output-dir", externalRoot],
+        ["intake", "--repo", repoRoot, "--output-dir", externalRoot, "--prompt", prompt],
         repoRoot,
       );
 
@@ -175,12 +190,13 @@ await runScenario(
     const externalRoot = await createTempRepo("forge-external-");
     const symlinkName = ".forge-link";
     const symlinkPath = join(repoRoot, symlinkName);
+    const prompt = "Inspect src/app.ts and tests/app.test.ts for the intake boundary.";
 
     try {
       await symlink(externalRoot, symlinkPath, "junction");
 
       const result = await runForgeCli(
-        ["intake", "--repo", repoRoot, "--output-dir", symlinkName],
+        ["intake", "--repo", repoRoot, "--output-dir", symlinkName, "--prompt", prompt],
         repoRoot,
       );
 
@@ -209,12 +225,21 @@ await runScenario(
   async () => {
     const repoRoot = await createTempRepo();
     const blockedOutputPath = join(repoRoot, "blocked-output");
+    const prompt = "Inspect src/app.ts and tests/app.test.ts for the intake boundary.";
 
     try {
       await writeFile(blockedOutputPath, "not a directory", "utf8");
 
       const result = await runForgeCli(
-        ["intake", "--repo", repoRoot, "--output-dir", "blocked-output"],
+        [
+          "intake",
+          "--repo",
+          repoRoot,
+          "--output-dir",
+          "blocked-output",
+          "--prompt",
+          prompt,
+        ],
         repoRoot,
       );
 
