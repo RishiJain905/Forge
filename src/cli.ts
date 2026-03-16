@@ -20,7 +20,14 @@ export async function runCli(argv: string[]): Promise<number> {
       "--output-dir <path>",
       "Custom repo-internal output directory. Defaults to .forge.",
     )
-    .action(async (options: { repo?: string; outputDir?: string }) => {
+    .option("--spec <path>", "Read the task input from a markdown spec file.")
+    .option("--prompt <text>", "Read the task input from an inline prompt.")
+    .action(async (options: {
+      repo?: string;
+      outputDir?: string;
+      spec?: string;
+      prompt?: string;
+    }) => {
       const result = await runIntakeCommand(options);
 
       const lines = [

@@ -8,6 +8,28 @@ function renderList(items: string[]): string {
   return items.map((item) => `- ${item}`).join("\n");
 }
 
+function renderCandidateTargets(
+  items: IntakeArtifact["candidateTargets"],
+): string {
+  if (items.length === 0) {
+    return "- none";
+  }
+
+  return items
+    .map((item) => `- \`${item.path}\` (${item.kind}, ${item.matchType}) - ${item.reason}`)
+    .join("\n");
+}
+
+function renderBlockingIssues(
+  items: IntakeArtifact["nextStepReadiness"]["blockingIssues"],
+): string {
+  if (items.length === 0) {
+    return "- none";
+  }
+
+  return items.map((item) => `- \`${item.code}\`: ${item.message}`).join("\n");
+}
+
 export function createIntakeReport(artifact: IntakeArtifact): string {
   const failureSection = artifact.failure
     ? [
@@ -37,6 +59,41 @@ export function createIntakeReport(artifact: IntakeArtifact): string {
     "## Purpose",
     "",
     artifact.purpose,
+    "",
+    "## Task Spec",
+    "",
+    `- Input mode: \`${artifact.inputMode ?? "none"}\``,
+    `- Goal: ${artifact.taskSpec.goal || "none"}`,
+    `- Acceptance criteria present: \`${artifact.taskSpec.hasAcceptanceCriteria}\``,
+    "",
+    renderList(artifact.taskSpec.acceptanceCriteria),
+    "",
+    "## Repo Context",
+    "",
+    `- Grounded: \`${artifact.repoContext.grounded}\``,
+    `- Source files found: ${artifact.repoContext.sourceFiles.length}`,
+    `- Test files found: ${artifact.repoContext.testFiles.length}`,
+    `- Manifest files found: ${artifact.repoContext.manifestFiles.length}`,
+    "",
+    "## Candidate Targets",
+    "",
+    renderCandidateTargets(artifact.candidateTargets),
+    "",
+    "## Ambiguities",
+    "",
+    renderList(artifact.ambiguities),
+    "",
+    "## Next Step Readiness",
+    "",
+    `- Ready for \`forge plan\`: \`${artifact.nextStepReadiness.ready}\``,
+    "",
+    "### Blocking Issues",
+    "",
+    renderBlockingIssues(artifact.nextStepReadiness.blockingIssues),
+    "",
+    "### Recommended User Actions",
+    "",
+    renderList(artifact.nextStepReadiness.recommendedUserActions),
     "",
     "## Boundary Notes",
     "",

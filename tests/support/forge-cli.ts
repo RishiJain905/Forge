@@ -1,7 +1,7 @@
-import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import { runIntakeCommand } from "../../src/intake/runner.js";
 
@@ -14,6 +14,16 @@ export interface ForgeRunResult {
 export async function createTempRepo(prefix = "forge-intake-"): Promise<string> {
   const repoRoot = await mkdtemp(join(tmpdir(), prefix));
   await writeFile(join(repoRoot, "README.md"), "# fixture repo\n", "utf8");
+  await writeRepoFile(
+    repoRoot,
+    "src/app.ts",
+    "export function runApp() {\n  return 'ok';\n}\n",
+  );
+  await writeRepoFile(
+    repoRoot,
+    "tests/app.test.ts",
+    "import assert from 'node:assert/strict';\n\nassert.equal(1, 1);\n",
+  );
   return repoRoot;
 }
 
@@ -55,8 +65,18 @@ export async function runForgeCli(args: string[], cwd: string): Promise<ForgeRun
   };
 }
 
-function parseIntakeArgs(args: string[]): { repo?: string; outputDir?: string } {
-  const options: { repo?: string; outputDir?: string } = {};
+export async function writeRepoFile(
+  repoRoot: string,
+  relativePath: string,
+  contents: string,
+): Promise<void> {
+  const filePath = join(repoRoot, relativePath);
+  await mkdir(dirname(filePath), { recursive: true });
+  await writeFile(filePath, contents, "utf8");
+}
+
+function parseIntakeArgs(args: string[]): Record<string, string | undefined> {
+  const options: Record<string, string | undefined> = {};
 
   for (let index = 0; index < args.length; index += 1) {
     const current = args[index];
@@ -78,6 +98,26 @@ function parseIntakeArgs(args: string[]): { repo?: string; outputDir?: string } 
       }
 
       options.outputDir = next;
+      index += 1;
+      continue;
+    }
+
+    if (current === "--spec") {
+      if (!next) {
+        throw new Error("Missing value for --spec");
+      }
+
+      options.spec = next;
+      index += 1;
+      continue;
+    }
+
+    if (current === "--prompt") {
+      if (!next) {
+        throw new Error("Missing value for --prompt");
+      }
+
+      options.prompt = next;
       index += 1;
       continue;
     }
