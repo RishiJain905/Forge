@@ -5,7 +5,7 @@ import { FORGE_INTAKE_COMMAND, STEP1_BOUNDARY_POLICY } from "./constants.js";
 import { createIntakeArtifact } from "./artifact.js";
 import { resolveCandidateTargets } from "./candidate-targets.js";
 import { PersistenceError } from "./errors.js";
-import { resolveTaskSource } from "./input.js";
+import { resolveTaskSource, toArtifactSourceInputs } from "./input.js";
 import { resolveOutputPaths, resolveRepoRoot } from "./path-policy.js";
 import { scanRepoContext } from "./repo-context.js";
 import { createIntakeReport } from "./report.js";
@@ -19,8 +19,8 @@ import type {
   IntakeFailureDetails,
   IntakeTaskSpec,
   NextStepReadiness,
+  NormalizedTaskInput,
   RepoContext,
-  ResolvedTaskSource,
 } from "./types.js";
 
 async function ensureParentDirectory(filePath: string): Promise<void> {
@@ -68,6 +68,7 @@ function createFailureDetails(
 
 async function persistResult(
   context: IntakeExecutionContext,
+  taskInput: NormalizedTaskInput | null,
   taskSpec: IntakeTaskSpec,
   repoContext: RepoContext,
   candidateTargets: CandidateTarget[],
@@ -80,6 +81,7 @@ async function persistResult(
   const artifact = createIntakeArtifact({
     context,
     finishedAt,
+    sourceInputs: taskInput ? toArtifactSourceInputs(taskInput) : null,
     taskSpec,
     repoContext,
     candidateTargets,
@@ -144,7 +146,7 @@ export async function runIntakeCommand(
   }
 
   const context = await createContext(repoRoot, options);
-  let taskSource: ResolvedTaskSource | null = null;
+  let taskInput: NormalizedTaskInput | null = null;
   let failure: IntakeFailureDetails | null = null;
 
   if (context.paths.usedFallbackRoot && context.paths.fallbackReason) {
@@ -164,23 +166,26 @@ export async function runIntakeCommand(
         taskSourceResult.failure.message,
       );
     } else {
-      taskSource = taskSourceResult.taskSource;
+      taskInput = taskSourceResult.taskInput;
     }
   }
 
-  const taskSpec = taskSource ? normalizeTaskSpec(taskSource) : createEmptyTaskSpec();
+  const taskSpec = taskInput ? normalizeTaskSpec(taskInput) : createEmptyTaskSpec();
   const repoContext = await scanRepoContext(repoRoot, context.paths.outputRoot);
-  const candidateTargets = resolveCandidateTargets(taskSource, repoContext);
+  const candidateTargets = resolveCandidateTargets(taskInput, repoContext);
   const successEvaluation = evaluateSuccessModel({
     taskSpec,
     repoContext,
     candidateTargets,
     failure,
+    inputAmbiguities: taskInput?.ambiguities,
+    inputRecommendedUserActions: taskInput?.recommendedUserActions,
   });
 
   try {
     return await persistResult(
       context,
+      taskInput,
       taskSpec,
       repoContext,
       candidateTargets,
@@ -232,6 +237,7 @@ export async function runIntakeCommand(
     try {
       return await persistResult(
         fallbackContext,
+        taskInput,
         taskSpec,
         repoContext,
         candidateTargets,

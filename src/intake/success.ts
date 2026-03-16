@@ -29,10 +29,12 @@ export function evaluateSuccessModel(params: {
   repoContext: RepoContext;
   candidateTargets: CandidateTarget[];
   failure: IntakeFailureDetails | null;
+  inputAmbiguities?: string[];
+  inputRecommendedUserActions?: string[];
 }): SuccessEvaluation {
   const warnings: string[] = [];
-  const ambiguities: string[] = [];
-  const recommendedUserActions: string[] = [];
+  const ambiguities = [...(params.inputAmbiguities ?? [])];
+  const recommendedUserActions = [...(params.inputRecommendedUserActions ?? [])];
   const blockingIssues: BlockingIssue[] = [];
 
   if (params.failure) {

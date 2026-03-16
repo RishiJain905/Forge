@@ -10,16 +10,32 @@ export interface IntakeCommandOptions {
   prompt?: string;
 }
 
-export interface ResolvedTaskSource {
+export interface ArtifactSourceInputs {
+  input_mode: IntakeInputMode | null;
+  primary_input: {
+    path: string | null;
+    raw_text: string;
+  };
+  normalized_task_text: string;
+  notes: string[];
+  constraints: string[];
+}
+
+export interface NormalizedTaskInput {
   inputMode: IntakeInputMode;
-  specPath: string | null;
-  prompt: string | null;
-  rawText: string;
+  primaryInput: {
+    path: string | null;
+    rawText: string;
+  };
+  normalizedTaskText: string;
+  parserInputText: string;
+  notes: string[];
+  constraints: string[];
+  ambiguities: string[];
+  recommendedUserActions: string[];
 }
 
 export interface IntakeTaskSpec {
-  inputMode: IntakeInputMode | null;
-  specPath: string | null;
   goal: string;
   acceptanceCriteria: string[];
   hasAcceptanceCriteria: boolean;
@@ -81,7 +97,8 @@ export interface IntakeArtifact {
   command: string;
   stage: string;
   status: IntakeStatus;
-  inputMode: IntakeInputMode | null;
+  input_mode: IntakeInputMode | null;
+  source_inputs: ArtifactSourceInputs | null;
   purpose: string;
   repoRoot: string;
   requestedOutputRoot: string | null;

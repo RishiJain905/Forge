@@ -47,8 +47,15 @@ async function main() {
 
     assert.equal(artifact.status, "warning");
     assert.equal(artifact.outputRoot, resolve(tempRepo, ".forge"));
+    assert.equal(artifact.input_mode, "prompt");
+    assert.equal(artifact.source_inputs.input_mode, "prompt");
+    assert.equal(
+      artifact.source_inputs.normalized_task_text,
+      "Update src/app.ts and tests/app.test.ts for intake readiness.",
+    );
     assert.equal(artifact.nextStepReadiness.ready, true);
     assert.match(report, /Forge Intake Report/);
+    assert.match(report, /Source Inputs/);
     assert.match(report, /Next Step Readiness/);
   } finally {
     await rm(tempRepo, { recursive: true, force: true });
