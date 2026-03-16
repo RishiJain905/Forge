@@ -75,6 +75,10 @@ All implementation streams must follow a **strict TDD feedback loop when practic
 ## 4. Integration
 
 - Integrate all completed streams back into the user-specified target branch.
+- If work was implemented in temporary git worktrees, each completed worktree branch must be merged back into the branch it was created from before the task is considered complete, unless the user explicitly requests a PR-only workflow.
+- “Integration complete” means the target branch itself contains the final implementation, not just a separate worktree branch.
+- After merging, run fresh verification on the merged target branch, not only inside the worktree branch.
+- Do not leave completed implementation stranded in a worktree branch unless the user explicitly asks to keep it separate.
 - Do not blindly merge in branch creation order if cherry-picking or curated conflict resolution is safer.
 - Resolve conflicts centrally and verify that no stream's intended behavior is lost.
 - Preserve all approved functionality from every stream during integration.
@@ -119,13 +123,15 @@ Do not claim completion without **fresh passing test results on the integrated b
 
 ## 6. Cleanup
 
-- Remove completed temporary worktrees when finished.
+- Remove completed temporary worktrees only after their branches have been successfully merged or cherry-picked into the source/target branch and that merged branch has passed fresh verification.
 - Delete merged local source branches after integration.
 - Delete merged remote source branches when appropriate and safe.
+- If a worktree branch has not been merged back into its source branch, cleanup is not complete.
 - Summarize:
   - the final target branch state
+  - which worktree branches were merged back
+  - verification status on the merged branch
   - merged or cherry-picked branches
-  - verification status
   - any remaining cleanup blockers.
 
 ---
