@@ -1,5 +1,5 @@
 import path from "node:path";
-import { access, stat } from "node:fs/promises";
+import { access, realpath, stat } from "node:fs/promises";
 
 import {
   DEFAULT_OUTPUT_DIRECTORY,
@@ -21,6 +21,40 @@ function isPathWithinRoot(root: string, candidatePath: string): boolean {
   );
 }
 
+function hasErrorCode(error: unknown, code: string): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code: unknown }).code === code
+  );
+}
+
+async function resolveBoundaryPath(candidatePath: string): Promise<string> {
+  const pendingSegments: string[] = [];
+  let currentPath = path.resolve(candidatePath);
+
+  while (true) {
+    try {
+      const resolvedCurrentPath = await realpath(currentPath);
+      return path.resolve(resolvedCurrentPath, ...pendingSegments.reverse());
+    } catch (error) {
+      if (!hasErrorCode(error, "ENOENT")) {
+        throw error;
+      }
+
+      const parentPath = path.dirname(currentPath);
+
+      if (parentPath === currentPath) {
+        throw error;
+      }
+
+      pendingSegments.push(path.basename(currentPath));
+      currentPath = parentPath;
+    }
+  }
+}
+
 export async function resolveRepoRoot(
   currentWorkingDirectory: string,
   requestedRepoRoot?: string,
@@ -38,6 +72,8 @@ export async function resolveRepoRoot(
         `Could not resolve repo root: ${repoRoot}. The path must point to a directory.`,
       );
     }
+
+    return await realpath(repoRoot);
   } catch (error) {
     if (error instanceof RepoResolutionError) {
       throw error;
@@ -48,13 +84,12 @@ export async function resolveRepoRoot(
     );
   }
 
-  return repoRoot;
 }
 
-export function resolveOutputRoot(
+export async function resolveOutputRoot(
   repoRoot: string,
   requestedOutputDirectory?: string,
-): ResolvedOutputRoot {
+): Promise<ResolvedOutputRoot> {
   const defaultOutputRoot = path.resolve(repoRoot, DEFAULT_OUTPUT_DIRECTORY);
 
   if (!requestedOutputDirectory) {
@@ -70,19 +105,21 @@ export function resolveOutputRoot(
     ? path.normalize(requestedOutputDirectory)
     : path.resolve(repoRoot, requestedOutputDirectory);
 
-  if (!isPathWithinRoot(repoRoot, candidateRoot)) {
+  const resolvedCandidateRoot = await resolveBoundaryPath(candidateRoot);
+
+  if (!isPathWithinRoot(repoRoot, resolvedCandidateRoot)) {
     return {
       requestedOutputRoot: candidateRoot,
       outputRoot: defaultOutputRoot,
       usedFallbackRoot: true,
       fallbackReason:
-        "The requested output directory resolved outside the repo. Falling back to the default .forge output root.",
+        "The requested output directory resolved outside the repo boundary after following real filesystem paths. Falling back to the default .forge output root.",
     };
   }
 
   return {
     requestedOutputRoot: candidateRoot,
-    outputRoot: candidateRoot,
+    outputRoot: resolvedCandidateRoot,
     usedFallbackRoot: false,
     fallbackReason: null,
   };
@@ -103,11 +140,11 @@ export function resolveOutputFilePath(
   return resolvedPath;
 }
 
-export function resolveOutputPaths(
+export async function resolveOutputPaths(
   repoRoot: string,
   requestedOutputDirectory?: string,
-): ResolvedOutputPaths {
-  const outputRoot = resolveOutputRoot(repoRoot, requestedOutputDirectory);
+): Promise<ResolvedOutputPaths> {
+  const outputRoot = await resolveOutputRoot(repoRoot, requestedOutputDirectory);
 
   return {
     ...outputRoot,

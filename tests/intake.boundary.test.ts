@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { writeFile } from "node:fs/promises";
+import { symlink, writeFile } from "node:fs/promises";
 import { join, resolve, sep } from "node:path";
 
 import {
@@ -161,6 +161,42 @@ await runScenario(
 
       assert.equal(artifact.status, "failed");
       assert.match(artifact.failure?.message ?? result.stderr, /outside|escape|repo/i);
+    } finally {
+      await disposeTempRepo(repoRoot);
+      await disposeTempRepo(externalRoot);
+    }
+  },
+);
+
+await runScenario(
+  "forge intake rejects a repo-local symlinked output root that resolves outside the repo",
+  async () => {
+    const repoRoot = await createTempRepo();
+    const externalRoot = await createTempRepo("forge-external-");
+    const symlinkName = ".forge-link";
+    const symlinkPath = join(repoRoot, symlinkName);
+
+    try {
+      await symlink(externalRoot, symlinkPath, "junction");
+
+      const result = await runForgeCli(
+        ["intake", "--repo", repoRoot, "--output-dir", symlinkName],
+        repoRoot,
+      );
+
+      assert.notEqual(result.code, 0, "symlinked output root should fail");
+
+      const fallbackArtifactPath = join(repoRoot, ".forge", "intake.json");
+      const externalArtifactPath = join(externalRoot, "intake.json");
+
+      assert.equal(await fileExists(fallbackArtifactPath), true);
+      assert.equal(await fileExists(externalArtifactPath), false);
+
+      const artifact = await readJsonFile<IntakeArtifact>(fallbackArtifactPath);
+
+      assert.equal(artifact.status, "failed");
+      assert.match(artifact.failure?.message ?? result.stderr, /outside|repo|symlink/i);
+      assert.equal(artifact.outputRoot, resolve(repoRoot, ".forge"));
     } finally {
       await disposeTempRepo(repoRoot);
       await disposeTempRepo(externalRoot);

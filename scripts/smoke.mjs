@@ -6,7 +6,9 @@ import { pathToFileURL, fileURLToPath } from "node:url";
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(currentDirectory, "..");
-const cliModule = await import(pathToFileURL(resolve(repoRoot, "dist", "cli.js")).href);
+const cliModule = await import(
+  pathToFileURL(resolve(repoRoot, "dist", "src", "cli.js")).href,
+);
 
 async function main() {
   const tempRepo = await mkdtemp(join(tmpdir(), "forge-smoke-"));

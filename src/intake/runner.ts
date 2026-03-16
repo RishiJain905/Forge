@@ -31,16 +31,16 @@ async function persistArtifactAndReport(
   await persistOutputFile(context.paths.reportPath, reportContents);
 }
 
-function createContext(
+async function createContext(
   repoRoot: string,
   options: IntakeCommandOptions,
-): IntakeExecutionContext {
+): Promise<IntakeExecutionContext> {
   return {
     command: FORGE_INTAKE_COMMAND,
     repoRoot,
     startedAt: new Date().toISOString(),
     boundaryPolicy: STEP1_BOUNDARY_POLICY,
-    paths: resolveOutputPaths(repoRoot, options.outputDir),
+    paths: await resolveOutputPaths(repoRoot, options.outputDir),
   };
 }
 
@@ -121,7 +121,7 @@ export async function runIntakeCommand(
     };
   }
 
-  const context = createContext(repoRoot, options);
+  const context = await createContext(repoRoot, options);
   const warnings: string[] = [];
   let failure: IntakeFailureDetails | null = null;
 
@@ -160,7 +160,7 @@ export async function runIntakeCommand(
     const fallbackContext: IntakeExecutionContext = {
       ...context,
       paths: {
-        ...resolveOutputPaths(repoRoot),
+        ...(await resolveOutputPaths(repoRoot)),
         requestedOutputRoot: context.paths.requestedOutputRoot ?? context.paths.outputRoot,
         usedFallbackRoot: true,
         fallbackReason:
