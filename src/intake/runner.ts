@@ -5,12 +5,13 @@ import { FORGE_INTAKE_COMMAND, STEP1_BOUNDARY_POLICY } from "./constants.js";
 import { createIntakeArtifact } from "./artifact.js";
 import { resolveCandidateTargets } from "./candidate-targets.js";
 import { PersistenceError } from "./errors.js";
-import { resolveTaskSource } from "./input.js";
+import { resolveTaskSource, toArtifactSourceInputs } from "./input.js";
 import { resolveOutputPaths, resolveRepoRoot } from "./path-policy.js";
 import { scanRepoContext } from "./repo-context.js";
 import { createIntakeReport } from "./report.js";
 import { evaluateSuccessModel } from "./success.js";
 import { createEmptyTaskSpec, normalizeTaskSpec } from "./task-spec.js";
+import { validateIntakeInputs } from "./validation.js";
 import type {
   CandidateTarget,
   IntakeCommandOptions,
@@ -19,8 +20,8 @@ import type {
   IntakeFailureDetails,
   IntakeTaskSpec,
   NextStepReadiness,
+  NormalizedTaskInput,
   RepoContext,
-  ResolvedTaskSource,
 } from "./types.js";
 
 async function ensureParentDirectory(filePath: string): Promise<void> {
@@ -68,6 +69,7 @@ function createFailureDetails(
 
 async function persistResult(
   context: IntakeExecutionContext,
+  taskInput: NormalizedTaskInput | null,
   taskSpec: IntakeTaskSpec,
   repoContext: RepoContext,
   candidateTargets: CandidateTarget[],
@@ -80,6 +82,7 @@ async function persistResult(
   const artifact = createIntakeArtifact({
     context,
     finishedAt,
+    sourceInputs: taskInput ? toArtifactSourceInputs(taskInput) : null,
     taskSpec,
     repoContext,
     candidateTargets,
@@ -144,8 +147,11 @@ export async function runIntakeCommand(
   }
 
   const context = await createContext(repoRoot, options);
-  let taskSource: ResolvedTaskSource | null = null;
+  let taskInput: NormalizedTaskInput | null = null;
   let failure: IntakeFailureDetails | null = null;
+  let validationBlockingIssues: NextStepReadiness["blockingIssues"] = [];
+  let validationWarnings: string[] = [];
+  let validationRecommendedUserActions: string[] = [];
 
   if (context.paths.usedFallbackRoot && context.paths.fallbackReason) {
     failure = createFailureDetails(
@@ -156,31 +162,42 @@ export async function runIntakeCommand(
   }
 
   if (!failure) {
-    const taskSourceResult = await resolveTaskSource(options, currentWorkingDirectory);
+    const validationResult = await validateIntakeInputs(options, currentWorkingDirectory, repoRoot);
+    validationBlockingIssues = validationResult.blockingIssues;
+    validationWarnings = validationResult.warnings;
+    validationRecommendedUserActions = validationResult.recommendedUserActions;
 
-    if (taskSourceResult.failure) {
+    if (validationResult.blockingIssues.length > 0) {
       failure = createFailureDetails(
-        taskSourceResult.failure.code,
-        taskSourceResult.failure.message,
+        "INPUT_VALIDATION_FAILED",
+        "Forge intake found blocking input validation issues.",
       );
-    } else {
-      taskSource = taskSourceResult.taskSource;
+    } else if (validationResult.validatedInput) {
+      taskInput = resolveTaskSource(validationResult.validatedInput);
     }
   }
 
-  const taskSpec = taskSource ? normalizeTaskSpec(taskSource) : createEmptyTaskSpec();
+  const taskSpec = taskInput ? normalizeTaskSpec(taskInput) : createEmptyTaskSpec();
   const repoContext = await scanRepoContext(repoRoot, context.paths.outputRoot);
-  const candidateTargets = resolveCandidateTargets(taskSource, repoContext);
+  const candidateTargets = resolveCandidateTargets(taskInput, repoContext);
   const successEvaluation = evaluateSuccessModel({
     taskSpec,
     repoContext,
     candidateTargets,
     failure,
+    validationBlockingIssues,
+    inputWarnings: validationWarnings,
+    inputAmbiguities: taskInput?.ambiguities,
+    inputRecommendedUserActions:
+      taskInput
+        ? [...taskInput.recommendedUserActions, ...validationRecommendedUserActions]
+        : validationRecommendedUserActions,
   });
 
   try {
     return await persistResult(
       context,
+      taskInput,
       taskSpec,
       repoContext,
       candidateTargets,
@@ -232,6 +249,7 @@ export async function runIntakeCommand(
     try {
       return await persistResult(
         fallbackContext,
+        taskInput,
         taskSpec,
         repoContext,
         candidateTargets,

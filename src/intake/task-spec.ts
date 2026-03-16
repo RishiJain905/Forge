@@ -1,4 +1,4 @@
-import type { IntakeTaskSpec, ResolvedTaskSource } from "./types.js";
+import type { IntakeTaskSpec, NormalizedTaskInput } from "./types.js";
 
 const acceptanceCriteriaHeading = /^(?:#{1,6}\s*)?acceptance criteria\b:?/i;
 const markdownHeading = /^#{1,6}\s+/;
@@ -11,8 +11,6 @@ function normalizeListValue(value: string): string {
 
 export function createEmptyTaskSpec(): IntakeTaskSpec {
   return {
-    inputMode: null,
-    specPath: null,
     goal: "",
     acceptanceCriteria: [],
     hasAcceptanceCriteria: false,
@@ -86,23 +84,11 @@ function extractAcceptanceCriteria(lines: string[]): string[] {
   return collected.filter((value) => value.length > 0);
 }
 
-export function normalizeTaskSpec(taskSource: ResolvedTaskSource): IntakeTaskSpec {
-  const lines = taskSource.rawText.split(/\r?\n/);
+export function normalizeTaskSpec(taskInput: NormalizedTaskInput): IntakeTaskSpec {
+  const lines = taskInput.parserInputText.split(/\r?\n/);
   const acceptanceCriteria = extractAcceptanceCriteria(lines);
 
-  if (taskSource.inputMode === "prompt") {
-    return {
-      inputMode: "prompt",
-      specPath: null,
-      goal: extractSpecGoal(lines),
-      acceptanceCriteria,
-      hasAcceptanceCriteria: acceptanceCriteria.length > 0,
-    };
-  }
-
   return {
-    inputMode: "spec",
-    specPath: taskSource.specPath,
     goal: extractSpecGoal(lines),
     acceptanceCriteria,
     hasAcceptanceCriteria: acceptanceCriteria.length > 0,

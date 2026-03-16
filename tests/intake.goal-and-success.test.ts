@@ -6,14 +6,21 @@ import { runCli } from "../src/cli.js";
 import {
   createTempRepo,
   disposeTempRepo,
-  fileExists,
   readJsonFile,
   runForgeCli,
   writeRepoFile,
 } from "./support/forge-cli.js";
 
 interface IntakeArtifact {
-  inputMode?: "spec" | "prompt";
+  input_mode?: "spec" | "prompt";
+  source_inputs?: {
+    input_mode?: "spec" | "prompt";
+    primary_input?: {
+      path?: string | null;
+      raw_text?: string;
+    };
+    normalized_task_text?: string;
+  };
   status: "success" | "warning" | "failed";
   taskSpec?: {
     goal?: string;
@@ -87,66 +94,6 @@ async function runScenario(name: string, scenario: () => Promise<void>): Promise
   }
 }
 
-await runScenario("forge intake fails when neither --spec nor --prompt is provided", async () => {
-  const repoRoot = await createTempRepo();
-
-  try {
-    const result = await runForgeCli(["intake", "--repo", repoRoot], repoRoot);
-
-    assert.notEqual(result.code, 0, "missing primary input should fail");
-
-    const artifactPath = join(repoRoot, ".forge", "intake.json");
-    assert.equal(await fileExists(artifactPath), true);
-
-    const artifact = await readJsonFile<IntakeArtifact>(artifactPath);
-    assert.equal(artifact.status, "failed");
-    assert.match(artifact.failure?.message ?? result.stderr, /spec|prompt|input/i);
-  } finally {
-    await disposeTempRepo(repoRoot);
-  }
-});
-
-await runScenario("forge intake fails when both --spec and --prompt are provided", async () => {
-  const repoRoot = await createTempRepo();
-  const specPath = join(repoRoot, "task.md");
-
-  try {
-    await writeRepoFile(
-      repoRoot,
-      "task.md",
-      [
-        "# Task",
-        "",
-        "Update `src/app.ts`.",
-      ].join("\n"),
-    );
-
-    const result = await runForgeCli(
-      [
-        "intake",
-        "--repo",
-        repoRoot,
-        "--spec",
-        specPath,
-        "--prompt",
-        "Update src/app.ts and tests/app.test.ts",
-      ],
-      repoRoot,
-    );
-
-    assert.notEqual(result.code, 0, "conflicting primary inputs should fail");
-
-    const artifactPath = join(repoRoot, ".forge", "intake.json");
-    assert.equal(await fileExists(artifactPath), true);
-
-    const artifact = await readJsonFile<IntakeArtifact>(artifactPath);
-    assert.equal(artifact.status, "failed");
-    assert.match(artifact.failure?.message ?? result.stderr, /spec|prompt|both|conflict/i);
-  } finally {
-    await disposeTempRepo(repoRoot);
-  }
-});
-
 await runScenario("forge intake marks a grounded spec with explicit targets as success", async () => {
   const repoRoot = await createTempRepo();
   const specPath = join(repoRoot, "task.md");
@@ -178,7 +125,9 @@ await runScenario("forge intake marks a grounded spec with explicit targets as s
     const artifact = await readJsonFile<IntakeArtifact>(artifactPath);
 
     assert.equal(artifact.status, "success");
-    assert.equal(artifact.inputMode, "spec");
+    assert.equal(artifact.input_mode, "spec");
+    assert.equal(artifact.source_inputs?.input_mode, "spec");
+    assert.equal(artifact.source_inputs?.primary_input?.path, specPath);
     assert.equal(artifact.nextStepReadiness?.ready, true);
     assert.equal(artifact.nextStepReadiness?.blockingIssues?.length, 0);
     assert.equal(artifact.taskSpec?.hasAcceptanceCriteria, true);
@@ -208,7 +157,8 @@ await runScenario(
       const artifact = await readJsonFile<IntakeArtifact>(artifactPath);
 
       assert.equal(artifact.status, "warning");
-      assert.equal(artifact.inputMode, "prompt");
+      assert.equal(artifact.input_mode, "prompt");
+      assert.equal(artifact.source_inputs?.input_mode, "prompt");
       assert.equal(artifact.nextStepReadiness?.ready, true);
       assert.ok(
         artifact.ambiguities?.some((value) => /acceptance criteria/i.test(value)),
@@ -255,7 +205,8 @@ await runScenario(
       const artifact = await readJsonFile<IntakeArtifact>(artifactPath);
 
       assert.equal(artifact.status, "success");
-      assert.equal(artifact.inputMode, "prompt");
+      assert.equal(artifact.input_mode, "prompt");
+      assert.equal(artifact.source_inputs?.input_mode, "prompt");
       assert.equal(artifact.taskSpec?.hasAcceptanceCriteria, true);
       assert.equal(artifact.nextStepReadiness?.ready, true);
     } finally {

@@ -1,93 +1,153 @@
-import path from "node:path";
-import { readFile } from "node:fs/promises";
+import type { ArtifactSourceInputs, NormalizedTaskInput, ValidatedIntakeInputs } from "./types.js";
 
-import type { IntakeCommandOptions, ResolvedTaskSource } from "./types.js";
+const acceptanceCriteriaHeading = /^(?:#{1,6}\s*)?acceptance criteria\b:?/im;
+const explicitPathToken = /\b(?:[\w.-]+\/)+[\w.-]+\b/;
 
-interface TaskSourceResolutionFailure {
-  code: string;
-  message: string;
+function hasAcceptanceCriteriaSection(value: string): boolean {
+  return acceptanceCriteriaHeading.test(value);
 }
 
-export interface TaskSourceResolutionResult {
-  taskSource: ResolvedTaskSource | null;
-  failure: TaskSourceResolutionFailure | null;
+function hasExplicitPathToken(value: string): boolean {
+  return explicitPathToken.test(value);
 }
 
-export async function resolveTaskSource(
-  options: IntakeCommandOptions,
-  currentWorkingDirectory: string,
-): Promise<TaskSourceResolutionResult> {
-  const prompt = options.prompt?.trim();
-  const spec = options.spec?.trim();
+function isPromptTooShortToBeActionable(prompt: string): boolean {
+  const nonWhitespaceLength = prompt.replace(/\s+/g, "").length;
+  const wordCount = prompt.trim().split(/\s+/).filter(Boolean).length;
+  const hasStructuralSignal =
+    hasExplicitPathToken(prompt) || hasAcceptanceCriteriaSection(prompt);
 
-  if (!prompt && !spec) {
-    return {
-      taskSource: null,
-      failure: {
-        code: "INPUT_REQUIRED",
-        message: "Forge intake requires exactly one primary input: pass either --spec or --prompt.",
-      },
-    };
+  return (nonWhitespaceLength < 20 || wordCount < 4) && !hasStructuralSignal;
+}
+
+function createSyntheticPromptSpec(prompt: string): string {
+  return [
+    "# Task",
+    "",
+    prompt,
+  ].join("\n");
+}
+
+function appendSupplementalSection(text: string, heading: string, lines: string[]): string {
+  if (lines.length === 0) {
+    return text;
   }
 
-  if (prompt && spec) {
-    return {
-      taskSource: null,
-      failure: {
-        code: "INPUT_CONFLICT",
-        message: "Forge intake accepts either --spec or --prompt, but not both in the same run.",
-      },
-    };
+  return [
+    text,
+    "",
+    heading,
+    "",
+    ...lines,
+  ].join("\n");
+}
+
+function createNormalizedTaskInput(params: {
+  inputMode: "spec" | "prompt";
+  path: string | null;
+  rawText: string;
+  notes: string[];
+  constraints: string[];
+  configPath: string | null;
+  focusPaths: string[];
+  normalizedTaskText: string;
+  parserInputText: string;
+  ambiguities?: string[];
+  recommendedUserActions?: string[];
+}): NormalizedTaskInput {
+  return {
+    inputMode: params.inputMode,
+    primaryInput: {
+      path: params.path,
+      rawText: params.rawText,
+    },
+    normalizedTaskText: params.normalizedTaskText,
+    parserInputText: params.parserInputText,
+    notes: [...params.notes],
+    constraints: [...params.constraints],
+    configPath: params.configPath,
+    focusPaths: [...params.focusPaths],
+    ambiguities: params.ambiguities ?? [],
+    recommendedUserActions: params.recommendedUserActions ?? [],
+  };
+}
+
+function resolvePromptInput(input: ValidatedIntakeInputs): NormalizedTaskInput {
+  const ambiguities: string[] = [];
+  const recommendedUserActions = [...input.recommendedUserActions];
+  let normalizedTaskText = input.primaryInput.rawText;
+  let parserInputText = createSyntheticPromptSpec(input.primaryInput.rawText);
+
+  if (isPromptTooShortToBeActionable(input.primaryInput.rawText)) {
+    ambiguities.push(
+      "Prompt mode input is too short to be actionable without follow-up. Clarify the goal, relevant files, or acceptance criteria.",
+    );
+    recommendedUserActions.push(
+      "Expand the prompt with the intended files, behavior changes, or acceptance criteria before planning.",
+    );
   }
 
-  if (prompt) {
-    return {
-      taskSource: {
-        inputMode: "prompt",
-        specPath: null,
-        prompt,
-        rawText: prompt,
-      },
-      failure: null,
-    };
+  normalizedTaskText = appendSupplementalSection(normalizedTaskText, "## Notes", input.notes);
+  normalizedTaskText = appendSupplementalSection(normalizedTaskText, "## Constraints", input.constraints);
+  parserInputText = appendSupplementalSection(parserInputText, "## Notes", input.notes);
+  parserInputText = appendSupplementalSection(parserInputText, "## Constraints", input.constraints);
+
+  return createNormalizedTaskInput({
+    inputMode: "prompt",
+    path: null,
+    rawText: input.primaryInput.rawText,
+    notes: input.notes,
+    constraints: input.constraints,
+    configPath: input.configPath,
+    focusPaths: input.focusPaths,
+    normalizedTaskText,
+    parserInputText,
+    ambiguities,
+    recommendedUserActions,
+  });
+}
+
+function resolveSpecInput(input: ValidatedIntakeInputs): NormalizedTaskInput {
+  let normalizedTaskText = input.primaryInput.rawText;
+  let parserInputText = input.primaryInput.rawText;
+
+  normalizedTaskText = appendSupplementalSection(normalizedTaskText, "## Notes", input.notes);
+  normalizedTaskText = appendSupplementalSection(normalizedTaskText, "## Constraints", input.constraints);
+  parserInputText = appendSupplementalSection(parserInputText, "## Notes", input.notes);
+  parserInputText = appendSupplementalSection(parserInputText, "## Constraints", input.constraints);
+
+  return createNormalizedTaskInput({
+    inputMode: "spec",
+    path: input.primaryInput.path,
+    rawText: input.primaryInput.rawText,
+    notes: input.notes,
+    constraints: input.constraints,
+    configPath: input.configPath,
+    focusPaths: input.focusPaths,
+    normalizedTaskText,
+    parserInputText,
+  });
+}
+
+export function toArtifactSourceInputs(taskInput: NormalizedTaskInput): ArtifactSourceInputs {
+  return {
+    input_mode: taskInput.inputMode,
+    primary_input: {
+      path: taskInput.primaryInput.path,
+      raw_text: taskInput.primaryInput.rawText,
+    },
+    normalized_task_text: taskInput.normalizedTaskText,
+    notes: [...taskInput.notes],
+    constraints: [...taskInput.constraints],
+    config_path: taskInput.configPath,
+    focus_paths: [...taskInput.focusPaths],
+  };
+}
+
+export function resolveTaskSource(validatedInput: ValidatedIntakeInputs): NormalizedTaskInput {
+  if (validatedInput.inputMode === "prompt") {
+    return resolvePromptInput(validatedInput);
   }
 
-  const specPath = path.isAbsolute(spec!)
-    ? path.normalize(spec!)
-    : path.resolve(currentWorkingDirectory, spec!);
-
-  try {
-    const rawText = await readFile(specPath, "utf8");
-    const trimmedText = rawText.trim();
-
-    if (trimmedText.length === 0) {
-      return {
-        taskSource: null,
-        failure: {
-          code: "SPEC_EMPTY",
-          message: `Forge intake could not use --spec because the file is empty: ${specPath}`,
-        },
-      };
-    }
-
-    return {
-      taskSource: {
-        inputMode: "spec",
-        specPath,
-        prompt: null,
-        rawText: trimmedText,
-      },
-      failure: null,
-    };
-  } catch (error) {
-    return {
-      taskSource: null,
-      failure: {
-        code: "SPEC_READ_FAILED",
-        message: error instanceof Error
-          ? `Forge intake could not read --spec at ${specPath}: ${error.message}`
-          : `Forge intake could not read --spec at ${specPath}.`,
-      },
-    };
-  }
+  return resolveSpecInput(validatedInput);
 }

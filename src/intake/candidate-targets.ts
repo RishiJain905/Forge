@@ -1,4 +1,4 @@
-import type { CandidateTarget, RepoContext, ResolvedTaskSource } from "./types.js";
+import type { CandidateTarget, NormalizedTaskInput, RepoContext } from "./types.js";
 
 function buildCandidateTarget(
   path: string,
@@ -15,10 +15,10 @@ function buildCandidateTarget(
 }
 
 export function resolveCandidateTargets(
-  taskSource: ResolvedTaskSource | null,
+  taskInput: NormalizedTaskInput | null,
   repoContext: RepoContext,
 ): CandidateTarget[] {
-  const text = taskSource?.rawText.toLowerCase() ?? "";
+  const text = taskInput?.normalizedTaskText.toLowerCase() ?? "";
   const explicitTargets: CandidateTarget[] = [];
 
   for (const sourceFile of repoContext.sourceFiles) {

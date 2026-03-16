@@ -7,6 +7,7 @@ import {
 } from "./constants.js";
 import { buildSummary, resolveIntakeStatus } from "./success.js";
 import type {
+  ArtifactSourceInputs,
   CandidateTarget,
   IntakeArtifact,
   IntakeExecutionContext,
@@ -22,7 +23,21 @@ const intakeArtifactSchema = z.object({
   command: z.literal(`forge ${FORGE_INTAKE_COMMAND}`),
   stage: z.string().min(1),
   status: z.enum(["success", "warning", "failed"]),
-  inputMode: z.enum(["spec", "prompt"]).nullable(),
+  input_mode: z.enum(["spec", "prompt"]).nullable(),
+  source_inputs: z
+    .object({
+      input_mode: z.enum(["spec", "prompt"]),
+      primary_input: z.object({
+        path: z.string().nullable(),
+        raw_text: z.string().min(1),
+      }),
+      normalized_task_text: z.string().min(1),
+      notes: z.array(z.string()),
+      constraints: z.array(z.string()),
+      config_path: z.string().nullable(),
+      focus_paths: z.array(z.string()),
+    })
+    .nullable(),
   purpose: z.string().min(1),
   repoRoot: z.string().min(1),
   requestedOutputRoot: z.string().nullable(),
@@ -43,8 +58,6 @@ const intakeArtifactSchema = z.object({
   finishedAt: z.string().min(1),
   summary: z.string().min(1),
   taskSpec: z.object({
-    inputMode: z.enum(["spec", "prompt"]).nullable(),
-    specPath: z.string().nullable(),
     goal: z.string(),
     acceptanceCriteria: z.array(z.string().min(1)),
     hasAcceptanceCriteria: z.boolean(),
@@ -98,6 +111,7 @@ function buildBoundaryNotes(context: IntakeExecutionContext): string[] {
 export function createIntakeArtifact(params: {
   context: IntakeExecutionContext;
   finishedAt: string;
+  sourceInputs: ArtifactSourceInputs | null;
   taskSpec: IntakeTaskSpec;
   repoContext: RepoContext;
   candidateTargets: CandidateTarget[];
@@ -121,7 +135,8 @@ export function createIntakeArtifact(params: {
     command: `forge ${FORGE_INTAKE_COMMAND}`,
     stage: STEP1_BOUNDARY_POLICY.stage,
     status,
-    inputMode: params.taskSpec.inputMode,
+    input_mode: params.sourceInputs?.input_mode ?? null,
+    source_inputs: params.sourceInputs,
     purpose: STEP1_BOUNDARY_POLICY.purpose,
     repoRoot: params.context.repoRoot,
     requestedOutputRoot: params.context.paths.requestedOutputRoot,
