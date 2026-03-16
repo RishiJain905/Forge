@@ -99,8 +99,8 @@ function resolveSpecInput(specPath: string, rawText: string): NormalizedTaskInpu
   });
 }
 
-export function toArtifactSourceInputs(taskInput: NormalizedTaskInput | null): {
-  input_mode: "spec" | "prompt" | null;
+export function toArtifactSourceInputs(taskInput: NormalizedTaskInput): {
+  input_mode: "spec" | "prompt";
   primary_input: {
     path: string | null;
     raw_text: string;
@@ -110,14 +110,14 @@ export function toArtifactSourceInputs(taskInput: NormalizedTaskInput | null): {
   constraints: string[];
 } {
   return {
-    input_mode: taskInput?.inputMode ?? null,
+    input_mode: taskInput.inputMode,
     primary_input: {
-      path: taskInput?.primaryInput.path ?? null,
-      raw_text: taskInput?.primaryInput.rawText ?? "",
+      path: taskInput.primaryInput.path,
+      raw_text: taskInput.primaryInput.rawText,
     },
-    normalized_task_text: taskInput?.normalizedTaskText ?? "",
-    notes: [...(taskInput?.notes ?? [])],
-    constraints: [...(taskInput?.constraints ?? [])],
+    normalized_task_text: taskInput.normalizedTaskText,
+    notes: [...taskInput.notes],
+    constraints: [...taskInput.constraints],
   };
 }
 

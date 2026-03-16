@@ -11,7 +11,7 @@ export interface IntakeCommandOptions {
 }
 
 export interface ArtifactSourceInputs {
-  input_mode: IntakeInputMode | null;
+  input_mode: IntakeInputMode;
   primary_input: {
     path: string | null;
     raw_text: string;
