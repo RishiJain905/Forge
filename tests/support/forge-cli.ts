@@ -75,8 +75,8 @@ export async function writeRepoFile(
   await writeFile(filePath, contents, "utf8");
 }
 
-function parseIntakeArgs(args: string[]): Record<string, string | undefined> {
-  const options: Record<string, string | undefined> = {};
+function parseIntakeArgs(args: string[]): Record<string, string | string[] | undefined> {
+  const options: Record<string, string | string[] | undefined> = {};
 
   for (let index = 0; index < args.length; index += 1) {
     const current = args[index];
@@ -118,6 +118,52 @@ function parseIntakeArgs(args: string[]): Record<string, string | undefined> {
       }
 
       options.prompt = next;
+      index += 1;
+      continue;
+    }
+
+    if (current === "--notes") {
+      if (!next) {
+        throw new Error("Missing value for --notes");
+      }
+
+      options.notes = next;
+      index += 1;
+      continue;
+    }
+
+    if (current === "--constraints") {
+      if (!next) {
+        throw new Error("Missing value for --constraints");
+      }
+
+      options.constraints = next;
+      index += 1;
+      continue;
+    }
+
+    if (current === "--config") {
+      if (!next) {
+        throw new Error("Missing value for --config");
+      }
+
+      options.config = next;
+      index += 1;
+      continue;
+    }
+
+    if (current === "--focus") {
+      if (!next) {
+        throw new Error("Missing value for --focus");
+      }
+
+      const existing = options.focus;
+      const values = Array.isArray(existing)
+        ? existing
+        : existing
+          ? [existing]
+          : [];
+      options.focus = [...values, next];
       index += 1;
       continue;
     }

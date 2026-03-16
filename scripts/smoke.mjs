@@ -53,6 +53,8 @@ async function main() {
       artifact.source_inputs.normalized_task_text,
       "Update src/app.ts and tests/app.test.ts for intake readiness.",
     );
+    assert.equal(artifact.source_inputs.config_path, null);
+    assert.deepEqual(artifact.source_inputs.focus_paths, []);
     assert.equal(artifact.nextStepReadiness.ready, true);
     assert.match(report, /Forge Intake Report/);
     assert.match(report, /Source Inputs/);

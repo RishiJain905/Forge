@@ -34,6 +34,8 @@ const intakeArtifactSchema = z.object({
       normalized_task_text: z.string().min(1),
       notes: z.array(z.string()),
       constraints: z.array(z.string()),
+      config_path: z.string().nullable(),
+      focus_paths: z.array(z.string()),
     })
     .nullable(),
   purpose: z.string().min(1),

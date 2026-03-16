@@ -22,11 +22,24 @@ export async function runCli(argv: string[]): Promise<number> {
     )
     .option("--spec <path>", "Read the task input from a markdown spec file.")
     .option("--prompt <text>", "Read the task input from an inline prompt.")
+    .option("--notes <path>", "Read supplemental notes from a text or markdown file.")
+    .option("--constraints <path>", "Read supplemental constraints from a text or markdown file.")
+    .option("--config <path>", "Validate and record an intake config file path.")
+    .option(
+      "--focus <path>",
+      "Record a repo-relative focus file or directory. Repeat to provide multiple focus paths.",
+      (value: string, previous: string[] = []) => [...previous, value],
+      [],
+    )
     .action(async (options: {
       repo?: string;
       outputDir?: string;
       spec?: string;
       prompt?: string;
+      notes?: string;
+      constraints?: string;
+      config?: string;
+      focus?: string[];
     }) => {
       const result = await runIntakeCommand(options);
 

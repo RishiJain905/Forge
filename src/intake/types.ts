@@ -8,6 +8,10 @@ export interface IntakeCommandOptions {
   outputDir?: string;
   spec?: string;
   prompt?: string;
+  notes?: string;
+  constraints?: string;
+  config?: string;
+  focus?: string[];
 }
 
 export interface ArtifactSourceInputs {
@@ -19,6 +23,8 @@ export interface ArtifactSourceInputs {
   normalized_task_text: string;
   notes: string[];
   constraints: string[];
+  config_path: string | null;
+  focus_paths: string[];
 }
 
 export interface NormalizedTaskInput {
@@ -31,7 +37,23 @@ export interface NormalizedTaskInput {
   parserInputText: string;
   notes: string[];
   constraints: string[];
+  configPath: string | null;
+  focusPaths: string[];
   ambiguities: string[];
+  recommendedUserActions: string[];
+}
+
+export interface ValidatedIntakeInputs {
+  inputMode: IntakeInputMode;
+  primaryInput: {
+    path: string | null;
+    rawText: string;
+  };
+  notes: string[];
+  constraints: string[];
+  configPath: string | null;
+  focusPaths: string[];
+  warnings: string[];
   recommendedUserActions: string[];
 }
 
@@ -58,6 +80,13 @@ export interface CandidateTarget {
 export interface BlockingIssue {
   code: string;
   message: string;
+}
+
+export interface IntakeValidationResult {
+  validatedInput: ValidatedIntakeInputs | null;
+  blockingIssues: BlockingIssue[];
+  warnings: string[];
+  recommendedUserActions: string[];
 }
 
 export interface NextStepReadiness {

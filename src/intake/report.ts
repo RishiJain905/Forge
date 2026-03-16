@@ -66,6 +66,8 @@ export function createIntakeReport(artifact: IntakeArtifact): string {
     `- Primary input path: ${artifact.source_inputs?.primary_input.path ?? "none"}`,
     `- Notes count: ${artifact.source_inputs?.notes.length ?? 0}`,
     `- Constraints count: ${artifact.source_inputs?.constraints.length ?? 0}`,
+    `- Config path: ${artifact.source_inputs?.config_path ?? "none"}`,
+    `- Focus paths: ${artifact.source_inputs?.focus_paths.join(", ") || "none"}`,
     "",
     "## Task Spec",
     "",
