@@ -227,6 +227,8 @@ export async function runIntakeCommand(
     repoContext: assembledResult.repoContext,
     candidateTargets: assembledResult.candidateTargets,
     failure,
+    confidenceLevel: assembledResult.confidence.level,
+    failOnLowConfidence: runtimeOptions.failOnLowConfidence,
     validationBlockingIssues: [...runtimeBlockingIssues, ...validationBlockingIssues],
     inputWarnings: assembledResult.warnings,
     inputAmbiguities: assembledResult.ambiguities,

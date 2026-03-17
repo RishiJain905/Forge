@@ -177,6 +177,41 @@ await runScenario(
 );
 
 await runScenario(
+  "forge intake keeps a low-confidence but structurally usable prompt at warning by default",
+  async () => {
+    const repoRoot = await createTempRepo();
+
+    try {
+      const result = await runForgeCli(
+        ["intake", "--repo", repoRoot, "--prompt", "fix"],
+        repoRoot,
+      );
+
+      assert.equal(result.code, 0, result.stderr);
+
+      const artifactPath = join(repoRoot, ".forge", "intake.json");
+      const artifact = await readJsonFile<IntakeArtifact>(artifactPath);
+
+      assert.equal(artifact.status, "warning");
+      assert.equal(artifact.next_step_readiness?.ready, true);
+      assert.ok(
+        artifact.warnings?.some((value) => /confidence/i.test(value)),
+        "expected low-confidence warning",
+      );
+      assert.ok(
+        !artifact.next_step_readiness?.blocking_issues?.some((issue) =>
+          /LOW_CONFIDENCE_ESCALATED|low confidence/i.test(issue.code ?? "") ||
+          /LOW_CONFIDENCE_ESCALATED|low confidence/i.test(issue.message ?? ""),
+        ),
+        "did not expect low confidence to block without the flag",
+      );
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
   "forge intake can resolve a structured prompt to success",
   async () => {
     const repoRoot = await createTempRepo();

@@ -71,9 +71,14 @@
   - Kept the public `confidence` artifact/report shape stable while making levels and component strengths reproducible from explicit parser, repo, targeting, and ambiguity signals.
   - Added resolver-focused automated coverage plus end-to-end tests for weak repo inspection when explicitly referenced test paths are missing.
   - Kept `--fail-on-low-confidence` deferred so Batch 1.13 can handle final status escalation separately.
+- Batch 1.13: `13-failure-warning-and-status-resolution.md`
+  - Finalized deterministic intake status resolution across blocking failures, warnings, ambiguities, and confidence outcomes.
+  - Activated `--fail-on-low-confidence` so low-confidence but structurally usable results can escalate from `warning` to `failed` when requested.
+  - Kept failed-run persistence best-effort so repo-resolved runs still emit useful artifact/report output when possible.
+  - Added focused status-policy coverage plus CLI regression tests for low-confidence warning-vs-failure behavior.
 
 ## Current Branch State
-- `dev` includes the completed Batch 1.12 implementation.
+- `dev` includes the completed Batch 1.13 implementation.
 - `execution.md` now explicitly requires completed worktree branches to be merged back into their source branch before a task is considered complete, unless the user explicitly requests a PR-only workflow.
 
 ## Verification
@@ -83,4 +88,4 @@
 - `npm.cmd run smoke`
 
 ## Next
-- Continue Batch 1 with `forge_step1_batch1_impl/13-failure-warning-and-status-resolution.md`.
+- Continue Batch 1 with `forge_step1_batch1_impl/14-prompt-mode-implementation-rules.md`.

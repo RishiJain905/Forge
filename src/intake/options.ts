@@ -72,15 +72,6 @@ export function resolveRuntimeOptions(
     );
   }
 
-  if (requestedFailOnLowConfidence) {
-    warnings.push(
-      "Low confidence escalation was requested, but Batch 1.05 does not implement confidence-based failure escalation yet.",
-    );
-    recommendedUserActions.push(
-      "Treat --fail-on-low-confidence as recorded intent only until the later confidence batches land.",
-    );
-  }
-
   return {
     outputMode,
     writeArtifact: outputMode !== "report-only",
