@@ -60,8 +60,8 @@ const intakeArtifactSchema = z.object({
     disallowedCapabilities: z.array(z.string().min(1)),
   }),
   files: z.object({
-    artifactPath: z.string().min(1),
-    reportPath: z.string().min(1),
+    artifactPath: z.string().min(1).nullable(),
+    reportPath: z.string().min(1).nullable(),
   }),
   startedAt: z.string().min(1),
   finishedAt: z.string().min(1),
@@ -161,8 +161,8 @@ export function createIntakeArtifact(params: {
       disallowedCapabilities: STEP1_BOUNDARY_POLICY.disallowedCapabilities,
     },
     files: {
-      artifactPath: params.context.paths.artifactPath,
-      reportPath: params.context.paths.reportPath,
+      artifactPath: params.runtimeOptions.writeArtifact ? params.context.paths.artifactPath : null,
+      reportPath: params.runtimeOptions.writeReport ? params.context.paths.reportPath : null,
     },
     startedAt: params.context.startedAt,
     finishedAt: params.finishedAt,

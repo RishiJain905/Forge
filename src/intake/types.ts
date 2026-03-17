@@ -251,8 +251,8 @@ export interface IntakeArtifact {
     disallowedCapabilities: readonly string[];
   };
   files: {
-    artifactPath: string;
-    reportPath: string;
+    artifactPath: string | null;
+    reportPath: string | null;
   };
   startedAt: string;
   finishedAt: string;

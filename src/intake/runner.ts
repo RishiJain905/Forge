@@ -176,6 +176,15 @@ export async function runIntakeCommand(
     );
   }
 
+  const validationResult = await validateIntakeInputs(options, currentWorkingDirectory, repoRoot);
+  validationBlockingIssues = validationResult.blockingIssues;
+  validationWarnings = validationResult.warnings;
+  validationRecommendedUserActions = validationResult.recommendedUserActions;
+
+  if (validationResult.validatedInput) {
+    taskInput = resolveTaskSource(validationResult.validatedInput);
+  }
+
   if (!failure && runtimeBlockingIssues.length > 0) {
     failure = createFailureDetails(
       "CLI_FLAG_POLICY_FAILED",
@@ -183,20 +192,11 @@ export async function runIntakeCommand(
     );
   }
 
-  if (!failure) {
-    const validationResult = await validateIntakeInputs(options, currentWorkingDirectory, repoRoot);
-    validationBlockingIssues = validationResult.blockingIssues;
-    validationWarnings = validationResult.warnings;
-    validationRecommendedUserActions = validationResult.recommendedUserActions;
-
-    if (validationResult.blockingIssues.length > 0) {
-      failure = createFailureDetails(
-        "INPUT_VALIDATION_FAILED",
-        "Forge intake found blocking input validation issues.",
-      );
-    } else if (validationResult.validatedInput) {
-      taskInput = resolveTaskSource(validationResult.validatedInput);
-    }
+  if (!failure && validationResult.blockingIssues.length > 0) {
+    failure = createFailureDetails(
+      "INPUT_VALIDATION_FAILED",
+      "Forge intake found blocking input validation issues.",
+    );
   }
 
   const taskParserResult = buildTaskParserResult(taskInput);

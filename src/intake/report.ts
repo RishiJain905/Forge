@@ -143,8 +143,12 @@ export function createIntakeReport(artifact: IntakeArtifact): string {
     "",
     "## Output Files",
     "",
-    `- Artifact: \`${artifact.files.artifactPath}\``,
-    `- Report: \`${artifact.files.reportPath}\``,
+    artifact.files.artifactPath
+      ? `- Artifact: \`${artifact.files.artifactPath}\``
+      : "- Artifact: none",
+    artifact.files.reportPath
+      ? `- Report: \`${artifact.files.reportPath}\``
+      : "- Report: none",
     "",
     "## Warnings",
     "",

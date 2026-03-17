@@ -13,6 +13,10 @@ import {
 interface IntakeArtifact {
   status: "success" | "warning" | "failed";
   source_inputs?: {
+    input_mode?: "spec" | "prompt";
+    primary_input?: {
+      raw_text?: string;
+    } | null;
     focus_paths?: string[];
   } | null;
   runtime_options?: {
@@ -28,6 +32,10 @@ interface IntakeArtifact {
     }>;
   };
   warnings?: string[];
+  files?: {
+    artifactPath?: string | null;
+    reportPath?: string | null;
+  };
 }
 
 async function runActualCli(args: string[], cwd: string): Promise<{
@@ -129,6 +137,8 @@ await runScenario("forge intake supports --json-only", async () => {
     assert.equal(await fileExists(artifactPath), true);
     assert.equal(await fileExists(reportPath), false);
     assert.equal(artifact.runtime_options?.output_mode, "json-only");
+    assert.equal(artifact.files?.artifactPath, artifactPath);
+    assert.equal(artifact.files?.reportPath ?? null, null);
     assert.match(result.stdout, /Artifact:/);
     assert.doesNotMatch(result.stdout, /Report:/);
   } finally {
@@ -160,6 +170,7 @@ await runScenario("forge intake supports --report-only", async () => {
 
     assert.equal(await fileExists(artifactPath), false);
     assert.equal(await fileExists(reportPath), true);
+    assert.equal(artifactPath === null, false);
     assert.match(report, /report-only/i);
     assert.doesNotMatch(result.stdout, /Artifact:/);
     assert.match(result.stdout, /Report:/);
@@ -194,6 +205,11 @@ await runScenario("forge intake rejects conflicting output selectors", async () 
     assert.equal(await fileExists(artifactPath), true);
     assert.equal(await fileExists(reportPath), true);
     assert.equal(artifact.status, "failed");
+    assert.equal(artifact.source_inputs?.input_mode, "prompt");
+    assert.equal(
+      artifact.source_inputs?.primary_input?.raw_text,
+      "Update src/app.ts for CLI flag behavior.",
+    );
     assert.equal(artifact.nextStepReadiness?.ready, false);
     assert.ok(
       artifact.nextStepReadiness?.blockingIssues?.some((issue) =>
@@ -201,6 +217,40 @@ await runScenario("forge intake rejects conflicting output selectors", async () 
         /json-only|report-only|output mode/i.test(issue.message ?? ""),
       ),
     );
+    assert.ok(
+      !artifact.nextStepReadiness?.blockingIssues?.some((issue) =>
+        /TASK_GOAL_MISSING|CANDIDATE_TARGETS_MISSING|REPO_CONTEXT_MISSING/.test(issue.code ?? ""),
+      ),
+      "unexpected unrelated blocking issues from skipped validation",
+    );
+  } finally {
+    await disposeTempRepo(repoRoot);
+  }
+});
+
+await runScenario("forge intake omits suppressed artifact file metadata in report-only mode", async () => {
+  const repoRoot = await createTempRepo();
+
+  try {
+    const result = await runActualCli(
+      [
+        "intake",
+        "--repo",
+        repoRoot,
+        "--prompt",
+        "Update src/app.ts for CLI flag behavior.",
+        "--report-only",
+      ],
+      repoRoot,
+    );
+
+    assert.equal(result.code, 0, result.stderr);
+
+    const reportPath = join(repoRoot, ".forge", "reports", "intake-report.md");
+    const report = await readTextFile(reportPath);
+
+    assert.match(report, /Report:\s+`.+intake-report\.md`/i);
+    assert.match(report, /Artifact:\s+none/i);
   } finally {
     await disposeTempRepo(repoRoot);
   }
