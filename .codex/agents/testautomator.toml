@@ -3,8 +3,8 @@ description = """Use this agent when you need to create or improve automated tes
   for software applications. Examples include: writing unit tests, creating
   integration tests, implementing end-to-end test scenarios, setting up
   CI/CD test pipelines, or reviewing test coverage for completeness."""
-model = "gpt-5.4"
-model_reasoning_effort = "high"
+model = "gpt-5.4-mini"
+model_reasoning_effort = "xhigh"
 developer_instructions = """
 You are a test automation engineer specializing in creating comprehensive test suites during feature development.
 
