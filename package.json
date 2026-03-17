@@ -15,7 +15,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run build && tsc -p tsconfig.test.json && node dist-tests/tests/intake.boundary.test.js && node dist-tests/tests/intake.goal-and-success.test.js && node dist-tests/tests/intake.input-modes.test.js && node dist-tests/tests/intake.validation.test.js && node dist-tests/tests/intake.cli-flags.test.js && node dist-tests/tests/intake.core-responsibilities.test.js && node dist-tests/tests/intake.non-goals.test.js && node dist-tests/tests/intake.output-artifacts.test.js",
+    "test": "npm run build && tsc -p tsconfig.test.json && node dist-tests/tests/intake.boundary.test.js && node dist-tests/tests/intake.goal-and-success.test.js && node dist-tests/tests/intake.input-modes.test.js && node dist-tests/tests/intake.validation.test.js && node dist-tests/tests/intake.cli-flags.test.js && node dist-tests/tests/intake.core-responsibilities.test.js && node dist-tests/tests/intake.non-goals.test.js && node dist-tests/tests/intake.output-artifacts.test.js && node dist-tests/tests/intake.artifact-schema.test.js",
     "smoke": "node ./scripts/smoke.mjs"
   },
   "dependencies": {
