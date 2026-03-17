@@ -15,6 +15,7 @@ export function toArtifactRuntimeOptions(
   return {
     output_mode: runtimeOptions.outputMode,
     llm_mode: runtimeOptions.llmMode,
+    strict_focus: runtimeOptions.strictFocus,
     fail_on_low_confidence: runtimeOptions.failOnLowConfidence,
   };
 }
@@ -30,6 +31,7 @@ export function resolveRuntimeOptions(
   const requestedReportOnly = options.reportOnly === true;
   const requestedLlmAssist = options.llmAssist === true;
   const requestedNoLlm = options.noLlm === true;
+  const requestedStrictFocus = options.strictFocus === true;
   const requestedFailOnLowConfidence = options.failOnLowConfidence === true;
   const writeDebugArtifact = process.env.FORGE_INTAKE_DEBUG === "1";
 
@@ -72,6 +74,7 @@ export function resolveRuntimeOptions(
     writeReport: outputMode !== "json-only",
     writeDebugArtifact,
     llmMode,
+    strictFocus: requestedStrictFocus,
     failOnLowConfidence: requestedFailOnLowConfidence,
     blockingIssues,
     warnings,

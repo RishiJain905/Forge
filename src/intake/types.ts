@@ -16,6 +16,7 @@ export interface IntakeCommandOptions {
   constraints?: string;
   config?: string;
   focus?: string[];
+  strictFocus?: boolean;
   jsonOnly?: boolean;
   reportOnly?: boolean;
   llmAssist?: boolean;
@@ -39,6 +40,7 @@ export interface ArtifactSourceInputs {
 export interface ArtifactRuntimeOptions {
   output_mode: IntakeOutputMode;
   llm_mode: IntakeLlmMode;
+  strict_focus: boolean;
   fail_on_low_confidence: boolean;
 }
 
@@ -177,6 +179,10 @@ export interface InferenceResult {
     explicitTargetCount: number;
     usedFallbackTargets: boolean;
     inferredRequirementCount: number;
+    focusApplied?: boolean;
+    strictFocusApplied?: boolean;
+    focusMatchedTargetCount?: number;
+    outOfFocusTargetCount?: number;
   };
   warnings: string[];
 }
@@ -236,6 +242,7 @@ export interface ResolvedRuntimeOptions {
   writeReport: boolean;
   writeDebugArtifact: boolean;
   llmMode: IntakeLlmMode;
+  strictFocus: boolean;
   failOnLowConfidence: boolean;
   blockingIssues: BlockingIssue[];
   warnings: string[];
@@ -414,6 +421,7 @@ export interface IntakeDebugArtifact {
     writeReport: boolean;
     writeDebugArtifact: boolean;
     llmMode: IntakeLlmMode;
+    strictFocus: boolean;
     failOnLowConfidence: boolean;
   };
   paths: {

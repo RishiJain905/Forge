@@ -208,6 +208,7 @@ export async function runIntakeCommand(
     taskInput,
     taskParserResult,
     repoScanResult,
+    strictFocus: runtimeOptions.strictFocus,
   });
   const optionalReasoningResult = await resolveOptionalReasoning({
     runtimeOptions,

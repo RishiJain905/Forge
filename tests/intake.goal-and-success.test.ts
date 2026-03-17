@@ -21,6 +21,12 @@ interface IntakeArtifact {
     };
     normalized_task_text?: string;
   };
+  repo_context?: {
+    grounded?: boolean;
+    source_files?: string[];
+    test_files?: string[];
+    manifest_files?: string[];
+  };
   status: "success" | "warning" | "failed";
   task_spec?: {
     goal?: string;
@@ -420,6 +426,194 @@ await runScenario(
 
       assert.equal(result.code, 0, result.stderr);
       assert.match(result.stdout, /Status: success/);
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "forge intake keeps full repo context visible when --focus is used",
+  async () => {
+    const repoRoot = await createTempRepo();
+
+    try {
+      await writeRepoFile(
+        repoRoot,
+        "package.json",
+        "{\n  \"name\": \"focus-fixture\"\n}\n",
+      );
+
+      const result = await runForgeCli(
+        [
+          "intake",
+          "--repo",
+          repoRoot,
+          "--prompt",
+          "Revise src/app.ts and tests/app.test.ts.",
+          "--focus",
+          "src",
+        ],
+        repoRoot,
+      );
+
+      assert.equal(result.code, 0, result.stderr);
+
+      const artifactPath = join(repoRoot, ".forge", "intake.json");
+      const artifact = await readJsonFile<IntakeArtifact>(artifactPath);
+
+      assert.equal(artifact.repo_context?.grounded, true);
+      assert.deepEqual(artifact.repo_context?.source_files, ["src/app.ts"]);
+      assert.deepEqual(artifact.repo_context?.test_files, ["tests/app.test.ts"]);
+      assert.deepEqual(artifact.repo_context?.manifest_files, ["package.json"]);
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "forge intake prioritizes in-focus candidate targets without losing out-of-focus evidence",
+  async () => {
+    const repoRoot = await createTempRepo();
+
+    try {
+      await writeRepoFile(
+        repoRoot,
+        "package.json",
+        "{\n  \"name\": \"focus-fixture\"\n}\n",
+      );
+
+      const result = await runForgeCli(
+        [
+          "intake",
+          "--repo",
+          repoRoot,
+          "--prompt",
+          [
+            "Revise src/app.ts and tests/app.test.ts.",
+            "",
+            "Acceptance Criteria",
+            "- src/app.ts is updated",
+            "- tests/app.test.ts stays aligned",
+          ].join("\n"),
+          "--focus",
+          "tests",
+        ],
+        repoRoot,
+      );
+
+      assert.equal(result.code, 0, result.stderr);
+
+      const artifactPath = join(repoRoot, ".forge", "intake.json");
+      const artifact = await readJsonFile<IntakeArtifact>(artifactPath);
+
+      assert.equal(artifact.repo_context?.grounded, true);
+      assert.deepEqual(artifact.repo_context?.source_files, ["src/app.ts"]);
+      assert.deepEqual(artifact.repo_context?.test_files, ["tests/app.test.ts"]);
+      assert.deepEqual(artifact.repo_context?.manifest_files, ["package.json"]);
+      assert.equal(artifact.candidate_targets?.[0]?.path, "tests/app.test.ts");
+      assert.ok(
+        artifact.candidate_targets?.some((candidate) => candidate.path === "src/app.ts"),
+        "expected out-of-focus source evidence to remain visible",
+      );
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "forge intake warns when a focus path does not align with likely targets",
+  async () => {
+    const repoRoot = await createTempRepo();
+
+    try {
+      await writeRepoFile(
+        repoRoot,
+        "package.json",
+        "{\n  \"name\": \"focus-fixture\"\n}\n",
+      );
+      await writeRepoFile(repoRoot, "docs/guide.md", "# docs\n");
+
+      const result = await runForgeCli(
+        [
+          "intake",
+          "--repo",
+          repoRoot,
+          "--prompt",
+          "Revise src/app.ts and tests/app.test.ts.",
+          "--focus",
+          "docs",
+        ],
+        repoRoot,
+      );
+
+      assert.equal(result.code, 0, result.stderr);
+
+      const artifactPath = join(repoRoot, ".forge", "intake.json");
+      const artifact = await readJsonFile<IntakeArtifact>(artifactPath);
+
+      assert.equal(artifact.repo_context?.grounded, true);
+      assert.ok(
+        artifact.warnings?.some((value) =>
+          /focus/i.test(value) && /(exclude|outside|likely)/i.test(value),
+        ),
+        "expected a warning that the focus path may exclude relevant targets",
+      );
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "forge intake filters out out-of-focus candidate targets under strict focus",
+  async () => {
+    const repoRoot = await createTempRepo();
+
+    try {
+      await writeRepoFile(
+        repoRoot,
+        "package.json",
+        "{\n  \"name\": \"focus-fixture\"\n}\n",
+      );
+
+      const result = await runForgeCli(
+        [
+          "intake",
+          "--repo",
+          repoRoot,
+          "--prompt",
+          [
+            "Revise src/app.ts and tests/app.test.ts.",
+            "",
+            "Acceptance Criteria",
+            "- src/app.ts is updated",
+            "- tests/app.test.ts stays aligned",
+          ].join("\n"),
+          "--focus",
+          "tests",
+          "--strict-focus",
+        ],
+        repoRoot,
+      );
+
+      assert.equal(result.code, 0, result.stderr);
+
+      const artifactPath = join(repoRoot, ".forge", "intake.json");
+      const artifact = await readJsonFile<IntakeArtifact>(artifactPath);
+
+      assert.deepEqual(
+        artifact.candidate_targets?.map((candidate) => candidate.path),
+        ["tests/app.test.ts"],
+      );
+      assert.ok(
+        artifact.warnings?.some((value) =>
+          /strict focus/i.test(value) && /(exclude|outside|likely)/i.test(value),
+        ),
+        "expected a warning that strict focus excluded relevant targets",
+      );
     } finally {
       await disposeTempRepo(repoRoot);
     }

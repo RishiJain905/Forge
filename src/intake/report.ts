@@ -171,6 +171,7 @@ function renderRuntimeOptionsSection(artifact: IntakeArtifact): string {
     "These runtime selections shaped how intake persisted its outputs for this run.",
     `- Output mode: \`${artifact.runtime_options.output_mode}\``,
     `- LLM mode: \`${artifact.runtime_options.llm_mode}\``,
+    `- Strict focus: \`${artifact.runtime_options.strict_focus}\``,
     `- Fail on low confidence: \`${artifact.runtime_options.fail_on_low_confidence}\``,
   ]);
 }

@@ -1,4 +1,8 @@
 import { buildConfidenceResolution } from "./confidence.js";
+import {
+  NON_STRICT_FOCUS_WARNING,
+  STRICT_FOCUS_WARNING,
+} from "./focus-policy.js";
 import type {
   AmbiguityAnalysisResult,
   BlockingIssue,
@@ -74,6 +78,29 @@ function addPromptOpenQuestionHandling(params: {
   }
 }
 
+function addFocusHandling(params: {
+  inferenceResult: InferenceResult;
+  warnings: string[];
+  recommendedUserActions: string[];
+}): void {
+  const signals = params.inferenceResult.signals;
+
+  if (!signals.focusApplied || signals.outOfFocusTargetCount === 0) {
+    return;
+  }
+
+  pushUnique(
+    params.warnings,
+    signals.strictFocusApplied ? STRICT_FOCUS_WARNING : NON_STRICT_FOCUS_WARNING,
+  );
+  pushUnique(
+    params.recommendedUserActions,
+    signals.strictFocusApplied
+      ? "Widen --focus or drop --strict-focus if the excluded targets are still relevant."
+      : "Broaden --focus if you want the out-of-focus targets considered equally during planning.",
+  );
+}
+
 export function buildAmbiguityAnalysisResult(params: {
   taskInput: NormalizedTaskInput | null;
   taskParserResult: TaskParserResult;
@@ -109,6 +136,11 @@ export function buildAmbiguityAnalysisResult(params: {
   addPromptOpenQuestionHandling({
     categories: params.taskParserResult.signals.promptOpenQuestionCategories,
     ambiguities,
+    recommendedUserActions,
+  });
+  addFocusHandling({
+    inferenceResult: params.inferenceResult,
+    warnings,
     recommendedUserActions,
   });
 
@@ -187,6 +219,10 @@ export function buildAmbiguityAnalysisResult(params: {
       explicitTargetCount: params.inferenceResult.signals.explicitTargetCount,
       usedFallbackTargets: params.inferenceResult.signals.usedFallbackTargets,
       unresolvedReferencedPathCount: unresolvedReferencedPaths.length,
+      focusApplied: params.inferenceResult.signals.focusApplied === true,
+      strictFocusApplied: params.inferenceResult.signals.strictFocusApplied === true,
+      focusMatchedTargetCount: params.inferenceResult.signals.focusMatchedTargetCount ?? 0,
+      outOfFocusTargetCount: params.inferenceResult.signals.outOfFocusTargetCount ?? 0,
     },
   });
 

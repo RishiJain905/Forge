@@ -13,6 +13,10 @@ export interface ForgeRunResult {
   stderr: string;
 }
 
+type TestIntakeCommandOptions = IntakeCommandOptions & {
+  strictFocus?: boolean;
+};
+
 export async function createTempRepo(prefix = "forge-intake-"): Promise<string> {
   const repoRoot = await mkdtemp(join(tmpdir(), prefix));
   await writeFile(join(repoRoot, "README.md"), "# fixture repo\n", "utf8");
@@ -57,7 +61,7 @@ export async function runForgeCli(args: string[], cwd: string): Promise<ForgeRun
   }
 
   const options = parseIntakeArgs(args.slice(1));
-  const result = await runIntakeCommand(options, cwd);
+  const result = await runIntakeCommand(options as IntakeCommandOptions, cwd);
   const output = formatIntakeCommandOutput(result);
 
   return {
@@ -77,8 +81,8 @@ export async function writeRepoFile(
   await writeFile(filePath, contents, "utf8");
 }
 
-function parseIntakeArgs(args: string[]): IntakeCommandOptions {
-  const options: IntakeCommandOptions = {};
+function parseIntakeArgs(args: string[]): TestIntakeCommandOptions {
+  const options: TestIntakeCommandOptions = {};
 
   for (let index = 0; index < args.length; index += 1) {
     const current = args[index];
@@ -176,6 +180,11 @@ function parseIntakeArgs(args: string[]): IntakeCommandOptions {
 
     if (current === "--fail-on-low-confidence") {
       options.failOnLowConfidence = true;
+      continue;
+    }
+
+    if (current === "--strict-focus") {
+      options.strictFocus = true;
       continue;
     }
 

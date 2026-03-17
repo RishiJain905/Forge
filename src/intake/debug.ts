@@ -31,6 +31,7 @@ export function createIntakeDebugArtifact(params: {
       writeReport: params.runtimeOptions.writeReport,
       writeDebugArtifact: params.runtimeOptions.writeDebugArtifact,
       llmMode: params.runtimeOptions.llmMode,
+      strictFocus: params.runtimeOptions.strictFocus,
       failOnLowConfidence: params.runtimeOptions.failOnLowConfidence,
     },
     paths: {

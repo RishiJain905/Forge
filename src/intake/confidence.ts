@@ -20,6 +20,10 @@ export interface ConfidenceResolutionInput {
     explicitTargetCount: number;
     usedFallbackTargets: boolean;
     unresolvedReferencedPathCount: number;
+    focusApplied?: boolean;
+    strictFocusApplied?: boolean;
+    focusMatchedTargetCount?: number;
+    outOfFocusTargetCount?: number;
   };
 }
 
@@ -127,11 +131,25 @@ function resolveTargetingStrength(
     pushReason(reasons, "candidate targeting does not have an explicit task-to-file match");
   }
 
+  if (input.focusApplied) {
+    if ((input.outOfFocusTargetCount ?? 0) > 0) {
+      pushReason(reasons, "focus paths do not cover all likely targets");
+    }
+
+    if (input.strictFocusApplied && (input.outOfFocusTargetCount ?? 0) > 0) {
+      pushReason(reasons, "strict focus excluded likely relevant candidate targets");
+    }
+  }
+
   if (input.candidateTargetCount === 0 || input.unresolvedReferencedPathCount > 0) {
     return "weak";
   }
 
-  if (input.usedFallbackTargets || input.explicitTargetCount === 0) {
+  if (
+    input.usedFallbackTargets ||
+    input.explicitTargetCount === 0 ||
+    ((input.focusApplied ?? false) && (input.outOfFocusTargetCount ?? 0) > 0)
+  ) {
     return "partial";
   }
 
