@@ -102,6 +102,7 @@ export interface RepoContext {
   sourceFiles: string[];
   testFiles: string[];
   manifestFiles: string[];
+  allFiles: string[];
 }
 
 export interface ArtifactRepoContextSection {

@@ -1,6 +1,6 @@
 export const FORGE_INTAKE_COMMAND = "intake" as const;
 export const FORGE_STEP_STAGE = "step1" as const;
-export const FORGE_SCHEMA_VERSION = "1.0.0" as const;
+export const FORGE_SCHEMA_VERSION = "2.0.0" as const;
 export const DEFAULT_OUTPUT_DIRECTORY = ".forge" as const;
 export const REPORTS_DIRECTORY = "reports" as const;
 export const DEBUG_DIRECTORY = "debug" as const;

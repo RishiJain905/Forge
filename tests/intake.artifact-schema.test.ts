@@ -77,6 +77,7 @@ function createAssembledResult(): AssembledIntakeResult {
           sourceFiles: ["src/app.ts"],
           testFiles: ["tests/app.test.ts"],
           manifestFiles: ["package.json"],
+          allFiles: ["src/app.ts", "tests/app.test.ts", "package.json"],
         },
         signals: {
           sourceFileCount: 1,
@@ -128,6 +129,7 @@ function createAssembledResult(): AssembledIntakeResult {
       sourceFiles: ["src/app.ts"],
       testFiles: ["tests/app.test.ts"],
       manifestFiles: ["package.json"],
+      allFiles: ["src/app.ts", "tests/app.test.ts", "package.json"],
     },
     candidateTargets: [
       {
@@ -164,6 +166,7 @@ function createBoundarySafeResult(): BoundarySafeIntakeResult {
       sourceFiles: ["src/app.ts"],
       testFiles: ["tests/app.test.ts"],
       manifestFiles: ["package.json"],
+      allFiles: ["src/app.ts", "tests/app.test.ts", "package.json"],
     },
     candidateTargets: [
       {
@@ -224,6 +227,11 @@ await runScenario("intake artifact preserves schema, command, and stage metadata
   const artifact = createValidArtifact();
 
   assert.equal(artifact.schemaVersion, FORGE_SCHEMA_VERSION);
+  assert.notEqual(
+    artifact.schemaVersion,
+    "1.0.0",
+    "breaking artifact contract changes must advance the schema version",
+  );
   assert.equal(artifact.command, "forge intake");
   assert.equal(artifact.stage, STEP1_BOUNDARY_POLICY.stage);
 });

@@ -93,9 +93,7 @@ function buildInitialRiskZones(params: {
     inference,
   } = params.assembledResult.responsibilities;
   const repoFiles = new Set([
-    ...params.boundarySafeResult.repoContext.sourceFiles,
-    ...params.boundarySafeResult.repoContext.testFiles,
-    ...params.boundarySafeResult.repoContext.manifestFiles,
+    ...params.boundarySafeResult.repoContext.allFiles,
   ]);
   const unresolvedReferencedPaths = taskParser.signals.referencedPaths.filter(
     (path) => !repoFiles.has(path),

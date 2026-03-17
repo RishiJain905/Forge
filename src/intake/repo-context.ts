@@ -90,6 +90,7 @@ export async function scanRepoContext(
     sourceFiles,
     testFiles,
     manifestFiles,
+    allFiles: files,
   };
 }
 

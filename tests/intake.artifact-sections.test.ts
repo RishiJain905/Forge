@@ -80,6 +80,7 @@ function createAssembledResult(overrides?: Partial<AssembledIntakeResult>): Asse
           sourceFiles: [],
           testFiles: [],
           manifestFiles: ["package.json"],
+          allFiles: ["package.json"],
         },
         signals: {
           sourceFileCount: 0,
@@ -131,6 +132,7 @@ function createAssembledResult(overrides?: Partial<AssembledIntakeResult>): Asse
       sourceFiles: [],
       testFiles: [],
       manifestFiles: ["package.json"],
+      allFiles: ["package.json"],
     },
     candidateTargets: [
       {
@@ -176,6 +178,7 @@ function createBoundarySafeResult(): BoundarySafeIntakeResult {
       sourceFiles: [],
       testFiles: [],
       manifestFiles: ["package.json"],
+      allFiles: ["package.json"],
     },
     candidateTargets: [
       {
@@ -290,6 +293,38 @@ await runScenario("intake artifact includes deterministic typed risk analysis zo
     assert.ok(["medium", "high"].includes(zone.level));
     assert.ok(Array.isArray(zone.evidence_paths));
   }
+});
+
+await runScenario("intake artifact does not flag referenced repo files outside classified buckets as unresolved", () => {
+  const artifact = createArtifact({
+    assembledResult: {
+      responsibilities: {
+        ...createAssembledResult().responsibilities,
+        taskParser: {
+          ...createAssembledResult().responsibilities.taskParser,
+          signals: {
+            ...createAssembledResult().responsibilities.taskParser.signals,
+            referencedPaths: ["docs/guide.md"],
+          },
+        },
+      },
+    },
+    boundarySafeResult: {
+      repoContext: {
+        grounded: true,
+        sourceFiles: [],
+        testFiles: [],
+        manifestFiles: ["package.json"],
+        allFiles: ["package.json", "docs/guide.md"],
+      },
+    },
+  });
+
+  const unresolvedZone = artifact.risk_analysis.initial_risk_zones.find(
+    (zone) => zone.code === "unresolved_referenced_paths",
+  );
+
+  assert.equal(unresolvedZone, undefined);
 });
 
 await runScenario("intake artifact exposes confidence as a stable public section", () => {
