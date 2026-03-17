@@ -31,6 +31,7 @@ export function resolveRuntimeOptions(
   const requestedLlmAssist = options.llmAssist === true;
   const requestedNoLlm = options.noLlm === true;
   const requestedFailOnLowConfidence = options.failOnLowConfidence === true;
+  const writeDebugArtifact = process.env.FORGE_INTAKE_DEBUG === "1";
 
   let outputMode: ResolvedRuntimeOptions["outputMode"] = "default";
   let llmMode: ResolvedRuntimeOptions["llmMode"] = "deterministic";
@@ -84,6 +85,7 @@ export function resolveRuntimeOptions(
     outputMode,
     writeArtifact: outputMode !== "report-only",
     writeReport: outputMode !== "json-only",
+    writeDebugArtifact,
     llmMode,
     failOnLowConfidence: requestedFailOnLowConfidence,
     blockingIssues,

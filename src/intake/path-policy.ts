@@ -2,8 +2,10 @@ import path from "node:path";
 import { access, realpath, stat } from "node:fs/promises";
 
 import {
+  DEBUG_DIRECTORY,
   DEFAULT_OUTPUT_DIRECTORY,
   INTAKE_ARTIFACT_NAME,
+  INTAKE_DEBUG_ARTIFACT_NAME,
   INTAKE_REPORT_NAME,
   REPORTS_DIRECTORY,
 } from "./constants.js";
@@ -153,6 +155,11 @@ export async function resolveOutputPaths(
       outputRoot.outputRoot,
       REPORTS_DIRECTORY,
       INTAKE_REPORT_NAME,
+    ),
+    debugArtifactPath: resolveOutputFilePath(
+      outputRoot.outputRoot,
+      DEBUG_DIRECTORY,
+      INTAKE_DEBUG_ARTIFACT_NAME,
     ),
   };
 }

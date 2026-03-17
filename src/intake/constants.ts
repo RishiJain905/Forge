@@ -3,8 +3,10 @@ export const FORGE_STEP_STAGE = "step1" as const;
 export const FORGE_SCHEMA_VERSION = "1.0.0" as const;
 export const DEFAULT_OUTPUT_DIRECTORY = ".forge" as const;
 export const REPORTS_DIRECTORY = "reports" as const;
+export const DEBUG_DIRECTORY = "debug" as const;
 export const INTAKE_ARTIFACT_NAME = "intake.json" as const;
 export const INTAKE_REPORT_NAME = "intake-report.md" as const;
+export const INTAKE_DEBUG_ARTIFACT_NAME = "intake-debug.json" as const;
 
 export const STEP1_BOUNDARY_POLICY = {
   command: FORGE_INTAKE_COMMAND,
@@ -15,6 +17,7 @@ export const STEP1_BOUNDARY_POLICY = {
     "create output directories under the configured output root",
     "write the intake artifact",
     "write the intake report",
+    "optionally write an internal debug artifact inside the output root",
   ],
   deferredCapabilities: [
     "forge plan",

@@ -1,16 +1,15 @@
-import path from "node:path";
-import { mkdir, writeFile } from "node:fs/promises";
-
 import { FORGE_INTAKE_COMMAND, STEP1_BOUNDARY_POLICY } from "./constants.js";
 import { buildAmbiguityAnalysisResult } from "./analysis.js";
 import { assembleIntakeResult } from "./assemble.js";
 import { createIntakeArtifact } from "./artifact.js";
 import { buildBoundarySafeIntakeResult } from "./boundary.js";
+import { createIntakeDebugArtifact } from "./debug.js";
 import { PersistenceError } from "./errors.js";
 import { buildInferenceResult } from "./inference.js";
 import { resolveTaskSource, toArtifactSourceInputs } from "./input.js";
 import { resolveRuntimeOptions } from "./options.js";
 import { resolveOutputPaths, resolveRepoRoot } from "./path-policy.js";
+import { persistIntakeOutputs } from "./persistence.js";
 import { scanRepoResult } from "./repo-context.js";
 import { createIntakeReport } from "./report.js";
 import { evaluateSuccessModel } from "./success.js";
@@ -24,32 +23,8 @@ import type {
   NextStepReadiness,
   NormalizedTaskInput,
   BoundarySafeIntakeResult,
+  AssembledIntakeResult,
 } from "./types.js";
-
-async function ensureParentDirectory(filePath: string): Promise<void> {
-  await mkdir(path.dirname(filePath), { recursive: true });
-}
-
-async function persistOutputFile(filePath: string, contents: string): Promise<void> {
-  await ensureParentDirectory(filePath);
-  await writeFile(filePath, contents, "utf8");
-}
-
-async function persistArtifactAndReport(
-  context: IntakeExecutionContext,
-  writeArtifact: boolean,
-  writeReport: boolean,
-  artifactContents: string,
-  reportContents: string,
-): Promise<void> {
-  if (writeArtifact) {
-    await persistOutputFile(context.paths.artifactPath, artifactContents);
-  }
-
-  if (writeReport) {
-    await persistOutputFile(context.paths.reportPath, reportContents);
-  }
-}
 
 async function createContext(
   repoRoot: string,
@@ -80,15 +55,17 @@ async function persistResult(
   context: IntakeExecutionContext,
   runtimeOptions: ReturnType<typeof resolveRuntimeOptions>,
   taskInput: NormalizedTaskInput | null,
+  assembledResult: AssembledIntakeResult,
   boundarySafeResult: BoundarySafeIntakeResult,
   nextStepReadiness: NextStepReadiness,
   failure: IntakeFailureDetails | null,
 ): Promise<IntakeCommandResult> {
   const finishedAt = new Date().toISOString();
+  const sourceInputs = taskInput ? toArtifactSourceInputs(taskInput) : null;
   const artifact = createIntakeArtifact({
     context,
     finishedAt,
-    sourceInputs: taskInput ? toArtifactSourceInputs(taskInput) : null,
+    sourceInputs,
     runtimeOptions,
     taskSpec: boundarySafeResult.taskSpec,
     repoContext: boundarySafeResult.repoContext,
@@ -101,15 +78,41 @@ async function persistResult(
     failure,
   });
   const report = createIntakeReport(artifact);
+  const debugArtifact = runtimeOptions.writeDebugArtifact
+    ? createIntakeDebugArtifact({
+        context,
+        runtimeOptions,
+        sourceInputs,
+        assembledResult,
+        boundarySafeResult,
+        nextStepReadiness,
+        failure,
+      })
+    : null;
 
   try {
-    await persistArtifactAndReport(
-      context,
-      runtimeOptions.writeArtifact,
-      runtimeOptions.writeReport,
-      `${JSON.stringify(artifact, null, 2)}\n`,
-      report,
-    );
+    await persistIntakeOutputs({
+      criticalWrites: [
+        ...(runtimeOptions.writeArtifact
+          ? [{
+              filePath: context.paths.artifactPath,
+              contents: `${JSON.stringify(artifact, null, 2)}\n`,
+            }]
+          : []),
+        ...(runtimeOptions.writeReport
+          ? [{
+              filePath: context.paths.reportPath,
+              contents: report,
+            }]
+          : []),
+      ],
+      debugWrite: debugArtifact
+        ? {
+            filePath: context.paths.debugArtifactPath,
+            contents: `${JSON.stringify(debugArtifact, null, 2)}\n`,
+          }
+        : null,
+    });
   } catch (error) {
     throw new PersistenceError(
       error instanceof Error ? error.message : "Unknown persistence failure.",
@@ -246,6 +249,7 @@ export async function runIntakeCommand(
       context,
       runtimeOptions,
       taskInput,
+      finalAssembledResult,
       buildBoundarySafeIntakeResult({
         context,
         taskInput,
@@ -299,6 +303,7 @@ export async function runIntakeCommand(
         fallbackContext,
         runtimeOptions,
         taskInput,
+        finalAssembledResult,
         buildBoundarySafeIntakeResult({
           context: fallbackContext,
           taskInput,
