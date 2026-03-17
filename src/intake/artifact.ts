@@ -36,6 +36,7 @@ export function createIntakeArtifact(params: {
     nextStepReadiness: params.nextStepReadiness,
     warnings,
     ambiguities,
+    confidenceLevel: params.assembledResult.confidence.level,
   });
 
   const artifact: IntakeArtifact = {

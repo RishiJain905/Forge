@@ -24,6 +24,9 @@ interface IntakeArtifact {
     llm_mode?: "deterministic" | "assist";
     fail_on_low_confidence?: boolean;
   } | null;
+  confidence?: {
+    level?: "high" | "medium" | "low";
+  } | null;
   next_step_readiness?: {
     ready?: boolean;
     blocking_issues?: Array<{
@@ -289,7 +292,7 @@ await runScenario("forge intake rejects conflicting llm selectors", async () => 
   }
 });
 
-await runScenario("forge intake records deferred llm assist and low-confidence flags", async () => {
+await runScenario("forge intake records deferred llm assist intent", async () => {
   const repoRoot = await createTempRepo();
 
   try {
@@ -301,7 +304,6 @@ await runScenario("forge intake records deferred llm assist and low-confidence f
         "--prompt",
         "Update src/app.ts for CLI flag behavior.",
         "--llm-assist",
-        "--fail-on-low-confidence",
       ],
       repoRoot,
     );
@@ -312,13 +314,52 @@ await runScenario("forge intake records deferred llm assist and low-confidence f
     const artifact = await readJsonFile<IntakeArtifact>(artifactPath);
 
     assert.equal(artifact.runtime_options?.llm_mode, "assist");
-    assert.equal(artifact.runtime_options?.fail_on_low_confidence, true);
+    assert.equal(artifact.runtime_options?.fail_on_low_confidence, false);
     assert.ok(
       artifact.warnings?.some((warning) => /llm assist|deferred/i.test(warning)),
     );
-    assert.ok(
-      artifact.warnings?.some((warning) => /low confidence|deferred/i.test(warning)),
+  } finally {
+    await disposeTempRepo(repoRoot);
+  }
+});
+
+await runScenario("forge intake fails low-confidence output when --fail-on-low-confidence is set", async () => {
+  const repoRoot = await createTempRepo();
+
+  try {
+    const result = await runActualCli(
+      [
+        "intake",
+        "--repo",
+        repoRoot,
+        "--prompt",
+        "fix",
+        "--fail-on-low-confidence",
+      ],
+      repoRoot,
     );
+
+    assert.equal(result.code, 1);
+
+    const artifactPath = join(repoRoot, ".forge", "intake.json");
+    const reportPath = join(repoRoot, ".forge", "reports", "intake-report.md");
+    const artifact = await readJsonFile<IntakeArtifact>(artifactPath);
+
+    assert.equal(await fileExists(artifactPath), true);
+    assert.equal(await fileExists(reportPath), true);
+    assert.equal(artifact.status, "failed");
+    assert.equal(artifact.runtime_options?.fail_on_low_confidence, true);
+    assert.equal(artifact.confidence?.level, "low");
+    assert.equal(artifact.next_step_readiness?.ready, false);
+    assert.ok(
+      artifact.next_step_readiness?.blocking_issues?.some((issue) =>
+        /LOW_CONFIDENCE_ESCALATED|low confidence/i.test(issue.code ?? "") ||
+        /LOW_CONFIDENCE_ESCALATED|low confidence/i.test(issue.message ?? ""),
+      ),
+      "expected low-confidence escalation blocking issue",
+    );
+    assert.match(result.stderr, /Status: failed/);
+    assert.match(result.stderr, /low confidence/i);
   } finally {
     await disposeTempRepo(repoRoot);
   }

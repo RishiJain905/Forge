@@ -153,6 +153,103 @@ await runScenario(
 );
 
 await runScenario(
+  "ambiguity analysis treats missing explicit test references as weak repo inspection",
+  async () => {
+    const repoRoot = await createTempRepo();
+
+    try {
+      const taskInput = resolveTaskSource(
+        createPromptInput(
+          [
+            "Update src/app.ts and keep tests/missing.test.ts aligned.",
+            "",
+            "Acceptance Criteria",
+            "- src/app.ts is updated",
+            "- tests/missing.test.ts is added or updated",
+          ].join("\n"),
+        ),
+      );
+      const taskParserResult = buildTaskParserResult(taskInput);
+      const repoScanResult = await scanRepoResult(repoRoot, join(repoRoot, ".forge"));
+      const inferenceResult = buildInferenceResult({
+        taskInput,
+        taskParserResult,
+        repoScanResult,
+      });
+
+      const result = buildAmbiguityAnalysisResult({
+        taskInput,
+        taskParserResult,
+        repoScanResult,
+        inferenceResult,
+        runtimeOptions: resolveRuntimeOptions({}),
+        failure: null,
+        validationBlockingIssues: [],
+        validationWarnings: [],
+        validationRecommendedUserActions: [],
+      });
+
+      assert.equal(result.confidence.level, "low");
+      assert.equal(result.confidence.signals.repoInspection, "weak");
+      assert.ok(
+        result.confidence.reasons.some((value: string) => /test paths were not found/i.test(value)),
+      );
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "ambiguity analysis treats differently cased referenced paths as grounded when the repo match exists",
+  async () => {
+    const repoRoot = await createTempRepo();
+
+    try {
+      const taskInput = resolveTaskSource(
+        createPromptInput(
+          [
+            "Update SRC/APP.TS and keep TESTS/APP.TEST.TS aligned.",
+            "",
+            "Acceptance Criteria",
+            "- SRC/APP.TS is updated",
+            "- TESTS/APP.TEST.TS stays aligned",
+          ].join("\n"),
+        ),
+      );
+      const taskParserResult = buildTaskParserResult(taskInput);
+      const repoScanResult = await scanRepoResult(repoRoot, join(repoRoot, ".forge"));
+      const inferenceResult = buildInferenceResult({
+        taskInput,
+        taskParserResult,
+        repoScanResult,
+      });
+
+      const result = buildAmbiguityAnalysisResult({
+        taskInput,
+        taskParserResult,
+        repoScanResult,
+        inferenceResult,
+        runtimeOptions: resolveRuntimeOptions({}),
+        failure: null,
+        validationBlockingIssues: [],
+        validationWarnings: [],
+        validationRecommendedUserActions: [],
+      });
+
+      assert.equal(result.confidence.level, "high");
+      assert.equal(result.confidence.signals.repoInspection, "strong");
+      assert.equal(result.confidence.signals.targeting, "strong");
+      assert.ok(
+        !result.confidence.reasons.some((value: string) => /test paths were not found|referenced paths remain unresolved/i.test(value)),
+      );
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
   "assembled intake result keeps all four responsibility outputs on the final path",
   async () => {
     const repoRoot = await createTempRepo();

@@ -1,6 +1,7 @@
 import type {
   BlockingIssue,
   CandidateTarget,
+  IntakeConfidenceLevel,
   IntakeFailureDetails,
   IntakeStatus,
   IntakeTaskSpec,
@@ -14,14 +15,12 @@ export interface SuccessEvaluation {
   nextStepReadiness: NextStepReadiness;
 }
 
-function pushUnique(values: string[], value: string): void {
-  if (!values.includes(value)) {
-    values.push(value);
-  }
-}
-
 function createBlockingIssue(code: string, message: string): BlockingIssue {
   return { code, message };
+}
+
+function hasBlockingIssue(blockingIssues: BlockingIssue[], code: string): boolean {
+  return blockingIssues.some((issue) => issue.code === code);
 }
 
 export function evaluateSuccessModel(params: {
@@ -29,6 +28,8 @@ export function evaluateSuccessModel(params: {
   repoContext: RepoContext;
   candidateTargets: CandidateTarget[];
   failure: IntakeFailureDetails | null;
+  confidenceLevel: IntakeConfidenceLevel;
+  failOnLowConfidence: boolean;
   validationBlockingIssues?: BlockingIssue[];
   inputWarnings?: string[];
   inputAmbiguities?: string[];
@@ -75,43 +76,16 @@ export function evaluateSuccessModel(params: {
     );
   }
 
-  if (!params.taskSpec.hasAcceptanceCriteria) {
-    pushUnique(
-      ambiguities,
-      "Acceptance criteria are missing from the task input.",
-    );
-    pushUnique(
-      warnings,
-      "Acceptance criteria are missing, so Step 2 planning may need user follow-up.",
-    );
-    pushUnique(
-      recommendedUserActions,
-      "Add explicit acceptance criteria to the task input before planning.",
-    );
-  }
-
-  if (params.repoContext.testFiles.length === 0) {
-    pushUnique(
-      warnings,
-      "No tests were detected during repo grounding.",
-    );
-    pushUnique(
-      recommendedUserActions,
-      "Identify or add the test files that should validate the planned changes.",
-    );
-  }
-
   if (
-    params.candidateTargets.length > 0 &&
-    params.candidateTargets.every((target) => target.matchType === "fallback")
+    params.failOnLowConfidence &&
+    params.confidenceLevel === "low" &&
+    !hasBlockingIssue(blockingIssues, "LOW_CONFIDENCE_ESCALATED")
   ) {
-    pushUnique(
-      warnings,
-      "Repo mapping is partial but still usable because candidate targets were inferred from repo structure.",
-    );
-    pushUnique(
-      recommendedUserActions,
-      "Reference concrete files or directories in the task input to strengthen repo grounding.",
+    blockingIssues.push(
+      createBlockingIssue(
+        "LOW_CONFIDENCE_ESCALATED",
+        "Forge intake was configured to fail on low confidence, and the final confidence level is low.",
+      ),
     );
   }
 
@@ -131,12 +105,17 @@ export function resolveIntakeStatus(params: {
   nextStepReadiness: NextStepReadiness;
   warnings: string[];
   ambiguities: string[];
+  confidenceLevel: IntakeConfidenceLevel;
 }): IntakeStatus {
   if (params.failure || !params.nextStepReadiness.ready) {
     return "failed";
   }
 
-  if (params.warnings.length > 0 || params.ambiguities.length > 0) {
+  if (
+    params.confidenceLevel !== "high" ||
+    params.warnings.length > 0 ||
+    params.ambiguities.length > 0
+  ) {
     return "warning";
   }
 
@@ -145,6 +124,13 @@ export function resolveIntakeStatus(params: {
 
 export function buildSummary(status: IntakeStatus, nextStepReadiness: NextStepReadiness): string {
   if (status === "failed") {
+    if (
+      nextStepReadiness.blockingIssues.length === 1 &&
+      hasBlockingIssue(nextStepReadiness.blockingIssues, "LOW_CONFIDENCE_ESCALATED")
+    ) {
+      return "Forge intake is not ready for forge plan because low confidence was escalated to failure.";
+    }
+
     return nextStepReadiness.blockingIssues.length > 0
       ? "Forge intake is not ready for forge plan because blocking issues remain."
       : "Forge intake failed before it could produce a ready result.";

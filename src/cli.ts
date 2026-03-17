@@ -56,7 +56,7 @@ export async function runCli(argv: string[]): Promise<number> {
     .option("--no-llm", "Force deterministic intake behavior without optional LLM assistance.")
     .option(
       "--fail-on-low-confidence",
-      "Record that low-confidence intake results should escalate to failure when confidence scoring is implemented.",
+      "Escalate a low-confidence intake result to a failed run.",
     )
     .option(
       "--focus <path>",
