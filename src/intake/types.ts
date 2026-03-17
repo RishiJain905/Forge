@@ -2,6 +2,10 @@ import type { Step1BoundaryPolicy } from "./constants.js";
 
 export type IntakeStatus = "success" | "warning" | "failed";
 export type IntakeInputMode = "spec" | "prompt";
+export type IntakeOutputMode = "default" | "json-only" | "report-only";
+export type IntakeLlmMode = "deterministic" | "assist";
+export type IntakeConfidenceLevel = "high" | "medium" | "low";
+export type IntakeConfidenceSignalStrength = "strong" | "partial" | "weak";
 
 export interface IntakeCommandOptions {
   repo?: string;
@@ -12,6 +16,11 @@ export interface IntakeCommandOptions {
   constraints?: string;
   config?: string;
   focus?: string[];
+  jsonOnly?: boolean;
+  reportOnly?: boolean;
+  llmAssist?: boolean;
+  noLlm?: boolean;
+  failOnLowConfidence?: boolean;
 }
 
 export interface ArtifactSourceInputs {
@@ -27,6 +36,12 @@ export interface ArtifactSourceInputs {
   focus_paths: string[];
 }
 
+export interface ArtifactRuntimeOptions {
+  output_mode: IntakeOutputMode;
+  llm_mode: IntakeLlmMode;
+  fail_on_low_confidence: boolean;
+}
+
 export interface NormalizedTaskInput {
   inputMode: IntakeInputMode;
   primaryInput: {
@@ -40,6 +55,19 @@ export interface NormalizedTaskInput {
   configPath: string | null;
   focusPaths: string[];
   ambiguities: string[];
+  recommendedUserActions: string[];
+}
+
+export interface TaskParserResult {
+  taskSpec: IntakeTaskSpec;
+  signals: {
+    hasGoal: boolean;
+    hasAcceptanceCriteria: boolean;
+    referencedPaths: string[];
+    promptIsThin: boolean;
+  };
+  ambiguities: string[];
+  warnings: string[];
   recommendedUserActions: string[];
 }
 
@@ -70,11 +98,39 @@ export interface RepoContext {
   manifestFiles: string[];
 }
 
+export interface RepoScanResult {
+  repoContext: RepoContext;
+  signals: {
+    sourceFileCount: number;
+    testFileCount: number;
+    manifestFileCount: number;
+    repoLooksSparse: boolean;
+  };
+  warnings: string[];
+}
+
 export interface CandidateTarget {
   path: string;
   kind: "source" | "test" | "manifest";
   matchType: "explicit" | "fallback";
   reason: string;
+}
+
+export interface InitialVerificationTarget {
+  path: string;
+  kind: CandidateTarget["kind"];
+  reason: string;
+}
+
+export interface InferenceResult {
+  candidateTargets: CandidateTarget[];
+  inferredRequirements: string[];
+  signals: {
+    explicitTargetCount: number;
+    usedFallbackTargets: boolean;
+    inferredRequirementCount: number;
+  };
+  warnings: string[];
 }
 
 export interface BlockingIssue {
@@ -87,6 +143,59 @@ export interface IntakeValidationResult {
   blockingIssues: BlockingIssue[];
   warnings: string[];
   recommendedUserActions: string[];
+}
+
+export interface ResolvedRuntimeOptions {
+  outputMode: IntakeOutputMode;
+  writeArtifact: boolean;
+  writeReport: boolean;
+  llmMode: IntakeLlmMode;
+  failOnLowConfidence: boolean;
+  blockingIssues: BlockingIssue[];
+  warnings: string[];
+  recommendedUserActions: string[];
+}
+
+export interface AmbiguityAnalysisResult {
+  ambiguities: string[];
+  warnings: string[];
+  recommendedUserActions: string[];
+  confidence: {
+    level: IntakeConfidenceLevel;
+    signals: {
+      taskParsing: IntakeConfidenceSignalStrength;
+      repoInspection: IntakeConfidenceSignalStrength;
+      targeting: IntakeConfidenceSignalStrength;
+    };
+    reasons: string[];
+  };
+}
+
+export interface AssembledIntakeResult {
+  responsibilities: {
+    taskParser: TaskParserResult;
+    repoScan: RepoScanResult;
+    inference: InferenceResult;
+    analysis: AmbiguityAnalysisResult;
+  };
+  taskSpec: IntakeTaskSpec;
+  repoContext: RepoContext;
+  candidateTargets: CandidateTarget[];
+  ambiguities: string[];
+  warnings: string[];
+  recommendedUserActions: string[];
+  confidence: AmbiguityAnalysisResult["confidence"];
+}
+
+export interface BoundarySafeIntakeResult {
+  taskSpec: IntakeTaskSpec;
+  repoContext: RepoContext;
+  candidateTargets: CandidateTarget[];
+  initialVerificationTargets: InitialVerificationTarget[];
+  ambiguities: string[];
+  warnings: string[];
+  recommendedUserActions: string[];
+  boundaryNotes: string[];
 }
 
 export interface NextStepReadiness {
@@ -128,6 +237,7 @@ export interface IntakeArtifact {
   status: IntakeStatus;
   input_mode: IntakeInputMode | null;
   source_inputs: ArtifactSourceInputs | null;
+  runtime_options: ArtifactRuntimeOptions;
   purpose: string;
   repoRoot: string;
   requestedOutputRoot: string | null;
@@ -141,8 +251,8 @@ export interface IntakeArtifact {
     disallowedCapabilities: readonly string[];
   };
   files: {
-    artifactPath: string;
-    reportPath: string;
+    artifactPath: string | null;
+    reportPath: string | null;
   };
   startedAt: string;
   finishedAt: string;
@@ -150,6 +260,7 @@ export interface IntakeArtifact {
   taskSpec: IntakeTaskSpec;
   repoContext: RepoContext;
   candidateTargets: CandidateTarget[];
+  initialVerificationTargets: InitialVerificationTarget[];
   ambiguities: string[];
   nextStepReadiness: NextStepReadiness;
   boundaryNotes: string[];

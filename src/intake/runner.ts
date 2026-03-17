@@ -2,26 +2,28 @@ import path from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
 
 import { FORGE_INTAKE_COMMAND, STEP1_BOUNDARY_POLICY } from "./constants.js";
+import { buildAmbiguityAnalysisResult } from "./analysis.js";
+import { assembleIntakeResult } from "./assemble.js";
 import { createIntakeArtifact } from "./artifact.js";
-import { resolveCandidateTargets } from "./candidate-targets.js";
+import { buildBoundarySafeIntakeResult } from "./boundary.js";
 import { PersistenceError } from "./errors.js";
+import { buildInferenceResult } from "./inference.js";
 import { resolveTaskSource, toArtifactSourceInputs } from "./input.js";
+import { resolveRuntimeOptions } from "./options.js";
 import { resolveOutputPaths, resolveRepoRoot } from "./path-policy.js";
-import { scanRepoContext } from "./repo-context.js";
+import { scanRepoResult } from "./repo-context.js";
 import { createIntakeReport } from "./report.js";
 import { evaluateSuccessModel } from "./success.js";
-import { createEmptyTaskSpec, normalizeTaskSpec } from "./task-spec.js";
+import { buildTaskParserResult } from "./task-parser.js";
 import { validateIntakeInputs } from "./validation.js";
 import type {
-  CandidateTarget,
   IntakeCommandOptions,
   IntakeCommandResult,
   IntakeExecutionContext,
   IntakeFailureDetails,
-  IntakeTaskSpec,
   NextStepReadiness,
   NormalizedTaskInput,
-  RepoContext,
+  BoundarySafeIntakeResult,
 } from "./types.js";
 
 async function ensureParentDirectory(filePath: string): Promise<void> {
@@ -35,11 +37,18 @@ async function persistOutputFile(filePath: string, contents: string): Promise<vo
 
 async function persistArtifactAndReport(
   context: IntakeExecutionContext,
+  writeArtifact: boolean,
+  writeReport: boolean,
   artifactContents: string,
   reportContents: string,
 ): Promise<void> {
-  await persistOutputFile(context.paths.artifactPath, artifactContents);
-  await persistOutputFile(context.paths.reportPath, reportContents);
+  if (writeArtifact) {
+    await persistOutputFile(context.paths.artifactPath, artifactContents);
+  }
+
+  if (writeReport) {
+    await persistOutputFile(context.paths.reportPath, reportContents);
+  }
 }
 
 async function createContext(
@@ -69,26 +78,26 @@ function createFailureDetails(
 
 async function persistResult(
   context: IntakeExecutionContext,
+  runtimeOptions: ReturnType<typeof resolveRuntimeOptions>,
   taskInput: NormalizedTaskInput | null,
-  taskSpec: IntakeTaskSpec,
-  repoContext: RepoContext,
-  candidateTargets: CandidateTarget[],
-  ambiguities: string[],
+  boundarySafeResult: BoundarySafeIntakeResult,
   nextStepReadiness: NextStepReadiness,
   failure: IntakeFailureDetails | null,
-  warnings: string[],
 ): Promise<IntakeCommandResult> {
   const finishedAt = new Date().toISOString();
   const artifact = createIntakeArtifact({
     context,
     finishedAt,
     sourceInputs: taskInput ? toArtifactSourceInputs(taskInput) : null,
-    taskSpec,
-    repoContext,
-    candidateTargets,
-    ambiguities,
+    runtimeOptions,
+    taskSpec: boundarySafeResult.taskSpec,
+    repoContext: boundarySafeResult.repoContext,
+    candidateTargets: boundarySafeResult.candidateTargets,
+    initialVerificationTargets: boundarySafeResult.initialVerificationTargets,
+    ambiguities: boundarySafeResult.ambiguities,
     nextStepReadiness,
-    warnings,
+    boundaryNotes: boundarySafeResult.boundaryNotes,
+    warnings: boundarySafeResult.warnings,
     failure,
   });
   const report = createIntakeReport(artifact);
@@ -96,6 +105,8 @@ async function persistResult(
   try {
     await persistArtifactAndReport(
       context,
+      runtimeOptions.writeArtifact,
+      runtimeOptions.writeReport,
       `${JSON.stringify(artifact, null, 2)}\n`,
       report,
     );
@@ -108,8 +119,8 @@ async function persistResult(
   return {
     status: artifact.status,
     artifact,
-    artifactPath: context.paths.artifactPath,
-    reportPath: context.paths.reportPath,
+    artifactPath: runtimeOptions.writeArtifact ? context.paths.artifactPath : null,
+    reportPath: runtimeOptions.writeReport ? context.paths.reportPath : null,
     outputRoot: context.paths.outputRoot,
     summary: artifact.summary,
     nextStepReadiness: artifact.nextStepReadiness,
@@ -147,8 +158,12 @@ export async function runIntakeCommand(
   }
 
   const context = await createContext(repoRoot, options);
+  const runtimeOptions = resolveRuntimeOptions(options);
   let taskInput: NormalizedTaskInput | null = null;
   let failure: IntakeFailureDetails | null = null;
+  let runtimeBlockingIssues = [...runtimeOptions.blockingIssues];
+  let runtimeWarnings = [...runtimeOptions.warnings];
+  let runtimeRecommendedUserActions = [...runtimeOptions.recommendedUserActions];
   let validationBlockingIssues: NextStepReadiness["blockingIssues"] = [];
   let validationWarnings: string[] = [];
   let validationRecommendedUserActions: string[] = [];
@@ -161,50 +176,83 @@ export async function runIntakeCommand(
     );
   }
 
-  if (!failure) {
-    const validationResult = await validateIntakeInputs(options, currentWorkingDirectory, repoRoot);
-    validationBlockingIssues = validationResult.blockingIssues;
-    validationWarnings = validationResult.warnings;
-    validationRecommendedUserActions = validationResult.recommendedUserActions;
+  const validationResult = await validateIntakeInputs(options, currentWorkingDirectory, repoRoot);
+  validationBlockingIssues = validationResult.blockingIssues;
+  validationWarnings = validationResult.warnings;
+  validationRecommendedUserActions = validationResult.recommendedUserActions;
 
-    if (validationResult.blockingIssues.length > 0) {
-      failure = createFailureDetails(
-        "INPUT_VALIDATION_FAILED",
-        "Forge intake found blocking input validation issues.",
-      );
-    } else if (validationResult.validatedInput) {
-      taskInput = resolveTaskSource(validationResult.validatedInput);
-    }
+  if (validationResult.validatedInput) {
+    taskInput = resolveTaskSource(validationResult.validatedInput);
   }
 
-  const taskSpec = taskInput ? normalizeTaskSpec(taskInput) : createEmptyTaskSpec();
-  const repoContext = await scanRepoContext(repoRoot, context.paths.outputRoot);
-  const candidateTargets = resolveCandidateTargets(taskInput, repoContext);
-  const successEvaluation = evaluateSuccessModel({
-    taskSpec,
-    repoContext,
-    candidateTargets,
-    failure,
-    validationBlockingIssues,
-    inputWarnings: validationWarnings,
-    inputAmbiguities: taskInput?.ambiguities,
-    inputRecommendedUserActions:
-      taskInput
-        ? [...taskInput.recommendedUserActions, ...validationRecommendedUserActions]
-        : validationRecommendedUserActions,
+  if (!failure && runtimeBlockingIssues.length > 0) {
+    failure = createFailureDetails(
+      "CLI_FLAG_POLICY_FAILED",
+      "Forge intake found blocking CLI flag conflicts.",
+    );
+  }
+
+  if (!failure && validationResult.blockingIssues.length > 0) {
+    failure = createFailureDetails(
+      "INPUT_VALIDATION_FAILED",
+      "Forge intake found blocking input validation issues.",
+    );
+  }
+
+  const taskParserResult = buildTaskParserResult(taskInput);
+  const repoScanResult = await scanRepoResult(repoRoot, context.paths.outputRoot);
+  const inferenceResult = buildInferenceResult({
+    taskInput,
+    taskParserResult,
+    repoScanResult,
   });
+  const ambiguityAnalysisResult = buildAmbiguityAnalysisResult({
+    taskInput,
+    taskParserResult,
+    repoScanResult,
+    inferenceResult,
+    runtimeOptions,
+    failure,
+    validationBlockingIssues: [...runtimeBlockingIssues, ...validationBlockingIssues],
+    validationWarnings,
+    validationRecommendedUserActions,
+  });
+  const assembledResult = assembleIntakeResult({
+    taskInput,
+    taskParserResult,
+    repoScanResult,
+    inferenceResult,
+    ambiguityAnalysisResult,
+  });
+  const successEvaluation = evaluateSuccessModel({
+    taskSpec: assembledResult.taskSpec,
+    repoContext: assembledResult.repoContext,
+    candidateTargets: assembledResult.candidateTargets,
+    failure,
+    validationBlockingIssues: [...runtimeBlockingIssues, ...validationBlockingIssues],
+    inputWarnings: assembledResult.warnings,
+    inputAmbiguities: assembledResult.ambiguities,
+    inputRecommendedUserActions: assembledResult.recommendedUserActions,
+  });
+  const finalAssembledResult = {
+    ...assembledResult,
+    ambiguities: successEvaluation.ambiguities,
+    warnings: successEvaluation.warnings,
+    recommendedUserActions: successEvaluation.nextStepReadiness.recommendedUserActions,
+  };
 
   try {
     return await persistResult(
       context,
+      runtimeOptions,
       taskInput,
-      taskSpec,
-      repoContext,
-      candidateTargets,
-      successEvaluation.ambiguities,
+      buildBoundarySafeIntakeResult({
+        context,
+        taskInput,
+        assembledResult: finalAssembledResult,
+      }),
       successEvaluation.nextStepReadiness,
       failure,
-      successEvaluation.warnings,
     );
   } catch (error) {
     const persistenceFailure = createFailureDetails(
@@ -249,14 +297,15 @@ export async function runIntakeCommand(
     try {
       return await persistResult(
         fallbackContext,
+        runtimeOptions,
         taskInput,
-        taskSpec,
-        repoContext,
-        candidateTargets,
-        successEvaluation.ambiguities,
+        buildBoundarySafeIntakeResult({
+          context: fallbackContext,
+          taskInput,
+          assembledResult: finalAssembledResult,
+        }),
         successEvaluation.nextStepReadiness,
         fallbackFailure,
-        successEvaluation.warnings,
       );
     } catch {
       return {

@@ -5,10 +5,13 @@ import {
   FORGE_SCHEMA_VERSION,
   STEP1_BOUNDARY_POLICY,
 } from "./constants.js";
+import { toArtifactRuntimeOptions } from "./options.js";
 import { buildSummary, resolveIntakeStatus } from "./success.js";
 import type {
   ArtifactSourceInputs,
+  BoundarySafeIntakeResult,
   CandidateTarget,
+  InitialVerificationTarget,
   IntakeArtifact,
   IntakeExecutionContext,
   IntakeFailureDetails,
@@ -16,6 +19,7 @@ import type {
   IntakeStatus,
   NextStepReadiness,
   RepoContext,
+  ResolvedRuntimeOptions,
 } from "./types.js";
 
 const intakeArtifactSchema = z.object({
@@ -38,6 +42,11 @@ const intakeArtifactSchema = z.object({
       focus_paths: z.array(z.string()),
     })
     .nullable(),
+  runtime_options: z.object({
+    output_mode: z.enum(["default", "json-only", "report-only"]),
+    llm_mode: z.enum(["deterministic", "assist"]),
+    fail_on_low_confidence: z.boolean(),
+  }),
   purpose: z.string().min(1),
   repoRoot: z.string().min(1),
   requestedOutputRoot: z.string().nullable(),
@@ -51,8 +60,8 @@ const intakeArtifactSchema = z.object({
     disallowedCapabilities: z.array(z.string().min(1)),
   }),
   files: z.object({
-    artifactPath: z.string().min(1),
-    reportPath: z.string().min(1),
+    artifactPath: z.string().min(1).nullable(),
+    reportPath: z.string().min(1).nullable(),
   }),
   startedAt: z.string().min(1),
   finishedAt: z.string().min(1),
@@ -73,6 +82,13 @@ const intakeArtifactSchema = z.object({
       path: z.string().min(1),
       kind: z.enum(["source", "test", "manifest"]),
       matchType: z.enum(["explicit", "fallback"]),
+      reason: z.string().min(1),
+    }),
+  ),
+  initialVerificationTargets: z.array(
+    z.object({
+      path: z.string().min(1),
+      kind: z.enum(["source", "test", "manifest"]),
       reason: z.string().min(1),
     }),
   ),
@@ -98,25 +114,18 @@ const intakeArtifactSchema = z.object({
     .nullable(),
 });
 
-function buildBoundaryNotes(context: IntakeExecutionContext): string[] {
-  return [
-    "Intake is limited to repository inspection and artifact/report persistence.",
-    "Later workflow steps are deferred; this run does not create plans, workstreams, execution packets, or code edits.",
-    context.paths.usedFallbackRoot
-      ? "The requested output directory was rejected and Forge fell back to the default .forge output root."
-      : "All writes are confined to the resolved output root.",
-  ];
-}
-
 export function createIntakeArtifact(params: {
   context: IntakeExecutionContext;
   finishedAt: string;
   sourceInputs: ArtifactSourceInputs | null;
+  runtimeOptions: ResolvedRuntimeOptions;
   taskSpec: IntakeTaskSpec;
   repoContext: RepoContext;
   candidateTargets: CandidateTarget[];
+  initialVerificationTargets: InitialVerificationTarget[];
   ambiguities?: string[];
   nextStepReadiness: NextStepReadiness;
+  boundaryNotes: BoundarySafeIntakeResult["boundaryNotes"];
   warnings?: string[];
   failure?: IntakeFailureDetails | null;
 }): IntakeArtifact {
@@ -137,6 +146,7 @@ export function createIntakeArtifact(params: {
     status,
     input_mode: params.sourceInputs?.input_mode ?? null,
     source_inputs: params.sourceInputs,
+    runtime_options: toArtifactRuntimeOptions(params.runtimeOptions),
     purpose: STEP1_BOUNDARY_POLICY.purpose,
     repoRoot: params.context.repoRoot,
     requestedOutputRoot: params.context.paths.requestedOutputRoot,
@@ -151,8 +161,8 @@ export function createIntakeArtifact(params: {
       disallowedCapabilities: STEP1_BOUNDARY_POLICY.disallowedCapabilities,
     },
     files: {
-      artifactPath: params.context.paths.artifactPath,
-      reportPath: params.context.paths.reportPath,
+      artifactPath: params.runtimeOptions.writeArtifact ? params.context.paths.artifactPath : null,
+      reportPath: params.runtimeOptions.writeReport ? params.context.paths.reportPath : null,
     },
     startedAt: params.context.startedAt,
     finishedAt: params.finishedAt,
@@ -160,9 +170,10 @@ export function createIntakeArtifact(params: {
     taskSpec: params.taskSpec,
     repoContext: params.repoContext,
     candidateTargets: params.candidateTargets,
+    initialVerificationTargets: params.initialVerificationTargets,
     ambiguities,
     nextStepReadiness: params.nextStepReadiness,
-    boundaryNotes: buildBoundaryNotes(params.context),
+    boundaryNotes: params.boundaryNotes,
     warnings,
     failure,
   };

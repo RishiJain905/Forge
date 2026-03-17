@@ -1,3 +1,11 @@
+name = "securityrev"
+description = """Use this agent when you need to perform security reviews of code changes,
+  identify vulnerabilities, check for OWASP Top 10 issues, review
+  authentication/authorization implementations, or ensure compliance with
+  security standards during feature development. Examples: reviewing a new API
+  endpoint for injection risks, checking user authentication flow for bypass
+  vulnerabilities, auditing data handling code for PII exposure, or evaluating
+  third-party dependencies for known CVEs."""
 model = "gpt-5.4"
 model_reasoning_effort = "xhigh"
 developer_instructions = """

@@ -1,9 +1,33 @@
 import { Command } from "commander";
 
 import { runIntakeCommand } from "./intake/runner.js";
+import type { IntakeCommandResult } from "./intake/types.js";
+
+function hasFlag(argv: string[], flag: string): boolean {
+  return argv.includes(flag);
+}
+
+export function formatIntakeCommandOutput(result: IntakeCommandResult): string {
+  const lines = [
+    `Status: ${result.status}`,
+    `Summary: ${result.summary}`,
+    result.outputRoot ? `Output root: ${result.outputRoot}` : null,
+    result.artifactPath ? `Artifact: ${result.artifactPath}` : null,
+    result.reportPath ? `Report: ${result.reportPath}` : null,
+  ].filter((line): line is string => Boolean(line));
+
+  return `${lines.join("\n")}\n`;
+}
 
 export async function runCli(argv: string[]): Promise<number> {
   const program = new Command();
+  const intakeFlagPresence = {
+    jsonOnly: hasFlag(argv, "--json-only"),
+    reportOnly: hasFlag(argv, "--report-only"),
+    llmAssist: hasFlag(argv, "--llm-assist"),
+    noLlm: hasFlag(argv, "--no-llm"),
+    failOnLowConfidence: hasFlag(argv, "--fail-on-low-confidence"),
+  };
 
   let exitCode = 0;
 
@@ -25,6 +49,14 @@ export async function runCli(argv: string[]): Promise<number> {
     .option("--notes <path>", "Read supplemental notes from a text or markdown file.")
     .option("--constraints <path>", "Read supplemental constraints from a text or markdown file.")
     .option("--config <path>", "Validate and record an intake config file path.")
+    .option("--json-only", "Persist only the intake JSON artifact.")
+    .option("--report-only", "Persist only the intake markdown report.")
+    .option("--llm-assist", "Record that optional LLM assistance is desired when available.")
+    .option("--no-llm", "Force deterministic intake behavior without optional LLM assistance.")
+    .option(
+      "--fail-on-low-confidence",
+      "Record that low-confidence intake results should escalate to failure when confidence scoring is implemented.",
+    )
     .option(
       "--focus <path>",
       "Record a repo-relative focus file or directory. Repeat to provide multiple focus paths.",
@@ -40,18 +72,22 @@ export async function runCli(argv: string[]): Promise<number> {
       constraints?: string;
       config?: string;
       focus?: string[];
+      jsonOnly?: boolean;
+      reportOnly?: boolean;
+      llmAssist?: boolean;
+      llm?: boolean;
+      failOnLowConfidence?: boolean;
     }) => {
-      const result = await runIntakeCommand(options);
+      const result = await runIntakeCommand({
+        ...options,
+        jsonOnly: intakeFlagPresence.jsonOnly,
+        reportOnly: intakeFlagPresence.reportOnly,
+        llmAssist: intakeFlagPresence.llmAssist,
+        noLlm: intakeFlagPresence.noLlm,
+        failOnLowConfidence: intakeFlagPresence.failOnLowConfidence,
+      });
 
-      const lines = [
-        `Status: ${result.status}`,
-        `Summary: ${result.summary}`,
-        result.outputRoot ? `Output root: ${result.outputRoot}` : null,
-        result.artifactPath ? `Artifact: ${result.artifactPath}` : null,
-        result.reportPath ? `Report: ${result.reportPath}` : null,
-      ].filter((line): line is string => Boolean(line));
-
-      const output = `${lines.join("\n")}\n`;
+      const output = formatIntakeCommandOutput(result);
 
       if (result.status === "failed") {
         process.stderr.write(output);

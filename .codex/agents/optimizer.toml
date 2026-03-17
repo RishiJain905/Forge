@@ -1,3 +1,9 @@
+name = "optimizer"
+description = """Use this agent when you need to optimize or improve existing codebases
+  for performance, maintainability, or best practices. Examples include:
+  refactoring complex functions, optimizing database queries, improving
+  frontend rendering performance, implementing caching strategies, or
+  reviewing code for potential performance bottlenecks."""
 model = "gpt-5.4"
 model_reasoning_effort = "high"
 developer_instructions = """

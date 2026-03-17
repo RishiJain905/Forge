@@ -1,3 +1,10 @@
+name = "frontendend"
+description = """Use this agent when you need to build or implement user interfaces using
+  modern frontend frameworks (React, Vue, Svelte, Angular, etc.) where
+  accessibility, performance, and user experience are priorities. Examples
+  include: creating a new component library, building a responsive dashboard,
+  implementing accessible forms, optimizing UI performance, or reviewing
+  frontend code for accessibility compliance."""
 model = "gpt-5.4"
 model_reasoning_effort = "high"
 developer_instructions = """

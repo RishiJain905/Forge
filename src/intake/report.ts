@@ -20,6 +20,18 @@ function renderCandidateTargets(
     .join("\n");
 }
 
+function renderInitialVerificationTargets(
+  items: IntakeArtifact["initialVerificationTargets"],
+): string {
+  if (items.length === 0) {
+    return "- none";
+  }
+
+  return items
+    .map((item) => `- \`${item.path}\` (${item.kind}) - ${item.reason}`)
+    .join("\n");
+}
+
 function renderBlockingIssues(
   items: IntakeArtifact["nextStepReadiness"]["blockingIssues"],
 ): string {
@@ -69,6 +81,12 @@ export function createIntakeReport(artifact: IntakeArtifact): string {
     `- Config path: ${artifact.source_inputs?.config_path ?? "none"}`,
     `- Focus paths: ${artifact.source_inputs?.focus_paths.join(", ") || "none"}`,
     "",
+    "## Runtime Options",
+    "",
+    `- Output mode: \`${artifact.runtime_options.output_mode}\``,
+    `- LLM mode: \`${artifact.runtime_options.llm_mode}\``,
+    `- Fail on low confidence: \`${artifact.runtime_options.fail_on_low_confidence}\``,
+    "",
     "## Task Spec",
     "",
     `- Goal: ${artifact.taskSpec.goal || "none"}`,
@@ -86,6 +104,10 @@ export function createIntakeReport(artifact: IntakeArtifact): string {
     "## Candidate Targets",
     "",
     renderCandidateTargets(artifact.candidateTargets),
+    "",
+    "## Initial Verification Targets",
+    "",
+    renderInitialVerificationTargets(artifact.initialVerificationTargets),
     "",
     "## Ambiguities",
     "",
@@ -121,8 +143,12 @@ export function createIntakeReport(artifact: IntakeArtifact): string {
     "",
     "## Output Files",
     "",
-    `- Artifact: \`${artifact.files.artifactPath}\``,
-    `- Report: \`${artifact.files.reportPath}\``,
+    artifact.files.artifactPath
+      ? `- Artifact: \`${artifact.files.artifactPath}\``
+      : "- Artifact: none",
+    artifact.files.reportPath
+      ? `- Report: \`${artifact.files.reportPath}\``
+      : "- Report: none",
     "",
     "## Warnings",
     "",
