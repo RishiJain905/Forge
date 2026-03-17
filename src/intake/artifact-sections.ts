@@ -1,5 +1,6 @@
 import type {
   ArtifactCandidateTargetSectionItem,
+  ArtifactGitContextSection,
   ArtifactConfidenceSection,
   ArtifactInitialVerificationTargetSectionItem,
   ArtifactNextStepReadinessSection,
@@ -23,6 +24,17 @@ function toArtifactTaskSpecSection(
   };
 }
 
+function toArtifactGitContextSection(
+  gitContext: BoundarySafeIntakeResult["repoContext"]["gitContext"],
+): ArtifactGitContextSection {
+  return {
+    status: gitContext.status,
+    repo_root: gitContext.repoRoot,
+    branch: gitContext.branch,
+    recent_files: [...gitContext.recentFiles],
+  };
+}
+
 function toArtifactRepoContextSection(
   repoContext: BoundarySafeIntakeResult["repoContext"],
 ): ArtifactRepoContextSection {
@@ -31,6 +43,7 @@ function toArtifactRepoContextSection(
     source_files: [...repoContext.sourceFiles],
     test_files: [...repoContext.testFiles],
     manifest_files: [...repoContext.manifestFiles],
+    git_context: toArtifactGitContextSection(repoContext.gitContext),
   };
 }
 

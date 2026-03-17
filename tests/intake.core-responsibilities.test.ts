@@ -132,6 +132,9 @@ await runScenario(
       const result = await scanRepoResult(repoRoot, join(repoRoot, ".forge"));
 
       assert.equal(result.repoContext.grounded, true);
+      assert.equal(result.repoContext.gitContext.status, "not_repo");
+      assert.equal(result.repoContext.gitContext.repoRoot, null);
+      assert.deepEqual(result.warnings, []);
       assert.ok(result.signals.sourceFileCount >= 1);
       assert.ok(result.signals.testFileCount >= 1);
       assert.equal(result.signals.repoLooksSparse, false);

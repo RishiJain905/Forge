@@ -4,6 +4,7 @@ import { createIntakeArtifact } from "../src/intake/artifact.js";
 import { STEP1_BOUNDARY_POLICY } from "../src/intake/constants.js";
 import { resolveRuntimeOptions } from "../src/intake/options.js";
 import { createIntakeReport } from "../src/intake/report.js";
+import { createGitContext } from "./support/forge-cli.js";
 import type {
   AssembledIntakeResult,
   BoundarySafeIntakeResult,
@@ -94,6 +95,7 @@ function createBaseAssembledResult(): AssembledIntakeResult {
           testFiles: ["tests/app.test.ts"],
           manifestFiles: ["package.json"],
           allFiles: ["src/app.ts", "tests/app.test.ts", "package.json"],
+          gitContext: createGitContext(),
         },
         signals: {
           sourceFileCount: 1,
@@ -157,6 +159,7 @@ function createBaseAssembledResult(): AssembledIntakeResult {
       testFiles: ["tests/app.test.ts"],
       manifestFiles: ["package.json"],
       allFiles: ["src/app.ts", "tests/app.test.ts", "package.json"],
+      gitContext: createGitContext(),
     },
     candidateTargets: [
       {
@@ -205,6 +208,7 @@ function createBaseBoundarySafeResult(): BoundarySafeIntakeResult {
       testFiles: ["tests/app.test.ts"],
       manifestFiles: ["package.json"],
       allFiles: ["src/app.ts", "tests/app.test.ts", "package.json"],
+      gitContext: createGitContext(),
     },
     candidateTargets: [
       {
@@ -295,7 +299,28 @@ await runScenario("intake report includes the full stable heading contract in or
   assert.deepEqual(extractLevelTwoHeadings(report), [...REQUIRED_HEADINGS]);
   assert.match(report, /## Overview/);
   assert.match(report, /## Assumptions/);
+  assert.match(report, /Git status:\s+`not_repo`/i);
   assert.match(report, /## Failure[\s\S]*?- none/);
+});
+
+await runScenario("intake report renders available git context details when present", () => {
+  const report = createIntakeReport(createArtifact({
+    mutateBoundarySafeResult: (result) => {
+      result.repoContext.gitContext = createGitContext({
+        status: "available",
+        repoRoot: "C:/repo",
+        branch: "main",
+        recentFiles: ["src/app.ts", "tests/app.test.ts"],
+      });
+    },
+  }));
+
+  assert.match(report, /Git status:\s+`available`/i);
+  assert.match(report, /Git repo root:\s+`C:\/repo`/i);
+  assert.match(report, /Git branch:\s+`main`/i);
+  assert.match(report, /## Repo Context[\s\S]*## Candidate Targets/);
+  assert.match(report, /Recent Git Files/);
+  assert.match(report, /src\/app\.ts/);
 });
 
 await runScenario("intake report derives assumptions from artifact evidence without overstating certainty", () => {

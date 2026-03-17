@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createIntakeArtifact } from "../src/intake/artifact.js";
 import { resolveRuntimeOptions } from "../src/intake/options.js";
 import { STEP1_BOUNDARY_POLICY } from "../src/intake/constants.js";
+import { createGitContext } from "./support/forge-cli.js";
 import type {
   AssembledIntakeResult,
   BoundarySafeIntakeResult,
@@ -83,6 +84,7 @@ function createAssembledResult(overrides?: Partial<AssembledIntakeResult>): Asse
           testFiles: [],
           manifestFiles: ["package.json"],
           allFiles: ["package.json"],
+          gitContext: createGitContext(),
         },
         signals: {
           sourceFileCount: 0,
@@ -135,6 +137,7 @@ function createAssembledResult(overrides?: Partial<AssembledIntakeResult>): Asse
       testFiles: [],
       manifestFiles: ["package.json"],
       allFiles: ["package.json"],
+      gitContext: createGitContext(),
     },
     candidateTargets: [
       {
@@ -181,6 +184,7 @@ function createBoundarySafeResult(): BoundarySafeIntakeResult {
       testFiles: [],
       manifestFiles: ["package.json"],
       allFiles: ["package.json"],
+      gitContext: createGitContext(),
     },
     candidateTargets: [
       {
@@ -244,12 +248,14 @@ await runScenario("intake artifact exposes snake_case public section keys and om
   assert.ok("initial_verification_targets" in artifactRecord);
   assert.ok("confidence" in artifactRecord);
   assert.ok("next_step_readiness" in artifactRecord);
+  assert.ok("git_context" in artifact.repo_context);
 
   assert.equal("taskSpec" in artifactRecord, false);
   assert.equal("repoContext" in artifactRecord, false);
   assert.equal("candidateTargets" in artifactRecord, false);
   assert.equal("initialVerificationTargets" in artifactRecord, false);
   assert.equal("nextStepReadiness" in artifactRecord, false);
+  assert.equal("gitContext" in artifact.repo_context, false);
 });
 
 await runScenario("intake artifact normalizes section field names and keeps empty/default sections present", () => {
@@ -272,6 +278,8 @@ await runScenario("intake artifact normalizes section field names and keeps empt
   assert.deepEqual(artifact.repo_context.source_files, []);
   assert.deepEqual(artifact.repo_context.test_files, []);
   assert.deepEqual(artifact.initial_verification_targets, []);
+  assert.equal(artifact.repo_context.git_context.status, "not_repo");
+  assert.equal(artifact.repo_context.git_context.repo_root, null);
   assert.deepEqual(artifact.next_step_readiness.blocking_issues, []);
   assert.deepEqual(artifact.next_step_readiness.recommended_user_actions, []);
   assert.ok(Array.isArray(artifact.risk_analysis.initial_risk_zones));
@@ -318,6 +326,7 @@ await runScenario("intake artifact does not flag referenced repo files outside c
         testFiles: [],
         manifestFiles: ["package.json"],
         allFiles: ["package.json", "docs/guide.md"],
+        gitContext: createGitContext(),
       },
     },
   });

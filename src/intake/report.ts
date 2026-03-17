@@ -189,12 +189,25 @@ function renderTaskSpecSection(artifact: IntakeArtifact): string {
 }
 
 function renderRepoContextSection(artifact: IntakeArtifact): string {
+  const gitContext = artifact.repo_context.git_context;
+
   return renderSection("Repo Context", [
     "Repo grounding summarizes the concrete repository evidence intake found.",
     `- Grounded: \`${artifact.repo_context.grounded}\``,
     `- Source files found: ${artifact.repo_context.source_files.length}`,
     `- Test files found: ${artifact.repo_context.test_files.length}`,
     `- Manifest files found: ${artifact.repo_context.manifest_files.length}`,
+    `- Git status: \`${gitContext.status}\``,
+    gitContext.repo_root
+      ? `- Git repo root: \`${gitContext.repo_root}\``
+      : "- Git repo root: none",
+    gitContext.branch
+      ? `- Git branch: \`${gitContext.branch}\``
+      : "- Git branch: none",
+    "",
+    "### Recent Git Files",
+    "",
+    renderList(gitContext.recent_files),
   ]);
 }
 

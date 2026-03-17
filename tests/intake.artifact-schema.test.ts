@@ -7,6 +7,7 @@ import {
 } from "../src/intake/artifact-schema.js";
 import { FORGE_SCHEMA_VERSION, STEP1_BOUNDARY_POLICY } from "../src/intake/constants.js";
 import { resolveRuntimeOptions } from "../src/intake/options.js";
+import { createGitContext } from "./support/forge-cli.js";
 import type {
   AssembledIntakeResult,
   BoundarySafeIntakeResult,
@@ -80,6 +81,7 @@ function createAssembledResult(): AssembledIntakeResult {
           testFiles: ["tests/app.test.ts"],
           manifestFiles: ["package.json"],
           allFiles: ["src/app.ts", "tests/app.test.ts", "package.json"],
+          gitContext: createGitContext(),
         },
         signals: {
           sourceFileCount: 1,
@@ -132,6 +134,7 @@ function createAssembledResult(): AssembledIntakeResult {
       testFiles: ["tests/app.test.ts"],
       manifestFiles: ["package.json"],
       allFiles: ["src/app.ts", "tests/app.test.ts", "package.json"],
+      gitContext: createGitContext(),
     },
     candidateTargets: [
       {
@@ -169,6 +172,7 @@ function createBoundarySafeResult(): BoundarySafeIntakeResult {
       testFiles: ["tests/app.test.ts"],
       manifestFiles: ["package.json"],
       allFiles: ["src/app.ts", "tests/app.test.ts", "package.json"],
+      gitContext: createGitContext(),
     },
     candidateTargets: [
       {
@@ -236,6 +240,8 @@ await runScenario("intake artifact preserves schema, command, and stage metadata
   );
   assert.equal(artifact.command, "forge intake");
   assert.equal(artifact.stage, STEP1_BOUNDARY_POLICY.stage);
+  assert.equal(artifact.repo_context.git_context.status, "not_repo");
+  assert.equal(artifact.repo_context.git_context.repo_root, null);
 });
 
 await runScenario("artifact schema rejects a missing schemaVersion", () => {

@@ -9,12 +9,17 @@ import { buildInferenceResult } from "./inference.js";
 import { resolveTaskSource, toArtifactSourceInputs } from "./input.js";
 import { resolveOptionalReasoning } from "./llm.js";
 import { resolveRuntimeOptions } from "./options.js";
-import { resolveOutputPaths, resolveRepoRoot } from "./path-policy.js";
+import {
+  resolveFilesystemRepoRoot,
+  resolveOutputPaths,
+  selectRepoRootFromGitContext,
+} from "./path-policy.js";
 import { persistIntakeOutputs } from "./persistence.js";
 import { scanRepoResult } from "./repo-context.js";
 import { createIntakeReport } from "./report.js";
 import { evaluateSuccessModel } from "./success.js";
 import { buildTaskParserResult } from "./task-parser.js";
+import { resolveGitContext } from "./git-context.js";
 import { validateIntakeInputs } from "./validation.js";
 import type {
   IntakeCommandOptions,
@@ -138,7 +143,204 @@ export async function runIntakeCommand(
   let repoRoot: string;
 
   try {
-    repoRoot = await resolveRepoRoot(currentWorkingDirectory, options.repo);
+    const filesystemRepoRoot = await resolveFilesystemRepoRoot(
+      currentWorkingDirectory,
+      options.repo,
+    );
+    const gitContextResult = await resolveGitContext(
+      filesystemRepoRoot,
+      dependencies.gitCommandRunner,
+    );
+
+    repoRoot = selectRepoRootFromGitContext(
+      filesystemRepoRoot,
+      gitContextResult,
+    );
+
+    const context = await createContext(repoRoot, options);
+    const runtimeOptions = resolveRuntimeOptions(options);
+    let taskInput: NormalizedTaskInput | null = null;
+    let failure: IntakeFailureDetails | null = null;
+    let runtimeBlockingIssues = [...runtimeOptions.blockingIssues];
+    let runtimeWarnings = [...runtimeOptions.warnings];
+    let runtimeRecommendedUserActions = [...runtimeOptions.recommendedUserActions];
+    let validationBlockingIssues: NextStepReadiness["blockingIssues"] = [];
+    let validationWarnings: string[] = [];
+    let validationRecommendedUserActions: string[] = [];
+
+    if (context.paths.usedFallbackRoot && context.paths.fallbackReason) {
+      failure = createFailureDetails(
+        "OUTPUT_ROOT_FALLBACK",
+        context.paths.fallbackReason ?? "The requested output directory violated the Step 1 boundary.",
+        context.paths.fallbackReason,
+      );
+    }
+
+    const validationResult = await validateIntakeInputs(options, currentWorkingDirectory, repoRoot);
+    validationBlockingIssues = validationResult.blockingIssues;
+    validationWarnings = validationResult.warnings;
+    validationRecommendedUserActions = validationResult.recommendedUserActions;
+
+    if (validationResult.validatedInput) {
+      taskInput = resolveTaskSource(validationResult.validatedInput);
+    }
+
+    if (!failure && runtimeBlockingIssues.length > 0) {
+      failure = createFailureDetails(
+        "CLI_FLAG_POLICY_FAILED",
+        "Forge intake found blocking CLI flag conflicts.",
+      );
+    }
+
+    if (!failure && validationResult.blockingIssues.length > 0) {
+      failure = createFailureDetails(
+        "INPUT_VALIDATION_FAILED",
+        "Forge intake found blocking input validation issues.",
+      );
+    }
+
+    const taskParserResult = buildTaskParserResult(taskInput);
+    const repoScanResult = await scanRepoResult(
+      repoRoot,
+      context.paths.outputRoot,
+      gitContextResult,
+    );
+    const inferenceResult = buildInferenceResult({
+      taskInput,
+      taskParserResult,
+      repoScanResult,
+      strictFocus: runtimeOptions.strictFocus,
+    });
+    const optionalReasoningResult = await resolveOptionalReasoning({
+      runtimeOptions,
+      taskInput,
+      taskParserResult,
+      repoScanResult,
+      inferenceResult,
+      optionalReasoningHook: dependencies.optionalReasoningHook,
+    });
+    const ambiguityAnalysisResult = buildAmbiguityAnalysisResult({
+      taskInput,
+      taskParserResult,
+      repoScanResult,
+      inferenceResult,
+      runtimeOptions,
+      optionalReasoningResult,
+      failure,
+      validationBlockingIssues: [...runtimeBlockingIssues, ...validationBlockingIssues],
+      validationWarnings,
+      validationRecommendedUserActions,
+    });
+    const assembledResult = assembleIntakeResult({
+      taskInput,
+      taskParserResult,
+      repoScanResult,
+      inferenceResult,
+      ambiguityAnalysisResult,
+    });
+    const successEvaluation = evaluateSuccessModel({
+      taskSpec: assembledResult.taskSpec,
+      repoContext: assembledResult.repoContext,
+      candidateTargets: assembledResult.candidateTargets,
+      failure,
+      confidenceLevel: assembledResult.confidence.level,
+      failOnLowConfidence: runtimeOptions.failOnLowConfidence,
+      validationBlockingIssues: [...runtimeBlockingIssues, ...validationBlockingIssues],
+      inputWarnings: assembledResult.warnings,
+      inputAmbiguities: assembledResult.ambiguities,
+      inputRecommendedUserActions: assembledResult.recommendedUserActions,
+    });
+    const finalAssembledResult = {
+      ...assembledResult,
+      ambiguities: successEvaluation.ambiguities,
+      warnings: successEvaluation.warnings,
+      recommendedUserActions: successEvaluation.nextStepReadiness.recommendedUserActions,
+    };
+
+    try {
+      return await persistResult(
+        context,
+        runtimeOptions,
+        taskInput,
+        finalAssembledResult,
+        buildBoundarySafeIntakeResult({
+          context,
+          taskInput,
+          assembledResult: finalAssembledResult,
+        }),
+        successEvaluation.nextStepReadiness,
+        failure,
+        optionalReasoningResult,
+      );
+    } catch (error) {
+      const persistenceFailure = createFailureDetails(
+        error instanceof Error && "code" in error
+          ? String((error as { code: unknown }).code)
+          : "PERSISTENCE_FAILED",
+        error instanceof Error ? error.message : "Unknown persistence failure.",
+        context.paths.fallbackReason ?? undefined,
+      );
+
+      if (context.paths.usedFallbackRoot) {
+        return {
+          status: "failed",
+          artifact: null,
+          artifactPath: null,
+          reportPath: null,
+          outputRoot: context.paths.outputRoot,
+        summary:
+            "Forge intake failed while persisting its fallback output. No durable artifact could be written.",
+          nextStepReadiness: successEvaluation.nextStepReadiness,
+          failure: persistenceFailure,
+        };
+      }
+
+      const fallbackContext: IntakeExecutionContext = {
+        ...context,
+        paths: {
+          ...(await resolveOutputPaths(repoRoot)),
+          requestedOutputRoot: context.paths.requestedOutputRoot ?? context.paths.outputRoot,
+          usedFallbackRoot: true,
+          fallbackReason:
+            "The configured output root failed during persistence. Forge retried using the default .forge output root.",
+        },
+      };
+
+      const fallbackFailure = createFailureDetails(
+        persistenceFailure.code,
+        persistenceFailure.message,
+        fallbackContext.paths.fallbackReason ?? undefined,
+      );
+
+      try {
+        return await persistResult(
+          fallbackContext,
+          runtimeOptions,
+          taskInput,
+          finalAssembledResult,
+          buildBoundarySafeIntakeResult({
+            context: fallbackContext,
+            taskInput,
+            assembledResult: finalAssembledResult,
+          }),
+          successEvaluation.nextStepReadiness,
+          fallbackFailure,
+          optionalReasoningResult,
+        );
+      } catch {
+        return {
+          status: "failed",
+          artifact: null,
+          artifactPath: null,
+          reportPath: null,
+          outputRoot: fallbackContext.paths.outputRoot,
+          summary:
+            "Forge intake failed while persisting both the configured output root and the default .forge fallback.",
+          nextStepReadiness: successEvaluation.nextStepReadiness,
+          failure: fallbackFailure,
+        };
+      }
+    }
   } catch (error) {
     const failure = createFailureDetails(
       error instanceof Error && "code" in error
@@ -158,187 +360,6 @@ export async function runIntakeCommand(
       nextStepReadiness: null,
       failure,
     };
-  }
-
-  const context = await createContext(repoRoot, options);
-  const runtimeOptions = resolveRuntimeOptions(options);
-  let taskInput: NormalizedTaskInput | null = null;
-  let failure: IntakeFailureDetails | null = null;
-  let runtimeBlockingIssues = [...runtimeOptions.blockingIssues];
-  let runtimeWarnings = [...runtimeOptions.warnings];
-  let runtimeRecommendedUserActions = [...runtimeOptions.recommendedUserActions];
-  let validationBlockingIssues: NextStepReadiness["blockingIssues"] = [];
-  let validationWarnings: string[] = [];
-  let validationRecommendedUserActions: string[] = [];
-
-  if (context.paths.usedFallbackRoot && context.paths.fallbackReason) {
-    failure = createFailureDetails(
-      "OUTPUT_ROOT_FALLBACK",
-      context.paths.fallbackReason ?? "The requested output directory violated the Step 1 boundary.",
-      context.paths.fallbackReason,
-    );
-  }
-
-  const validationResult = await validateIntakeInputs(options, currentWorkingDirectory, repoRoot);
-  validationBlockingIssues = validationResult.blockingIssues;
-  validationWarnings = validationResult.warnings;
-  validationRecommendedUserActions = validationResult.recommendedUserActions;
-
-  if (validationResult.validatedInput) {
-    taskInput = resolveTaskSource(validationResult.validatedInput);
-  }
-
-  if (!failure && runtimeBlockingIssues.length > 0) {
-    failure = createFailureDetails(
-      "CLI_FLAG_POLICY_FAILED",
-      "Forge intake found blocking CLI flag conflicts.",
-    );
-  }
-
-  if (!failure && validationResult.blockingIssues.length > 0) {
-    failure = createFailureDetails(
-      "INPUT_VALIDATION_FAILED",
-      "Forge intake found blocking input validation issues.",
-    );
-  }
-
-  const taskParserResult = buildTaskParserResult(taskInput);
-  const repoScanResult = await scanRepoResult(repoRoot, context.paths.outputRoot);
-  const inferenceResult = buildInferenceResult({
-    taskInput,
-    taskParserResult,
-    repoScanResult,
-    strictFocus: runtimeOptions.strictFocus,
-  });
-  const optionalReasoningResult = await resolveOptionalReasoning({
-    runtimeOptions,
-    taskInput,
-    taskParserResult,
-    repoScanResult,
-    inferenceResult,
-    optionalReasoningHook: dependencies.optionalReasoningHook,
-  });
-  const ambiguityAnalysisResult = buildAmbiguityAnalysisResult({
-    taskInput,
-    taskParserResult,
-    repoScanResult,
-    inferenceResult,
-    runtimeOptions,
-    optionalReasoningResult,
-    failure,
-    validationBlockingIssues: [...runtimeBlockingIssues, ...validationBlockingIssues],
-    validationWarnings,
-    validationRecommendedUserActions,
-  });
-  const assembledResult = assembleIntakeResult({
-    taskInput,
-    taskParserResult,
-    repoScanResult,
-    inferenceResult,
-    ambiguityAnalysisResult,
-  });
-  const successEvaluation = evaluateSuccessModel({
-    taskSpec: assembledResult.taskSpec,
-    repoContext: assembledResult.repoContext,
-    candidateTargets: assembledResult.candidateTargets,
-    failure,
-    confidenceLevel: assembledResult.confidence.level,
-    failOnLowConfidence: runtimeOptions.failOnLowConfidence,
-    validationBlockingIssues: [...runtimeBlockingIssues, ...validationBlockingIssues],
-    inputWarnings: assembledResult.warnings,
-    inputAmbiguities: assembledResult.ambiguities,
-    inputRecommendedUserActions: assembledResult.recommendedUserActions,
-  });
-  const finalAssembledResult = {
-    ...assembledResult,
-    ambiguities: successEvaluation.ambiguities,
-    warnings: successEvaluation.warnings,
-    recommendedUserActions: successEvaluation.nextStepReadiness.recommendedUserActions,
-  };
-
-  try {
-    return await persistResult(
-      context,
-      runtimeOptions,
-      taskInput,
-      finalAssembledResult,
-      buildBoundarySafeIntakeResult({
-        context,
-        taskInput,
-        assembledResult: finalAssembledResult,
-      }),
-      successEvaluation.nextStepReadiness,
-      failure,
-      optionalReasoningResult,
-    );
-  } catch (error) {
-    const persistenceFailure = createFailureDetails(
-      error instanceof Error && "code" in error
-        ? String((error as { code: unknown }).code)
-        : "PERSISTENCE_FAILED",
-      error instanceof Error ? error.message : "Unknown persistence failure.",
-      context.paths.fallbackReason ?? undefined,
-    );
-
-    if (context.paths.usedFallbackRoot) {
-      return {
-        status: "failed",
-        artifact: null,
-        artifactPath: null,
-        reportPath: null,
-        outputRoot: context.paths.outputRoot,
-      summary:
-          "Forge intake failed while persisting its fallback output. No durable artifact could be written.",
-        nextStepReadiness: successEvaluation.nextStepReadiness,
-        failure: persistenceFailure,
-      };
-    }
-
-    const fallbackContext: IntakeExecutionContext = {
-      ...context,
-      paths: {
-        ...(await resolveOutputPaths(repoRoot)),
-        requestedOutputRoot: context.paths.requestedOutputRoot ?? context.paths.outputRoot,
-        usedFallbackRoot: true,
-        fallbackReason:
-          "The configured output root failed during persistence. Forge retried using the default .forge output root.",
-      },
-    };
-
-    const fallbackFailure = createFailureDetails(
-      persistenceFailure.code,
-      persistenceFailure.message,
-      fallbackContext.paths.fallbackReason ?? undefined,
-    );
-
-    try {
-      return await persistResult(
-        fallbackContext,
-        runtimeOptions,
-        taskInput,
-        finalAssembledResult,
-        buildBoundarySafeIntakeResult({
-          context: fallbackContext,
-          taskInput,
-          assembledResult: finalAssembledResult,
-        }),
-        successEvaluation.nextStepReadiness,
-        fallbackFailure,
-        optionalReasoningResult,
-      );
-    } catch {
-      return {
-        status: "failed",
-        artifact: null,
-        artifactPath: null,
-        reportPath: null,
-        outputRoot: fallbackContext.paths.outputRoot,
-        summary:
-          "Forge intake failed while persisting both the configured output root and the default .forge fallback.",
-        nextStepReadiness: successEvaluation.nextStepReadiness,
-        failure: fallbackFailure,
-      };
-    }
   }
 }
 

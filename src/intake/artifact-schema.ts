@@ -92,6 +92,12 @@ export const intakeArtifactSchema = z.object({
     source_files: z.array(z.string().min(1)),
     test_files: z.array(z.string().min(1)),
     manifest_files: z.array(z.string().min(1)),
+    git_context: z.object({
+      status: z.enum(["available", "not_repo", "unavailable", "error"]),
+      repo_root: z.string().min(1).nullable(),
+      branch: z.string().min(1).nullable(),
+      recent_files: z.array(z.string().min(1)),
+    }),
   }),
   candidate_targets: z.array(
     z.object({
