@@ -80,6 +80,8 @@ function createBaseAssembledResult(): AssembledIntakeResult {
           hasAcceptanceCriteria: true,
           referencedPaths: ["src/app.ts", "tests/app.test.ts"],
           promptIsThin: false,
+          promptRequirementCandidateCount: 2,
+          promptOpenQuestionCategories: [],
         },
         ambiguities: [],
         warnings: [],

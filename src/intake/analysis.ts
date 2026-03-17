@@ -29,6 +29,34 @@ function normalizePathForComparison(value: string): string {
   return value.replace(/\\/g, "/").toLowerCase();
 }
 
+function addPromptOpenQuestionHandling(params: {
+  categories: TaskParserResult["signals"]["promptOpenQuestionCategories"];
+  ambiguities: string[];
+  recommendedUserActions: string[];
+}): void {
+  if (params.categories.includes("scope")) {
+    pushUnique(
+      params.ambiguities,
+      "Prompt scope is still unclear for the current repo. Clarify the concrete files, modules, or bounded behavior to change.",
+    );
+    pushUnique(
+      params.recommendedUserActions,
+      "Clarify the exact repo surfaces or bounded behavior this prompt should change before planning.",
+    );
+  }
+
+  if (params.categories.includes("constraints")) {
+    pushUnique(
+      params.ambiguities,
+      "Prompt constraints are missing. Clarify non-goals, rollout limits, or boundaries before planning.",
+    );
+    pushUnique(
+      params.recommendedUserActions,
+      "Add explicit constraints or non-goals so the plan stays bounded.",
+    );
+  }
+}
+
 export function buildAmbiguityAnalysisResult(params: {
   taskInput: NormalizedTaskInput | null;
   taskParserResult: TaskParserResult;
@@ -53,6 +81,12 @@ export function buildAmbiguityAnalysisResult(params: {
     ...params.runtimeOptions.recommendedUserActions,
     ...params.validationRecommendedUserActions,
   ];
+
+  addPromptOpenQuestionHandling({
+    categories: params.taskParserResult.signals.promptOpenQuestionCategories,
+    ambiguities,
+    recommendedUserActions,
+  });
 
   if (!params.taskParserResult.signals.hasAcceptanceCriteria) {
     pushUnique(
@@ -97,12 +131,25 @@ export function buildAmbiguityAnalysisResult(params: {
   const unresolvedReferencedPaths = params.taskParserResult.signals.referencedPaths.filter(
     (path) => !repoFiles.has(normalizePathForComparison(path)),
   );
+
+  if (unresolvedReferencedPaths.length > 0) {
+    pushUnique(
+      ambiguities,
+      `Prompt references repo paths that were not found during grounding: ${unresolvedReferencedPaths.join(", ")}.`,
+    );
+    pushUnique(
+      recommendedUserActions,
+      "Fix the prompt's missing repo references or clarify the intended replacement paths before planning.",
+    );
+  }
+
   const confidence = buildConfidenceResolution({
     taskParsing: {
       hasGoal: params.taskParserResult.signals.hasGoal,
       hasAcceptanceCriteria: params.taskParserResult.signals.hasAcceptanceCriteria,
       promptIsThin: params.taskParserResult.signals.promptIsThin,
       ambiguityCount: ambiguities.length,
+      promptOpenQuestionCategories: params.taskParserResult.signals.promptOpenQuestionCategories,
     },
     repoInspection: {
       grounded: params.repoScanResult.repoContext.grounded,

@@ -42,6 +42,24 @@ export interface ArtifactRuntimeOptions {
   fail_on_low_confidence: boolean;
 }
 
+export interface PromptRequirementCandidate {
+  text: string;
+  source: "acceptance-criteria" | "prompt-clause";
+}
+
+export interface PromptOpenQuestion {
+  category: "acceptance_criteria" | "scope" | "constraints" | "repo_alignment";
+  text: string;
+}
+
+export interface PromptDetails {
+  title: string;
+  goal: string;
+  summary: string;
+  requirementCandidates: PromptRequirementCandidate[];
+  openQuestions: PromptOpenQuestion[];
+}
+
 export interface NormalizedTaskInput {
   inputMode: IntakeInputMode;
   primaryInput: {
@@ -56,6 +74,7 @@ export interface NormalizedTaskInput {
   focusPaths: string[];
   ambiguities: string[];
   recommendedUserActions: string[];
+  promptDetails?: PromptDetails;
 }
 
 export interface TaskParserResult {
@@ -65,6 +84,8 @@ export interface TaskParserResult {
     hasAcceptanceCriteria: boolean;
     referencedPaths: string[];
     promptIsThin: boolean;
+    promptRequirementCandidateCount: number;
+    promptOpenQuestionCategories: PromptOpenQuestion["category"][];
   };
   ambiguities: string[];
   warnings: string[];

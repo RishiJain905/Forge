@@ -76,9 +76,14 @@
   - Activated `--fail-on-low-confidence` so low-confidence but structurally usable results can escalate from `warning` to `failed` when requested.
   - Kept failed-run persistence best-effort so repo-resolved runs still emit useful artifact/report output when possible.
   - Added focused status-policy coverage plus CLI regression tests for low-confidence warning-vs-failure behavior.
+- Batch 1.14: `14-prompt-mode-implementation-rules.md`
+  - Added deterministic prompt normalization so prompt mode derives a synthetic title, goal, summary, and structured requirement candidates from inline prompts without changing the public artifact/report contract.
+  - Added prompt-mode open-question handling for missing acceptance criteria, unclear scope, missing constraints, and repo-shape conflicts.
+  - Tightened prompt confidence scoring so broad or weakly grounded prompts downgrade more aggressively while explicit grounded prompts remain capable of `success`.
+  - Added focused automated coverage for structured prompt normalization, broad prompt follow-up guidance, and prompt/repo conflict handling.
 
 ## Current Branch State
-- `dev` includes the completed Batch 1.13 implementation.
+- `dev` includes the completed Batch 1.14 implementation.
 - `execution.md` now explicitly requires completed worktree branches to be merged back into their source branch before a task is considered complete, unless the user explicitly requests a PR-only workflow.
 
 ## Verification
@@ -88,4 +93,4 @@
 - `npm.cmd run smoke`
 
 ## Next
-- Continue Batch 1 with `forge_step1_batch1_impl/14-prompt-mode-implementation-rules.md`.
+- Continue Batch 1 with `forge_step1_batch1_impl/15-llm-usage-policy-and-control.md`.

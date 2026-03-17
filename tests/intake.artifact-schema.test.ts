@@ -66,6 +66,8 @@ function createAssembledResult(): AssembledIntakeResult {
           hasAcceptanceCriteria: false,
           referencedPaths: ["src/app.ts"],
           promptIsThin: false,
+          promptRequirementCandidateCount: 1,
+          promptOpenQuestionCategories: [],
         },
         ambiguities: [],
         warnings: [],

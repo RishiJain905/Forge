@@ -20,6 +20,8 @@ export function buildTaskParserResult(
         hasAcceptanceCriteria: false,
         referencedPaths: [],
         promptIsThin: false,
+        promptRequirementCandidateCount: 0,
+        promptOpenQuestionCategories: [],
       },
       ambiguities: [],
       warnings: [
@@ -41,6 +43,8 @@ export function buildTaskParserResult(
       hasAcceptanceCriteria: taskSpec.hasAcceptanceCriteria,
       referencedPaths: extractReferencedPaths(taskInput.normalizedTaskText),
       promptIsThin,
+      promptRequirementCandidateCount: taskInput.promptDetails?.requirementCandidates.length ?? 0,
+      promptOpenQuestionCategories: taskInput.promptDetails?.openQuestions.map((question) => question.category) ?? [],
     },
     ambiguities: [...taskInput.ambiguities],
     warnings: [],

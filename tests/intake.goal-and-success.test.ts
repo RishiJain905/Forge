@@ -212,6 +212,44 @@ await runScenario(
 );
 
 await runScenario(
+  "forge intake surfaces scope and constraint follow-up for a broad prompt with no repo anchors",
+  async () => {
+    const repoRoot = await createTempRepo();
+
+    try {
+      const result = await runForgeCli(
+        ["intake", "--repo", repoRoot, "--prompt", "Build a customer support dashboard for the product."],
+        repoRoot,
+      );
+
+      assert.equal(result.code, 0, result.stderr);
+
+      const artifactPath = join(repoRoot, ".forge", "intake.json");
+      const artifact = await readJsonFile<IntakeArtifact>(artifactPath);
+
+      assert.equal(artifact.status, "warning");
+      assert.equal(artifact.next_step_readiness?.ready, true);
+      assert.ok(
+        artifact.ambiguities?.some((value) => /scope/i.test(value)),
+        "expected scope ambiguity",
+      );
+      assert.ok(
+        artifact.ambiguities?.some((value) => /constraint/i.test(value)),
+        "expected constraints ambiguity",
+      );
+      assert.ok(
+        artifact.next_step_readiness?.recommended_user_actions?.some((value) =>
+          /scope|constraint/i.test(value),
+        ),
+        "expected scope or constraints follow-up action",
+      );
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
   "forge intake can resolve a structured prompt to success",
   async () => {
     const repoRoot = await createTempRepo();
