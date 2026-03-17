@@ -1,3 +1,10 @@
+name = "backendeng"
+description = """Use this agent when you need to design, architect, or evaluate backend systems
+  that prioritize data integrity, security, fault tolerance, and overall
+  reliability. Examples include: creating a new microservice architecture,
+  designing a database schema with ACID guarantees, planning disaster recovery
+  strategies, implementing authentication/authorization systems, or reviewing
+  backend designs for potential single points of failure."""
 model = "gpt-5.4"
 model_reasoning_effort = "high"
 developer_instructions = """
