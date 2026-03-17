@@ -54,9 +54,15 @@
   - Tightened version, command, and stage metadata validation so the public artifact contract stays explicit and boring.
   - Added direct schema-focused automated coverage for exact top-level keys plus rejection of missing version fields, missing top-level sections, and invalid status values.
   - Kept the existing artifact assembly path and public field names intact while hardening the formal schema contract.
+- Batch 1.10: `10-detailed-artifact-sections.md`
+  - Replaced the public artifact’s internal camelCase section leakage with an explicit section-mapping layer that emits stable `snake_case` Step 1 section names.
+  - Added dedicated public `risk_analysis` and `confidence` sections so intake now persists deterministic risk zones and confidence signals directly in `.forge/intake.json`.
+  - Normalized the documented detailed section field names and made every documented section present even when empty or defaulted.
+  - Updated the markdown report, smoke verification, and intake artifact consumers to align with the new detailed section contract.
+  - Added dedicated automated coverage for the normalized section contract, typed risk zones, stable confidence output, and failed-run default section behavior.
 
 ## Current Branch State
-- `dev` includes the completed Batch 1.09 implementation.
+- `dev` includes the completed Batch 1.10 implementation.
 - `execution.md` now explicitly requires completed worktree branches to be merged back into their source branch before a task is considered complete, unless the user explicitly requests a PR-only workflow.
 
 ## Verification
@@ -66,4 +72,4 @@
 - `npm.cmd run smoke`
 
 ## Next
-- Continue Batch 1 with `forge_step1_batch1_impl/10-detailed-artifact-sections.md`.
+- Continue Batch 1 with `forge_step1_batch1_impl/11-human-readable-report-format.md`.

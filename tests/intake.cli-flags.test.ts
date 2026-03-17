@@ -24,9 +24,9 @@ interface IntakeArtifact {
     llm_mode?: "deterministic" | "assist";
     fail_on_low_confidence?: boolean;
   } | null;
-  nextStepReadiness?: {
+  next_step_readiness?: {
     ready?: boolean;
-    blockingIssues?: Array<{
+    blocking_issues?: Array<{
       code?: string;
       message?: string;
     }>;
@@ -210,15 +210,15 @@ await runScenario("forge intake rejects conflicting output selectors", async () 
       artifact.source_inputs?.primary_input?.raw_text,
       "Update src/app.ts for CLI flag behavior.",
     );
-    assert.equal(artifact.nextStepReadiness?.ready, false);
+    assert.equal(artifact.next_step_readiness?.ready, false);
     assert.ok(
-      artifact.nextStepReadiness?.blockingIssues?.some((issue) =>
+      artifact.next_step_readiness?.blocking_issues?.some((issue) =>
         /json-only|report-only|output mode/i.test(issue.code ?? "") ||
         /json-only|report-only|output mode/i.test(issue.message ?? ""),
       ),
     );
     assert.ok(
-      !artifact.nextStepReadiness?.blockingIssues?.some((issue) =>
+      !artifact.next_step_readiness?.blocking_issues?.some((issue) =>
         /TASK_GOAL_MISSING|CANDIDATE_TARGETS_MISSING|REPO_CONTEXT_MISSING/.test(issue.code ?? ""),
       ),
       "unexpected unrelated blocking issues from skipped validation",
@@ -280,7 +280,7 @@ await runScenario("forge intake rejects conflicting llm selectors", async () => 
 
     assert.equal(artifact.status, "failed");
     assert.ok(
-      artifact.nextStepReadiness?.blockingIssues?.some((issue) =>
+      artifact.next_step_readiness?.blocking_issues?.some((issue) =>
         /llm/i.test(issue.code ?? "") || /llm/i.test(issue.message ?? ""),
       ),
     );

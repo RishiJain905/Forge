@@ -8,6 +8,8 @@ import {
 import { FORGE_SCHEMA_VERSION, STEP1_BOUNDARY_POLICY } from "../src/intake/constants.js";
 import { resolveRuntimeOptions } from "../src/intake/options.js";
 import type {
+  AssembledIntakeResult,
+  BoundarySafeIntakeResult,
   IntakeArtifact,
   IntakeExecutionContext,
   NextStepReadiness,
@@ -50,23 +52,108 @@ function createNextStepReadiness(): NextStepReadiness {
   };
 }
 
-function createValidArtifact(): IntakeArtifact {
-  return createIntakeArtifact({
-    context: createContext(),
-    finishedAt: "2026-03-17T00:01:00.000Z",
-    sourceInputs: {
-      input_mode: "prompt",
-      primary_input: {
-        path: null,
-        raw_text: "Update src/app.ts",
+function createAssembledResult(): AssembledIntakeResult {
+  return {
+    responsibilities: {
+      taskParser: {
+        taskSpec: {
+          goal: "Update src/app.ts",
+          acceptanceCriteria: [],
+          hasAcceptanceCriteria: false,
+        },
+        signals: {
+          hasGoal: true,
+          hasAcceptanceCriteria: false,
+          referencedPaths: ["src/app.ts"],
+          promptIsThin: false,
+        },
+        ambiguities: [],
+        warnings: [],
+        recommendedUserActions: [],
       },
-      normalized_task_text: "Update src/app.ts",
-      notes: [],
-      constraints: [],
-      config_path: null,
-      focus_paths: [],
+      repoScan: {
+        repoContext: {
+          grounded: true,
+          sourceFiles: ["src/app.ts"],
+          testFiles: ["tests/app.test.ts"],
+          manifestFiles: ["package.json"],
+        },
+        signals: {
+          sourceFileCount: 1,
+          testFileCount: 1,
+          manifestFileCount: 1,
+          repoLooksSparse: false,
+        },
+        warnings: [],
+      },
+      inference: {
+        candidateTargets: [
+          {
+            path: "src/app.ts",
+            kind: "source",
+            matchType: "explicit",
+            reason: "Explicitly mentioned in task input.",
+          },
+        ],
+        inferredRequirements: [],
+        signals: {
+          explicitTargetCount: 1,
+          usedFallbackTargets: false,
+          inferredRequirementCount: 0,
+        },
+        warnings: [],
+      },
+      analysis: {
+        ambiguities: [],
+        warnings: [],
+        recommendedUserActions: [],
+        confidence: {
+          level: "high",
+          signals: {
+            taskParsing: "strong",
+            repoInspection: "strong",
+            targeting: "strong",
+          },
+          reasons: [],
+        },
+      },
     },
-    runtimeOptions: resolveRuntimeOptions({}),
+    taskSpec: {
+      goal: "Update src/app.ts",
+      acceptanceCriteria: [],
+      hasAcceptanceCriteria: false,
+    },
+    repoContext: {
+      grounded: true,
+      sourceFiles: ["src/app.ts"],
+      testFiles: ["tests/app.test.ts"],
+      manifestFiles: ["package.json"],
+    },
+    candidateTargets: [
+      {
+        path: "src/app.ts",
+        kind: "source",
+        matchType: "explicit",
+        reason: "Explicitly mentioned in task input.",
+      },
+    ],
+    ambiguities: [],
+    warnings: [],
+    recommendedUserActions: [],
+    confidence: {
+      level: "high",
+      signals: {
+        taskParsing: "strong",
+        repoInspection: "strong",
+        targeting: "strong",
+      },
+      reasons: [],
+    },
+  };
+}
+
+function createBoundarySafeResult(): BoundarySafeIntakeResult {
+  return {
     taskSpec: {
       goal: "Update src/app.ts",
       acceptanceCriteria: [],
@@ -94,9 +181,32 @@ function createValidArtifact(): IntakeArtifact {
       },
     ],
     ambiguities: [],
-    nextStepReadiness: createNextStepReadiness(),
-    boundaryNotes: ["Step 1 writes only intake outputs."],
     warnings: [],
+    recommendedUserActions: [],
+    boundaryNotes: ["Step 1 writes only intake outputs."],
+  };
+}
+
+function createValidArtifact(): IntakeArtifact {
+  return createIntakeArtifact({
+    context: createContext(),
+    finishedAt: "2026-03-17T00:01:00.000Z",
+    sourceInputs: {
+      input_mode: "prompt",
+      primary_input: {
+        path: null,
+        raw_text: "Update src/app.ts",
+      },
+      normalized_task_text: "Update src/app.ts",
+      notes: [],
+      constraints: [],
+      config_path: null,
+      focus_paths: [],
+    },
+    runtimeOptions: resolveRuntimeOptions({}),
+    assembledResult: createAssembledResult(),
+    boundarySafeResult: createBoundarySafeResult(),
+    nextStepReadiness: createNextStepReadiness(),
     failure: null,
   });
 }
@@ -127,9 +237,9 @@ await runScenario("artifact schema rejects a missing schemaVersion", () => {
 
 await runScenario("artifact schema rejects a missing top-level sub-result", () => {
   const artifact = createValidArtifact() as unknown as Record<string, unknown>;
-  delete artifact.taskSpec;
+  delete artifact.task_spec;
 
-  assert.throws(() => validateIntakeArtifact(artifact), /taskSpec/i);
+  assert.throws(() => validateIntakeArtifact(artifact), /task_spec/i);
 });
 
 await runScenario("artifact schema rejects an invalid status value", () => {
@@ -148,6 +258,19 @@ await runScenario("artifact schema rejects extra top-level fields", () => {
   };
 
   assert.throws(() => validateIntakeArtifact(artifact), /unrecognized|unexpected/i);
+});
+
+await runScenario("artifact schema rejects legacy camelCase section keys", () => {
+  const artifact = {
+    ...createValidArtifact(),
+    taskSpec: {
+      goal: "legacy",
+      acceptanceCriteria: [],
+      hasAcceptanceCriteria: false,
+    },
+  };
+
+  assert.throws(() => validateIntakeArtifact(artifact), /unrecognized|unexpected|taskSpec/i);
 });
 
 if (process.exitCode && process.exitCode !== 0) {

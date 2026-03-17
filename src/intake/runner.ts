@@ -67,14 +67,9 @@ async function persistResult(
     finishedAt,
     sourceInputs,
     runtimeOptions,
-    taskSpec: boundarySafeResult.taskSpec,
-    repoContext: boundarySafeResult.repoContext,
-    candidateTargets: boundarySafeResult.candidateTargets,
-    initialVerificationTargets: boundarySafeResult.initialVerificationTargets,
-    ambiguities: boundarySafeResult.ambiguities,
+    assembledResult,
+    boundarySafeResult,
     nextStepReadiness,
-    boundaryNotes: boundarySafeResult.boundaryNotes,
-    warnings: boundarySafeResult.warnings,
     failure,
   });
   const report = createIntakeReport(artifact);
@@ -126,7 +121,7 @@ async function persistResult(
     reportPath: runtimeOptions.writeReport ? context.paths.reportPath : null,
     outputRoot: context.paths.outputRoot,
     summary: artifact.summary,
-    nextStepReadiness: artifact.nextStepReadiness,
+    nextStepReadiness: nextStepReadiness,
     failure,
   };
 }
@@ -274,7 +269,7 @@ export async function runIntakeCommand(
         artifactPath: null,
         reportPath: null,
         outputRoot: context.paths.outputRoot,
-        summary:
+      summary:
           "Forge intake failed while persisting its fallback output. No durable artifact could be written.",
         nextStepReadiness: successEvaluation.nextStepReadiness,
         failure: persistenceFailure,
