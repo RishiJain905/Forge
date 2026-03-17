@@ -6,6 +6,7 @@ import type {
   IntakeExecutionContext,
   IntakeFailureDetails,
   NextStepReadiness,
+  OptionalReasoningResolution,
   ResolvedRuntimeOptions,
 } from "./types.js";
 
@@ -14,6 +15,7 @@ export function createIntakeDebugArtifact(params: {
   runtimeOptions: ResolvedRuntimeOptions;
   sourceInputs: ArtifactSourceInputs | null;
   assembledResult: AssembledIntakeResult;
+  optionalReasoningResult: OptionalReasoningResolution;
   boundarySafeResult: BoundarySafeIntakeResult;
   nextStepReadiness: NextStepReadiness;
   failure: IntakeFailureDetails | null;
@@ -47,6 +49,7 @@ export function createIntakeDebugArtifact(params: {
       recommendedUserActions: params.assembledResult.recommendedUserActions,
       confidence: params.assembledResult.confidence,
     },
+    optionalReasoning: params.optionalReasoningResult,
     boundarySafeResult: params.boundarySafeResult,
     nextStepReadiness: params.nextStepReadiness,
     failure: params.failure,

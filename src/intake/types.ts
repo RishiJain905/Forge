@@ -186,6 +186,43 @@ export interface BlockingIssue {
   message: string;
 }
 
+export interface OptionalReasoningSuggestion {
+  provider: string;
+  ambiguities?: string[];
+  warnings?: string[];
+  recommendedUserActions?: string[];
+  confidenceNotes?: string[];
+  suggestedTargetPaths?: string[];
+}
+
+export interface OptionalReasoningInput {
+  taskInput: NormalizedTaskInput | null;
+  taskParserResult: TaskParserResult;
+  repoScanResult: RepoScanResult;
+  inferenceResult: InferenceResult;
+}
+
+export type OptionalReasoningHook =
+  (input: OptionalReasoningInput) => Promise<OptionalReasoningSuggestion | null>;
+
+export interface OptionalReasoningResolution {
+  requested: boolean;
+  attempted: boolean;
+  used: boolean;
+  available: boolean;
+  provider: string | null;
+  ambiguities: string[];
+  warnings: string[];
+  recommendedUserActions: string[];
+  confidenceNotes: string[];
+  suggestedTargetPaths: string[];
+  ignoredTargetPaths: string[];
+}
+
+export interface IntakeRunnerDependencies {
+  optionalReasoningHook?: OptionalReasoningHook;
+}
+
 export interface IntakeValidationResult {
   validatedInput: ValidatedIntakeInputs | null;
   blockingIssues: BlockingIssue[];
@@ -395,6 +432,7 @@ export interface IntakeDebugArtifact {
     recommendedUserActions: string[];
     confidence: AmbiguityAnalysisResult["confidence"];
   };
+  optionalReasoning: OptionalReasoningResolution;
   boundarySafeResult: BoundarySafeIntakeResult;
   nextStepReadiness: NextStepReadiness;
   failure: IntakeFailureDetails | null;

@@ -292,7 +292,7 @@ await runScenario("forge intake rejects conflicting llm selectors", async () => 
   }
 });
 
-await runScenario("forge intake records deferred llm assist intent", async () => {
+await runScenario("forge intake falls back deterministically when llm assist is requested without a backend", async () => {
   const repoRoot = await createTempRepo();
 
   try {
@@ -316,7 +316,9 @@ await runScenario("forge intake records deferred llm assist intent", async () =>
     assert.equal(artifact.runtime_options?.llm_mode, "assist");
     assert.equal(artifact.runtime_options?.fail_on_low_confidence, false);
     assert.ok(
-      artifact.warnings?.some((warning) => /llm assist|deferred/i.test(warning)),
+      artifact.warnings?.some((warning) =>
+        /llm assist|no optional reasoning backend|deterministic mode/i.test(warning)
+      ),
     );
   } finally {
     await disposeTempRepo(repoRoot);

@@ -81,9 +81,14 @@
   - Added prompt-mode open-question handling for missing acceptance criteria, unclear scope, missing constraints, and repo-shape conflicts.
   - Tightened prompt confidence scoring so broad or weakly grounded prompts downgrade more aggressively while explicit grounded prompts remain capable of `success`.
   - Added focused automated coverage for structured prompt normalization, broad prompt follow-up guidance, and prompt/repo conflict handling.
+- Batch 1.15: `15-llm-usage-policy-and-control.md`
+  - Replaced the old defer-only `--llm-assist` behavior with a real deterministic-first optional reasoning policy.
+  - Added an internal optional reasoning hook interface so intake can accept assist-side ambiguity, warning, and follow-up enrichment without making LLM output authoritative.
+  - Kept deterministic repo facts authoritative by ignoring conflicting optional reasoning target suggestions and surfacing override notes in warnings and confidence reasons.
+  - Added focused automated coverage for no-backend fallback, injected hook enrichment, `--no-llm` suppression, and deterministic override behavior.
 
 ## Current Branch State
-- `dev` includes the completed Batch 1.14 implementation.
+- `dev` includes the completed Batch 1.15 implementation.
 - `execution.md` now explicitly requires completed worktree branches to be merged back into their source branch before a task is considered complete, unless the user explicitly requests a PR-only workflow.
 
 ## Verification
@@ -93,4 +98,4 @@
 - `npm.cmd run smoke`
 
 ## Next
-- Continue Batch 1 with `forge_step1_batch1_impl/15-llm-usage-policy-and-control.md`.
+- Continue Batch 1 with `forge_step1_batch1_impl/16-focus-directory-and-targeting-rules.md`.

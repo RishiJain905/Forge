@@ -7,6 +7,7 @@ import { createIntakeDebugArtifact } from "./debug.js";
 import { PersistenceError } from "./errors.js";
 import { buildInferenceResult } from "./inference.js";
 import { resolveTaskSource, toArtifactSourceInputs } from "./input.js";
+import { resolveOptionalReasoning } from "./llm.js";
 import { resolveRuntimeOptions } from "./options.js";
 import { resolveOutputPaths, resolveRepoRoot } from "./path-policy.js";
 import { persistIntakeOutputs } from "./persistence.js";
@@ -20,6 +21,7 @@ import type {
   IntakeCommandResult,
   IntakeExecutionContext,
   IntakeFailureDetails,
+  IntakeRunnerDependencies,
   NextStepReadiness,
   NormalizedTaskInput,
   BoundarySafeIntakeResult,
@@ -59,6 +61,7 @@ async function persistResult(
   boundarySafeResult: BoundarySafeIntakeResult,
   nextStepReadiness: NextStepReadiness,
   failure: IntakeFailureDetails | null,
+  optionalReasoningResult: Awaited<ReturnType<typeof resolveOptionalReasoning>>,
 ): Promise<IntakeCommandResult> {
   const finishedAt = new Date().toISOString();
   const sourceInputs = taskInput ? toArtifactSourceInputs(taskInput) : null;
@@ -79,6 +82,7 @@ async function persistResult(
         runtimeOptions,
         sourceInputs,
         assembledResult,
+        optionalReasoningResult,
         boundarySafeResult,
         nextStepReadiness,
         failure,
@@ -129,6 +133,7 @@ async function persistResult(
 export async function runIntakeCommand(
   options: IntakeCommandOptions,
   currentWorkingDirectory = process.cwd(),
+  dependencies: IntakeRunnerDependencies = {},
 ): Promise<IntakeCommandResult> {
   let repoRoot: string;
 
@@ -204,12 +209,21 @@ export async function runIntakeCommand(
     taskParserResult,
     repoScanResult,
   });
+  const optionalReasoningResult = await resolveOptionalReasoning({
+    runtimeOptions,
+    taskInput,
+    taskParserResult,
+    repoScanResult,
+    inferenceResult,
+    optionalReasoningHook: dependencies.optionalReasoningHook,
+  });
   const ambiguityAnalysisResult = buildAmbiguityAnalysisResult({
     taskInput,
     taskParserResult,
     repoScanResult,
     inferenceResult,
     runtimeOptions,
+    optionalReasoningResult,
     failure,
     validationBlockingIssues: [...runtimeBlockingIssues, ...validationBlockingIssues],
     validationWarnings,
@@ -254,6 +268,7 @@ export async function runIntakeCommand(
       }),
       successEvaluation.nextStepReadiness,
       failure,
+      optionalReasoningResult,
     );
   } catch (error) {
     const persistenceFailure = createFailureDetails(
@@ -308,6 +323,7 @@ export async function runIntakeCommand(
         }),
         successEvaluation.nextStepReadiness,
         fallbackFailure,
+        optionalReasoningResult,
       );
     } catch {
       return {

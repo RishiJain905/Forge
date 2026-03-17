@@ -8,7 +8,24 @@ import type {
   RepoScanResult,
   ResolvedRuntimeOptions,
   TaskParserResult,
+  OptionalReasoningResolution,
 } from "./types.js";
+
+function createEmptyOptionalReasoningResolution(): OptionalReasoningResolution {
+  return {
+    requested: false,
+    attempted: false,
+    used: false,
+    available: false,
+    provider: null,
+    ambiguities: [],
+    warnings: [],
+    recommendedUserActions: [],
+    confidenceNotes: [],
+    suggestedTargetPaths: [],
+    ignoredTargetPaths: [],
+  };
+}
 
 function pushUnique(values: string[], value: string): void {
   if (!values.includes(value)) {
@@ -63,14 +80,16 @@ export function buildAmbiguityAnalysisResult(params: {
   repoScanResult: RepoScanResult;
   inferenceResult: InferenceResult;
   runtimeOptions: ResolvedRuntimeOptions;
+  optionalReasoningResult?: OptionalReasoningResolution;
   failure: IntakeFailureDetails | null;
   validationBlockingIssues: BlockingIssue[];
   validationWarnings: string[];
   validationRecommendedUserActions: string[];
 }): AmbiguityAnalysisResult {
-  const ambiguities = [...params.taskParserResult.ambiguities];
+  const optionalReasoningResult = params.optionalReasoningResult ?? createEmptyOptionalReasoningResolution();
   const warnings = [
     ...params.runtimeOptions.warnings,
+    ...optionalReasoningResult.warnings,
     ...params.validationWarnings,
     ...params.taskParserResult.warnings,
     ...params.repoScanResult.warnings,
@@ -78,8 +97,13 @@ export function buildAmbiguityAnalysisResult(params: {
   ];
   const recommendedUserActions = [
     ...params.taskParserResult.recommendedUserActions,
+    ...optionalReasoningResult.recommendedUserActions,
     ...params.runtimeOptions.recommendedUserActions,
     ...params.validationRecommendedUserActions,
+  ];
+  const ambiguities = [
+    ...params.taskParserResult.ambiguities,
+    ...optionalReasoningResult.ambiguities,
   ];
 
   addPromptOpenQuestionHandling({
@@ -165,6 +189,10 @@ export function buildAmbiguityAnalysisResult(params: {
       unresolvedReferencedPathCount: unresolvedReferencedPaths.length,
     },
   });
+
+  for (const note of optionalReasoningResult.confidenceNotes) {
+    pushUnique(confidence.reasons, note);
+  }
 
   if (confidence.level === "low" || confidence.level === "medium") {
     pushUnique(

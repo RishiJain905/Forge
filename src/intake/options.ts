@@ -64,12 +64,6 @@ export function resolveRuntimeOptions(
     );
   } else if (requestedLlmAssist) {
     llmMode = "assist";
-    warnings.push(
-      "LLM assist was requested, but Batch 1.05 still runs in deterministic mode until later LLM integration is implemented.",
-    );
-    recommendedUserActions.push(
-      "Treat --llm-assist as recorded intent only for now; deterministic intake behavior still drives the result.",
-    );
   }
 
   return {
