@@ -152,6 +152,42 @@ await runScenario("status resolver escalates low confidence to failed when reque
   assert.match(buildSummary(status, evaluation.nextStepReadiness), /low confidence/i);
 });
 
+await runScenario("status resolver keeps the generic failed summary when other blockers are also present", () => {
+  const evaluation = evaluateSuccessModel({
+    taskSpec: createTaskSpec(),
+    repoContext: createRepoContext(),
+    candidateTargets: createCandidateTargets(),
+    failure: null,
+    confidenceLevel: "low",
+    failOnLowConfidence: true,
+    validationBlockingIssues: [
+      {
+        code: "INPUT_VALIDATION_FAILED",
+        message: "Input validation failed before intake could continue.",
+      },
+    ],
+    inputWarnings: [
+      "Overall intake confidence is low because the prompt is too thin to resolve confidently.",
+    ],
+    inputAmbiguities: [],
+    inputRecommendedUserActions: [],
+  });
+
+  const status = resolveIntakeStatus({
+    failure: null,
+    nextStepReadiness: evaluation.nextStepReadiness,
+    warnings: evaluation.warnings,
+    ambiguities: evaluation.ambiguities,
+    confidenceLevel: "low",
+  });
+
+  assert.equal(status, "failed");
+  assert.equal(
+    buildSummary(status, evaluation.nextStepReadiness),
+    "Forge intake is not ready for forge plan because blocking issues remain.",
+  );
+});
+
 if (process.exitCode && process.exitCode !== 0) {
   process.exit(process.exitCode);
 }

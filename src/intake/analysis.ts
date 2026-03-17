@@ -25,6 +25,10 @@ function isTestLikePath(value: string): boolean {
   );
 }
 
+function normalizePathForComparison(value: string): string {
+  return value.replace(/\\/g, "/").toLowerCase();
+}
+
 export function buildAmbiguityAnalysisResult(params: {
   taskInput: NormalizedTaskInput | null;
   taskParserResult: TaskParserResult;
@@ -87,9 +91,11 @@ export function buildAmbiguityAnalysisResult(params: {
     );
   }
 
-  const repoFiles = new Set(params.repoScanResult.repoContext.allFiles);
+  const repoFiles = new Set(
+    params.repoScanResult.repoContext.allFiles.map(normalizePathForComparison),
+  );
   const unresolvedReferencedPaths = params.taskParserResult.signals.referencedPaths.filter(
-    (path) => !repoFiles.has(path),
+    (path) => !repoFiles.has(normalizePathForComparison(path)),
   );
   const confidence = buildConfidenceResolution({
     taskParsing: {

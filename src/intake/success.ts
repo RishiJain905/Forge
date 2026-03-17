@@ -124,7 +124,10 @@ export function resolveIntakeStatus(params: {
 
 export function buildSummary(status: IntakeStatus, nextStepReadiness: NextStepReadiness): string {
   if (status === "failed") {
-    if (hasBlockingIssue(nextStepReadiness.blockingIssues, "LOW_CONFIDENCE_ESCALATED")) {
+    if (
+      nextStepReadiness.blockingIssues.length === 1 &&
+      hasBlockingIssue(nextStepReadiness.blockingIssues, "LOW_CONFIDENCE_ESCALATED")
+    ) {
       return "Forge intake is not ready for forge plan because low confidence was escalated to failure.";
     }
 
