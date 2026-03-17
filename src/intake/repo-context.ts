@@ -1,7 +1,7 @@
 import path from "node:path";
 import { readdir } from "node:fs/promises";
 
-import type { RepoContext } from "./types.js";
+import type { RepoContext, RepoScanResult } from "./types.js";
 
 const ignoredDirectoryNames = new Set([
   ".git",
@@ -90,5 +90,24 @@ export async function scanRepoContext(
     sourceFiles,
     testFiles,
     manifestFiles,
+  };
+}
+
+export async function scanRepoResult(
+  repoRoot: string,
+  outputRoot: string,
+): Promise<RepoScanResult> {
+  const repoContext = await scanRepoContext(repoRoot, outputRoot);
+
+  return {
+    repoContext,
+    signals: {
+      sourceFileCount: repoContext.sourceFiles.length,
+      testFileCount: repoContext.testFiles.length,
+      manifestFileCount: repoContext.manifestFiles.length,
+      repoLooksSparse:
+        repoContext.sourceFiles.length + repoContext.testFiles.length + repoContext.manifestFiles.length <= 1,
+    },
+    warnings: [],
   };
 }

@@ -2,27 +2,26 @@ import path from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
 
 import { FORGE_INTAKE_COMMAND, STEP1_BOUNDARY_POLICY } from "./constants.js";
+import { buildAmbiguityAnalysisResult } from "./analysis.js";
+import { assembleIntakeResult } from "./assemble.js";
 import { createIntakeArtifact } from "./artifact.js";
-import { resolveCandidateTargets } from "./candidate-targets.js";
 import { PersistenceError } from "./errors.js";
+import { buildInferenceResult } from "./inference.js";
 import { resolveTaskSource, toArtifactSourceInputs } from "./input.js";
 import { resolveRuntimeOptions } from "./options.js";
 import { resolveOutputPaths, resolveRepoRoot } from "./path-policy.js";
-import { scanRepoContext } from "./repo-context.js";
+import { scanRepoResult } from "./repo-context.js";
 import { createIntakeReport } from "./report.js";
 import { evaluateSuccessModel } from "./success.js";
-import { createEmptyTaskSpec, normalizeTaskSpec } from "./task-spec.js";
+import { buildTaskParserResult } from "./task-parser.js";
 import { validateIntakeInputs } from "./validation.js";
 import type {
-  CandidateTarget,
   IntakeCommandOptions,
   IntakeCommandResult,
   IntakeExecutionContext,
   IntakeFailureDetails,
-  IntakeTaskSpec,
   NextStepReadiness,
   NormalizedTaskInput,
-  RepoContext,
 } from "./types.js";
 
 async function ensureParentDirectory(filePath: string): Promise<void> {
@@ -79,13 +78,9 @@ async function persistResult(
   context: IntakeExecutionContext,
   runtimeOptions: ReturnType<typeof resolveRuntimeOptions>,
   taskInput: NormalizedTaskInput | null,
-  taskSpec: IntakeTaskSpec,
-  repoContext: RepoContext,
-  candidateTargets: CandidateTarget[],
-  ambiguities: string[],
+  assembledResult: ReturnType<typeof assembleIntakeResult>,
   nextStepReadiness: NextStepReadiness,
   failure: IntakeFailureDetails | null,
-  warnings: string[],
 ): Promise<IntakeCommandResult> {
   const finishedAt = new Date().toISOString();
   const artifact = createIntakeArtifact({
@@ -93,12 +88,12 @@ async function persistResult(
     finishedAt,
     sourceInputs: taskInput ? toArtifactSourceInputs(taskInput) : null,
     runtimeOptions,
-    taskSpec,
-    repoContext,
-    candidateTargets,
-    ambiguities,
+    taskSpec: assembledResult.taskSpec,
+    repoContext: assembledResult.repoContext,
+    candidateTargets: assembledResult.candidateTargets,
+    ambiguities: assembledResult.ambiguities,
     nextStepReadiness,
-    warnings,
+    warnings: assembledResult.warnings,
     failure,
   });
   const report = createIntakeReport(artifact);
@@ -200,25 +195,40 @@ export async function runIntakeCommand(
     }
   }
 
-  const taskSpec = taskInput ? normalizeTaskSpec(taskInput) : createEmptyTaskSpec();
-  const repoContext = await scanRepoContext(repoRoot, context.paths.outputRoot);
-  const candidateTargets = resolveCandidateTargets(taskInput, repoContext);
-  const successEvaluation = evaluateSuccessModel({
-    taskSpec,
-    repoContext,
-    candidateTargets,
+  const taskParserResult = buildTaskParserResult(taskInput);
+  const repoScanResult = await scanRepoResult(repoRoot, context.paths.outputRoot);
+  const inferenceResult = buildInferenceResult({
+    taskInput,
+    taskParserResult,
+    repoScanResult,
+  });
+  const ambiguityAnalysisResult = buildAmbiguityAnalysisResult({
+    taskInput,
+    taskParserResult,
+    repoScanResult,
+    inferenceResult,
+    runtimeOptions,
     failure,
     validationBlockingIssues: [...runtimeBlockingIssues, ...validationBlockingIssues],
-    inputWarnings: [...runtimeWarnings, ...validationWarnings],
-    inputAmbiguities: taskInput?.ambiguities,
-    inputRecommendedUserActions:
-      taskInput
-        ? [
-          ...taskInput.recommendedUserActions,
-          ...runtimeRecommendedUserActions,
-          ...validationRecommendedUserActions,
-        ]
-        : [...runtimeRecommendedUserActions, ...validationRecommendedUserActions],
+    validationWarnings,
+    validationRecommendedUserActions,
+  });
+  const assembledResult = assembleIntakeResult({
+    taskInput,
+    taskParserResult,
+    repoScanResult,
+    inferenceResult,
+    ambiguityAnalysisResult,
+  });
+  const successEvaluation = evaluateSuccessModel({
+    taskSpec: assembledResult.taskSpec,
+    repoContext: assembledResult.repoContext,
+    candidateTargets: assembledResult.candidateTargets,
+    failure,
+    validationBlockingIssues: [...runtimeBlockingIssues, ...validationBlockingIssues],
+    inputWarnings: assembledResult.warnings,
+    inputAmbiguities: assembledResult.ambiguities,
+    inputRecommendedUserActions: assembledResult.recommendedUserActions,
   });
 
   try {
@@ -226,13 +236,14 @@ export async function runIntakeCommand(
       context,
       runtimeOptions,
       taskInput,
-      taskSpec,
-      repoContext,
-      candidateTargets,
-      successEvaluation.ambiguities,
+      {
+        ...assembledResult,
+        ambiguities: successEvaluation.ambiguities,
+        warnings: successEvaluation.warnings,
+        recommendedUserActions: successEvaluation.nextStepReadiness.recommendedUserActions,
+      },
       successEvaluation.nextStepReadiness,
       failure,
-      successEvaluation.warnings,
     );
   } catch (error) {
     const persistenceFailure = createFailureDetails(
@@ -279,13 +290,14 @@ export async function runIntakeCommand(
         fallbackContext,
         runtimeOptions,
         taskInput,
-        taskSpec,
-        repoContext,
-        candidateTargets,
-        successEvaluation.ambiguities,
+        {
+          ...assembledResult,
+          ambiguities: successEvaluation.ambiguities,
+          warnings: successEvaluation.warnings,
+          recommendedUserActions: successEvaluation.nextStepReadiness.recommendedUserActions,
+        },
         successEvaluation.nextStepReadiness,
         fallbackFailure,
-        successEvaluation.warnings,
       );
     } catch {
       return {

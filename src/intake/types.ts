@@ -4,6 +4,8 @@ export type IntakeStatus = "success" | "warning" | "failed";
 export type IntakeInputMode = "spec" | "prompt";
 export type IntakeOutputMode = "default" | "json-only" | "report-only";
 export type IntakeLlmMode = "deterministic" | "assist";
+export type IntakeConfidenceLevel = "high" | "medium" | "low";
+export type IntakeConfidenceSignalStrength = "strong" | "partial" | "weak";
 
 export interface IntakeCommandOptions {
   repo?: string;
@@ -56,6 +58,19 @@ export interface NormalizedTaskInput {
   recommendedUserActions: string[];
 }
 
+export interface TaskParserResult {
+  taskSpec: IntakeTaskSpec;
+  signals: {
+    hasGoal: boolean;
+    hasAcceptanceCriteria: boolean;
+    referencedPaths: string[];
+    promptIsThin: boolean;
+  };
+  ambiguities: string[];
+  warnings: string[];
+  recommendedUserActions: string[];
+}
+
 export interface ValidatedIntakeInputs {
   inputMode: IntakeInputMode;
   primaryInput: {
@@ -83,11 +98,33 @@ export interface RepoContext {
   manifestFiles: string[];
 }
 
+export interface RepoScanResult {
+  repoContext: RepoContext;
+  signals: {
+    sourceFileCount: number;
+    testFileCount: number;
+    manifestFileCount: number;
+    repoLooksSparse: boolean;
+  };
+  warnings: string[];
+}
+
 export interface CandidateTarget {
   path: string;
   kind: "source" | "test" | "manifest";
   matchType: "explicit" | "fallback";
   reason: string;
+}
+
+export interface InferenceResult {
+  candidateTargets: CandidateTarget[];
+  inferredRequirements: string[];
+  signals: {
+    explicitTargetCount: number;
+    usedFallbackTargets: boolean;
+    inferredRequirementCount: number;
+  };
+  warnings: string[];
 }
 
 export interface BlockingIssue {
@@ -111,6 +148,37 @@ export interface ResolvedRuntimeOptions {
   blockingIssues: BlockingIssue[];
   warnings: string[];
   recommendedUserActions: string[];
+}
+
+export interface AmbiguityAnalysisResult {
+  ambiguities: string[];
+  warnings: string[];
+  recommendedUserActions: string[];
+  confidence: {
+    level: IntakeConfidenceLevel;
+    signals: {
+      taskParsing: IntakeConfidenceSignalStrength;
+      repoInspection: IntakeConfidenceSignalStrength;
+      targeting: IntakeConfidenceSignalStrength;
+    };
+    reasons: string[];
+  };
+}
+
+export interface AssembledIntakeResult {
+  responsibilities: {
+    taskParser: TaskParserResult;
+    repoScan: RepoScanResult;
+    inference: InferenceResult;
+    analysis: AmbiguityAnalysisResult;
+  };
+  taskSpec: IntakeTaskSpec;
+  repoContext: RepoContext;
+  candidateTargets: CandidateTarget[];
+  ambiguities: string[];
+  warnings: string[];
+  recommendedUserActions: string[];
+  confidence: AmbiguityAnalysisResult["confidence"];
 }
 
 export interface NextStepReadiness {

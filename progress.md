@@ -30,9 +30,15 @@
   - Made `--json-only` and `--report-only` control which intake files are persisted while keeping the human-readable CLI summary stable.
   - Added durable `runtime_options` metadata to the artifact/report and explicit deferred-behavior warnings for `--llm-assist` and `--fail-on-low-confidence`.
   - Expanded automated coverage and smoke assertions for the new CLI surface and flag behavior contract.
+- Batch 1.06: `06-core-responsibilities.md`
+  - Added explicit internal result types and pipeline stages for task parsing, repo inspection, engineering-only inference, and ambiguity/confidence analysis.
+  - Reworked intake orchestration so all four responsibilities feed a shared assembled result before artifact persistence.
+  - Moved candidate-target generation under the explicit inference responsibility while keeping the public artifact/report contract stable.
+  - Added preliminary internal confidence analysis that now drives warning context without yet exposing the later public confidence section.
+  - Added dedicated automated coverage for the new responsibility pipeline and assembly path.
 
 ## Current Branch State
-- `dev` includes the completed Batch 1.05 implementation.
+- `dev` includes the completed Batch 1.06 implementation.
 - `execution.md` now explicitly requires completed worktree branches to be merged back into their source branch before a task is considered complete, unless the user explicitly requests a PR-only workflow.
 
 ## Verification
@@ -42,4 +48,4 @@
 - `npm.cmd run smoke`
 
 ## Next
-- Continue Batch 1 with `forge_step1_batch1_impl/06-core-responsibilities.md`.
+- Continue Batch 1 with `forge_step1_batch1_impl/07-non-goals-and-boundary-enforcement.md`.
