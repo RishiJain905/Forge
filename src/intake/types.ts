@@ -149,6 +149,7 @@ export interface ResolvedRuntimeOptions {
   outputMode: IntakeOutputMode;
   writeArtifact: boolean;
   writeReport: boolean;
+  writeDebugArtifact: boolean;
   llmMode: IntakeLlmMode;
   failOnLowConfidence: boolean;
   blockingIssues: BlockingIssue[];
@@ -214,6 +215,7 @@ export interface ResolvedOutputRoot {
 export interface ResolvedOutputPaths extends ResolvedOutputRoot {
   artifactPath: string;
   reportPath: string;
+  debugArtifactPath: string;
 }
 
 export interface IntakeExecutionContext {
@@ -276,5 +278,39 @@ export interface IntakeCommandResult {
   outputRoot: string | null;
   summary: string;
   nextStepReadiness: NextStepReadiness | null;
+  failure: IntakeFailureDetails | null;
+}
+
+export interface IntakeDebugArtifact {
+  command: string;
+  repoRoot: string;
+  requestedOutputRoot: string | null;
+  outputRoot: string;
+  runtimeOptions: {
+    outputMode: IntakeOutputMode;
+    writeArtifact: boolean;
+    writeReport: boolean;
+    writeDebugArtifact: boolean;
+    llmMode: IntakeLlmMode;
+    failOnLowConfidence: boolean;
+  };
+  paths: {
+    artifactPath: string;
+    reportPath: string;
+    debugArtifactPath: string;
+  };
+  sourceInputs: ArtifactSourceInputs | null;
+  responsibilities: AssembledIntakeResult["responsibilities"];
+  assembledResult: {
+    taskSpec: IntakeTaskSpec;
+    repoContext: RepoContext;
+    candidateTargets: CandidateTarget[];
+    ambiguities: string[];
+    warnings: string[];
+    recommendedUserActions: string[];
+    confidence: AmbiguityAnalysisResult["confidence"];
+  };
+  boundarySafeResult: BoundarySafeIntakeResult;
+  nextStepReadiness: NextStepReadiness;
   failure: IntakeFailureDetails | null;
 }

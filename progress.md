@@ -42,9 +42,15 @@
   - Expanded boundary notes and report language to explicitly defer code edits, workstream splitting, and formal verification requests to later workflow stages.
   - Strengthened Step 1 boundary policy constants to document excluded capabilities more explicitly.
   - Added dedicated automated coverage for semantic non-goals and boundary-safe failed-run behavior.
+- Batch 1.08: `08-output-artifacts-and-write-rules.md`
+  - Refactored intake persistence into explicit artifact/report/debug writer helpers with deterministic directory bootstrap and write ordering.
+  - Added internal debug artifact emission behind `FORGE_INTAKE_DEBUG=1`, scoped to the resolved output root.
+  - Added cleanup of partial configured-root writes before fallback persistence so artifact/report outputs stay aligned to the same run state.
+  - Surfaced explicit persistence failure details in CLI failure output when durable files cannot be trusted.
+  - Added dedicated automated coverage for partial-write cleanup, debug artifact emission, and no-durable-output failure messaging.
 
 ## Current Branch State
-- `dev` includes the completed Batch 1.07 implementation.
+- `dev` includes the completed Batch 1.08 implementation.
 - `execution.md` now explicitly requires completed worktree branches to be merged back into their source branch before a task is considered complete, unless the user explicitly requests a PR-only workflow.
 
 ## Verification
@@ -54,4 +60,4 @@
 - `npm.cmd run smoke`
 
 ## Next
-- Continue Batch 1 with `forge_step1_batch1_impl/08-output-artifacts-and-write-rules.md`.
+- Continue Batch 1 with `forge_step1_batch1_impl/09-main-artifact-schema.md`.
