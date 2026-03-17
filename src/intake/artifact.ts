@@ -3,20 +3,18 @@ import {
   FORGE_SCHEMA_VERSION,
   STEP1_BOUNDARY_POLICY,
 } from "./constants.js";
+import { buildArtifactSections } from "./artifact-sections.js";
 import { validateIntakeArtifact } from "./artifact-schema.js";
 import { toArtifactRuntimeOptions } from "./options.js";
 import { buildSummary, resolveIntakeStatus } from "./success.js";
 import type {
   ArtifactSourceInputs,
+  AssembledIntakeResult,
   BoundarySafeIntakeResult,
-  CandidateTarget,
-  InitialVerificationTarget,
   IntakeArtifact,
   IntakeExecutionContext,
   IntakeFailureDetails,
-  IntakeTaskSpec,
   NextStepReadiness,
-  RepoContext,
   ResolvedRuntimeOptions,
 } from "./types.js";
 
@@ -25,18 +23,13 @@ export function createIntakeArtifact(params: {
   finishedAt: string;
   sourceInputs: ArtifactSourceInputs | null;
   runtimeOptions: ResolvedRuntimeOptions;
-  taskSpec: IntakeTaskSpec;
-  repoContext: RepoContext;
-  candidateTargets: CandidateTarget[];
-  initialVerificationTargets: InitialVerificationTarget[];
-  ambiguities?: string[];
+  assembledResult: AssembledIntakeResult;
+  boundarySafeResult: BoundarySafeIntakeResult;
   nextStepReadiness: NextStepReadiness;
-  boundaryNotes: BoundarySafeIntakeResult["boundaryNotes"];
-  warnings?: string[];
   failure?: IntakeFailureDetails | null;
 }): IntakeArtifact {
-  const warnings = params.warnings ?? [];
-  const ambiguities = params.ambiguities ?? [];
+  const warnings = params.boundarySafeResult.warnings;
+  const ambiguities = params.boundarySafeResult.ambiguities;
   const failure = params.failure ?? null;
   const status = resolveIntakeStatus({
     failure,
@@ -73,14 +66,11 @@ export function createIntakeArtifact(params: {
     startedAt: params.context.startedAt,
     finishedAt: params.finishedAt,
     summary: buildSummary(status, params.nextStepReadiness),
-    taskSpec: params.taskSpec,
-    repoContext: params.repoContext,
-    candidateTargets: params.candidateTargets,
-    initialVerificationTargets: params.initialVerificationTargets,
-    ambiguities,
-    nextStepReadiness: params.nextStepReadiness,
-    boundaryNotes: params.boundaryNotes,
-    warnings,
+    ...buildArtifactSections({
+      assembledResult: params.assembledResult,
+      boundarySafeResult: params.boundarySafeResult,
+      nextStepReadiness: params.nextStepReadiness,
+    }),
     failure,
   };
 

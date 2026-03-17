@@ -24,12 +24,14 @@ export const INTAKE_ARTIFACT_TOP_LEVEL_KEYS = [
   "startedAt",
   "finishedAt",
   "summary",
-  "taskSpec",
-  "repoContext",
-  "candidateTargets",
-  "initialVerificationTargets",
+  "task_spec",
+  "repo_context",
+  "candidate_targets",
+  "risk_analysis",
+  "initial_verification_targets",
   "ambiguities",
-  "nextStepReadiness",
+  "confidence",
+  "next_step_readiness",
   "boundaryNotes",
   "warnings",
   "failure",
@@ -79,26 +81,43 @@ export const intakeArtifactSchema = z.object({
   startedAt: z.string().min(1),
   finishedAt: z.string().min(1),
   summary: z.string().min(1),
-  taskSpec: z.object({
+  task_spec: z.object({
     goal: z.string(),
-    acceptanceCriteria: z.array(z.string().min(1)),
-    hasAcceptanceCriteria: z.boolean(),
+    acceptance_criteria: z.array(z.string().min(1)),
+    has_acceptance_criteria: z.boolean(),
   }),
-  repoContext: z.object({
+  repo_context: z.object({
     grounded: z.boolean(),
-    sourceFiles: z.array(z.string().min(1)),
-    testFiles: z.array(z.string().min(1)),
-    manifestFiles: z.array(z.string().min(1)),
+    source_files: z.array(z.string().min(1)),
+    test_files: z.array(z.string().min(1)),
+    manifest_files: z.array(z.string().min(1)),
   }),
-  candidateTargets: z.array(
+  candidate_targets: z.array(
     z.object({
       path: z.string().min(1),
       kind: z.enum(["source", "test", "manifest"]),
-      matchType: z.enum(["explicit", "fallback"]),
+      match_type: z.enum(["explicit", "fallback"]),
       reason: z.string().min(1),
     }),
   ),
-  initialVerificationTargets: z.array(
+  risk_analysis: z.object({
+    initial_risk_zones: z.array(
+      z.object({
+        code: z.enum([
+          "weak_repo_grounding",
+          "unresolved_referenced_paths",
+          "no_candidate_targets",
+          "fallback_targeting_only",
+          "no_tests_detected",
+          "manifest_or_config_impact",
+        ]),
+        level: z.enum(["medium", "high"]),
+        reason: z.string().min(1),
+        evidence_paths: z.array(z.string().min(1)),
+      }),
+    ),
+  }),
+  initial_verification_targets: z.array(
     z.object({
       path: z.string().min(1),
       kind: z.enum(["source", "test", "manifest"]),
@@ -106,15 +125,24 @@ export const intakeArtifactSchema = z.object({
     }),
   ),
   ambiguities: z.array(z.string().min(1)),
-  nextStepReadiness: z.object({
+  confidence: z.object({
+    level: z.enum(["high", "medium", "low"]),
+    signals: z.object({
+      task_parsing: z.enum(["strong", "partial", "weak"]),
+      repo_inspection: z.enum(["strong", "partial", "weak"]),
+      targeting: z.enum(["strong", "partial", "weak"]),
+    }),
+    reasons: z.array(z.string().min(1)),
+  }),
+  next_step_readiness: z.object({
     ready: z.boolean(),
-    blockingIssues: z.array(
+    blocking_issues: z.array(
       z.object({
         code: z.string().min(1),
         message: z.string().min(1),
       }),
     ),
-    recommendedUserActions: z.array(z.string().min(1)),
+    recommended_user_actions: z.array(z.string().min(1)),
   }),
   boundaryNotes: z.array(z.string().min(1)),
   warnings: z.array(z.string().min(1)),

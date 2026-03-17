@@ -9,19 +9,19 @@ function renderList(items: string[]): string {
 }
 
 function renderCandidateTargets(
-  items: IntakeArtifact["candidateTargets"],
+  items: IntakeArtifact["candidate_targets"],
 ): string {
   if (items.length === 0) {
     return "- none";
   }
 
   return items
-    .map((item) => `- \`${item.path}\` (${item.kind}, ${item.matchType}) - ${item.reason}`)
+    .map((item) => `- \`${item.path}\` (${item.kind}, ${item.match_type}) - ${item.reason}`)
     .join("\n");
 }
 
 function renderInitialVerificationTargets(
-  items: IntakeArtifact["initialVerificationTargets"],
+  items: IntakeArtifact["initial_verification_targets"],
 ): string {
   if (items.length === 0) {
     return "- none";
@@ -33,13 +33,30 @@ function renderInitialVerificationTargets(
 }
 
 function renderBlockingIssues(
-  items: IntakeArtifact["nextStepReadiness"]["blockingIssues"],
+  items: IntakeArtifact["next_step_readiness"]["blocking_issues"],
 ): string {
   if (items.length === 0) {
     return "- none";
   }
 
   return items.map((item) => `- \`${item.code}\`: ${item.message}`).join("\n");
+}
+
+function renderRiskAnalysis(
+  items: IntakeArtifact["risk_analysis"]["initial_risk_zones"],
+): string {
+  if (items.length === 0) {
+    return "- none";
+  }
+
+  return items
+    .map((item) => {
+      const evidence = item.evidence_paths.length > 0
+        ? ` [evidence: ${item.evidence_paths.join(", ")}]`
+        : "";
+      return `- \`${item.code}\` (${item.level}) - ${item.reason}${evidence}`;
+    })
+    .join("\n");
 }
 
 export function createIntakeReport(artifact: IntakeArtifact): string {
@@ -89,41 +106,54 @@ export function createIntakeReport(artifact: IntakeArtifact): string {
     "",
     "## Task Spec",
     "",
-    `- Goal: ${artifact.taskSpec.goal || "none"}`,
-    `- Acceptance criteria present: \`${artifact.taskSpec.hasAcceptanceCriteria}\``,
+    `- Goal: ${artifact.task_spec.goal || "none"}`,
+    `- Acceptance criteria present: \`${artifact.task_spec.has_acceptance_criteria}\``,
     "",
-    renderList(artifact.taskSpec.acceptanceCriteria),
+    renderList(artifact.task_spec.acceptance_criteria),
     "",
     "## Repo Context",
     "",
-    `- Grounded: \`${artifact.repoContext.grounded}\``,
-    `- Source files found: ${artifact.repoContext.sourceFiles.length}`,
-    `- Test files found: ${artifact.repoContext.testFiles.length}`,
-    `- Manifest files found: ${artifact.repoContext.manifestFiles.length}`,
+    `- Grounded: \`${artifact.repo_context.grounded}\``,
+    `- Source files found: ${artifact.repo_context.source_files.length}`,
+    `- Test files found: ${artifact.repo_context.test_files.length}`,
+    `- Manifest files found: ${artifact.repo_context.manifest_files.length}`,
     "",
     "## Candidate Targets",
     "",
-    renderCandidateTargets(artifact.candidateTargets),
+    renderCandidateTargets(artifact.candidate_targets),
+    "",
+    "## Risk Analysis",
+    "",
+    renderRiskAnalysis(artifact.risk_analysis.initial_risk_zones),
     "",
     "## Initial Verification Targets",
     "",
-    renderInitialVerificationTargets(artifact.initialVerificationTargets),
+    renderInitialVerificationTargets(artifact.initial_verification_targets),
     "",
     "## Ambiguities",
     "",
     renderList(artifact.ambiguities),
     "",
+    "## Confidence",
+    "",
+    `- Level: \`${artifact.confidence.level}\``,
+    `- Task parsing: \`${artifact.confidence.signals.task_parsing}\``,
+    `- Repo inspection: \`${artifact.confidence.signals.repo_inspection}\``,
+    `- Targeting: \`${artifact.confidence.signals.targeting}\``,
+    "",
+    renderList(artifact.confidence.reasons),
+    "",
     "## Next Step Readiness",
     "",
-    `- Ready for \`forge plan\`: \`${artifact.nextStepReadiness.ready}\``,
+    `- Ready for \`forge plan\`: \`${artifact.next_step_readiness.ready}\``,
     "",
     "### Blocking Issues",
     "",
-    renderBlockingIssues(artifact.nextStepReadiness.blockingIssues),
+    renderBlockingIssues(artifact.next_step_readiness.blocking_issues),
     "",
     "### Recommended User Actions",
     "",
-    renderList(artifact.nextStepReadiness.recommendedUserActions),
+    renderList(artifact.next_step_readiness.recommended_user_actions),
     "",
     "## Boundary Notes",
     "",

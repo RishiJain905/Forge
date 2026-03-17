@@ -58,10 +58,15 @@ async function main() {
     assert.equal(artifact.runtime_options.fail_on_low_confidence, false);
     assert.equal(artifact.source_inputs.config_path, null);
     assert.deepEqual(artifact.source_inputs.focus_paths, []);
-    assert.equal(artifact.nextStepReadiness.ready, true);
+    assert.equal(artifact.task_spec.has_acceptance_criteria, false);
+    assert.equal(artifact.next_step_readiness.ready, true);
+    assert.ok(Array.isArray(artifact.risk_analysis.initial_risk_zones));
+    assert.equal(artifact.confidence.level, "medium");
     assert.match(report, /Forge Intake Report/);
     assert.match(report, /Source Inputs/);
     assert.match(report, /Runtime Options/);
+    assert.match(report, /Risk Analysis/);
+    assert.match(report, /Confidence/);
     assert.match(report, /Next Step Readiness/);
   } finally {
     await rm(tempRepo, { recursive: true, force: true });

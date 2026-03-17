@@ -16,7 +16,7 @@ interface InitialVerificationTarget {
 }
 
 interface IntakeArtifact {
-  initialVerificationTargets: InitialVerificationTarget[];
+  initial_verification_targets: InitialVerificationTarget[];
   boundaryNotes: string[];
 }
 
@@ -75,7 +75,7 @@ await runScenario(
       const artifact = await readJsonFile<IntakeArtifact>(join(repoRoot, ".forge", "intake.json"));
       const report = await readTextFile(join(repoRoot, ".forge", "reports", "intake-report.md"));
 
-      assertPointerOnlyTargets(artifact.initialVerificationTargets);
+      assertPointerOnlyTargets(artifact.initial_verification_targets);
       assertNoFutureStepPayloads(artifact);
       assert.ok(
         artifact.boundaryNotes.some((note) => /code edits|implementation work|later step|deferred/i.test(note)),
@@ -111,7 +111,7 @@ await runScenario(
       const artifact = await readJsonFile<IntakeArtifact>(join(repoRoot, ".forge", "intake.json"));
       const report = await readTextFile(join(repoRoot, ".forge", "reports", "intake-report.md"));
 
-      assertPointerOnlyTargets(artifact.initialVerificationTargets);
+      assertPointerOnlyTargets(artifact.initial_verification_targets);
       assertNoFutureStepPayloads(artifact);
       assert.ok(
         artifact.boundaryNotes.some((note) => /workstream|split/i.test(note)),
@@ -141,7 +141,7 @@ await runScenario(
 
       const artifact = await readJsonFile<IntakeArtifact>(join(repoRoot, ".forge", "intake.json"));
 
-      assert.deepEqual(artifact.initialVerificationTargets, []);
+      assert.deepEqual(artifact.initial_verification_targets, []);
       assertNoFutureStepPayloads(artifact);
       assert.ok(
         artifact.boundaryNotes.some((note) => /deferred|later step|forge plan/i.test(note)),
