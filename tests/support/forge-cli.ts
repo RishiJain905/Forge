@@ -5,11 +5,7 @@ import { dirname, join } from "node:path";
 
 import { formatIntakeCommandOutput } from "../../src/cli.js";
 import { runIntakeCommand } from "../../src/intake/runner.js";
-import type {
-  IntakeArtifact,
-  IntakeCommandOptions,
-  IntakeInputMode,
-} from "../../src/intake/types.js";
+import type { IntakeCommandOptions } from "../../src/intake/types.js";
 
 export interface ForgeRunResult {
   code: number;
@@ -20,78 +16,6 @@ export interface ForgeRunResult {
 type TestIntakeCommandOptions = IntakeCommandOptions & {
   strictFocus?: boolean;
 };
-
-export const STEP1_SUCCESS_CHECKLIST = [
-  "spec mode works",
-  "prompt mode works",
-  "repo context is usable",
-  "artifact is written",
-  "report is written",
-  "readiness is present",
-  "confidence is present",
-  "ambiguity is persisted",
-] as const;
-
-export type Step1SuccessChecklistLabel = (typeof STEP1_SUCCESS_CHECKLIST)[number];
-
-export interface Step1SuccessCriteriaInput {
-  artifact: IntakeArtifact;
-  report: string;
-  expectedInputMode: IntakeInputMode;
-  expectPersistedAmbiguity: boolean;
-}
-
-export function collectStep1SuccessCriteriaFailures(
-  input: Step1SuccessCriteriaInput,
-): Step1SuccessChecklistLabel[] {
-  const failures: Step1SuccessChecklistLabel[] = [];
-
-  if (input.expectedInputMode === "spec" && input.artifact.input_mode !== "spec") {
-    failures.push("spec mode works");
-  }
-
-  if (input.expectedInputMode === "prompt" && input.artifact.input_mode !== "prompt") {
-    failures.push("prompt mode works");
-  }
-
-  if (
-    !input.artifact.repo_context.grounded ||
-    input.artifact.repo_context.source_files.length +
-      input.artifact.repo_context.test_files.length +
-      input.artifact.repo_context.manifest_files.length ===
-      0
-  ) {
-    failures.push("repo context is usable");
-  }
-
-  if (!input.artifact.files.artifactPath) {
-    failures.push("artifact is written");
-  }
-
-  if (!input.artifact.files.reportPath || input.report.trim().length === 0) {
-    failures.push("report is written");
-  }
-
-  if (
-    typeof input.artifact.next_step_readiness.ready !== "boolean" ||
-    !Array.isArray(input.artifact.next_step_readiness.blocking_issues)
-  ) {
-    failures.push("readiness is present");
-  }
-
-  if (
-    !["high", "medium", "low"].includes(input.artifact.confidence.level) ||
-    !Array.isArray(input.artifact.confidence.reasons)
-  ) {
-    failures.push("confidence is present");
-  }
-
-  if (input.expectPersistedAmbiguity && input.artifact.ambiguities.length === 0) {
-    failures.push("ambiguity is persisted");
-  }
-
-  return failures;
-}
 
 export async function createTempRepo(prefix = "forge-intake-"): Promise<string> {
   const repoRoot = await mkdtemp(join(tmpdir(), prefix));

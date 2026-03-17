@@ -6,7 +6,7 @@
 ## What Changed
 - Added a dedicated Step 1 success-criteria test with one explicit eight-item checklist that maps directly to runnable intake behavior.
 - Covered both required end-to-end scenarios: a grounded spec run with explicit source/test targets and a prompt run that stays usable while persisting a real ambiguity.
-- Added a small shared checklist helper in the intake test support layer and wired the new compiled test into the default `npm.cmd test` suite.
+- Kept the checklist logic local to the dedicated success-criteria test and wired the new compiled test into the default `npm.cmd test` suite.
 - Kept production runtime unchanged because the new checklist did not expose any `src/intake/*` behavior gap.
 
 ## Completion Checklist
@@ -21,7 +21,6 @@
 
 ## Key Files
 - `tests/intake.step1-success-criteria.test.ts`
-- `tests/support/forge-cli.ts`
 - `package.json`
 
 ## Verification

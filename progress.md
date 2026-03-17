@@ -95,7 +95,7 @@
 - Batch 1.18: `18-step1-success-criteria.md`
   - Added a dedicated end-to-end Step 1 success-criteria test that evaluates the eight documented completion bullets against real intake outputs.
   - Covered both required verification paths: a grounded spec success run and a prompt warning run with persisted ambiguity.
-  - Added a small shared checklist helper for intake tests and wired the new compiled test into the default `npm.cmd test` suite.
+  - Kept the checklist logic local to the dedicated success-criteria test and wired the new compiled test into the default `npm.cmd test` suite.
   - Documented the checklist evidence in `B1-done/18-summary-done.md` without broadening the production runtime surface.
 
 ## Current Branch State

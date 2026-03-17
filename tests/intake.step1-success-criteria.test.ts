@@ -6,15 +6,79 @@ import {
   createTempRepo,
   disposeTempRepo,
   fileExists,
-  STEP1_SUCCESS_CHECKLIST,
   readJsonFile,
   readTextFile,
   runForgeCli,
   writeRepoFile,
-  collectStep1SuccessCriteriaFailures,
 } from "./support/forge-cli.js";
 
+const STEP1_SUCCESS_CHECKLIST = [
+  "spec mode works",
+  "prompt mode works",
+  "repo context is usable",
+  "artifact is written",
+  "report is written",
+  "readiness is present",
+  "confidence is present",
+  "ambiguity is persisted",
+] as const;
+
 type Step1SuccessChecklistLabel = (typeof STEP1_SUCCESS_CHECKLIST)[number];
+
+function collectStep1SuccessCriteriaFailures(input: {
+  artifact: IntakeArtifact;
+  report: string;
+  expectedInputMode: "spec" | "prompt";
+  expectPersistedAmbiguity: boolean;
+}): Step1SuccessChecklistLabel[] {
+  const failures: Step1SuccessChecklistLabel[] = [];
+
+  if (input.expectedInputMode === "spec" && input.artifact.input_mode !== "spec") {
+    failures.push("spec mode works");
+  }
+
+  if (input.expectedInputMode === "prompt" && input.artifact.input_mode !== "prompt") {
+    failures.push("prompt mode works");
+  }
+
+  if (
+    !input.artifact.repo_context.grounded ||
+    input.artifact.repo_context.source_files.length +
+      input.artifact.repo_context.test_files.length +
+      input.artifact.repo_context.manifest_files.length ===
+      0
+  ) {
+    failures.push("repo context is usable");
+  }
+
+  if (!input.artifact.files.artifactPath) {
+    failures.push("artifact is written");
+  }
+
+  if (!input.artifact.files.reportPath || input.report.trim().length === 0) {
+    failures.push("report is written");
+  }
+
+  if (
+    typeof input.artifact.next_step_readiness.ready !== "boolean" ||
+    !Array.isArray(input.artifact.next_step_readiness.blocking_issues)
+  ) {
+    failures.push("readiness is present");
+  }
+
+  if (
+    !["high", "medium", "low"].includes(input.artifact.confidence.level) ||
+    !Array.isArray(input.artifact.confidence.reasons)
+  ) {
+    failures.push("confidence is present");
+  }
+
+  if (input.expectPersistedAmbiguity && input.artifact.ambiguities.length === 0) {
+    failures.push("ambiguity is persisted");
+  }
+
+  return failures;
+}
 
 function assertNoChecklistFailures(
   scenarioName: string,
