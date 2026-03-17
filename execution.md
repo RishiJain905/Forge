@@ -171,6 +171,21 @@ Do not claim completion without **fresh passing test results on the integrated b
 - Remove completed temporary worktrees when finished.
 - Delete merged local source branches after integration.
 - Delete merged remote source branches when appropriate and safe.
+
+### Post-Cleanup Quality Review
+
+- After worktree and stream cleanup is complete, and all intended changes are present on the target branch, the orchestrator must perform a final quality review of the newly changed uncommitted or freshly integrated code.
+- This review should check for:
+  - integration seams or inconsistencies across merged work
+  - duplicated logic or overlapping implementations
+  - obvious code quality regressions
+  - inconsistent naming, structure, or abstractions
+  - leftover debug code, temporary scaffolding, or incomplete cleanup
+  - changes that technically pass tests but are unnecessarily brittle, confusing, or poorly integrated
+
+- If issues are found, the orchestrator should delegate or apply the minimal necessary follow-up fixes and rerun relevant verification before claiming completion.
+- Completion should only be claimed after this final quality sweep confirms that the integrated code is not only functional, but also reasonably clean and coherent.
+
 - Summarize:
   - the final target branch state
   - merged or cherry-picked branches
