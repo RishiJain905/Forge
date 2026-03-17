@@ -73,6 +73,33 @@ await runScenario(
 );
 
 await runScenario(
+  "prompt source normalization skips markdown headings when deriving the prompt goal",
+  async () => {
+    const taskInput = resolveTaskSource(
+      createPromptInput(
+        [
+          "# Title",
+          "",
+          "Revise src/app.ts and tests/app.test.ts.",
+          "",
+          "Acceptance Criteria",
+          "- src/app.ts is updated",
+          "- tests/app.test.ts stays aligned",
+        ].join("\n"),
+      ),
+    );
+
+    const result = buildTaskParserResult(taskInput);
+
+    assert.equal(taskInput.inputMode, "prompt");
+    assert.ok(taskInput.promptDetails, "expected promptDetails for prompt mode");
+    assert.match(taskInput.promptDetails?.goal ?? "", /Revise src\/app\.ts/i);
+    assert.match(result.taskSpec.goal, /Revise src\/app\.ts/i);
+    assert.equal(result.signals.hasGoal, true);
+  },
+);
+
+await runScenario(
   "task parser result includes task spec and parse signals",
   async () => {
     const taskInput = resolveTaskSource(

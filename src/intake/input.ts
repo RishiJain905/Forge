@@ -7,6 +7,7 @@ import type {
 } from "./types.js";
 
 const acceptanceCriteriaHeading = /^(?:#{1,6}\s*)?acceptance criteria\b:?/im;
+const markdownHeading = /^#{1,6}\s+/;
 const explicitPathToken = /\b(?:[\w.-]+\/)+[\w.-]+\b/;
 
 function hasAcceptanceCriteriaSection(value: string): boolean {
@@ -71,7 +72,12 @@ function extractPromptGoal(prompt: string): string {
   for (const line of lines) {
     const trimmed = line.trim();
 
-    if (!trimmed || acceptanceCriteriaHeading.test(trimmed) || /^[-*]\s+/.test(trimmed)) {
+    if (
+      !trimmed ||
+      markdownHeading.test(trimmed) ||
+      acceptanceCriteriaHeading.test(trimmed) ||
+      /^[-*]\s+/.test(trimmed)
+    ) {
       continue;
     }
 
