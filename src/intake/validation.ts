@@ -176,12 +176,12 @@ export async function validateIntakeInputs(
     );
   }
 
-  if ((options.focus?.length ?? 0) > 0 && normalizedFocusPaths.length > 0) {
-    warnings.push(
-      "Focus paths were validated and recorded, but focus-aware candidate targeting is deferred in this batch.",
-    );
-    recommendedUserActions.push(
-      "Treat --focus as metadata only for now; focus-aware targeting will arrive in a later batch.",
+  if (options.strictFocus && normalizedFocusPaths.length === 0) {
+    blockingIssues.push(
+      createBlockingIssue(
+        "STRICT_FOCUS_REQUIRES_FOCUS",
+        "Forge intake requires at least one valid --focus path when --strict-focus is enabled.",
+      ),
     );
   }
 
@@ -200,6 +200,12 @@ export async function validateIntakeInputs(
 
     if ((options.focus?.length ?? 0) > 0) {
       recommendedUserActions.push("Pass only existing repo-relative paths to --focus.");
+    }
+
+    if (options.strictFocus) {
+      recommendedUserActions.push(
+        "Pass at least one valid repo-relative path to --focus before enabling --strict-focus.",
+      );
     }
 
     return {

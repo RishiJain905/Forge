@@ -42,6 +42,64 @@ async function runScenario(name: string, scenario: () => Promise<void>): Promise
 }
 
 await runScenario(
+  "prompt source normalization creates synthetic prompt details from structured prompt input",
+  async () => {
+    const taskInput = resolveTaskSource(
+      createPromptInput(
+        [
+          "Add retry telemetry to src/app.ts and keep tests/app.test.ts aligned.",
+          "",
+          "Acceptance Criteria",
+          "- src/app.ts emits retry telemetry",
+          "- tests/app.test.ts validates the retry telemetry output",
+        ].join("\n"),
+      ),
+    );
+
+    assert.equal(taskInput.inputMode, "prompt");
+    assert.ok(taskInput.promptDetails, "expected promptDetails for prompt mode");
+    assert.match(taskInput.promptDetails?.title ?? "", /retry telemetry/i);
+    assert.match(taskInput.promptDetails?.goal ?? "", /src\/app\.ts/i);
+    assert.match(taskInput.promptDetails?.summary ?? "", /tests\/app\.test\.ts/i);
+    assert.deepEqual(
+      taskInput.promptDetails?.requirementCandidates.map((candidate) => candidate.text),
+      [
+        "src/app.ts emits retry telemetry",
+        "tests/app.test.ts validates the retry telemetry output",
+      ],
+    );
+    assert.deepEqual(taskInput.promptDetails?.openQuestions, []);
+  },
+);
+
+await runScenario(
+  "prompt source normalization skips markdown headings when deriving the prompt goal",
+  async () => {
+    const taskInput = resolveTaskSource(
+      createPromptInput(
+        [
+          "# Title",
+          "",
+          "Revise src/app.ts and tests/app.test.ts.",
+          "",
+          "Acceptance Criteria",
+          "- src/app.ts is updated",
+          "- tests/app.test.ts stays aligned",
+        ].join("\n"),
+      ),
+    );
+
+    const result = buildTaskParserResult(taskInput);
+
+    assert.equal(taskInput.inputMode, "prompt");
+    assert.ok(taskInput.promptDetails, "expected promptDetails for prompt mode");
+    assert.match(taskInput.promptDetails?.goal ?? "", /Revise src\/app\.ts/i);
+    assert.match(result.taskSpec.goal, /Revise src\/app\.ts/i);
+    assert.equal(result.signals.hasGoal, true);
+  },
+);
+
+await runScenario(
   "task parser result includes task spec and parse signals",
   async () => {
     const taskInput = resolveTaskSource(
@@ -146,6 +204,95 @@ await runScenario(
       assert.equal(result.confidence.level, "low");
       assert.ok(result.ambiguities.some((value: string) => /too short|acceptance criteria/i.test(value)));
       assert.ok(result.warnings.some((value: string) => /confidence|fallback|partial/i.test(value)));
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "ambiguity analysis generates scope and constraints open questions for a broad prompt with no repo anchors",
+  async () => {
+    const repoRoot = await createTempRepo();
+
+    try {
+      const taskInput = resolveTaskSource(
+        createPromptInput("Build a customer support dashboard for the product."),
+      );
+      const taskParserResult = buildTaskParserResult(taskInput);
+      const repoScanResult = await scanRepoResult(repoRoot, join(repoRoot, ".forge"));
+      const inferenceResult = buildInferenceResult({
+        taskInput,
+        taskParserResult,
+        repoScanResult,
+      });
+
+      const result = buildAmbiguityAnalysisResult({
+        taskInput,
+        taskParserResult,
+        repoScanResult,
+        inferenceResult,
+        runtimeOptions: resolveRuntimeOptions({}),
+        failure: null,
+        validationBlockingIssues: [],
+        validationWarnings: [],
+        validationRecommendedUserActions: [],
+      });
+
+      assert.deepEqual(
+        taskInput.promptDetails?.openQuestions.map((question) => question.category),
+        ["acceptance_criteria", "scope", "constraints"],
+      );
+      assert.ok(result.ambiguities.some((value: string) => /scope/i.test(value)));
+      assert.ok(result.ambiguities.some((value: string) => /constraint/i.test(value)));
+      assert.equal(result.confidence.level, "low");
+      assert.ok(result.confidence.reasons.some((value: string) => /scope|constraint/i.test(value)));
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "ambiguity analysis flags repo-alignment conflicts when prompt references paths missing from the repo",
+  async () => {
+    const repoRoot = await createTempRepo();
+
+    try {
+      const taskInput = resolveTaskSource(
+        createPromptInput(
+          [
+            "Update src/missing.ts and keep tests/missing.test.ts aligned.",
+            "",
+            "Acceptance Criteria",
+            "- src/missing.ts is updated",
+            "- tests/missing.test.ts is added or updated",
+          ].join("\n"),
+        ),
+      );
+      const taskParserResult = buildTaskParserResult(taskInput);
+      const repoScanResult = await scanRepoResult(repoRoot, join(repoRoot, ".forge"));
+      const inferenceResult = buildInferenceResult({
+        taskInput,
+        taskParserResult,
+        repoScanResult,
+      });
+
+      const result = buildAmbiguityAnalysisResult({
+        taskInput,
+        taskParserResult,
+        repoScanResult,
+        inferenceResult,
+        runtimeOptions: resolveRuntimeOptions({}),
+        failure: null,
+        validationBlockingIssues: [],
+        validationWarnings: [],
+        validationRecommendedUserActions: [],
+      });
+
+      assert.ok(result.ambiguities.some((value: string) => /repo|missing\.ts|not found/i.test(value)));
+      assert.equal(result.confidence.level, "low");
+      assert.ok(result.confidence.reasons.some((value: string) => /unresolved|repo/i.test(value)));
     } finally {
       await disposeTempRepo(repoRoot);
     }

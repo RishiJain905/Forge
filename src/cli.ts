@@ -27,6 +27,7 @@ export async function runCli(argv: string[]): Promise<number> {
     reportOnly: hasFlag(argv, "--report-only"),
     llmAssist: hasFlag(argv, "--llm-assist"),
     noLlm: hasFlag(argv, "--no-llm"),
+    strictFocus: hasFlag(argv, "--strict-focus"),
     failOnLowConfidence: hasFlag(argv, "--fail-on-low-confidence"),
   };
 
@@ -54,6 +55,7 @@ export async function runCli(argv: string[]): Promise<number> {
     .option("--report-only", "Persist only the intake markdown report.")
     .option("--llm-assist", "Record that optional LLM assistance is desired when available.")
     .option("--no-llm", "Force deterministic intake behavior without optional LLM assistance.")
+    .option("--strict-focus", "Constrain candidate targets to the provided focus paths.")
     .option(
       "--fail-on-low-confidence",
       "Escalate a low-confidence intake result to a failed run.",
@@ -77,6 +79,7 @@ export async function runCli(argv: string[]): Promise<number> {
       reportOnly?: boolean;
       llmAssist?: boolean;
       llm?: boolean;
+      strictFocus?: boolean;
       failOnLowConfidence?: boolean;
     }) => {
       const result = await runIntakeCommand({
@@ -85,6 +88,7 @@ export async function runCli(argv: string[]): Promise<number> {
         reportOnly: intakeFlagPresence.reportOnly,
         llmAssist: intakeFlagPresence.llmAssist,
         noLlm: intakeFlagPresence.noLlm,
+        strictFocus: intakeFlagPresence.strictFocus,
         failOnLowConfidence: intakeFlagPresence.failOnLowConfidence,
       });
 

@@ -6,6 +6,7 @@ export interface ConfidenceResolutionInput {
     hasAcceptanceCriteria: boolean;
     promptIsThin: boolean;
     ambiguityCount: number;
+    promptOpenQuestionCategories: Array<"acceptance_criteria" | "scope" | "constraints" | "repo_alignment">;
   };
   repoInspection: {
     grounded: boolean;
@@ -19,6 +20,10 @@ export interface ConfidenceResolutionInput {
     explicitTargetCount: number;
     usedFallbackTargets: boolean;
     unresolvedReferencedPathCount: number;
+    focusApplied?: boolean;
+    strictFocusApplied?: boolean;
+    focusMatchedTargetCount?: number;
+    outOfFocusTargetCount?: number;
   };
 }
 
@@ -44,15 +49,27 @@ function resolveTaskParsingStrength(
     pushReason(reasons, "acceptance criteria are missing from the task input");
   }
 
+  if (input.promptOpenQuestionCategories.includes("scope")) {
+    pushReason(reasons, "prompt scope remains underspecified for the current repo");
+  }
+
+  if (input.promptOpenQuestionCategories.includes("constraints")) {
+    pushReason(reasons, "prompt constraints or non-goals remain unspecified");
+  }
+
   if (input.ambiguityCount > 0) {
     pushReason(reasons, "task ambiguities remain unresolved");
   }
 
-  if (!input.hasGoal || input.promptIsThin) {
+  if (!input.hasGoal || input.promptIsThin || input.promptOpenQuestionCategories.includes("scope")) {
     return "weak";
   }
 
-  if (!input.hasAcceptanceCriteria || input.ambiguityCount > 0) {
+  if (
+    !input.hasAcceptanceCriteria ||
+    input.ambiguityCount > 0 ||
+    input.promptOpenQuestionCategories.includes("constraints")
+  ) {
     return "partial";
   }
 
@@ -114,11 +131,25 @@ function resolveTargetingStrength(
     pushReason(reasons, "candidate targeting does not have an explicit task-to-file match");
   }
 
+  if (input.focusApplied) {
+    if ((input.outOfFocusTargetCount ?? 0) > 0) {
+      pushReason(reasons, "focus paths do not cover all likely targets");
+    }
+
+    if (input.strictFocusApplied && (input.outOfFocusTargetCount ?? 0) > 0) {
+      pushReason(reasons, "strict focus excluded likely relevant candidate targets");
+    }
+  }
+
   if (input.candidateTargetCount === 0 || input.unresolvedReferencedPathCount > 0) {
     return "weak";
   }
 
-  if (input.usedFallbackTargets || input.explicitTargetCount === 0) {
+  if (
+    input.usedFallbackTargets ||
+    input.explicitTargetCount === 0 ||
+    ((input.focusApplied ?? false) && (input.outOfFocusTargetCount ?? 0) > 0)
+  ) {
     return "partial";
   }
 

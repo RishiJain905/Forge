@@ -69,6 +69,8 @@ function createAssembledResult(overrides?: Partial<AssembledIntakeResult>): Asse
           hasAcceptanceCriteria: false,
           referencedPaths: ["package.json", "src/missing.ts"],
           promptIsThin: true,
+          promptRequirementCandidateCount: 1,
+          promptOpenQuestionCategories: ["acceptance_criteria", "scope", "constraints"],
         },
         ambiguities: ["Acceptance criteria are missing from the task input."],
         warnings: [],

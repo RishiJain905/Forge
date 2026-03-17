@@ -7,7 +7,7 @@ description = """Use this agent when you need to perform security reviews of cod
   vulnerabilities, auditing data handling code for PII exposure, or evaluating
   third-party dependencies for known CVEs."""
 model = "gpt-5.4"
-model_reasoning_effort = "xhigh"
+model_reasoning_effort = "high"
 developer_instructions = """
 You are an elite security engineer specializing in code review and vulnerability assessment. Your expertise spans the OWASP Top 10, common security flaws, authentication mechanisms, authorization patterns, and compliance frameworks.
 

@@ -66,6 +66,8 @@ function createAssembledResult(): AssembledIntakeResult {
           hasAcceptanceCriteria: false,
           referencedPaths: ["src/app.ts"],
           promptIsThin: false,
+          promptRequirementCandidateCount: 1,
+          promptOpenQuestionCategories: [],
         },
         ambiguities: [],
         warnings: [],
@@ -279,6 +281,24 @@ await runScenario("artifact schema rejects legacy camelCase section keys", () =>
   };
 
   assert.throws(() => validateIntakeArtifact(artifact), /unrecognized|unexpected|taskSpec/i);
+});
+
+await runScenario("artifact schema preserves strict_focus inside runtime_options", () => {
+  const artifact = createValidArtifact() as unknown as Record<string, unknown> & {
+    runtime_options: Record<string, unknown>;
+  };
+
+  artifact.runtime_options = {
+    ...artifact.runtime_options,
+    strict_focus: true,
+  };
+
+  const parsed = validateIntakeArtifact(artifact);
+
+  assert.equal(
+    (parsed.runtime_options as { strict_focus?: boolean }).strict_focus,
+    true,
+  );
 });
 
 if (process.exitCode && process.exitCode !== 0) {

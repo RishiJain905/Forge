@@ -1,6 +1,30 @@
-# Implementation Execution Workflow (TDD-Enforced)
+# Implementation Execution Workflow (TDD-Enforced, Orchestrator-Led)
 
-## 1. Plan Intake
+## 1. Role and Operating Mode
+
+- The main agent is the **orchestrator and context manager** for the entire task.
+- The orchestrator is responsible for:
+  - maintaining global context
+  - interpreting and preserving the approved implementation plan
+  - coordinating delegation across all work
+  - identifying dependencies, overlap, risks, and execution order
+  - managing execution flow across subagents
+  - owning integration, merge strategy, and final verification
+  - ensuring that no approved requirements, constraints, or implementation intent are lost across handoffs
+
+- The orchestrator is **not** the default implementation worker.
+- The orchestrator should coordinate specialist execution through subagents whenever a matching delegated role exists.
+- The orchestrator may step in directly only when:
+  - the work is integration-owned by the orchestrator
+  - safe delegation is blocked
+  - no suitable specialist role exists
+  - direct intervention is required to resolve blockers or preserve correctness
+
+- The orchestrator must preserve continuity across all delegated work so that no approved requirements, constraints, or implementation intent are lost between planning, execution, integration, and verification.
+
+---
+
+## 2. Plan Intake
 
 - Read the approved implementation plan and any referenced specs before touching code.
 - If an approved plan already exists, execute against that plan instead of writing a replacement plan.
@@ -10,11 +34,11 @@
   - overlap between workstreams
   - integration/conflict zones
   - ordering or migration dependencies
-  - the verification strategy.
+  - the verification strategy
 
 ---
 
-## 2. Multi-Stream Execution
+## 3. Multi-Stream Execution
 
 - If the work can be split safely, create separate implementation streams in separate git worktrees and branches.
 - Use one stream per feature/domain when practical.
@@ -24,35 +48,51 @@
 
 ---
 
-## 3. Subagent Delegation - Required For Separable Streams
+## 4. Subagent Delegation - Required For All Implementation Work
 
-- Do not treat subagent delegation as optional when the work is clearly separable by domain.
-- Always instantiate implementation work through the designated subagents when a matching stream exists.
-- Work should be handed to the appropriate subagent to perform and finish, not kept local by default when the stream maps cleanly to one of the delegated roles.
+- The orchestrator must delegate **all actual implementation work** to subagents whenever there is a relevant delegated role available.
+- This requirement applies to:
+  - parallel stream work
+  - sequential work
+  - isolated bug fixes
+  - feature additions
+  - test creation and test expansion
+  - reviews that map cleanly to a specialist role
 
-- Use the appropriate delegated specialist for each stream:
+- Subagent delegation is not optional simply because work is small, sequential, or manageable by the orchestrator directly.
+- The orchestrator should coordinate, supervise, review, and integrate, but should not default to performing specialist execution work itself when an appropriate subagent exists.
+- The orchestrator may step in directly only when:
+  - a task is integration-owned by the orchestrator
+  - a blocking issue prevents safe delegation
+  - delegation surfaces are unavailable
+  - the work is tightly coupled across domains such that delegation would create more risk than clarity
+  - subagent output requires orchestrator intervention to unblock progress or preserve correctness
+
+- If a relevant subagent is not used, the reason must be a concrete blocking constraint tied to:
+  - coupling
+  - risk
+  - lack of delegation surface
+  - an integration-critical dependency
+  - a missing or unsuitable specialist role
+
+  The reason must **not** be convenience or personal preference.
+
+- Use the appropriate delegated specialist for each task or stream:
   - backend work: `.codex/agents/backendeng.toml`
   - frontend work: `.codex/agents/frontendeng.toml`
   - automated test creation or expansion: `.codex/agents/testautomator.toml`
   - security-sensitive work or review: `.codex/agents/securityrev.toml`
   - performance-related work: `.codex/agents/optimizer.toml`
 
-- Assign one owner per file/domain and avoid overlapping write ownership unless there is an explicit handoff.
+- Always instantiate implementation work through the designated subagents when a matching role exists.
+- Work should be handed to the appropriate subagent to perform and finish, not kept local by default.
 - Prefer parallel investigation and parallel implementation when streams are independent.
-
-- If a relevant subagent is not used for a separable stream, the reason must be a concrete blocking constraint tied to:
-  - coupling
-  - risk
-  - lack of delegation surface
-  - an integration-critical dependency that makes delegation unsafe
-
-  The reason must **not** be convenience or personal preference.
-
----
+- Even when work is not split into multiple streams, the orchestrator must still delegate execution to the appropriate subagent rather than performing the implementation itself by default.
+- Assign one owner per file/domain and avoid overlapping write ownership unless there is an explicit handoff.
 
 ### Test-Driven Development Enforcement
 
-All implementation streams must follow a **strict TDD feedback loop when practical**.
+All implementation streams and delegated execution tasks must follow a **strict TDD feedback loop when practical**.
 
 #### Required TDD Loop
 
@@ -68,24 +108,30 @@ All implementation streams must follow a **strict TDD feedback loop when practic
 - Bug fixes must **always start with a regression test** that reproduces the issue before applying the fix.
 - Feature work must introduce tests that **define the expected behavior** before the implementation is considered complete.
 - Subagents responsible for implementation should collaborate with the `testautomator` agent when new coverage is required.
-- If the codebase lacks a test harness or the behavior cannot yet be tested, the stream must first implement the **minimal testing scaffolding** required before continuing.
+- If the codebase lacks a test harness or the behavior cannot yet be tested, the delegated execution stream must first implement the **minimal testing scaffolding** required before continuing.
 
 ---
 
-## 4. Integration
+## 5. Integration
 
-- Integrate all completed streams back into the user-specified target branch.
-- If work was implemented in temporary git worktrees, each completed worktree branch must be merged back into the branch it was created from before the task is considered complete, unless the user explicitly requests a PR-only workflow.
-- “Integration complete” means the target branch itself contains the final implementation, not just a separate worktree branch.
-- After merging, run fresh verification on the merged target branch, not only inside the worktree branch.
-- Do not leave completed implementation stranded in a worktree branch unless the user explicitly asks to keep it separate.
+- The orchestrator is the **sole owner of cross-stream integration and merge strategy**.
+- Subagents may complete isolated implementation streams, but final merge ordering, conflict resolution, and integrated verification remain centrally owned by the orchestrator.
+- The orchestrator must perform all merging from the full set of worktrees, branches, and streams back into the user-specified target branch.
+- The orchestrator must review the intended behavior from each completed stream before integration to ensure no approved functionality is lost.
 - Do not blindly merge in branch creation order if cherry-picking or curated conflict resolution is safer.
+- The orchestrator must choose the safest integration approach per stream pair or set, including:
+  - merge
+  - rebase
+  - cherry-pick
+  - manual patch transfer
+
 - Resolve conflicts centrally and verify that no stream's intended behavior is lost.
 - Preserve all approved functionality from every stream during integration.
+- Final integrated verification must occur on the target branch before completion is claimed.
 
 ---
 
-## 5. Verification (TDD-Aware)
+## 6. Verification (TDD-Aware)
 
 Verification must be performed **continuously during implementation** through TDD feedback loops.
 
@@ -93,7 +139,6 @@ Verification must be performed **continuously during implementation** through TD
 
 - Tests must be introduced or updated **before implementing new behavior when feasible**.
 - Each implementation step should follow a **Red → Green → Refactor cycle**:
-
   - Write failing test (**Red**)
   - Implement minimal fix (**Green**)
   - Refactor safely while keeping tests passing
@@ -121,24 +166,39 @@ Do not claim completion without **fresh passing test results on the integrated b
 
 ---
 
-## 6. Cleanup
+## 7. Cleanup
 
-- Remove completed temporary worktrees only after their branches have been successfully merged or cherry-picked into the source/target branch and that merged branch has passed fresh verification.
+- Remove completed temporary worktrees when finished.
 - Delete merged local source branches after integration.
 - Delete merged remote source branches when appropriate and safe.
-- If a worktree branch has not been merged back into its source branch, cleanup is not complete.
+
+### Post-Cleanup Quality Review
+
+- After worktree and stream cleanup is complete, and all intended changes are present on the target branch, the orchestrator must perform a final quality review of the newly changed uncommitted or freshly integrated code.
+- This review should check for:
+  - integration seams or inconsistencies across merged work
+  - duplicated logic or overlapping implementations
+  - obvious code quality regressions
+  - inconsistent naming, structure, or abstractions
+  - leftover debug code, temporary scaffolding, or incomplete cleanup
+  - changes that technically pass tests but are unnecessarily brittle, confusing, or poorly integrated
+
+- If issues are found, the orchestrator should delegate or apply the minimal necessary follow-up fixes and rerun relevant verification before claiming completion.
+- Completion should only be claimed after this final quality sweep confirms that the integrated code is not only functional, but also reasonably clean and coherent.
+
 - Summarize:
   - the final target branch state
-  - which worktree branches were merged back
-  - verification status on the merged branch
   - merged or cherry-picked branches
-  - any remaining cleanup blockers.
+  - verification status
+  - any remaining cleanup blockers
 
 ---
 
 ## Behavioral Expectations
 
+- The main agent must behave as an **orchestrator and context manager**, not as the default implementation worker.
 - Do not stop at planning if implementation is requested.
+- Delegate all specialist execution work to subagents when a matching role exists, including sequential non-stream work.
 - Surface merge vs cherry-pick tradeoffs explicitly.
 - Avoid overlapping ownership across streams unless integration requires it.
 - Think through failures and continue working toward completion unless the user explicitly wants to pause.
@@ -148,6 +208,6 @@ Do not claim completion without **fresh passing test results on the integrated b
 
 - Production code should **not be modified without either**:
   - an existing failing test, or
-  - a newly introduced test that defines the intended behavior.
+  - a newly introduced test that defines the intended behavior
 
 The only exception is when building or repairing **test infrastructure itself**.

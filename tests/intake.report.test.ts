@@ -80,6 +80,8 @@ function createBaseAssembledResult(): AssembledIntakeResult {
           hasAcceptanceCriteria: true,
           referencedPaths: ["src/app.ts", "tests/app.test.ts"],
           promptIsThin: false,
+          promptRequirementCandidateCount: 2,
+          promptOpenQuestionCategories: [],
         },
         ambiguities: [],
         warnings: [],
@@ -507,6 +509,24 @@ await runScenario("intake report keeps output file metadata accurate in report-o
   assert.match(report, /## Output Files/);
   assert.match(report, /Artifact: none/i);
   assert.match(report, /Report:\s+`C:\/repo\/\.forge\/reports\/intake-report\.md`/i);
+});
+
+await runScenario("intake report renders strict focus in runtime options", () => {
+  type IntakeArtifactWithStrictFocus = IntakeArtifact & {
+    runtime_options: NonNullable<IntakeArtifact["runtime_options"]> & {
+      strict_focus?: boolean;
+    };
+  };
+
+  const artifact = createArtifact() as IntakeArtifactWithStrictFocus;
+  artifact.runtime_options = {
+    ...artifact.runtime_options,
+    strict_focus: true,
+  };
+
+  const report = createIntakeReport(artifact as IntakeArtifact);
+
+  assert.match(report, /## Runtime Options[\s\S]*Strict focus:\s+`true`/i);
 });
 
 if (process.exitCode && process.exitCode !== 0) {

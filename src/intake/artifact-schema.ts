@@ -60,6 +60,7 @@ export const intakeArtifactSchema = z.object({
   runtime_options: z.object({
     output_mode: z.enum(["default", "json-only", "report-only"]),
     llm_mode: z.enum(["deterministic", "assist"]),
+    strict_focus: z.boolean(),
     fail_on_low_confidence: z.boolean(),
   }),
   purpose: z.string().min(1),

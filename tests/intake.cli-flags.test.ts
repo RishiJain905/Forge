@@ -7,6 +7,7 @@ import {
   disposeTempRepo,
   fileExists,
   readJsonFile,
+  runForgeCli,
   readTextFile,
 } from "./support/forge-cli.js";
 
@@ -23,6 +24,7 @@ interface IntakeArtifact {
     output_mode?: "default" | "json-only" | "report-only";
     llm_mode?: "deterministic" | "assist";
     fail_on_low_confidence?: boolean;
+    strict_focus?: boolean;
   } | null;
   confidence?: {
     level?: "high" | "medium" | "low";
@@ -292,7 +294,7 @@ await runScenario("forge intake rejects conflicting llm selectors", async () => 
   }
 });
 
-await runScenario("forge intake records deferred llm assist intent", async () => {
+await runScenario("forge intake falls back deterministically when llm assist is requested without a backend", async () => {
   const repoRoot = await createTempRepo();
 
   try {
@@ -316,8 +318,40 @@ await runScenario("forge intake records deferred llm assist intent", async () =>
     assert.equal(artifact.runtime_options?.llm_mode, "assist");
     assert.equal(artifact.runtime_options?.fail_on_low_confidence, false);
     assert.ok(
-      artifact.warnings?.some((warning) => /llm assist|deferred/i.test(warning)),
+      artifact.warnings?.some((warning) =>
+        /llm assist|no optional reasoning backend|deterministic mode/i.test(warning)
+      ),
     );
+  } finally {
+    await disposeTempRepo(repoRoot);
+  }
+});
+
+await runScenario("forge intake persists strict focus in runtime options", async () => {
+  const repoRoot = await createTempRepo();
+
+  try {
+    const result = await runForgeCli(
+      [
+        "intake",
+        "--repo",
+        repoRoot,
+        "--prompt",
+        "Update tests/app.test.ts for CLI flag behavior.",
+        "--focus",
+        "tests",
+        "--strict-focus",
+      ],
+      repoRoot,
+    );
+
+    assert.equal(result.code, 0, result.stderr);
+
+    const artifactPath = join(repoRoot, ".forge", "intake.json");
+    const artifact = await readJsonFile<IntakeArtifact>(artifactPath);
+
+    assert.equal(artifact.runtime_options?.strict_focus, true);
+    assert.deepEqual(artifact.source_inputs?.focus_paths, ["tests"]);
   } finally {
     await disposeTempRepo(repoRoot);
   }

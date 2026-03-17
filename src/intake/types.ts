@@ -16,6 +16,7 @@ export interface IntakeCommandOptions {
   constraints?: string;
   config?: string;
   focus?: string[];
+  strictFocus?: boolean;
   jsonOnly?: boolean;
   reportOnly?: boolean;
   llmAssist?: boolean;
@@ -39,7 +40,26 @@ export interface ArtifactSourceInputs {
 export interface ArtifactRuntimeOptions {
   output_mode: IntakeOutputMode;
   llm_mode: IntakeLlmMode;
+  strict_focus: boolean;
   fail_on_low_confidence: boolean;
+}
+
+export interface PromptRequirementCandidate {
+  text: string;
+  source: "acceptance-criteria" | "prompt-clause";
+}
+
+export interface PromptOpenQuestion {
+  category: "acceptance_criteria" | "scope" | "constraints" | "repo_alignment";
+  text: string;
+}
+
+export interface PromptDetails {
+  title: string;
+  goal: string;
+  summary: string;
+  requirementCandidates: PromptRequirementCandidate[];
+  openQuestions: PromptOpenQuestion[];
 }
 
 export interface NormalizedTaskInput {
@@ -56,6 +76,7 @@ export interface NormalizedTaskInput {
   focusPaths: string[];
   ambiguities: string[];
   recommendedUserActions: string[];
+  promptDetails?: PromptDetails;
 }
 
 export interface TaskParserResult {
@@ -65,6 +86,8 @@ export interface TaskParserResult {
     hasAcceptanceCriteria: boolean;
     referencedPaths: string[];
     promptIsThin: boolean;
+    promptRequirementCandidateCount: number;
+    promptOpenQuestionCategories: PromptOpenQuestion["category"][];
   };
   ambiguities: string[];
   warnings: string[];
@@ -156,6 +179,10 @@ export interface InferenceResult {
     explicitTargetCount: number;
     usedFallbackTargets: boolean;
     inferredRequirementCount: number;
+    focusApplied?: boolean;
+    strictFocusApplied?: boolean;
+    focusMatchedTargetCount?: number;
+    outOfFocusTargetCount?: number;
   };
   warnings: string[];
 }
@@ -163,6 +190,43 @@ export interface InferenceResult {
 export interface BlockingIssue {
   code: string;
   message: string;
+}
+
+export interface OptionalReasoningSuggestion {
+  provider: string;
+  ambiguities?: string[];
+  warnings?: string[];
+  recommendedUserActions?: string[];
+  confidenceNotes?: string[];
+  suggestedTargetPaths?: string[];
+}
+
+export interface OptionalReasoningInput {
+  taskInput: NormalizedTaskInput | null;
+  taskParserResult: TaskParserResult;
+  repoScanResult: RepoScanResult;
+  inferenceResult: InferenceResult;
+}
+
+export type OptionalReasoningHook =
+  (input: OptionalReasoningInput) => Promise<OptionalReasoningSuggestion | null>;
+
+export interface OptionalReasoningResolution {
+  requested: boolean;
+  attempted: boolean;
+  used: boolean;
+  available: boolean;
+  provider: string | null;
+  ambiguities: string[];
+  warnings: string[];
+  recommendedUserActions: string[];
+  confidenceNotes: string[];
+  suggestedTargetPaths: string[];
+  ignoredTargetPaths: string[];
+}
+
+export interface IntakeRunnerDependencies {
+  optionalReasoningHook?: OptionalReasoningHook;
 }
 
 export interface IntakeValidationResult {
@@ -178,6 +242,7 @@ export interface ResolvedRuntimeOptions {
   writeReport: boolean;
   writeDebugArtifact: boolean;
   llmMode: IntakeLlmMode;
+  strictFocus: boolean;
   failOnLowConfidence: boolean;
   blockingIssues: BlockingIssue[];
   warnings: string[];
@@ -356,6 +421,7 @@ export interface IntakeDebugArtifact {
     writeReport: boolean;
     writeDebugArtifact: boolean;
     llmMode: IntakeLlmMode;
+    strictFocus: boolean;
     failOnLowConfidence: boolean;
   };
   paths: {
@@ -374,6 +440,7 @@ export interface IntakeDebugArtifact {
     recommendedUserActions: string[];
     confidence: AmbiguityAnalysisResult["confidence"];
   };
+  optionalReasoning: OptionalReasoningResolution;
   boundarySafeResult: BoundarySafeIntakeResult;
   nextStepReadiness: NextStepReadiness;
   failure: IntakeFailureDetails | null;

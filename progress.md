@@ -76,16 +76,32 @@
   - Activated `--fail-on-low-confidence` so low-confidence but structurally usable results can escalate from `warning` to `failed` when requested.
   - Kept failed-run persistence best-effort so repo-resolved runs still emit useful artifact/report output when possible.
   - Added focused status-policy coverage plus CLI regression tests for low-confidence warning-vs-failure behavior.
+- Batch 1.14: `14-prompt-mode-implementation-rules.md`
+  - Added deterministic prompt normalization so prompt mode derives a synthetic title, goal, summary, and structured requirement candidates from inline prompts without changing the public artifact/report contract.
+  - Added prompt-mode open-question handling for missing acceptance criteria, unclear scope, missing constraints, and repo-shape conflicts.
+  - Tightened prompt confidence scoring so broad or weakly grounded prompts downgrade more aggressively while explicit grounded prompts remain capable of `success`.
+  - Added focused automated coverage for structured prompt normalization, broad prompt follow-up guidance, and prompt/repo conflict handling.
+- Batch 1.15: `15-llm-usage-policy-and-control.md`
+  - Replaced the old defer-only `--llm-assist` behavior with a real deterministic-first optional reasoning policy.
+  - Added an internal optional reasoning hook interface so intake can accept assist-side ambiguity, warning, and follow-up enrichment without making LLM output authoritative.
+  - Kept deterministic repo facts authoritative by ignoring conflicting optional reasoning target suggestions and surfacing override notes in warnings and confidence reasons.
+  - Added focused automated coverage for no-backend fallback, injected hook enrichment, `--no-llm` suppression, and deterministic override behavior.
+- Batch 1.16: `16-focus-directory-and-targeting-rules.md`
+  - Added public `--strict-focus` support and persisted it through runtime options, artifact output, report output, and debug output.
+  - Kept repo scanning whole-repo while applying focus-aware candidate ordering and strict filtering only after raw candidate discovery.
+  - Made non-strict focus prioritize in-focus candidate targets while keeping out-of-focus evidence visible and warning when focus does not cover all likely targets.
+  - Made strict focus filter final candidate targets to focus matches only, with validation for missing valid focus paths and confidence/analysis updates for focus-driven targeting changes.
+  - Added focused automated coverage for whole-repo context preservation, focus prioritization, strict-focus filtering, validation, schema preservation, and runtime/report rendering.
 
 ## Current Branch State
-- `dev` includes the completed Batch 1.13 implementation.
+- `dev` includes the completed Batch 1.16 implementation.
 - `execution.md` now explicitly requires completed worktree branches to be merged back into their source branch before a task is considered complete, unless the user explicitly requests a PR-only workflow.
 
 ## Verification
-- `npm.cmd run typecheck`
 - `npm.cmd test`
+- `npm.cmd run typecheck`
 - `npm.cmd run build`
 - `npm.cmd run smoke`
 
 ## Next
-- Continue Batch 1 with `forge_step1_batch1_impl/14-prompt-mode-implementation-rules.md`.
+- Continue Batch 1 with `forge_step1_batch1_impl/17-git-context-rules.md`.

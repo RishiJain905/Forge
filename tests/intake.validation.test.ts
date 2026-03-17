@@ -20,6 +20,7 @@ interface IntakeArtifact {
     config_path?: string | null;
     focus_paths?: string[];
   } | null;
+  warnings?: string[];
   next_step_readiness?: {
     ready?: boolean;
     blocking_issues?: Array<{
@@ -180,6 +181,14 @@ await runScenario(
       assert.deepEqual(artifact.source_inputs?.focus_paths, ["src"]);
       assert.match(artifact.source_inputs?.normalized_task_text ?? "", /Keep CLI output stable/i);
       assert.match(artifact.source_inputs?.normalized_task_text ?? "", /Keep the implementation deterministic/i);
+      assert.ok(
+        artifact.warnings?.some((value) => /focus/i.test(value)),
+        "expected focus-related guidance in warnings",
+      );
+      assert.ok(
+        !artifact.warnings?.some((value) => /deferred|later step/i.test(value)),
+        "did not expect the old deferred-focus warning",
+      );
     } finally {
       await disposeTempRepo(repoRoot);
     }
@@ -224,6 +233,45 @@ await runScenario(
     } finally {
       await disposeTempRepo(repoRoot);
       await disposeTempRepo(externalRoot);
+    }
+  },
+);
+
+await runScenario(
+  "forge intake fails when --strict-focus is provided without any focus paths",
+  async () => {
+    const repoRoot = await createTempRepo();
+
+    try {
+      const result = await runForgeCli(
+        [
+          "intake",
+          "--repo",
+          repoRoot,
+          "--prompt",
+          "Update src/app.ts for intake validation.",
+          "--strict-focus",
+        ],
+        repoRoot,
+      );
+
+      assert.notEqual(result.code, 0, "strict focus without explicit focus paths should fail");
+
+      const artifactPath = join(repoRoot, ".forge", "intake.json");
+      assert.equal(await fileExists(artifactPath), true);
+
+      const artifact = await readJsonFile<IntakeArtifact>(artifactPath);
+      assert.equal(artifact.status, "failed");
+      assert.equal(artifact.next_step_readiness?.ready, false);
+      assert.ok(
+        artifact.next_step_readiness?.blocking_issues?.some((issue) =>
+          /strict focus|focus/i.test(issue.code ?? "") ||
+          /strict focus|focus/i.test(issue.message ?? ""),
+        ),
+        "expected blocking issue for strict focus without focus paths",
+      );
+    } finally {
+      await disposeTempRepo(repoRoot);
     }
   },
 );

@@ -6,6 +6,7 @@ interface ConfidenceResolutionInput {
     hasAcceptanceCriteria: boolean;
     promptIsThin: boolean;
     ambiguityCount: number;
+    promptOpenQuestionCategories: Array<"acceptance_criteria" | "scope" | "constraints" | "repo_alignment">;
   };
   repoInspection: {
     grounded: boolean;
@@ -48,6 +49,7 @@ function createStrongInput(): ConfidenceResolutionInput {
       hasAcceptanceCriteria: true,
       promptIsThin: false,
       ambiguityCount: 0,
+      promptOpenQuestionCategories: [],
     },
     repoInspection: {
       grounded: true,
@@ -118,6 +120,7 @@ await runScenario("confidence resolver returns low confidence for a thin prompt 
       hasAcceptanceCriteria: false,
       promptIsThin: true,
       ambiguityCount: 2,
+      promptOpenQuestionCategories: ["acceptance_criteria", "scope", "constraints"],
     },
   });
 
@@ -184,13 +187,14 @@ await runScenario("confidence resolver treats unresolved referenced paths as wea
 
 await runScenario("confidence resolver is reproducible for the same inputs", async () => {
   const { buildConfidenceResolution } = await loadResolver();
-  const input = {
+  const input: ConfidenceResolutionInput = {
     ...createStrongInput(),
     taskParsing: {
       hasGoal: true,
       hasAcceptanceCriteria: false,
       promptIsThin: false,
       ambiguityCount: 1,
+      promptOpenQuestionCategories: ["acceptance_criteria"],
     },
   };
 
