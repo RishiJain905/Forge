@@ -10,6 +10,8 @@ import {
   REPORTS_DIRECTORY,
 } from "./constants.js";
 import { BoundaryPolicyError, RepoResolutionError } from "./errors.js";
+import { resolveGitContext } from "./git-context.js";
+import type { GitContextResolution } from "./git-context.js";
 import type { ResolvedOutputPaths, ResolvedOutputRoot } from "./types.js";
 
 const accessMode = 0;
@@ -57,7 +59,7 @@ async function resolveBoundaryPath(candidatePath: string): Promise<string> {
   }
 }
 
-export async function resolveRepoRoot(
+export async function resolveFilesystemRepoRoot(
   currentWorkingDirectory: string,
   requestedRepoRoot?: string,
 ): Promise<string> {
@@ -85,7 +87,32 @@ export async function resolveRepoRoot(
       `Could not resolve repo root: ${repoRoot}. The path must exist and be readable.`,
     );
   }
+}
 
+export async function resolveRepoRoot(
+  currentWorkingDirectory: string,
+  requestedRepoRoot?: string,
+  gitCommandRunner?: Parameters<typeof resolveGitContext>[1],
+): Promise<string> {
+  const resolvedRepoRoot = await resolveFilesystemRepoRoot(
+    currentWorkingDirectory,
+    requestedRepoRoot,
+  );
+  const gitContext = await resolveGitContext(resolvedRepoRoot, gitCommandRunner);
+
+  return gitContext.gitContext.status === "available" && gitContext.gitContext.repoRoot
+    ? gitContext.gitContext.repoRoot
+    : resolvedRepoRoot;
+}
+
+export function selectRepoRootFromGitContext(
+  resolvedRepoRoot: string,
+  gitContextResolution: GitContextResolution,
+): string {
+  return gitContextResolution.gitContext.status === "available" &&
+    gitContextResolution.gitContext.repoRoot
+    ? gitContextResolution.gitContext.repoRoot
+    : resolvedRepoRoot;
 }
 
 export async function resolveOutputRoot(

@@ -126,6 +126,7 @@ export interface RepoContext {
   testFiles: string[];
   manifestFiles: string[];
   allFiles: string[];
+  gitContext: GitContext;
 }
 
 export interface ArtifactRepoContextSection {
@@ -133,6 +134,23 @@ export interface ArtifactRepoContextSection {
   source_files: string[];
   test_files: string[];
   manifest_files: string[];
+  git_context: ArtifactGitContextSection;
+}
+
+export type GitContextStatus = "available" | "not_repo" | "unavailable" | "error";
+
+export interface GitContext {
+  status: GitContextStatus;
+  repoRoot: string | null;
+  branch: string | null;
+  recentFiles: string[];
+}
+
+export interface ArtifactGitContextSection {
+  status: GitContextStatus;
+  repo_root: string | null;
+  branch: string | null;
+  recent_files: string[];
 }
 
 export interface RepoScanResult {
@@ -211,6 +229,17 @@ export interface OptionalReasoningInput {
 export type OptionalReasoningHook =
   (input: OptionalReasoningInput) => Promise<OptionalReasoningSuggestion | null>;
 
+export interface GitCommandResult {
+  code: number;
+  stdout: string;
+  stderr: string;
+}
+
+export type GitCommandRunner = (
+  args: string[],
+  cwd: string,
+) => Promise<GitCommandResult>;
+
 export interface OptionalReasoningResolution {
   requested: boolean;
   attempted: boolean;
@@ -227,6 +256,7 @@ export interface OptionalReasoningResolution {
 
 export interface IntakeRunnerDependencies {
   optionalReasoningHook?: OptionalReasoningHook;
+  gitCommandRunner?: GitCommandRunner;
 }
 
 export interface IntakeValidationResult {

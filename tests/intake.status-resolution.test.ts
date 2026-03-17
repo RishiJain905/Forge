@@ -5,6 +5,7 @@ import {
   evaluateSuccessModel,
   resolveIntakeStatus,
 } from "../src/intake/success.js";
+import { createGitContext } from "./support/forge-cli.js";
 
 function createRepoContext(
   overrides: Partial<Parameters<typeof evaluateSuccessModel>[0]["repoContext"]> = {},
@@ -15,6 +16,7 @@ function createRepoContext(
     testFiles: ["tests/app.test.ts"],
     manifestFiles: ["package.json"],
     allFiles: ["src/app.ts", "tests/app.test.ts", "package.json"],
+    gitContext: createGitContext(),
     ...overrides,
   };
 }
