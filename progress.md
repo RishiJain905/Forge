@@ -102,9 +102,19 @@
   - Covered both required verification paths: a grounded spec success run and a prompt warning run with persisted ambiguity.
   - Kept the checklist logic local to the dedicated success-criteria test and wired the new compiled test into the default `npm.cmd test` suite.
   - Documented the checklist evidence in `B1-done/18-summary-done.md` without broadening the production runtime surface.
+- Batch 1.19: `19-out-of-scope-and-deferral-rules.md`
+  - Made the Step 1 deferral policy explicit in the intake boundary constants so the artifact records the concrete out-of-scope areas for V1.
+  - Added boundary notes that call out deferred advanced AST and multi-language semantic analysis, issue-tracker ingestion, and provider-specific execution prompt generation when they appear in task text.
+  - Locked the contract in the non-goals test suite so the deferred capability list and boundary messaging stay visible and do not drift silently.
+  - Kept the implementation narrow and local to intake scope enforcement instead of adding new runtime behavior.
+- Batch 1.20: `20-batch1-exit-condition.md`
+  - Added a clear Batch 1 exit gate that ties the Batch 2 decision to runnable Step 1 behavior instead of architecture claims.
+  - Defined the gate as a compact checklist covering command contract stability, artifact contract stability, warning/failure/confidence logic, prompt/spec input handling, and report/artifact output.
+  - Kept the gate lightweight by grounding it in the existing test surfaces rather than introducing a new runtime path or verification framework.
+  - Documented the exit gate in `B1-done/20-summary-done.md` so Batch 2 starts only after the current Step 1 contract stays green on `dev`.
 
 ## Current Branch State
-- `dev` includes the completed Batch 1.16, Batch 1.17, and Batch 1.18 implementations.
+- `dev` includes the completed Batch 1.16, Batch 1.17, Batch 1.18, Batch 1.19, and Batch 1.20 implementations.
 - `execution.md` now explicitly requires completed worktree branches to be merged back into their source branch before a task is considered complete, unless the user explicitly requests a PR-only workflow.
 
 ## Verification
@@ -114,4 +124,4 @@
 - `npm.cmd run smoke`
 
 ## Next
-- Continue Batch 1 with `forge_step1_batch1_impl/19-out-of-scope-and-deferral-rules.md`.
+- Batch 1 is complete. Begin Batch 2 only after the Batch 1.20 exit gate remains green on `dev`.
