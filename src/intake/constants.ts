@@ -26,8 +26,11 @@ export const STEP1_BOUNDARY_POLICY = {
   repoReadOnlyOutsideOutputRoot: true,
   disallowedCapabilities: [
     "create plan items",
+    "split work into workstreams",
     "create execution packets",
+    "perform formal verification work",
     "modify application source files",
+    "edit source files directly",
     "run implementation tasks",
   ],
 } as const;

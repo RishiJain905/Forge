@@ -36,9 +36,15 @@
   - Moved candidate-target generation under the explicit inference responsibility while keeping the public artifact/report contract stable.
   - Added preliminary internal confidence analysis that now drives warning context without yet exposing the later public confidence section.
   - Added dedicated automated coverage for the new responsibility pipeline and assembly path.
+- Batch 1.07: `07-non-goals-and-boundary-enforcement.md`
+  - Added a dedicated boundary-enforcement helper that now shapes the final Step 1 output before artifact/report persistence.
+  - Added pointer-only `initialVerificationTargets` output so intake can identify later verification surfaces without performing verification work.
+  - Expanded boundary notes and report language to explicitly defer code edits, workstream splitting, and formal verification requests to later workflow stages.
+  - Strengthened Step 1 boundary policy constants to document excluded capabilities more explicitly.
+  - Added dedicated automated coverage for semantic non-goals and boundary-safe failed-run behavior.
 
 ## Current Branch State
-- `dev` includes the completed Batch 1.06 implementation.
+- `dev` includes the completed Batch 1.07 implementation.
 - `execution.md` now explicitly requires completed worktree branches to be merged back into their source branch before a task is considered complete, unless the user explicitly requests a PR-only workflow.
 
 ## Verification
@@ -48,4 +54,4 @@
 - `npm.cmd run smoke`
 
 ## Next
-- Continue Batch 1 with `forge_step1_batch1_impl/07-non-goals-and-boundary-enforcement.md`.
+- Continue Batch 1 with `forge_step1_batch1_impl/08-output-artifacts-and-write-rules.md`.

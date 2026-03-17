@@ -237,6 +237,7 @@ forge intake --repo /path/to/repo --prompt "Update src/app.ts" --report-only
 Step 1 defaults to writing both `.forge/intake.json` and `.forge/reports/intake-report.md`.
 `--json-only` and `--report-only` are mutually exclusive.
 `--llm-assist` and `--fail-on-low-confidence` are accepted as explicit runtime intent, but their deeper behavior is deferred until later Step 1 batches.
+Any intake verification output is pointer-only; Step 1 does not run verification work, create workstreams, or emit execution packets.
 
 ## 2. Plan
 Purpose:

@@ -9,7 +9,9 @@ import { toArtifactRuntimeOptions } from "./options.js";
 import { buildSummary, resolveIntakeStatus } from "./success.js";
 import type {
   ArtifactSourceInputs,
+  BoundarySafeIntakeResult,
   CandidateTarget,
+  InitialVerificationTarget,
   IntakeArtifact,
   IntakeExecutionContext,
   IntakeFailureDetails,
@@ -83,6 +85,13 @@ const intakeArtifactSchema = z.object({
       reason: z.string().min(1),
     }),
   ),
+  initialVerificationTargets: z.array(
+    z.object({
+      path: z.string().min(1),
+      kind: z.enum(["source", "test", "manifest"]),
+      reason: z.string().min(1),
+    }),
+  ),
   ambiguities: z.array(z.string().min(1)),
   nextStepReadiness: z.object({
     ready: z.boolean(),
@@ -105,16 +114,6 @@ const intakeArtifactSchema = z.object({
     .nullable(),
 });
 
-function buildBoundaryNotes(context: IntakeExecutionContext): string[] {
-  return [
-    "Intake is limited to repository inspection and artifact/report persistence.",
-    "Later workflow steps are deferred; this run does not create plans, workstreams, execution packets, or code edits.",
-    context.paths.usedFallbackRoot
-      ? "The requested output directory was rejected and Forge fell back to the default .forge output root."
-      : "All writes are confined to the resolved output root.",
-  ];
-}
-
 export function createIntakeArtifact(params: {
   context: IntakeExecutionContext;
   finishedAt: string;
@@ -123,8 +122,10 @@ export function createIntakeArtifact(params: {
   taskSpec: IntakeTaskSpec;
   repoContext: RepoContext;
   candidateTargets: CandidateTarget[];
+  initialVerificationTargets: InitialVerificationTarget[];
   ambiguities?: string[];
   nextStepReadiness: NextStepReadiness;
+  boundaryNotes: BoundarySafeIntakeResult["boundaryNotes"];
   warnings?: string[];
   failure?: IntakeFailureDetails | null;
 }): IntakeArtifact {
@@ -169,9 +170,10 @@ export function createIntakeArtifact(params: {
     taskSpec: params.taskSpec,
     repoContext: params.repoContext,
     candidateTargets: params.candidateTargets,
+    initialVerificationTargets: params.initialVerificationTargets,
     ambiguities,
     nextStepReadiness: params.nextStepReadiness,
-    boundaryNotes: buildBoundaryNotes(params.context),
+    boundaryNotes: params.boundaryNotes,
     warnings,
     failure,
   };

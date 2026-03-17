@@ -20,6 +20,18 @@ function renderCandidateTargets(
     .join("\n");
 }
 
+function renderInitialVerificationTargets(
+  items: IntakeArtifact["initialVerificationTargets"],
+): string {
+  if (items.length === 0) {
+    return "- none";
+  }
+
+  return items
+    .map((item) => `- \`${item.path}\` (${item.kind}) - ${item.reason}`)
+    .join("\n");
+}
+
 function renderBlockingIssues(
   items: IntakeArtifact["nextStepReadiness"]["blockingIssues"],
 ): string {
@@ -92,6 +104,10 @@ export function createIntakeReport(artifact: IntakeArtifact): string {
     "## Candidate Targets",
     "",
     renderCandidateTargets(artifact.candidateTargets),
+    "",
+    "## Initial Verification Targets",
+    "",
+    renderInitialVerificationTargets(artifact.initialVerificationTargets),
     "",
     "## Ambiguities",
     "",

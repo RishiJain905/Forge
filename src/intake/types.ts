@@ -116,6 +116,12 @@ export interface CandidateTarget {
   reason: string;
 }
 
+export interface InitialVerificationTarget {
+  path: string;
+  kind: CandidateTarget["kind"];
+  reason: string;
+}
+
 export interface InferenceResult {
   candidateTargets: CandidateTarget[];
   inferredRequirements: string[];
@@ -181,6 +187,17 @@ export interface AssembledIntakeResult {
   confidence: AmbiguityAnalysisResult["confidence"];
 }
 
+export interface BoundarySafeIntakeResult {
+  taskSpec: IntakeTaskSpec;
+  repoContext: RepoContext;
+  candidateTargets: CandidateTarget[];
+  initialVerificationTargets: InitialVerificationTarget[];
+  ambiguities: string[];
+  warnings: string[];
+  recommendedUserActions: string[];
+  boundaryNotes: string[];
+}
+
 export interface NextStepReadiness {
   ready: boolean;
   blockingIssues: BlockingIssue[];
@@ -243,6 +260,7 @@ export interface IntakeArtifact {
   taskSpec: IntakeTaskSpec;
   repoContext: RepoContext;
   candidateTargets: CandidateTarget[];
+  initialVerificationTargets: InitialVerificationTarget[];
   ambiguities: string[];
   nextStepReadiness: NextStepReadiness;
   boundaryNotes: string[];

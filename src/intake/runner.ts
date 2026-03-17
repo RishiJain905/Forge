@@ -5,6 +5,7 @@ import { FORGE_INTAKE_COMMAND, STEP1_BOUNDARY_POLICY } from "./constants.js";
 import { buildAmbiguityAnalysisResult } from "./analysis.js";
 import { assembleIntakeResult } from "./assemble.js";
 import { createIntakeArtifact } from "./artifact.js";
+import { buildBoundarySafeIntakeResult } from "./boundary.js";
 import { PersistenceError } from "./errors.js";
 import { buildInferenceResult } from "./inference.js";
 import { resolveTaskSource, toArtifactSourceInputs } from "./input.js";
@@ -22,6 +23,7 @@ import type {
   IntakeFailureDetails,
   NextStepReadiness,
   NormalizedTaskInput,
+  BoundarySafeIntakeResult,
 } from "./types.js";
 
 async function ensureParentDirectory(filePath: string): Promise<void> {
@@ -78,7 +80,7 @@ async function persistResult(
   context: IntakeExecutionContext,
   runtimeOptions: ReturnType<typeof resolveRuntimeOptions>,
   taskInput: NormalizedTaskInput | null,
-  assembledResult: ReturnType<typeof assembleIntakeResult>,
+  boundarySafeResult: BoundarySafeIntakeResult,
   nextStepReadiness: NextStepReadiness,
   failure: IntakeFailureDetails | null,
 ): Promise<IntakeCommandResult> {
@@ -88,12 +90,14 @@ async function persistResult(
     finishedAt,
     sourceInputs: taskInput ? toArtifactSourceInputs(taskInput) : null,
     runtimeOptions,
-    taskSpec: assembledResult.taskSpec,
-    repoContext: assembledResult.repoContext,
-    candidateTargets: assembledResult.candidateTargets,
-    ambiguities: assembledResult.ambiguities,
+    taskSpec: boundarySafeResult.taskSpec,
+    repoContext: boundarySafeResult.repoContext,
+    candidateTargets: boundarySafeResult.candidateTargets,
+    initialVerificationTargets: boundarySafeResult.initialVerificationTargets,
+    ambiguities: boundarySafeResult.ambiguities,
     nextStepReadiness,
-    warnings: assembledResult.warnings,
+    boundaryNotes: boundarySafeResult.boundaryNotes,
+    warnings: boundarySafeResult.warnings,
     failure,
   });
   const report = createIntakeReport(artifact);
@@ -230,18 +234,23 @@ export async function runIntakeCommand(
     inputAmbiguities: assembledResult.ambiguities,
     inputRecommendedUserActions: assembledResult.recommendedUserActions,
   });
+  const finalAssembledResult = {
+    ...assembledResult,
+    ambiguities: successEvaluation.ambiguities,
+    warnings: successEvaluation.warnings,
+    recommendedUserActions: successEvaluation.nextStepReadiness.recommendedUserActions,
+  };
 
   try {
     return await persistResult(
       context,
       runtimeOptions,
       taskInput,
-      {
-        ...assembledResult,
-        ambiguities: successEvaluation.ambiguities,
-        warnings: successEvaluation.warnings,
-        recommendedUserActions: successEvaluation.nextStepReadiness.recommendedUserActions,
-      },
+      buildBoundarySafeIntakeResult({
+        context,
+        taskInput,
+        assembledResult: finalAssembledResult,
+      }),
       successEvaluation.nextStepReadiness,
       failure,
     );
@@ -290,12 +299,11 @@ export async function runIntakeCommand(
         fallbackContext,
         runtimeOptions,
         taskInput,
-        {
-          ...assembledResult,
-          ambiguities: successEvaluation.ambiguities,
-          warnings: successEvaluation.warnings,
-          recommendedUserActions: successEvaluation.nextStepReadiness.recommendedUserActions,
-        },
+        buildBoundarySafeIntakeResult({
+          context: fallbackContext,
+          taskInput,
+          assembledResult: finalAssembledResult,
+        }),
         successEvaluation.nextStepReadiness,
         fallbackFailure,
       );
