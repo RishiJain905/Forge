@@ -8,6 +8,9 @@ export const INTAKE_ARTIFACT_NAME = "intake.json" as const;
 export const INTAKE_REPORT_NAME = "intake-report.md" as const;
 export const INTAKE_DEBUG_ARTIFACT_NAME = "intake-debug.json" as const;
 
+// Step 1 stays intentionally shallow: it records intake context, but defers
+// deeper analysis, external ingestion, and execution prompt generation to
+// later workflow stages.
 export const STEP1_BOUNDARY_POLICY = {
   command: FORGE_INTAKE_COMMAND,
   stage: FORGE_STEP_STAGE,
@@ -20,6 +23,9 @@ export const STEP1_BOUNDARY_POLICY = {
     "optionally write an internal debug artifact inside the output root",
   ],
   deferredCapabilities: [
+    "advanced AST and multi-language semantic analysis",
+    "issue-tracker ingestion",
+    "provider-specific execution prompt generation",
     "forge plan",
     "forge verify",
     "forge split",

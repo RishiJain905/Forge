@@ -1,11 +1,12 @@
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
 import { formatIntakeCommandOutput } from "../../src/cli.js";
 import { runIntakeCommand } from "../../src/intake/runner.js";
-import type { IntakeCommandOptions } from "../../src/intake/types.js";
+import type { GitContext, IntakeCommandOptions } from "../../src/intake/types.js";
 
 export interface ForgeRunResult {
   code: number;
@@ -79,6 +80,92 @@ export async function writeRepoFile(
   const filePath = join(repoRoot, relativePath);
   await mkdir(dirname(filePath), { recursive: true });
   await writeFile(filePath, contents, "utf8");
+}
+
+export function runGitCommand(repoRoot: string, args: string[]): string {
+  return execFileSync(
+    "git",
+    [
+      "-c",
+      "core.autocrlf=false",
+      "-c",
+      "core.safecrlf=false",
+      "-c",
+      "core.eol=lf",
+      ...args,
+    ],
+    {
+    cwd: repoRoot,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      GIT_CONFIG_NOSYSTEM: "1",
+      GIT_CONFIG_GLOBAL: process.platform === "win32" ? "NUL" : "/dev/null",
+    },
+    },
+  ).trim();
+}
+
+export function runGitCommandSilently(repoRoot: string, args: string[]): void {
+  const result = spawnSync(
+    "git",
+    [
+      "-c",
+      "core.autocrlf=false",
+      "-c",
+      "core.safecrlf=false",
+      "-c",
+      "core.eol=lf",
+      ...args,
+    ],
+    {
+      cwd: repoRoot,
+      env: {
+        ...process.env,
+        GIT_CONFIG_NOSYSTEM: "1",
+        GIT_CONFIG_GLOBAL: process.platform === "win32" ? "NUL" : "/dev/null",
+      },
+      stdio: "ignore",
+    },
+  );
+
+  if (result.status !== 0) {
+    throw new Error(`git ${args.join(" ")} failed`);
+  }
+}
+
+export async function initGitRepo(repoRoot: string): Promise<void> {
+  runGitCommandSilently(repoRoot, ["init"]);
+  runGitCommandSilently(repoRoot, ["symbolic-ref", "HEAD", "refs/heads/main"]);
+  runGitCommandSilently(repoRoot, ["config", "user.name", "Forge Test"]);
+  runGitCommandSilently(repoRoot, ["config", "user.email", "forge@example.com"]);
+  runGitCommandSilently(repoRoot, ["config", "core.autocrlf", "false"]);
+  runGitCommandSilently(repoRoot, ["config", "core.eol", "lf"]);
+  runGitCommandSilently(repoRoot, ["config", "core.safecrlf", "false"]);
+}
+
+export async function gitCommitAll(repoRoot: string, message: string): Promise<void> {
+  runGitCommandSilently(repoRoot, ["add", "-A"]);
+  runGitCommandSilently(repoRoot, ["commit", "-m", message, "--quiet"]);
+}
+
+export async function gitCheckoutDetachedHead(repoRoot: string): Promise<void> {
+  const headCommit = runGitCommand(repoRoot, ["rev-parse", "HEAD"]);
+  runGitCommandSilently(repoRoot, ["checkout", "-q", "--detach", headCommit]);
+}
+
+export async function gitRenameBranch(repoRoot: string, branchName: string): Promise<void> {
+  runGitCommandSilently(repoRoot, ["branch", "-M", branchName]);
+}
+
+export function createGitContext(overrides: Partial<GitContext> = {}): GitContext {
+  return {
+    status: "not_repo",
+    repoRoot: null,
+    branch: null,
+    recentFiles: [],
+    ...overrides,
+  };
 }
 
 function parseIntakeArgs(args: string[]): TestIntakeCommandOptions {

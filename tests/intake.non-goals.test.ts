@@ -16,6 +16,10 @@ interface InitialVerificationTarget {
 }
 
 interface IntakeArtifact {
+  writePolicy: {
+    deferredCapabilities: string[];
+    disallowedCapabilities: string[];
+  };
   initial_verification_targets: InitialVerificationTarget[];
   boundaryNotes: string[];
 }
@@ -40,6 +44,22 @@ function assertPointerOnlyTargets(targets: InitialVerificationTarget[]): void {
       /\b(run|execute|owner|step\s+\d|checklist|packet|workstream)\b/i,
     );
   }
+}
+
+function assertDeferredCapabilities(artifact: IntakeArtifact): void {
+  assert.ok(
+    artifact.writePolicy.deferredCapabilities.includes(
+      "advanced AST and multi-language semantic analysis",
+    ),
+  );
+  assert.ok(
+    artifact.writePolicy.deferredCapabilities.includes("issue-tracker ingestion"),
+  );
+  assert.ok(
+    artifact.writePolicy.deferredCapabilities.includes(
+      "provider-specific execution prompt generation",
+    ),
+  );
 }
 
 async function runScenario(name: string, scenario: () => Promise<void>): Promise<void> {
@@ -76,6 +96,7 @@ await runScenario(
       const report = await readTextFile(join(repoRoot, ".forge", "reports", "intake-report.md"));
 
       assertPointerOnlyTargets(artifact.initial_verification_targets);
+      assertDeferredCapabilities(artifact);
       assertNoFutureStepPayloads(artifact);
       assert.ok(
         artifact.boundaryNotes.some((note) => /code edits|implementation work|later step|deferred/i.test(note)),
@@ -112,6 +133,7 @@ await runScenario(
       const report = await readTextFile(join(repoRoot, ".forge", "reports", "intake-report.md"));
 
       assertPointerOnlyTargets(artifact.initial_verification_targets);
+      assertDeferredCapabilities(artifact);
       assertNoFutureStepPayloads(artifact);
       assert.ok(
         artifact.boundaryNotes.some((note) => /workstream|split/i.test(note)),
@@ -123,6 +145,42 @@ await runScenario(
       );
       assert.match(report, /Initial Verification Targets/);
       assert.match(report, /workstream|formal verification|deferred/i);
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "forge intake records explicit out-of-scope analysis and ingestion capabilities as deferred",
+  async () => {
+    const repoRoot = await createTempRepo();
+
+    try {
+      const result = await runForgeCli(
+        [
+          "intake",
+          "--repo",
+          repoRoot,
+          "--prompt",
+          "Inspect advanced AST behavior, ingest issue-tracker data, and generate provider-specific execution prompts for src/app.ts.",
+        ],
+        repoRoot,
+      );
+
+      assert.equal(result.code, 0, result.stderr);
+
+      const artifact = await readJsonFile<IntakeArtifact>(join(repoRoot, ".forge", "intake.json"));
+      const report = await readTextFile(join(repoRoot, ".forge", "reports", "intake-report.md"));
+
+      assertDeferredCapabilities(artifact);
+      assert.ok(
+        artifact.boundaryNotes.some((note) => /advanced AST|semantic analysis|issue-tracker|execution prompt/i.test(note)),
+        "expected a boundary note for deferred analysis and ingestion capabilities",
+      );
+      assert.match(report, /advanced AST and multi-language semantic analysis/);
+      assert.match(report, /issue-tracker ingestion/);
+      assert.match(report, /provider-specific execution prompt generation/);
     } finally {
       await disposeTempRepo(repoRoot);
     }

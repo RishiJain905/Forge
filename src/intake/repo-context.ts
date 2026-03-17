@@ -1,7 +1,14 @@
 import path from "node:path";
 import { readdir } from "node:fs/promises";
 
-import type { RepoContext, RepoScanResult } from "./types.js";
+import { resolveGitContext } from "./git-context.js";
+import type {
+  GitCommandRunner,
+  GitContext,
+  RepoContext,
+  RepoScanResult,
+} from "./types.js";
+import type { GitContextResolution } from "./git-context.js";
 
 const ignoredDirectoryNames = new Set([
   ".git",
@@ -74,6 +81,7 @@ async function collectRepoFiles(
 export async function scanRepoContext(
   repoRoot: string,
   outputRoot: string,
+  gitContext: GitContext,
 ): Promise<RepoContext> {
   const files: string[] = [];
   await collectRepoFiles(repoRoot, repoRoot, outputRoot, files);
@@ -91,14 +99,32 @@ export async function scanRepoContext(
     testFiles,
     manifestFiles,
     allFiles: files,
+    gitContext,
   };
 }
 
 export async function scanRepoResult(
   repoRoot: string,
   outputRoot: string,
+  gitContextResolutionOrRunner?: GitContextResolution | GitCommandRunner,
+  gitCommandRunner?: GitCommandRunner,
 ): Promise<RepoScanResult> {
-  const repoContext = await scanRepoContext(repoRoot, outputRoot);
+  const gitContextResult =
+    gitContextResolutionOrRunner &&
+    typeof gitContextResolutionOrRunner === "object" &&
+    "gitContext" in gitContextResolutionOrRunner
+      ? gitContextResolutionOrRunner
+      : await resolveGitContext(
+          repoRoot,
+          typeof gitContextResolutionOrRunner === "function"
+            ? gitContextResolutionOrRunner
+            : gitCommandRunner,
+        );
+  const repoContext = await scanRepoContext(
+    repoRoot,
+    outputRoot,
+    gitContextResult.gitContext,
+  );
 
   return {
     repoContext,
@@ -109,6 +135,6 @@ export async function scanRepoResult(
       repoLooksSparse:
         repoContext.sourceFiles.length + repoContext.testFiles.length + repoContext.manifestFiles.length <= 1,
     },
-    warnings: [],
+    warnings: gitContextResult.warning ? [gitContextResult.warning] : [],
   };
 }
