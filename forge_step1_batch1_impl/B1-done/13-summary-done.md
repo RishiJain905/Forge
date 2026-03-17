@@ -23,5 +23,10 @@
 - `npm.cmd run build` - PASS
 - `npm.cmd run smoke` - PASS
 
+## Final Branch State
+- Target branch: `dev`
+- Merged worktree branch: `batch1-13-status-resolution`
+- Verification was rerun on merged `dev` before cleanup.
+
 ## Follow-On
 - Next Batch 1 target: `forge_step1_batch1_impl/14-prompt-mode-implementation-rules.md`
