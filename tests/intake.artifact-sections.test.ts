@@ -337,6 +337,55 @@ await runScenario("intake artifact exposes confidence as a stable public section
   assert.ok(artifact.confidence.reasons.some((reason) => /task parsing/i.test(reason)));
 });
 
+await runScenario("intake artifact projects ordered confidence reasons and weak repo inspection when test references are missing", () => {
+  const artifact = createArtifact({
+    assembledResult: {
+      responsibilities: {
+        ...createAssembledResult().responsibilities,
+        analysis: {
+          ambiguities: [],
+          warnings: [],
+          recommendedUserActions: [],
+          confidence: {
+            level: "low",
+            signals: {
+              taskParsing: "partial",
+              repoInspection: "weak",
+              targeting: "partial",
+            },
+            reasons: [
+              "acceptance criteria are missing from the task input",
+              "explicitly referenced test paths were not found during repo grounding",
+              "candidate targeting relies on fallback repo structure",
+            ],
+          },
+        },
+      },
+      confidence: {
+        level: "low",
+        signals: {
+          taskParsing: "partial",
+          repoInspection: "weak",
+          targeting: "partial",
+        },
+        reasons: [
+          "acceptance criteria are missing from the task input",
+          "explicitly referenced test paths were not found during repo grounding",
+          "candidate targeting relies on fallback repo structure",
+        ],
+      },
+    },
+  });
+
+  assert.equal(artifact.confidence.level, "low");
+  assert.equal(artifact.confidence.signals.repo_inspection, "weak");
+  assert.deepEqual(artifact.confidence.reasons, [
+    "acceptance criteria are missing from the task input",
+    "explicitly referenced test paths were not found during repo grounding",
+    "candidate targeting relies on fallback repo structure",
+  ]);
+});
+
 await runScenario("failed artifacts still include detailed sections with safe defaults", () => {
   const artifact = createArtifact({
     assembledResult: {

@@ -66,9 +66,14 @@
   - Kept the report grounded in artifact data and derived assumptions only from existing artifact signals instead of adding a new JSON field.
   - Preserved existing report output-path behavior while making warning, ambiguity, confidence, and readiness sections easier for humans to inspect.
   - Added dedicated report-renderer tests and wired them into the default `npm.cmd test` suite.
+- Batch 1.12: `12-confidence-model-and-scoring.md`
+  - Added a dedicated rules-based confidence resolver and moved confidence scoring out of the inline intake analysis flow.
+  - Kept the public `confidence` artifact/report shape stable while making levels and component strengths reproducible from explicit parser, repo, targeting, and ambiguity signals.
+  - Added resolver-focused automated coverage plus end-to-end tests for weak repo inspection when explicitly referenced test paths are missing.
+  - Kept `--fail-on-low-confidence` deferred so Batch 1.13 can handle final status escalation separately.
 
 ## Current Branch State
-- `dev` includes the completed Batch 1.11 implementation.
+- `dev` includes the completed Batch 1.12 implementation.
 - `execution.md` now explicitly requires completed worktree branches to be merged back into their source branch before a task is considered complete, unless the user explicitly requests a PR-only workflow.
 
 ## Verification
@@ -78,4 +83,4 @@
 - `npm.cmd run smoke`
 
 ## Next
-- Continue Batch 1 with `forge_step1_batch1_impl/12-confidence-model-and-scoring.md`.
+- Continue Batch 1 with `forge_step1_batch1_impl/13-failure-warning-and-status-resolution.md`.

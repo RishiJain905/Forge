@@ -1,3 +1,4 @@
+import { buildConfidenceResolution } from "./confidence.js";
 import type {
   AmbiguityAnalysisResult,
   BlockingIssue,
@@ -15,49 +16,13 @@ function pushUnique(values: string[], value: string): void {
   }
 }
 
-function resolveTaskParsingStrength(
-  taskParserResult: TaskParserResult,
-): AmbiguityAnalysisResult["confidence"]["signals"]["taskParsing"] {
-  if (!taskParserResult.signals.hasGoal || taskParserResult.signals.promptIsThin) {
-    return "weak";
-  }
-
-  if (!taskParserResult.signals.hasAcceptanceCriteria) {
-    return "partial";
-  }
-
-  return "strong";
-}
-
-function resolveRepoInspectionStrength(
-  repoScanResult: RepoScanResult,
-): AmbiguityAnalysisResult["confidence"]["signals"]["repoInspection"] {
-  if (!repoScanResult.repoContext.grounded || repoScanResult.signals.repoLooksSparse) {
-    return "weak";
-  }
-
-  if (
-    repoScanResult.signals.sourceFileCount === 0 ||
-    repoScanResult.signals.testFileCount === 0
-  ) {
-    return "partial";
-  }
-
-  return "strong";
-}
-
-function resolveTargetingStrength(
-  inferenceResult: InferenceResult,
-): AmbiguityAnalysisResult["confidence"]["signals"]["targeting"] {
-  if (inferenceResult.candidateTargets.length === 0) {
-    return "weak";
-  }
-
-  if (inferenceResult.signals.usedFallbackTargets) {
-    return "partial";
-  }
-
-  return "strong";
+function isTestLikePath(value: string): boolean {
+  return (
+    value.includes("/tests/") ||
+    value.includes("/__tests__/") ||
+    /\.test\./i.test(value) ||
+    /\.spec\./i.test(value)
+  );
 }
 
 export function buildAmbiguityAnalysisResult(params: {
@@ -122,61 +87,36 @@ export function buildAmbiguityAnalysisResult(params: {
     );
   }
 
-  const confidenceSignals = {
-    taskParsing: resolveTaskParsingStrength(params.taskParserResult),
-    repoInspection: resolveRepoInspectionStrength(params.repoScanResult),
-    targeting: resolveTargetingStrength(params.inferenceResult),
-  };
-  const confidenceReasons: string[] = [];
+  const repoFiles = new Set(params.repoScanResult.repoContext.allFiles);
+  const unresolvedReferencedPaths = params.taskParserResult.signals.referencedPaths.filter(
+    (path) => !repoFiles.has(path),
+  );
+  const confidence = buildConfidenceResolution({
+    taskParsing: {
+      hasGoal: params.taskParserResult.signals.hasGoal,
+      hasAcceptanceCriteria: params.taskParserResult.signals.hasAcceptanceCriteria,
+      promptIsThin: params.taskParserResult.signals.promptIsThin,
+      ambiguityCount: ambiguities.length,
+    },
+    repoInspection: {
+      grounded: params.repoScanResult.repoContext.grounded,
+      repoLooksSparse: params.repoScanResult.signals.repoLooksSparse,
+      sourceFileCount: params.repoScanResult.signals.sourceFileCount,
+      testFileCount: params.repoScanResult.signals.testFileCount,
+      missingExplicitTestReference: unresolvedReferencedPaths.some(isTestLikePath),
+    },
+    targeting: {
+      candidateTargetCount: params.inferenceResult.candidateTargets.length,
+      explicitTargetCount: params.inferenceResult.signals.explicitTargetCount,
+      usedFallbackTargets: params.inferenceResult.signals.usedFallbackTargets,
+      unresolvedReferencedPathCount: unresolvedReferencedPaths.length,
+    },
+  });
 
-  if (confidenceSignals.taskParsing === "weak") {
-    confidenceReasons.push("task parsing signals are weak");
-  } else if (confidenceSignals.taskParsing === "partial") {
-    confidenceReasons.push("task parsing signals are only partial");
-  }
-
-  if (confidenceSignals.repoInspection === "weak") {
-    confidenceReasons.push("repo inspection signals are weak");
-  } else if (confidenceSignals.repoInspection === "partial") {
-    confidenceReasons.push("repo inspection signals are only partial");
-  }
-
-  if (confidenceSignals.targeting === "weak") {
-    confidenceReasons.push("targeting signals are weak");
-  } else if (confidenceSignals.targeting === "partial") {
-    confidenceReasons.push("targeting signals are only partial");
-  }
-
-  const confidenceLevel =
-    Object.values(confidenceSignals).some((value) => value === "weak")
-      ? "low"
-      : Object.values(confidenceSignals).some((value) => value === "partial")
-        ? "medium"
-        : "high";
-
-  if (confidenceLevel === "low") {
+  if (confidence.level === "low" || confidence.level === "medium") {
     pushUnique(
       warnings,
-      `Overall intake confidence is low because ${confidenceReasons.join(", ")}.`,
-    );
-  } else if (confidenceLevel === "medium") {
-    pushUnique(
-      warnings,
-      `Overall intake confidence is medium because ${confidenceReasons.join(", ")}.`,
-    );
-  }
-
-  if (params.failure) {
-    pushUnique(
-      confidenceReasons,
-      `the run already contains a failure state (${params.failure.code})`,
-    );
-  }
-
-  if (params.validationBlockingIssues.length > 0) {
-    pushUnique(
-      confidenceReasons,
-      "validation blocking issues remain",
+      `Overall intake confidence is ${confidence.level} because ${confidence.reasons.join(", ")}.`,
     );
   }
 
@@ -184,10 +124,6 @@ export function buildAmbiguityAnalysisResult(params: {
     ambiguities,
     warnings,
     recommendedUserActions,
-    confidence: {
-      level: confidenceLevel,
-      signals: confidenceSignals,
-      reasons: confidenceReasons,
-    },
+    confidence,
   };
 }
