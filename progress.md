@@ -61,8 +61,14 @@
   - Updated the markdown report, smoke verification, and intake artifact consumers to align with the new detailed section contract.
   - Added dedicated automated coverage for the normalized section contract, typed risk zones, stable confidence output, and failed-run default section behavior.
 
+- Batch 1.11: `11-human-readable-report-contract.md`
+  - Reworked the intake markdown report into a stable human-readable heading contract with explicit `Overview` and `Assumptions` sections.
+  - Kept the report grounded in artifact data and derived assumptions only from existing artifact signals instead of adding a new JSON field.
+  - Preserved existing report output-path behavior while making warning, ambiguity, confidence, and readiness sections easier for humans to inspect.
+  - Added dedicated report-renderer tests and wired them into the default `npm.cmd test` suite.
+
 ## Current Branch State
-- `dev` includes the completed Batch 1.10 implementation.
+- `dev` includes the completed Batch 1.11 implementation.
 - `execution.md` now explicitly requires completed worktree branches to be merged back into their source branch before a task is considered complete, unless the user explicitly requests a PR-only workflow.
 
 ## Verification
@@ -72,4 +78,4 @@
 - `npm.cmd run smoke`
 
 ## Next
-- Continue Batch 1 with `forge_step1_batch1_impl/11-human-readable-report-format.md`.
+- Continue Batch 1 with `forge_step1_batch1_impl/12-confidence-model-and-scoring.md`.
