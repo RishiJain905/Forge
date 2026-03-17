@@ -92,6 +92,11 @@
   - Made non-strict focus prioritize in-focus candidate targets while keeping out-of-focus evidence visible and warning when focus does not cover all likely targets.
   - Made strict focus filter final candidate targets to focus matches only, with validation for missing valid focus paths and confidence/analysis updates for focus-driven targeting changes.
   - Added focused automated coverage for whole-repo context preservation, focus prioritization, strict-focus filtering, validation, schema preservation, and runtime/report rendering.
+- Batch 1.17: `17-git-context-rules.md`
+  - Added git-aware repo root resolution so intake prefers the git top-level when available while preserving filesystem fallback behavior.
+  - Added a normalized public `repo_context.git_context` section with status, repo root, branch, and bounded recent-file hints.
+  - Kept git enrichment non-blocking for plain folders and missing git, while surfacing a warning only for unexpected git-command failures.
+  - Added dedicated git-context end-to-end coverage plus schema, report, and section-contract assertions.
 - Batch 1.18: `18-step1-success-criteria.md`
   - Added a dedicated end-to-end Step 1 success-criteria test that evaluates the eight documented completion bullets against real intake outputs.
   - Covered both required verification paths: a grounded spec success run and a prompt warning run with persisted ambiguity.
@@ -99,7 +104,7 @@
   - Documented the checklist evidence in `B1-done/18-summary-done.md` without broadening the production runtime surface.
 
 ## Current Branch State
-- `dev` includes the completed Batch 1.16 and Batch 1.18 implementations.
+- `dev` includes the completed Batch 1.16, Batch 1.17, and Batch 1.18 implementations.
 - `execution.md` now explicitly requires completed worktree branches to be merged back into their source branch before a task is considered complete, unless the user explicitly requests a PR-only workflow.
 
 ## Verification
@@ -109,4 +114,4 @@
 - `npm.cmd run smoke`
 
 ## Next
-- Continue Batch 1 with `forge_step1_batch1_impl/17-git-context-rules.md`.
+- Continue Batch 1 with `forge_step1_batch1_impl/19-out-of-scope-and-deferral-rules.md`.
