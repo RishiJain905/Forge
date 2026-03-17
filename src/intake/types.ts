@@ -2,6 +2,8 @@ import type { Step1BoundaryPolicy } from "./constants.js";
 
 export type IntakeStatus = "success" | "warning" | "failed";
 export type IntakeInputMode = "spec" | "prompt";
+export type IntakeOutputMode = "default" | "json-only" | "report-only";
+export type IntakeLlmMode = "deterministic" | "assist";
 
 export interface IntakeCommandOptions {
   repo?: string;
@@ -12,6 +14,11 @@ export interface IntakeCommandOptions {
   constraints?: string;
   config?: string;
   focus?: string[];
+  jsonOnly?: boolean;
+  reportOnly?: boolean;
+  llmAssist?: boolean;
+  noLlm?: boolean;
+  failOnLowConfidence?: boolean;
 }
 
 export interface ArtifactSourceInputs {
@@ -25,6 +32,12 @@ export interface ArtifactSourceInputs {
   constraints: string[];
   config_path: string | null;
   focus_paths: string[];
+}
+
+export interface ArtifactRuntimeOptions {
+  output_mode: IntakeOutputMode;
+  llm_mode: IntakeLlmMode;
+  fail_on_low_confidence: boolean;
 }
 
 export interface NormalizedTaskInput {
@@ -89,6 +102,17 @@ export interface IntakeValidationResult {
   recommendedUserActions: string[];
 }
 
+export interface ResolvedRuntimeOptions {
+  outputMode: IntakeOutputMode;
+  writeArtifact: boolean;
+  writeReport: boolean;
+  llmMode: IntakeLlmMode;
+  failOnLowConfidence: boolean;
+  blockingIssues: BlockingIssue[];
+  warnings: string[];
+  recommendedUserActions: string[];
+}
+
 export interface NextStepReadiness {
   ready: boolean;
   blockingIssues: BlockingIssue[];
@@ -128,6 +152,7 @@ export interface IntakeArtifact {
   status: IntakeStatus;
   input_mode: IntakeInputMode | null;
   source_inputs: ArtifactSourceInputs | null;
+  runtime_options: ArtifactRuntimeOptions;
   purpose: string;
   repoRoot: string;
   requestedOutputRoot: string | null;

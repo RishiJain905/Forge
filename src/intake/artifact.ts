@@ -5,6 +5,7 @@ import {
   FORGE_SCHEMA_VERSION,
   STEP1_BOUNDARY_POLICY,
 } from "./constants.js";
+import { toArtifactRuntimeOptions } from "./options.js";
 import { buildSummary, resolveIntakeStatus } from "./success.js";
 import type {
   ArtifactSourceInputs,
@@ -16,6 +17,7 @@ import type {
   IntakeStatus,
   NextStepReadiness,
   RepoContext,
+  ResolvedRuntimeOptions,
 } from "./types.js";
 
 const intakeArtifactSchema = z.object({
@@ -38,6 +40,11 @@ const intakeArtifactSchema = z.object({
       focus_paths: z.array(z.string()),
     })
     .nullable(),
+  runtime_options: z.object({
+    output_mode: z.enum(["default", "json-only", "report-only"]),
+    llm_mode: z.enum(["deterministic", "assist"]),
+    fail_on_low_confidence: z.boolean(),
+  }),
   purpose: z.string().min(1),
   repoRoot: z.string().min(1),
   requestedOutputRoot: z.string().nullable(),
@@ -112,6 +119,7 @@ export function createIntakeArtifact(params: {
   context: IntakeExecutionContext;
   finishedAt: string;
   sourceInputs: ArtifactSourceInputs | null;
+  runtimeOptions: ResolvedRuntimeOptions;
   taskSpec: IntakeTaskSpec;
   repoContext: RepoContext;
   candidateTargets: CandidateTarget[];
@@ -137,6 +145,7 @@ export function createIntakeArtifact(params: {
     status,
     input_mode: params.sourceInputs?.input_mode ?? null,
     source_inputs: params.sourceInputs,
+    runtime_options: toArtifactRuntimeOptions(params.runtimeOptions),
     purpose: STEP1_BOUNDARY_POLICY.purpose,
     repoRoot: params.context.repoRoot,
     requestedOutputRoot: params.context.paths.requestedOutputRoot,

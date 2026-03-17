@@ -3,7 +3,9 @@ import { constants as fsConstants } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
+import { formatIntakeCommandOutput } from "../../src/cli.js";
 import { runIntakeCommand } from "../../src/intake/runner.js";
+import type { IntakeCommandOptions } from "../../src/intake/types.js";
 
 export interface ForgeRunResult {
   code: number;
@@ -56,12 +58,12 @@ export async function runForgeCli(args: string[], cwd: string): Promise<ForgeRun
 
   const options = parseIntakeArgs(args.slice(1));
   const result = await runIntakeCommand(options, cwd);
-  const summary = result.summary ?? result.failure?.message ?? "";
+  const output = formatIntakeCommandOutput(result);
 
   return {
     code: result.status === "failed" ? 1 : 0,
-    stdout: result.status === "failed" ? "" : summary,
-    stderr: result.status === "failed" ? summary : "",
+    stdout: result.status === "failed" ? "" : output,
+    stderr: result.status === "failed" ? output : "",
   };
 }
 
@@ -75,8 +77,8 @@ export async function writeRepoFile(
   await writeFile(filePath, contents, "utf8");
 }
 
-function parseIntakeArgs(args: string[]): Record<string, string | string[] | undefined> {
-  const options: Record<string, string | string[] | undefined> = {};
+function parseIntakeArgs(args: string[]): IntakeCommandOptions {
+  const options: IntakeCommandOptions = {};
 
   for (let index = 0; index < args.length; index += 1) {
     const current = args[index];
@@ -149,6 +151,31 @@ function parseIntakeArgs(args: string[]): Record<string, string | string[] | und
 
       options.config = next;
       index += 1;
+      continue;
+    }
+
+    if (current === "--json-only") {
+      options.jsonOnly = true;
+      continue;
+    }
+
+    if (current === "--report-only") {
+      options.reportOnly = true;
+      continue;
+    }
+
+    if (current === "--llm-assist") {
+      options.llmAssist = true;
+      continue;
+    }
+
+    if (current === "--no-llm") {
+      options.noLlm = true;
+      continue;
+    }
+
+    if (current === "--fail-on-low-confidence") {
+      options.failOnLowConfidence = true;
       continue;
     }
 

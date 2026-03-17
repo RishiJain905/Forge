@@ -24,9 +24,15 @@
   - Normalized notes and constraints into `source_inputs` and appended them to downstream parser input.
   - Surfaced `config_path` and `focus_paths` metadata in the artifact/report while explicitly warning that their behavioral use is deferred.
   - Added dedicated validation-focused automated coverage plus smoke updates for the new stable source-input metadata.
+- Batch 1.05: `05-cli-surface-and-flag-behavior.md`
+  - Added the remaining Step 1 CLI flags for output selection, LLM mode selection, and low-confidence escalation intent.
+  - Introduced deterministic runtime option resolution for default output behavior, output-mode conflicts, and LLM-mode conflicts.
+  - Made `--json-only` and `--report-only` control which intake files are persisted while keeping the human-readable CLI summary stable.
+  - Added durable `runtime_options` metadata to the artifact/report and explicit deferred-behavior warnings for `--llm-assist` and `--fail-on-low-confidence`.
+  - Expanded automated coverage and smoke assertions for the new CLI surface and flag behavior contract.
 
 ## Current Branch State
-- `dev` includes the completed Batch 1.04 implementation.
+- `dev` includes the completed Batch 1.05 implementation.
 - `execution.md` now explicitly requires completed worktree branches to be merged back into their source branch before a task is considered complete, unless the user explicitly requests a PR-only workflow.
 
 ## Verification
@@ -36,4 +42,4 @@
 - `npm.cmd run smoke`
 
 ## Next
-- Continue Batch 1 with `forge_step1_batch1_impl/05-cli-surface-and-flag-behavior.md`.
+- Continue Batch 1 with `forge_step1_batch1_impl/06-core-responsibilities.md`.

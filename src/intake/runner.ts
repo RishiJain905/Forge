@@ -6,6 +6,7 @@ import { createIntakeArtifact } from "./artifact.js";
 import { resolveCandidateTargets } from "./candidate-targets.js";
 import { PersistenceError } from "./errors.js";
 import { resolveTaskSource, toArtifactSourceInputs } from "./input.js";
+import { resolveRuntimeOptions } from "./options.js";
 import { resolveOutputPaths, resolveRepoRoot } from "./path-policy.js";
 import { scanRepoContext } from "./repo-context.js";
 import { createIntakeReport } from "./report.js";
@@ -35,11 +36,18 @@ async function persistOutputFile(filePath: string, contents: string): Promise<vo
 
 async function persistArtifactAndReport(
   context: IntakeExecutionContext,
+  writeArtifact: boolean,
+  writeReport: boolean,
   artifactContents: string,
   reportContents: string,
 ): Promise<void> {
-  await persistOutputFile(context.paths.artifactPath, artifactContents);
-  await persistOutputFile(context.paths.reportPath, reportContents);
+  if (writeArtifact) {
+    await persistOutputFile(context.paths.artifactPath, artifactContents);
+  }
+
+  if (writeReport) {
+    await persistOutputFile(context.paths.reportPath, reportContents);
+  }
 }
 
 async function createContext(
@@ -69,6 +77,7 @@ function createFailureDetails(
 
 async function persistResult(
   context: IntakeExecutionContext,
+  runtimeOptions: ReturnType<typeof resolveRuntimeOptions>,
   taskInput: NormalizedTaskInput | null,
   taskSpec: IntakeTaskSpec,
   repoContext: RepoContext,
@@ -83,6 +92,7 @@ async function persistResult(
     context,
     finishedAt,
     sourceInputs: taskInput ? toArtifactSourceInputs(taskInput) : null,
+    runtimeOptions,
     taskSpec,
     repoContext,
     candidateTargets,
@@ -96,6 +106,8 @@ async function persistResult(
   try {
     await persistArtifactAndReport(
       context,
+      runtimeOptions.writeArtifact,
+      runtimeOptions.writeReport,
       `${JSON.stringify(artifact, null, 2)}\n`,
       report,
     );
@@ -108,8 +120,8 @@ async function persistResult(
   return {
     status: artifact.status,
     artifact,
-    artifactPath: context.paths.artifactPath,
-    reportPath: context.paths.reportPath,
+    artifactPath: runtimeOptions.writeArtifact ? context.paths.artifactPath : null,
+    reportPath: runtimeOptions.writeReport ? context.paths.reportPath : null,
     outputRoot: context.paths.outputRoot,
     summary: artifact.summary,
     nextStepReadiness: artifact.nextStepReadiness,
@@ -147,8 +159,12 @@ export async function runIntakeCommand(
   }
 
   const context = await createContext(repoRoot, options);
+  const runtimeOptions = resolveRuntimeOptions(options);
   let taskInput: NormalizedTaskInput | null = null;
   let failure: IntakeFailureDetails | null = null;
+  let runtimeBlockingIssues = [...runtimeOptions.blockingIssues];
+  let runtimeWarnings = [...runtimeOptions.warnings];
+  let runtimeRecommendedUserActions = [...runtimeOptions.recommendedUserActions];
   let validationBlockingIssues: NextStepReadiness["blockingIssues"] = [];
   let validationWarnings: string[] = [];
   let validationRecommendedUserActions: string[] = [];
@@ -158,6 +174,13 @@ export async function runIntakeCommand(
       "OUTPUT_ROOT_FALLBACK",
       context.paths.fallbackReason ?? "The requested output directory violated the Step 1 boundary.",
       context.paths.fallbackReason,
+    );
+  }
+
+  if (!failure && runtimeBlockingIssues.length > 0) {
+    failure = createFailureDetails(
+      "CLI_FLAG_POLICY_FAILED",
+      "Forge intake found blocking CLI flag conflicts.",
     );
   }
 
@@ -185,18 +208,23 @@ export async function runIntakeCommand(
     repoContext,
     candidateTargets,
     failure,
-    validationBlockingIssues,
-    inputWarnings: validationWarnings,
+    validationBlockingIssues: [...runtimeBlockingIssues, ...validationBlockingIssues],
+    inputWarnings: [...runtimeWarnings, ...validationWarnings],
     inputAmbiguities: taskInput?.ambiguities,
     inputRecommendedUserActions:
       taskInput
-        ? [...taskInput.recommendedUserActions, ...validationRecommendedUserActions]
-        : validationRecommendedUserActions,
+        ? [
+          ...taskInput.recommendedUserActions,
+          ...runtimeRecommendedUserActions,
+          ...validationRecommendedUserActions,
+        ]
+        : [...runtimeRecommendedUserActions, ...validationRecommendedUserActions],
   });
 
   try {
     return await persistResult(
       context,
+      runtimeOptions,
       taskInput,
       taskSpec,
       repoContext,
@@ -249,6 +277,7 @@ export async function runIntakeCommand(
     try {
       return await persistResult(
         fallbackContext,
+        runtimeOptions,
         taskInput,
         taskSpec,
         repoContext,

@@ -226,6 +226,18 @@ Outputs include:
 - initial verification targets
 - confidence signals
 
+Example CLI usage:
+
+```bash
+forge intake --repo /path/to/repo --spec task.md
+forge intake --repo /path/to/repo --prompt "Update src/app.ts" --json-only
+forge intake --repo /path/to/repo --prompt "Update src/app.ts" --report-only
+```
+
+Step 1 defaults to writing both `.forge/intake.json` and `.forge/reports/intake-report.md`.
+`--json-only` and `--report-only` are mutually exclusive.
+`--llm-assist` and `--fail-on-low-confidence` are accepted as explicit runtime intent, but their deeper behavior is deferred until later Step 1 batches.
+
 ## 2. Plan
 Purpose:
 Turn intake results into an execution-grade implementation plan.
