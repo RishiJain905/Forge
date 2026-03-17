@@ -42,9 +42,27 @@
   - Expanded boundary notes and report language to explicitly defer code edits, workstream splitting, and formal verification requests to later workflow stages.
   - Strengthened Step 1 boundary policy constants to document excluded capabilities more explicitly.
   - Added dedicated automated coverage for semantic non-goals and boundary-safe failed-run behavior.
+- Batch 1.08: `08-output-artifacts-and-write-rules.md`
+  - Refactored intake persistence into explicit artifact/report/debug writer helpers with deterministic directory bootstrap and write ordering.
+  - Added internal debug artifact emission behind `FORGE_INTAKE_DEBUG=1`, scoped to the resolved output root.
+  - Added cleanup of partial configured-root writes before fallback persistence so artifact/report outputs stay aligned to the same run state.
+  - Surfaced explicit persistence failure details in CLI failure output when durable files cannot be trusted.
+  - Added dedicated automated coverage for partial-write cleanup, debug artifact emission, and no-durable-output failure messaging.
+- Batch 1.09: `09-main-artifact-schema.md`
+  - Extracted the top-level intake artifact contract into a dedicated schema module instead of keeping the validator only inline in artifact assembly.
+  - Locked the stable top-level field set for `.forge/intake.json` and made the runtime validator reject unexpected extra top-level keys.
+  - Tightened version, command, and stage metadata validation so the public artifact contract stays explicit and boring.
+  - Added direct schema-focused automated coverage for exact top-level keys plus rejection of missing version fields, missing top-level sections, and invalid status values.
+  - Kept the existing artifact assembly path and public field names intact while hardening the formal schema contract.
+- Batch 1.10: `10-detailed-artifact-sections.md`
+  - Replaced the public artifact’s internal camelCase section leakage with an explicit section-mapping layer that emits stable `snake_case` Step 1 section names.
+  - Added dedicated public `risk_analysis` and `confidence` sections so intake now persists deterministic risk zones and confidence signals directly in `.forge/intake.json`.
+  - Normalized the documented detailed section field names and made every documented section present even when empty or defaulted.
+  - Updated the markdown report, smoke verification, and intake artifact consumers to align with the new detailed section contract.
+  - Added dedicated automated coverage for the normalized section contract, typed risk zones, stable confidence output, and failed-run default section behavior.
 
 ## Current Branch State
-- `dev` includes the completed Batch 1.07 implementation.
+- `dev` includes the completed Batch 1.10 implementation.
 - `execution.md` now explicitly requires completed worktree branches to be merged back into their source branch before a task is considered complete, unless the user explicitly requests a PR-only workflow.
 
 ## Verification
@@ -54,4 +72,4 @@
 - `npm.cmd run smoke`
 
 ## Next
-- Continue Batch 1 with `forge_step1_batch1_impl/08-output-artifacts-and-write-rules.md`.
+- Continue Batch 1 with `forge_step1_batch1_impl/11-human-readable-report-format.md`.

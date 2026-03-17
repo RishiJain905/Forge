@@ -91,11 +91,25 @@ export interface IntakeTaskSpec {
   hasAcceptanceCriteria: boolean;
 }
 
+export interface ArtifactTaskSpecSection {
+  goal: string;
+  acceptance_criteria: string[];
+  has_acceptance_criteria: boolean;
+}
+
 export interface RepoContext {
   grounded: boolean;
   sourceFiles: string[];
   testFiles: string[];
   manifestFiles: string[];
+  allFiles: string[];
+}
+
+export interface ArtifactRepoContextSection {
+  grounded: boolean;
+  source_files: string[];
+  test_files: string[];
+  manifest_files: string[];
 }
 
 export interface RepoScanResult {
@@ -116,9 +130,22 @@ export interface CandidateTarget {
   reason: string;
 }
 
+export interface ArtifactCandidateTargetSectionItem {
+  path: string;
+  kind: CandidateTarget["kind"];
+  match_type: CandidateTarget["matchType"];
+  reason: string;
+}
+
 export interface InitialVerificationTarget {
   path: string;
   kind: CandidateTarget["kind"];
+  reason: string;
+}
+
+export interface ArtifactInitialVerificationTargetSectionItem {
+  path: string;
+  kind: InitialVerificationTarget["kind"];
   reason: string;
 }
 
@@ -149,6 +176,7 @@ export interface ResolvedRuntimeOptions {
   outputMode: IntakeOutputMode;
   writeArtifact: boolean;
   writeReport: boolean;
+  writeDebugArtifact: boolean;
   llmMode: IntakeLlmMode;
   failOnLowConfidence: boolean;
   blockingIssues: BlockingIssue[];
@@ -169,6 +197,35 @@ export interface AmbiguityAnalysisResult {
     };
     reasons: string[];
   };
+}
+
+export type ArtifactRiskZoneCode =
+  | "weak_repo_grounding"
+  | "unresolved_referenced_paths"
+  | "no_candidate_targets"
+  | "fallback_targeting_only"
+  | "no_tests_detected"
+  | "manifest_or_config_impact";
+
+export interface ArtifactRiskZone {
+  code: ArtifactRiskZoneCode;
+  level: "medium" | "high";
+  reason: string;
+  evidence_paths: string[];
+}
+
+export interface ArtifactRiskAnalysisSection {
+  initial_risk_zones: ArtifactRiskZone[];
+}
+
+export interface ArtifactConfidenceSection {
+  level: IntakeConfidenceLevel;
+  signals: {
+    task_parsing: IntakeConfidenceSignalStrength;
+    repo_inspection: IntakeConfidenceSignalStrength;
+    targeting: IntakeConfidenceSignalStrength;
+  };
+  reasons: string[];
 }
 
 export interface AssembledIntakeResult {
@@ -204,6 +261,12 @@ export interface NextStepReadiness {
   recommendedUserActions: string[];
 }
 
+export interface ArtifactNextStepReadinessSection {
+  ready: boolean;
+  blocking_issues: BlockingIssue[];
+  recommended_user_actions: string[];
+}
+
 export interface ResolvedOutputRoot {
   requestedOutputRoot: string | null;
   outputRoot: string;
@@ -214,6 +277,7 @@ export interface ResolvedOutputRoot {
 export interface ResolvedOutputPaths extends ResolvedOutputRoot {
   artifactPath: string;
   reportPath: string;
+  debugArtifactPath: string;
 }
 
 export interface IntakeExecutionContext {
@@ -257,12 +321,14 @@ export interface IntakeArtifact {
   startedAt: string;
   finishedAt: string;
   summary: string;
-  taskSpec: IntakeTaskSpec;
-  repoContext: RepoContext;
-  candidateTargets: CandidateTarget[];
-  initialVerificationTargets: InitialVerificationTarget[];
+  task_spec: ArtifactTaskSpecSection;
+  repo_context: ArtifactRepoContextSection;
+  candidate_targets: ArtifactCandidateTargetSectionItem[];
+  risk_analysis: ArtifactRiskAnalysisSection;
+  initial_verification_targets: ArtifactInitialVerificationTargetSectionItem[];
   ambiguities: string[];
-  nextStepReadiness: NextStepReadiness;
+  confidence: ArtifactConfidenceSection;
+  next_step_readiness: ArtifactNextStepReadinessSection;
   boundaryNotes: string[];
   warnings: string[];
   failure: IntakeFailureDetails | null;
@@ -276,5 +342,39 @@ export interface IntakeCommandResult {
   outputRoot: string | null;
   summary: string;
   nextStepReadiness: NextStepReadiness | null;
+  failure: IntakeFailureDetails | null;
+}
+
+export interface IntakeDebugArtifact {
+  command: string;
+  repoRoot: string;
+  requestedOutputRoot: string | null;
+  outputRoot: string;
+  runtimeOptions: {
+    outputMode: IntakeOutputMode;
+    writeArtifact: boolean;
+    writeReport: boolean;
+    writeDebugArtifact: boolean;
+    llmMode: IntakeLlmMode;
+    failOnLowConfidence: boolean;
+  };
+  paths: {
+    artifactPath: string;
+    reportPath: string;
+    debugArtifactPath: string;
+  };
+  sourceInputs: ArtifactSourceInputs | null;
+  responsibilities: AssembledIntakeResult["responsibilities"];
+  assembledResult: {
+    taskSpec: IntakeTaskSpec;
+    repoContext: RepoContext;
+    candidateTargets: CandidateTarget[];
+    ambiguities: string[];
+    warnings: string[];
+    recommendedUserActions: string[];
+    confidence: AmbiguityAnalysisResult["confidence"];
+  };
+  boundarySafeResult: BoundarySafeIntakeResult;
+  nextStepReadiness: NextStepReadiness;
   failure: IntakeFailureDetails | null;
 }

@@ -22,24 +22,24 @@ interface IntakeArtifact {
     normalized_task_text?: string;
   };
   status: "success" | "warning" | "failed";
-  taskSpec?: {
+  task_spec?: {
     goal?: string;
-    acceptanceCriteria?: string[];
-    hasAcceptanceCriteria?: boolean;
+    acceptance_criteria?: string[];
+    has_acceptance_criteria?: boolean;
   };
-  candidateTargets?: Array<{
+  candidate_targets?: Array<{
     path?: string;
-    matchType?: "explicit" | "fallback";
+    match_type?: "explicit" | "fallback";
   }>;
   ambiguities?: string[];
   warnings?: string[];
-  nextStepReadiness?: {
+  next_step_readiness?: {
     ready?: boolean;
-    blockingIssues?: Array<{
+    blocking_issues?: Array<{
       code?: string;
       message?: string;
     }>;
-    recommendedUserActions?: string[];
+    recommended_user_actions?: string[];
   };
   failure?: {
     code?: string;
@@ -128,11 +128,11 @@ await runScenario("forge intake marks a grounded spec with explicit targets as s
     assert.equal(artifact.input_mode, "spec");
     assert.equal(artifact.source_inputs?.input_mode, "spec");
     assert.equal(artifact.source_inputs?.primary_input?.path, specPath);
-    assert.equal(artifact.nextStepReadiness?.ready, true);
-    assert.equal(artifact.nextStepReadiness?.blockingIssues?.length, 0);
-    assert.equal(artifact.taskSpec?.hasAcceptanceCriteria, true);
+    assert.equal(artifact.next_step_readiness?.ready, true);
+    assert.equal(artifact.next_step_readiness?.blocking_issues?.length, 0);
+    assert.equal(artifact.task_spec?.has_acceptance_criteria, true);
     assert.ok(
-      artifact.candidateTargets?.some((candidate) => candidate.path?.endsWith("src/app.ts")),
+      artifact.candidate_targets?.some((candidate) => candidate.path?.endsWith("src/app.ts")),
       "expected src/app.ts candidate target",
     );
   } finally {
@@ -159,13 +159,13 @@ await runScenario(
       assert.equal(artifact.status, "warning");
       assert.equal(artifact.input_mode, "prompt");
       assert.equal(artifact.source_inputs?.input_mode, "prompt");
-      assert.equal(artifact.nextStepReadiness?.ready, true);
+      assert.equal(artifact.next_step_readiness?.ready, true);
       assert.ok(
         artifact.ambiguities?.some((value) => /acceptance criteria/i.test(value)),
         "expected acceptance-criteria ambiguity",
       );
       assert.ok(
-        artifact.nextStepReadiness?.recommendedUserActions?.some((value) =>
+        artifact.next_step_readiness?.recommended_user_actions?.some((value) =>
           /acceptance criteria/i.test(value),
         ),
         "expected recommended action for acceptance criteria",
@@ -207,8 +207,8 @@ await runScenario(
       assert.equal(artifact.status, "success");
       assert.equal(artifact.input_mode, "prompt");
       assert.equal(artifact.source_inputs?.input_mode, "prompt");
-      assert.equal(artifact.taskSpec?.hasAcceptanceCriteria, true);
-      assert.equal(artifact.nextStepReadiness?.ready, true);
+      assert.equal(artifact.task_spec?.has_acceptance_criteria, true);
+      assert.equal(artifact.next_step_readiness?.ready, true);
     } finally {
       await disposeTempRepo(repoRoot);
     }
@@ -234,7 +234,7 @@ await runScenario(
       const artifact = await readJsonFile<IntakeArtifact>(artifactPath);
 
       assert.equal(artifact.status, "warning");
-      assert.equal(artifact.nextStepReadiness?.ready, true);
+      assert.equal(artifact.next_step_readiness?.ready, true);
       assert.ok(
         artifact.warnings?.some((value) => /test/i.test(value)),
         "expected missing-tests warning",
@@ -276,9 +276,9 @@ await runScenario(
       const artifact = await readJsonFile<IntakeArtifact>(artifactPath);
 
       assert.equal(artifact.status, "failed");
-      assert.equal(artifact.nextStepReadiness?.ready, false);
+      assert.equal(artifact.next_step_readiness?.ready, false);
       assert.ok(
-        artifact.nextStepReadiness?.blockingIssues?.some((issue) =>
+        artifact.next_step_readiness?.blocking_issues?.some((issue) =>
           /task goal/i.test(issue.message ?? ""),
         ),
         "expected blocking issue for missing task goal",
@@ -309,9 +309,9 @@ await runScenario(
       const artifact = await readJsonFile<IntakeArtifact>(artifactPath);
 
       assert.equal(artifact.status, "failed");
-      assert.equal(artifact.nextStepReadiness?.ready, false);
+      assert.equal(artifact.next_step_readiness?.ready, false);
       assert.ok(
-        artifact.nextStepReadiness?.blockingIssues?.some((issue) =>
+        artifact.next_step_readiness?.blocking_issues?.some((issue) =>
           /candidate target/i.test(issue.message ?? ""),
         ),
         "expected blocking issue for candidate targets",

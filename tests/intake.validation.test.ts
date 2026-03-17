@@ -20,9 +20,9 @@ interface IntakeArtifact {
     config_path?: string | null;
     focus_paths?: string[];
   } | null;
-  nextStepReadiness?: {
+  next_step_readiness?: {
     ready?: boolean;
-    blockingIssues?: Array<{
+    blocking_issues?: Array<{
       code?: string;
       message?: string;
     }>;
@@ -102,9 +102,9 @@ await runScenario(
 
       const artifact = await readJsonFile<IntakeArtifact>(artifactPath);
       assert.equal(artifact.status, "failed");
-      assert.equal(artifact.nextStepReadiness?.ready, false);
+      assert.equal(artifact.next_step_readiness?.ready, false);
       assert.ok(
-        artifact.nextStepReadiness?.blockingIssues?.some((issue) =>
+        artifact.next_step_readiness?.blocking_issues?.some((issue) =>
           /notes/i.test(issue.code ?? "") || /notes/i.test(issue.message ?? ""),
         ),
         "expected blocking issue for missing notes file",
@@ -216,7 +216,7 @@ await runScenario(
       const artifact = await readJsonFile<IntakeArtifact>(artifactPath);
       assert.equal(artifact.status, "failed");
       assert.ok(
-        artifact.nextStepReadiness?.blockingIssues?.some((issue) =>
+        artifact.next_step_readiness?.blocking_issues?.some((issue) =>
           /focus/i.test(issue.code ?? "") || /focus/i.test(issue.message ?? ""),
         ),
         "expected blocking issue for invalid focus path",

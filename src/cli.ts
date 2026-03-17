@@ -14,6 +14,7 @@ export function formatIntakeCommandOutput(result: IntakeCommandResult): string {
     result.outputRoot ? `Output root: ${result.outputRoot}` : null,
     result.artifactPath ? `Artifact: ${result.artifactPath}` : null,
     result.reportPath ? `Report: ${result.reportPath}` : null,
+    result.failure ? `Failure: [${result.failure.code}] ${result.failure.message}` : null,
   ].filter((line): line is string => Boolean(line));
 
   return `${lines.join("\n")}\n`;
