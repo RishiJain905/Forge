@@ -62,8 +62,23 @@ function createAssembledResult(overrides?: Partial<AssembledIntakeResult>): Asse
     responsibilities: {
       taskParser: {
         taskSpec: {
+          title: "Update app behavior",
+          summary: "Spec summary",
           goal: "",
-          acceptanceCriteria: [],
+          scope: ["src/app.ts"],
+          explicitRequirements: ["Keep the retry flow stable"],
+          constraints: ["Do not change public APIs."],
+          mentionedPaths: ["src/app.ts", "tests/app.test.ts"],
+          mentionedTests: ["tests/app.test.ts"],
+          mentionedModules: ["app"],
+          riskyPhrases: ["migration"],
+          openQuestions: [
+            {
+              category: "scope",
+              text: "Which surface should change?",
+            },
+          ],
+          acceptanceCriteria: [], 
           hasAcceptanceCriteria: false,
         },
         signals: {
@@ -86,6 +101,14 @@ function createAssembledResult(overrides?: Partial<AssembledIntakeResult>): Asse
           manifestFiles: ["package.json"],
           allFiles: ["package.json"],
           gitContext: createGitContext(),
+          languages: ["typescript"],
+          frameworkHints: ["Node.js", "TypeScript"],
+          packageManager: "npm",
+          keyDirectories: ["src", "tests"],
+          entryPoints: ["src/app.ts"],
+          testFrameworkHints: ["Vitest"],
+          layoutSummary:
+            "languages: typescript; package manager: npm; key directories: src, tests; entry points: src/app.ts; manifests: package.json",
         },
         signals: {
           sourceFileCount: 0,
@@ -128,7 +151,22 @@ function createAssembledResult(overrides?: Partial<AssembledIntakeResult>): Asse
       },
     },
     taskSpec: {
+      title: "Update app behavior",
+      summary: "Spec summary",
       goal: "",
+      scope: ["src/app.ts"],
+      explicitRequirements: ["Keep the retry flow stable"],
+      constraints: ["Do not change public APIs."],
+      mentionedPaths: ["src/app.ts", "tests/app.test.ts"],
+      mentionedTests: ["tests/app.test.ts"],
+      mentionedModules: ["app"],
+      riskyPhrases: ["migration"],
+      openQuestions: [
+        {
+          category: "scope",
+          text: "Which surface should change?",
+        },
+      ],
       acceptanceCriteria: [],
       hasAcceptanceCriteria: false,
     },
@@ -139,6 +177,14 @@ function createAssembledResult(overrides?: Partial<AssembledIntakeResult>): Asse
       manifestFiles: ["package.json"],
       allFiles: ["package.json"],
       gitContext: createGitContext(),
+      languages: ["typescript"],
+      frameworkHints: ["Node.js", "TypeScript"],
+      packageManager: "npm",
+      keyDirectories: ["src", "tests"],
+      entryPoints: ["src/app.ts"],
+      testFrameworkHints: ["Vitest"],
+      layoutSummary:
+        "languages: typescript; package manager: npm; key directories: src, tests; entry points: src/app.ts; manifests: package.json",
     },
     candidateTargets: [
       {
@@ -175,7 +221,22 @@ function createAssembledResult(overrides?: Partial<AssembledIntakeResult>): Asse
 function createBoundarySafeResult(): BoundarySafeIntakeResult {
   return {
     taskSpec: {
+      title: "Update app behavior",
+      summary: "Spec summary",
       goal: "",
+      scope: ["src/app.ts"],
+      explicitRequirements: ["Keep the retry flow stable"],
+      constraints: ["Do not change public APIs."],
+      mentionedPaths: ["src/app.ts", "tests/app.test.ts"],
+      mentionedTests: ["tests/app.test.ts"],
+      mentionedModules: ["app"],
+      riskyPhrases: ["migration"],
+      openQuestions: [
+        {
+          category: "scope",
+          text: "Which surface should change?",
+        },
+      ],
       acceptanceCriteria: [],
       hasAcceptanceCriteria: false,
     },
@@ -186,6 +247,14 @@ function createBoundarySafeResult(): BoundarySafeIntakeResult {
       manifestFiles: ["package.json"],
       allFiles: ["package.json"],
       gitContext: createGitContext(),
+      languages: ["typescript"],
+      frameworkHints: ["Node.js", "TypeScript"],
+      packageManager: "npm",
+      keyDirectories: ["src", "tests"],
+      entryPoints: ["src/app.ts"],
+      testFrameworkHints: ["Vitest"],
+      layoutSummary:
+        "languages: typescript; package manager: npm; key directories: src, tests; entry points: src/app.ts; manifests: package.json",
     },
     candidateTargets: [
       {
@@ -306,6 +375,98 @@ await runScenario("intake artifact includes deterministic typed risk analysis zo
   }
 });
 
+await runScenario("artifact sections project the richer Batch 3 task and repo context surface", () => {
+  const assembledResult = createAssembledResult() as AssembledIntakeResult & {
+    taskSpec: Record<string, unknown>;
+    repoContext: Record<string, unknown>;
+  };
+  const boundarySafeResult = createBoundarySafeResult() as BoundarySafeIntakeResult & {
+    taskSpec: Record<string, unknown>;
+    repoContext: Record<string, unknown>;
+  };
+
+  assembledResult.taskSpec.implementationNecessities = [
+    "Add or update tests for the touched behavior.",
+  ];
+  assembledResult.repoContext.testCommandHints = ["npm test"];
+  assembledResult.repoContext.ciHints = ["GitHub Actions"];
+  boundarySafeResult.taskSpec.implementationNecessities = [
+    "Add or update tests for the touched behavior.",
+  ];
+  boundarySafeResult.repoContext.testCommandHints = ["npm test"];
+  boundarySafeResult.repoContext.ciHints = ["GitHub Actions"];
+
+  const sections = buildArtifactSections({
+    assembledResult,
+    boundarySafeResult,
+    nextStepReadiness: createNextStepReadiness(),
+    riskAnalysis: {
+      initialRiskZones: [],
+    },
+    initialVerificationTargets: [],
+  } as any);
+
+  assert.equal((sections.task_spec as unknown as Record<string, unknown>).title, "Update app behavior");
+  assert.equal((sections.task_spec as unknown as Record<string, unknown>).summary, "Spec summary");
+  assert.deepEqual((sections.task_spec as unknown as Record<string, unknown>).scope, ["src/app.ts"]);
+  assert.deepEqual((sections.task_spec as unknown as Record<string, unknown>).explicit_requirements, [
+    "Keep the retry flow stable",
+  ]);
+  assert.deepEqual((sections.task_spec as unknown as Record<string, unknown>).implementation_necessities, [
+    "Add or update tests for the touched behavior.",
+  ]);
+  assert.deepEqual((sections.task_spec as unknown as Record<string, unknown>).constraints, [
+    "Do not change public APIs.",
+  ]);
+  assert.deepEqual((sections.task_spec as unknown as Record<string, unknown>).mentioned_paths, [
+    "src/app.ts",
+    "tests/app.test.ts",
+  ]);
+  assert.deepEqual((sections.task_spec as unknown as Record<string, unknown>).mentioned_tests, [
+    "tests/app.test.ts",
+  ]);
+  assert.deepEqual((sections.task_spec as unknown as Record<string, unknown>).mentioned_modules, [
+    "app",
+  ]);
+  assert.deepEqual((sections.task_spec as unknown as Record<string, unknown>).risky_phrases, [
+    "migration",
+  ]);
+  assert.deepEqual((sections.task_spec as unknown as Record<string, unknown>).open_questions, [
+    {
+      category: "scope",
+      text: "Which surface should change?",
+    },
+  ]);
+  assert.deepEqual((sections.repo_context as unknown as Record<string, unknown>).languages, [
+    "typescript",
+  ]);
+  assert.deepEqual((sections.repo_context as unknown as Record<string, unknown>).framework_hints, [
+    "Node.js",
+    "TypeScript",
+  ]);
+  assert.equal((sections.repo_context as unknown as Record<string, unknown>).package_manager, "npm");
+  assert.deepEqual((sections.repo_context as unknown as Record<string, unknown>).key_directories, [
+    "src",
+    "tests",
+  ]);
+  assert.deepEqual((sections.repo_context as unknown as Record<string, unknown>).entry_points, [
+    "src/app.ts",
+  ]);
+  assert.deepEqual((sections.repo_context as unknown as Record<string, unknown>).test_framework_hints, [
+    "Vitest",
+  ]);
+  assert.deepEqual((sections.repo_context as unknown as Record<string, unknown>).test_command_hints, [
+    "npm test",
+  ]);
+  assert.deepEqual((sections.repo_context as unknown as Record<string, unknown>).ci_hints, [
+    "GitHub Actions",
+  ]);
+  assert.match(
+    String((sections.repo_context as unknown as Record<string, unknown>).layout_summary ?? ""),
+    /languages: typescript/i,
+  );
+});
+
 await runScenario("intake artifact does not flag referenced repo files outside classified buckets as unresolved", () => {
   const artifact = createArtifact({
     assembledResult: {
@@ -406,12 +567,12 @@ await runScenario(
       boundarySafeResult: createBoundarySafeResult(),
       nextStepReadiness: createNextStepReadiness(),
       riskAnalysis: {
-        initial_risk_zones: [
+        initialRiskZones: [
           {
-            code: "manual_risk",
+            code: "manifest_or_config_impact",
             level: "high",
             reason: "Manual risk should be projected without recomputation.",
-            evidence_paths: ["src/app.ts"],
+            evidencePaths: ["src/app.ts"],
           },
         ],
       },
@@ -426,7 +587,7 @@ await runScenario(
 
     assert.deepEqual(
       sections.risk_analysis.initial_risk_zones.map((zone) => zone.code),
-      ["manual_risk"],
+      ["manifest_or_config_impact"],
     );
     assert.deepEqual(
       sections.initial_verification_targets.map((target) => target.path),

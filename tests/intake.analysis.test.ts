@@ -18,19 +18,25 @@ function createPromptInput(
   prompt: string,
   overrides: Partial<ValidatedIntakeInputs> = {},
 ): ValidatedIntakeInputs {
+  const { supplementalInputs: supplementalOverrides, ...otherOverrides } = overrides;
+  const supplementalInputs = {
+    notes: [],
+    constraints: [],
+    configPath: null,
+    focusPaths: [],
+    ...supplementalOverrides,
+  };
+
   return {
     inputMode: "prompt",
     primaryInput: {
       path: null,
       rawText: prompt,
     },
-    notes: [],
-    constraints: [],
-    configPath: null,
-    focusPaths: [],
+    supplementalInputs,
     warnings: [],
     recommendedUserActions: [],
-    ...overrides,
+    ...otherOverrides,
   };
 }
 
@@ -113,6 +119,83 @@ async function runScenario(name: string, scenario: () => Promise<void>): Promise
 }
 
 await runScenario(
+  "buildRiskAnalysisResult surfaces migration, api contract, coordination, config, and test risk through existing observable zones",
+  async () => {
+    const { taskParserResult } = createTaskParserResult(
+      [
+        "Migrate src/app.ts and package.json together while coordinating ownership and keeping the API contract stable.",
+        "",
+        "Acceptance Criteria",
+        "- src/app.ts is updated for the migration",
+        "- package.json stays aligned with the API contract",
+      ].join("\n"),
+    );
+    const repoScanResult = createRepoScanResult({
+      repoContext: createRepoContext({
+        testFiles: [],
+        allFiles: ["src/app.ts", "src/worker.ts", "package.json"],
+      }),
+      signals: {
+        sourceFileCount: 2,
+        testFileCount: 0,
+        manifestFileCount: 1,
+        repoLooksSparse: false,
+      },
+    });
+    const inferenceResult = createInferenceResult({
+      candidateTargets: [
+        {
+          path: "src/app.ts",
+          kind: "source",
+          matchType: "explicit",
+          reason: "Matched a source file path mentioned in the task input.",
+          notes: ["Matched an explicit task-to-file reference."],
+          sharedRisk: true,
+        },
+        {
+          path: "src/worker.ts",
+          kind: "source",
+          matchType: "fallback",
+          reason: "Inferred a likely source target from the repo layout.",
+          notes: ["Fell back to repo-layout targeting because the task had no explicit file match."],
+          sharedRisk: true,
+        },
+        {
+          path: "package.json",
+          kind: "manifest",
+          matchType: "explicit",
+          reason: "Matched a manifest mentioned in the task input.",
+          notes: ["Manifest/config surface can widen downstream impact."],
+          sharedRisk: true,
+        },
+      ],
+      signals: {
+        explicitTargetCount: 2,
+        usedFallbackTargets: true,
+        inferredRequirementCount: 0,
+        focusApplied: false,
+        strictFocusApplied: false,
+        focusMatchedTargetCount: 0,
+        outOfFocusTargetCount: 0,
+      },
+    });
+
+    const result = buildRiskAnalysisResult({
+      taskParserResult,
+      repoScanResult,
+      inferenceResult,
+    });
+
+    const manifestRisk = result.initialRiskZones.find((zone) => zone.code === "manifest_or_config_impact");
+    assert.ok(manifestRisk);
+    assert.match(manifestRisk?.reason ?? "", /migration/i);
+    assert.match(manifestRisk?.reason ?? "", /API contract/i);
+    assert.match(manifestRisk?.reason ?? "", /coordination/i);
+    assert.ok(result.initialRiskZones.some((zone) => zone.code === "no_tests_detected"));
+  },
+);
+
+await runScenario(
   "buildRiskAnalysisResult flags weak grounding, unresolved referenced paths, and no-tests risk zones",
   async () => {
     const { taskParserResult } = createTaskParserResult(
@@ -140,15 +223,15 @@ await runScenario(
     });
 
     assert.deepEqual(
-      result.initial_risk_zones.map((zone) => zone.code),
+      result.initialRiskZones.map((zone) => zone.code),
       [
         "weak_repo_grounding",
         "unresolved_referenced_paths",
         "no_tests_detected",
       ],
     );
-    assert.equal(result.initial_risk_zones[0]?.level, "high");
-    assert.deepEqual(result.initial_risk_zones[1]?.evidence_paths, [
+    assert.equal(result.initialRiskZones[0]?.level, "high");
+    assert.deepEqual(result.initialRiskZones[1]?.evidencePaths, [
       "src/missing.ts",
       "tests/missing.test.ts",
     ]);
@@ -161,7 +244,12 @@ await runScenario(
     const { taskInput, taskParserResult } = createTaskParserResult(
       "Update src/app.ts and tests/app.test.ts.",
       {
-        focusPaths: ["tests"],
+        supplementalInputs: {
+          notes: [],
+          constraints: [],
+          configPath: null,
+          focusPaths: ["tests"],
+        },
       },
     );
     const repoScanResult = createRepoScanResult();

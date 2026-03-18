@@ -307,6 +307,102 @@ await runScenario("artifact schema preserves strict_focus inside runtime_options
   );
 });
 
+await runScenario("artifact schema accepts richer Batch 3 task and repo context fields", () => {
+  const artifact = createValidArtifact() as unknown as Record<string, unknown> & {
+    task_spec: Record<string, unknown>;
+    repo_context: Record<string, unknown>;
+  };
+
+  artifact.task_spec = {
+    ...artifact.task_spec,
+    title: "Update app behavior",
+    summary: "Spec summary",
+    scope: ["src/app.ts"],
+    explicit_requirements: ["Keep the retry flow stable"],
+    implementation_necessities: ["Add or update tests for the touched behavior."],
+    constraints: ["Do not change public APIs."],
+    mentioned_paths: ["src/app.ts", "tests/app.test.ts"],
+    mentioned_tests: ["tests/app.test.ts"],
+    mentioned_modules: ["app"],
+    risky_phrases: ["migration"],
+    open_questions: [
+      {
+        category: "scope",
+        text: "Which surface should change?",
+      },
+    ],
+  };
+
+  artifact.repo_context = {
+    ...artifact.repo_context,
+    languages: ["typescript"],
+    framework_hints: ["Node.js", "TypeScript"],
+    package_manager: "npm",
+    key_directories: ["src", "tests"],
+    entry_points: ["src/app.ts"],
+    test_framework_hints: ["Vitest"],
+    test_command_hints: ["npm test"],
+    ci_hints: ["GitHub Actions"],
+    layout_summary:
+      "languages: typescript; package manager: npm; key directories: src, tests; entry points: src/app.ts; manifests: package.json",
+  };
+
+  const parsed = validateIntakeArtifact(artifact) as unknown as {
+    task_spec: {
+      title?: string | null;
+      summary?: string | null;
+      scope?: string[];
+      explicit_requirements?: string[];
+      implementation_necessities?: string[];
+      constraints?: string[];
+      mentioned_paths?: string[];
+      mentioned_tests?: string[];
+      mentioned_modules?: string[];
+      risky_phrases?: string[];
+      open_questions?: Array<{ category: string; text: string }>;
+    };
+    repo_context: {
+      languages?: string[];
+      framework_hints?: string[];
+      package_manager?: string | null;
+      key_directories?: string[];
+      entry_points?: string[];
+      test_framework_hints?: string[];
+      test_command_hints?: string[];
+      ci_hints?: string[];
+      layout_summary?: string | null;
+    };
+  };
+
+  assert.equal(parsed.task_spec.title, "Update app behavior");
+  assert.equal(parsed.task_spec.summary, "Spec summary");
+  assert.deepEqual(parsed.task_spec.scope, ["src/app.ts"]);
+  assert.deepEqual(parsed.task_spec.explicit_requirements, ["Keep the retry flow stable"]);
+  assert.deepEqual(parsed.task_spec.implementation_necessities, [
+    "Add or update tests for the touched behavior.",
+  ]);
+  assert.deepEqual(parsed.task_spec.constraints, ["Do not change public APIs."]);
+  assert.deepEqual(parsed.task_spec.mentioned_paths, ["src/app.ts", "tests/app.test.ts"]);
+  assert.deepEqual(parsed.task_spec.mentioned_tests, ["tests/app.test.ts"]);
+  assert.deepEqual(parsed.task_spec.mentioned_modules, ["app"]);
+  assert.deepEqual(parsed.task_spec.risky_phrases, ["migration"]);
+  assert.deepEqual(parsed.task_spec.open_questions, [
+    {
+      category: "scope",
+      text: "Which surface should change?",
+    },
+  ]);
+  assert.deepEqual(parsed.repo_context.languages, ["typescript"]);
+  assert.deepEqual(parsed.repo_context.framework_hints, ["Node.js", "TypeScript"]);
+  assert.equal(parsed.repo_context.package_manager, "npm");
+  assert.deepEqual(parsed.repo_context.key_directories, ["src", "tests"]);
+  assert.deepEqual(parsed.repo_context.entry_points, ["src/app.ts"]);
+  assert.deepEqual(parsed.repo_context.test_framework_hints, ["Vitest"]);
+  assert.deepEqual(parsed.repo_context.test_command_hints, ["npm test"]);
+  assert.deepEqual(parsed.repo_context.ci_hints, ["GitHub Actions"]);
+  assert.match(parsed.repo_context.layout_summary ?? "", /languages: typescript/i);
+});
+
 if (process.exitCode && process.exitCode !== 0) {
   process.exit(process.exitCode);
 }

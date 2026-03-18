@@ -11,15 +11,27 @@ import type {
   BoundarySafeIntakeResult,
   CandidateTarget,
   NextStepReadiness,
+  RiskAnalysis,
 } from "./types.js";
 
 function toArtifactTaskSpecSection(
   taskSpec: BoundarySafeIntakeResult["taskSpec"],
 ): ArtifactTaskSpecSection {
   return {
+    title: taskSpec.title ?? "",
+    summary: taskSpec.summary ?? "",
     goal: taskSpec.goal,
+    scope: [...(taskSpec.scope ?? [])],
     acceptance_criteria: [...taskSpec.acceptanceCriteria],
     has_acceptance_criteria: taskSpec.hasAcceptanceCriteria,
+    explicit_requirements: [...(taskSpec.explicitRequirements ?? [])],
+    implementation_necessities: [...(taskSpec.implementationNecessities ?? [])],
+    constraints: [...(taskSpec.constraints ?? [])],
+    mentioned_paths: [...(taskSpec.mentionedPaths ?? [])],
+    mentioned_tests: [...(taskSpec.mentionedTests ?? [])],
+    mentioned_modules: [...(taskSpec.mentionedModules ?? [])],
+    risky_phrases: [...(taskSpec.riskyPhrases ?? [])],
+    open_questions: [...(taskSpec.openQuestions ?? [])],
   };
 }
 
@@ -42,6 +54,15 @@ function toArtifactRepoContextSection(
     source_files: [...repoContext.sourceFiles],
     test_files: [...repoContext.testFiles],
     manifest_files: [...repoContext.manifestFiles],
+    languages: [...(repoContext.languages ?? [])],
+    framework_hints: [...(repoContext.frameworkHints ?? [])],
+    package_manager: repoContext.packageManager ?? null,
+    key_directories: [...(repoContext.keyDirectories ?? [])],
+    entry_points: [...(repoContext.entryPoints ?? [])],
+    test_framework_hints: [...(repoContext.testFrameworkHints ?? [])],
+    test_command_hints: [...(repoContext.testCommandHints ?? [])],
+    ci_hints: [...(repoContext.ciHints ?? [])],
+    layout_summary: repoContext.layoutSummary ?? "No repository layout signals were detected.",
     git_context: toArtifactGitContextSection(repoContext.gitContext),
   };
 }
@@ -81,6 +102,19 @@ function toArtifactConfidenceSection(
   };
 }
 
+function toArtifactRiskAnalysisSection(
+  riskAnalysis: RiskAnalysis,
+): ArtifactRiskAnalysisSection {
+  return {
+    initial_risk_zones: riskAnalysis.initialRiskZones.map((zone) => ({
+      code: zone.code,
+      level: zone.level,
+      reason: zone.reason,
+      evidence_paths: [...zone.evidencePaths],
+    })),
+  };
+}
+
 function toArtifactNextStepReadinessSection(
   nextStepReadiness: NextStepReadiness,
 ): ArtifactNextStepReadinessSection {
@@ -97,7 +131,7 @@ function toArtifactNextStepReadinessSection(
 export function buildArtifactSections(params: {
   assembledResult: AssembledIntakeResult;
   boundarySafeResult: BoundarySafeIntakeResult;
-  riskAnalysis: ArtifactRiskAnalysisSection;
+  riskAnalysis: RiskAnalysis;
   initialVerificationTargets: BoundarySafeIntakeResult["initialVerificationTargets"];
   nextStepReadiness: NextStepReadiness;
 }): Pick<
@@ -119,7 +153,7 @@ export function buildArtifactSections(params: {
     candidate_targets: params.boundarySafeResult.candidateTargets.map(
       toArtifactCandidateTargetSectionItem,
     ),
-    risk_analysis: params.riskAnalysis,
+    risk_analysis: toArtifactRiskAnalysisSection(params.riskAnalysis),
     initial_verification_targets: params.initialVerificationTargets.map(
       toArtifactInitialVerificationTargetSectionItem,
     ),

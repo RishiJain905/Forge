@@ -36,7 +36,7 @@ export function validateLoadedIntakeInput(
   }
 
   if (
-    input.primaryInputLoaded !== false &&
+    input.primaryInput.loaded &&
     input.inputMode === "spec" &&
     input.primaryInput.rawText.trim().length === 0
   ) {
@@ -48,7 +48,7 @@ export function validateLoadedIntakeInput(
     );
   }
 
-  if (input.configPath && input.configLoaded) {
+  if (input.supplementalInputs.configPath && input.supplementalInputs.configLoaded) {
     pushUnique(
       warnings,
       "Config input was validated and recorded, but config-driven intake behavior is not implemented yet.",
@@ -59,7 +59,7 @@ export function validateLoadedIntakeInput(
     );
   }
 
-  if (input.strictFocus && input.focusPaths.length === 0) {
+  if (input.supplementalInputs.strictFocus && input.supplementalInputs.focusPaths.length === 0) {
     blockingIssues.push(
       createBlockingIssue(
         "STRICT_FOCUS_REQUIRES_FOCUS",
@@ -73,13 +73,13 @@ export function validateLoadedIntakeInput(
   }
 
   if (blockingIssues.length > 0) {
-    if (input.configPath) {
+    if (input.supplementalInputs.configPath) {
       pushUnique(recommendedUserActions, "Provide a readable file for --config or omit the flag.");
     }
 
     if (
       (input.sourceSelection.promptProvided || input.sourceSelection.specProvided) &&
-      input.focusPaths.length > 0
+      input.supplementalInputs.focusPaths.length > 0
     ) {
       pushUnique(recommendedUserActions, "Pass only existing repo-relative paths to --focus.");
     }

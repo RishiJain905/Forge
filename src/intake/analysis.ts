@@ -5,13 +5,13 @@ import {
 } from "./candidate-targets.js";
 import type {
   AmbiguityAnalysisResult,
-  ArtifactRiskAnalysisSection,
-  ArtifactRiskZone,
   BlockingIssue,
   InferenceResult,
   IntakeFailureDetails,
   NormalizedTaskInput,
   RepoScanResult,
+  RiskAnalysis,
+  RiskZone,
   ResolvedRuntimeOptions,
   TaskParserResult,
   OptionalReasoningResolution,
@@ -88,13 +88,38 @@ function buildManifestOrConfigPaths(params: {
   ].filter((value, index, values) => values.indexOf(value) === index);
 }
 
+function buildSurfaceRiskReason(params: {
+  taskParserResult: TaskParserResult;
+}): string {
+  const riskSignals: string[] = [];
+
+  if (params.taskParserResult.taskSpec.riskyPhrases?.includes("migration")) {
+    riskSignals.push("migration");
+  }
+
+  if (params.taskParserResult.taskSpec.riskyPhrases?.includes("api contract")) {
+    riskSignals.push("API contract");
+  }
+
+  if (params.taskParserResult.taskSpec.riskyPhrases?.includes("parallel") === true ||
+    params.taskParserResult.taskSpec.riskyPhrases?.includes("ownership") === true) {
+    riskSignals.push("coordination");
+  }
+
+  if (riskSignals.length === 0) {
+    return "The task appears to affect manifest or configuration surfaces that can widen downstream impact.";
+  }
+
+  return `The task appears to affect manifest or configuration surfaces and also carries ${riskSignals.join(", ")} risk.`;
+}
+
 export function buildRiskAnalysisResult(params: {
   taskParserResult: TaskParserResult;
   repoScanResult: RepoScanResult;
   inferenceResult: InferenceResult;
   repoContextOverride?: RepoScanResult["repoContext"];
-}): ArtifactRiskAnalysisSection {
-  const riskZones: ArtifactRiskZone[] = [];
+}): RiskAnalysis {
+  const riskZones: RiskZone[] = [];
   const repoContext = params.repoContextOverride ?? params.repoScanResult.repoContext;
   const repoFiles = new Set(
     repoContext.allFiles.map(normalizePathForComparison),
@@ -108,7 +133,7 @@ export function buildRiskAnalysisResult(params: {
       code: "weak_repo_grounding",
       level: "high",
       reason: "Repo grounding is partial, so later planning may rely on weak repository evidence.",
-      evidence_paths: [],
+      evidencePaths: [],
     });
   }
 
@@ -117,7 +142,7 @@ export function buildRiskAnalysisResult(params: {
       code: "unresolved_referenced_paths",
       level: "high",
       reason: "The task references paths that were not found during repo grounding.",
-      evidence_paths: unresolvedReferencedPaths,
+      evidencePaths: unresolvedReferencedPaths,
     });
   }
 
@@ -126,7 +151,7 @@ export function buildRiskAnalysisResult(params: {
       code: "no_candidate_targets",
       level: "high",
       reason: "Intake could not produce any plausible candidate targets for the next step.",
-      evidence_paths: [],
+      evidencePaths: [],
     });
   }
 
@@ -138,7 +163,7 @@ export function buildRiskAnalysisResult(params: {
       code: "fallback_targeting_only",
       level: "medium",
       reason: "Targeting depends entirely on fallback repo structure instead of explicit task-to-file matches.",
-      evidence_paths: params.inferenceResult.candidateTargets.map((target) => target.path),
+      evidencePaths: params.inferenceResult.candidateTargets.map((target) => target.path),
     });
   }
 
@@ -147,7 +172,7 @@ export function buildRiskAnalysisResult(params: {
       code: "no_tests_detected",
       level: "medium",
       reason: "No tests were detected during repo grounding, so later verification coverage may be weak.",
-      evidence_paths: [],
+      evidencePaths: [],
     });
   }
 
@@ -160,22 +185,27 @@ export function buildRiskAnalysisResult(params: {
     riskZones.push({
       code: "manifest_or_config_impact",
       level: "medium",
-      reason: "The task appears to affect manifest or configuration surfaces that can widen downstream impact.",
-      evidence_paths: manifestOrConfigPaths,
+      reason: buildSurfaceRiskReason({
+        taskParserResult: params.taskParserResult,
+      }),
+      evidencePaths: manifestOrConfigPaths,
     });
   }
 
   return {
-    initial_risk_zones: riskZones,
+    initialRiskZones: riskZones,
   };
 }
 
-function addPromptOpenQuestionHandling(params: {
+function addParserOpenQuestionHandling(params: {
+  inputMode: NormalizedTaskInput["inputMode"] | null;
   categories: TaskParserResult["signals"]["promptOpenQuestionCategories"];
   ambiguityItems: NonNullable<AmbiguityAnalysisResult["ambiguityItems"]>;
   ambiguities: string[];
   recommendedUserActions: string[];
 }): void {
+  const subject = params.inputMode === "prompt" ? "Prompt" : "Task";
+
   if (params.categories.includes("scope")) {
     pushAmbiguityItem(
       params.ambiguityItems,
@@ -184,12 +214,12 @@ function addPromptOpenQuestionHandling(params: {
         type: "scope",
         severity: "medium",
         message:
-          "Prompt scope is still unclear for the current repo. Clarify the concrete files, modules, or bounded behavior to change.",
+          `${subject} scope is still unclear for the current repo. Clarify the concrete files, modules, or bounded behavior to change.`,
       },
     );
     pushUnique(
       params.recommendedUserActions,
-      "Clarify the exact repo surfaces or bounded behavior this prompt should change before planning.",
+      `Clarify the exact repo surfaces or bounded behavior this ${params.inputMode === "prompt" ? "prompt" : "task"} should change before planning.`,
     );
   }
 
@@ -201,7 +231,7 @@ function addPromptOpenQuestionHandling(params: {
         type: "constraints",
         severity: "medium",
         message:
-          "Prompt constraints are missing. Clarify non-goals, rollout limits, or boundaries before planning.",
+          `${subject} constraints are missing. Clarify non-goals, rollout limits, or boundaries before planning.`,
       },
     );
     pushUnique(
@@ -273,7 +303,8 @@ export function buildAmbiguityAnalysisResult(params: {
   const ambiguityItems: AmbiguityAnalysisResult["ambiguityItems"] = [];
   const warningItems: AmbiguityAnalysisResult["warningItems"] = [];
 
-  addPromptOpenQuestionHandling({
+  addParserOpenQuestionHandling({
+    inputMode: params.taskInput?.inputMode ?? null,
     categories: params.taskParserResult.signals.promptOpenQuestionCategories,
     ambiguityItems,
     ambiguities,

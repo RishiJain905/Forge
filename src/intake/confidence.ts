@@ -1,12 +1,12 @@
 import type {
-  AmbiguityAnalysisResult,
   BlockingIssue,
   CandidateTarget,
+  ConfidenceSummary,
   IntakeConfidenceLevel,
   IntakeFailureDetails,
   IntakeStatus,
-  IntakeTaskSpec,
   NextStepReadiness,
+  NormalizedTaskSpec,
   RepoContext,
 } from "./types.js";
 
@@ -46,7 +46,7 @@ function pushReason(reasons: string[], reason: string): void {
 function resolveTaskParsingStrength(
   input: ConfidenceResolutionInput["taskParsing"],
   reasons: string[],
-): AmbiguityAnalysisResult["confidence"]["signals"]["taskParsing"] {
+): ConfidenceSummary["signals"]["taskParsing"] {
   if (!input.hasGoal) {
     pushReason(reasons, "task goal could not be normalized from the input");
   }
@@ -89,7 +89,7 @@ function resolveTaskParsingStrength(
 function resolveRepoInspectionStrength(
   input: ConfidenceResolutionInput["repoInspection"],
   reasons: string[],
-): AmbiguityAnalysisResult["confidence"]["signals"]["repoInspection"] {
+): ConfidenceSummary["signals"]["repoInspection"] {
   if (!input.grounded) {
     pushReason(reasons, "repo grounding did not produce usable repository evidence");
   }
@@ -124,7 +124,7 @@ function resolveRepoInspectionStrength(
 function resolveTargetingStrength(
   input: ConfidenceResolutionInput["targeting"],
   reasons: string[],
-): AmbiguityAnalysisResult["confidence"]["signals"]["targeting"] {
+): ConfidenceSummary["signals"]["targeting"] {
   if (input.candidateTargetCount === 0) {
     pushReason(reasons, "candidate targeting could not produce any plausible targets");
   }
@@ -168,7 +168,7 @@ function resolveTargetingStrength(
 
 export function buildConfidenceResolution(
   input: ConfidenceResolutionInput,
-): AmbiguityAnalysisResult["confidence"] {
+): ConfidenceSummary {
   const taskReasons: string[] = [];
   const repoReasons: string[] = [];
   const targetingReasons: string[] = [];
@@ -208,7 +208,7 @@ function hasBlockingIssue(blockingIssues: BlockingIssue[], code: string): boolea
 }
 
 export function evaluateSuccessModel(params: {
-  taskSpec: IntakeTaskSpec;
+  taskSpec: NormalizedTaskSpec;
   repoContext: RepoContext;
   candidateTargets: CandidateTarget[];
   failure: IntakeFailureDetails | null;

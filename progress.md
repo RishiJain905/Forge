@@ -136,10 +136,28 @@
   - Added a dedicated Batch 2 acceptance-gates suite that exercises Gate 1 through Gate 6 plus the minimum scenarios for a strong spec, a weak prompt, invalid input, strict-focus exclusion, and no-tests/no-git repos.
   - Wired the new suites into the default `npm.cmd test` command while keeping the Batch 1 CLI, artifact, report, and smoke behavior stable.
   - Documented completion evidence in `S1-B2-Done/part4-done-summary.md` after the full verification gate stayed green.
+- Batch 3.01: `part-1-step1-batch3-goal-and-boundaries.md`
+  - Expanded the normalized Step 1 task and repo-context contracts so the real spec-mode intake path now carries the richer Batch 3 task metadata and repo grounding signals end to end.
+  - Made structured parser-owned task signals materially drive inference, promoted risk analysis and verification targets to first-class assembled outputs, and reused those assembled outputs in artifact generation and runner sequencing.
+  - Expanded the public nested `task_spec` and `repo_context` artifact/report sections while keeping the top-level CLI and artifact contract stable.
+  - Added dedicated Batch 3 runnable-milestone coverage for `forge intake --spec <file>` and fixed title/targeting regressions so synthetic headings do not create false explicit matches or incorrect task titles.
+  - Documented completion evidence in `S1-B3-done/p1-done-summary.md` after the full verification gate stayed green.
+- Batch 3.02: `part-2-stage-1-and-2-core-types-and-input-foundation.md`
+  - Canonicalized the Step 1 intake type layer so domain contracts now live independently from artifact/report projection shapes.
+  - Reworked `ResolvedIntakeInput` into one runner-facing bundle that carries source selection, loaded input metadata, normalized task input, and validation output together.
+  - Kept `input.ts` as the single owner of load-and-normalize behavior while keeping `validation.ts` policy-only and updating `runner.ts` to consume the canonical resolved bundle.
+  - Promoted risk analysis and confidence to explicit domain types while keeping the public Batch 1 artifact/report contract stable through projection helpers.
+  - Expanded direct architecture, validation, analysis, and acceptance-gate coverage for the new Stage 1/2 foundation and documented completion evidence in `S1-B3-done/p2-done-summary.md`.
+- Batch 3.03: `part-3-stage-3-and-4-task-normalization-and-repo-context.md`
+  - Reworked `task-parser.ts` so spec-mode normalization now handles structured, semi-structured, repeated-section, and headingless task inputs with parser-owned open questions, typed ambiguity/warning items, stronger risky-phrase detection, and conservative `implementationNecessities`.
+  - Kept `input.ts` as the canonical input loader while moving missing-scope and missing-constraint follow-up into parser-owned logic instead of leaving it prompt-only.
+  - Reworked `repo-context.ts` to ground richer JS/TS layouts, add best-effort Python support, detect nonstandard test locations, derive test-command and CI hints, and emit non-blocking warnings for mixed package-manager clues and weak test signals.
+  - Expanded the nested public `task_spec` and `repo_context` artifact/report sections with `implementation_necessities`, `test_command_hints`, and `ci_hints` while keeping the top-level Step 1 contract stable.
+  - Expanded direct parser, repo-context, schema, report, and acceptance-gate coverage and documented completion evidence in `S1-B3-done/p3-done-summary.md`.
 
 ## Current Branch State
-- `dev` includes the completed Batch 1.16, Batch 1.17, Batch 1.18, Batch 1.19, Batch 1.20, Batch 2.01, Batch 2.02, Batch 2.03, and Batch 2.04 implementations.
-- The Batch 2 Part 1 implementation from worktree branch `codex/s1-b2-p1-intake-architecture`, the Batch 2 Part 2 implementation from worktree branch `codex/s1-b2-p2-file-ownership`, the Batch 2 Part 3 implementation from worktree branch `codex/s1-b2-p3-sequential-build-order`, and the Batch 2 Part 4 implementation from worktree branch `codex/s1-b2-p4-test-strategy-and-acceptance-gates` have been merged back into `dev`.
+- `dev` includes the completed Batch 1.16, Batch 1.17, Batch 1.18, Batch 1.19, Batch 1.20, Batch 2.01, Batch 2.02, Batch 2.03, Batch 2.04, Batch 3.01, Batch 3.02, and Batch 3.03 implementations.
+- The Batch 2 Part 1 implementation from worktree branch `codex/s1-b2-p1-intake-architecture`, the Batch 2 Part 2 implementation from worktree branch `codex/s1-b2-p2-file-ownership`, the Batch 2 Part 3 implementation from worktree branch `codex/s1-b2-p3-sequential-build-order`, the Batch 2 Part 4 implementation from worktree branch `codex/s1-b2-p4-test-strategy-and-acceptance-gates`, the Batch 3 Part 1 implementation from worktree branch `codex/s1-b3-p1-umbrella`, the Batch 3 Part 2 implementation from worktree branch `codex/s1-b3-p2-core-types-input-foundation`, and the Batch 3 Part 3 implementation from worktree branch `codex/s1-b3-p3-task-normalization-repo-context` have been merged back into `dev`.
 - `execution.md` now explicitly requires completed worktree branches to be merged back into their source branch before a task is considered complete, unless the user explicitly requests a PR-only workflow.
 
 ## Verification
@@ -149,4 +167,4 @@
 - `npm.cmd run smoke`
 
 ## Next
-- Batch 2 is complete. Next work should proceed against the frozen Batch 2 architecture, file ownership, build order, and acceptance gates.
+- Batch 3 Part 3 is complete. Next work should proceed against the stabilized task-normalization and repo-context foundation with `forge_step1_batch3/part-4-stage-5-and-6-targeting-analysis-confidence.md`.

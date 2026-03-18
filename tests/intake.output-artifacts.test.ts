@@ -7,6 +7,7 @@ import {
   disposeTempRepo,
   fileExists,
   readJsonFile,
+  readTextFile,
   runForgeCli,
   writeRepoFile,
 } from "./support/forge-cli.js";
@@ -103,6 +104,126 @@ await runScenario(
         process.env.FORGE_INTAKE_DEBUG = originalDebugEnv;
       }
 
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "forge intake surfaces the Batch 3 runnable milestone through the real spec-mode pipeline",
+  async () => {
+    const repoRoot = await createTempRepo();
+    const specPath = join(repoRoot, "task.md");
+
+    try {
+      await writeRepoFile(
+        repoRoot,
+        "package.json",
+        [
+          "{",
+          '  "name": "batch3-fixture",',
+          '  "private": true,',
+          '  "type": "module",',
+          '  "scripts": {',
+          '    "test": "vitest run"',
+          "  },",
+          '  "devDependencies": {',
+          '    "vitest": "^1.0.0"',
+          "  }",
+          "}",
+        ].join("\n"),
+      );
+      await writeRepoFile(
+        repoRoot,
+        "tsconfig.json",
+        [
+          "{",
+          '  "compilerOptions": {',
+          '    "target": "ES2022",',
+          '    "module": "NodeNext"',
+          "  }",
+          "}",
+        ].join("\n"),
+      );
+      await writeRepoFile(
+        repoRoot,
+        "task.md",
+        [
+          "# Update app behavior",
+          "",
+          "Revise `src/app.ts` and keep `tests/app.test.ts` aligned.",
+          "",
+          "## Acceptance Criteria",
+          "",
+          "- `src/app.ts` is updated",
+          "- `tests/app.test.ts` stays aligned",
+        ].join("\n"),
+      );
+
+      const result = await runForgeCli(
+        ["intake", "--repo", repoRoot, "--spec", specPath],
+        repoRoot,
+      );
+
+      assert.equal(result.code, 0, result.stderr);
+
+      const artifactPath = join(repoRoot, ".forge", "intake.json");
+      const reportPath = join(repoRoot, ".forge", "reports", "intake-report.md");
+      const artifact = await readJsonFile<{
+        status: "success" | "warning" | "failed";
+        input_mode?: "spec" | "prompt";
+        task_spec?: {
+          title?: string;
+          summary?: string;
+          goal?: string;
+          scope?: string[];
+          acceptance_criteria?: string[];
+        };
+        repo_context?: {
+          grounded?: boolean;
+          languages?: string[];
+          framework_hints?: string[];
+          package_manager?: string | null;
+          key_directories?: string[];
+          entry_points?: string[];
+          test_framework_hints?: string[];
+          layout_summary?: string | null;
+        };
+        candidate_targets?: Array<{ path?: string; kind?: string }>;
+        initial_verification_targets?: Array<{ path?: string; kind?: string }>;
+      }>(artifactPath);
+      const report = await readTextFile(reportPath);
+
+      assert.equal(artifact.status, "success");
+      assert.equal(artifact.input_mode, "spec");
+      assert.equal(artifact.task_spec?.title, "Update app behavior");
+      assert.match(artifact.task_spec?.summary ?? "", /Revise `?src\/app\.ts`?/i);
+      assert.ok(artifact.task_spec?.scope?.includes("src/app.ts"));
+      assert.ok(artifact.task_spec?.scope?.includes("tests/app.test.ts"));
+      assert.equal(artifact.repo_context?.grounded, true);
+      assert.ok(artifact.repo_context?.languages?.includes("typescript"));
+      assert.ok(artifact.repo_context?.languages?.includes("json"));
+      assert.ok(artifact.repo_context?.framework_hints?.some((hint) => /Node\.js/i.test(hint)));
+      assert.equal(artifact.repo_context?.package_manager, "npm");
+      assert.ok(artifact.repo_context?.key_directories?.includes("src"));
+      assert.ok(artifact.repo_context?.entry_points?.includes("src/app.ts"));
+      assert.ok(artifact.repo_context?.test_framework_hints?.includes("Vitest"));
+      assert.match(artifact.repo_context?.layout_summary ?? "", /languages: typescript/i);
+      assert.ok(
+        artifact.candidate_targets?.some((candidate) => candidate.path === "src/app.ts"),
+        "expected src/app.ts candidate target",
+      );
+      assert.ok(
+        artifact.initial_verification_targets?.some((target) => target.path === "tests/app.test.ts"),
+        "expected tests/app.test.ts initial verification target",
+      );
+      assert.match(report, /## Task Spec/);
+      assert.match(report, /Title:\s+Update app behavior/);
+      assert.match(report, /## Repo Context/);
+      assert.match(report, /Package Manager:\s+npm/);
+      assert.match(report, /Initial Verification Targets/);
+      assert.match(report, /tests\/app\.test\.ts/);
+    } finally {
       await disposeTempRepo(repoRoot);
     }
   },

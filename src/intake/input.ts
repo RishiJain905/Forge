@@ -350,19 +350,35 @@ function resolvePromptInput(input: ValidatedIntakeInputs): NormalizedTaskInput {
     );
   }
 
-  normalizedTaskText = appendSupplementalSection(normalizedTaskText, "## Notes", input.notes);
-  normalizedTaskText = appendSupplementalSection(normalizedTaskText, "## Constraints", input.constraints);
-  parserInputText = appendSupplementalSection(parserInputText, "## Notes", input.notes);
-  parserInputText = appendSupplementalSection(parserInputText, "## Constraints", input.constraints);
+  normalizedTaskText = appendSupplementalSection(
+    normalizedTaskText,
+    "## Notes",
+    input.supplementalInputs.notes,
+  );
+  normalizedTaskText = appendSupplementalSection(
+    normalizedTaskText,
+    "## Constraints",
+    input.supplementalInputs.constraints,
+  );
+  parserInputText = appendSupplementalSection(
+    parserInputText,
+    "## Notes",
+    input.supplementalInputs.notes,
+  );
+  parserInputText = appendSupplementalSection(
+    parserInputText,
+    "## Constraints",
+    input.supplementalInputs.constraints,
+  );
 
   return createNormalizedTaskInput({
     inputMode: "prompt",
     path: null,
     rawText: input.primaryInput.rawText,
-    notes: input.notes,
-    constraints: input.constraints,
-    configPath: input.configPath,
-    focusPaths: input.focusPaths,
+    notes: input.supplementalInputs.notes,
+    constraints: input.supplementalInputs.constraints,
+    configPath: input.supplementalInputs.configPath,
+    focusPaths: input.supplementalInputs.focusPaths,
     normalizedTaskText,
     parserInputText,
     ambiguities,
@@ -375,19 +391,35 @@ function resolveSpecInput(input: ValidatedIntakeInputs): NormalizedTaskInput {
   let normalizedTaskText = input.primaryInput.rawText;
   let parserInputText = input.primaryInput.rawText;
 
-  normalizedTaskText = appendSupplementalSection(normalizedTaskText, "## Notes", input.notes);
-  normalizedTaskText = appendSupplementalSection(normalizedTaskText, "## Constraints", input.constraints);
-  parserInputText = appendSupplementalSection(parserInputText, "## Notes", input.notes);
-  parserInputText = appendSupplementalSection(parserInputText, "## Constraints", input.constraints);
+  normalizedTaskText = appendSupplementalSection(
+    normalizedTaskText,
+    "## Notes",
+    input.supplementalInputs.notes,
+  );
+  normalizedTaskText = appendSupplementalSection(
+    normalizedTaskText,
+    "## Constraints",
+    input.supplementalInputs.constraints,
+  );
+  parserInputText = appendSupplementalSection(
+    parserInputText,
+    "## Notes",
+    input.supplementalInputs.notes,
+  );
+  parserInputText = appendSupplementalSection(
+    parserInputText,
+    "## Constraints",
+    input.supplementalInputs.constraints,
+  );
 
   return createNormalizedTaskInput({
     inputMode: "spec",
     path: input.primaryInput.path,
     rawText: input.primaryInput.rawText,
-    notes: input.notes,
-    constraints: input.constraints,
-    configPath: input.configPath,
-    focusPaths: input.focusPaths,
+    notes: input.supplementalInputs.notes,
+    constraints: input.supplementalInputs.constraints,
+    configPath: input.supplementalInputs.configPath,
+    focusPaths: input.supplementalInputs.focusPaths,
     normalizedTaskText,
     parserInputText,
   });
@@ -395,24 +427,15 @@ function resolveSpecInput(input: ValidatedIntakeInputs): NormalizedTaskInput {
 
 function buildValidatedIntakeInput(params: {
   inputMode: "prompt" | "spec";
-  primaryInput: {
-    path: string | null;
-    rawText: string;
-  };
-  notes: string[];
-  constraints: string[];
-  configPath: string | null;
-  focusPaths: string[];
+  primaryInput: ValidatedIntakeInputs["primaryInput"];
+  supplementalInputs: ValidatedIntakeInputs["supplementalInputs"];
   warnings: string[];
   recommendedUserActions: string[];
 }): ValidatedIntakeInputs {
   return {
     inputMode: params.inputMode,
     primaryInput: params.primaryInput,
-    notes: params.notes,
-    constraints: params.constraints,
-    configPath: params.configPath,
-    focusPaths: params.focusPaths,
+    supplementalInputs: params.supplementalInputs,
     warnings: [...params.warnings],
     recommendedUserActions: [...params.recommendedUserActions],
   };
@@ -487,20 +510,23 @@ export async function resolveIntakeInput(params: {
     inputMode: prompt ? "prompt" : "spec",
     primaryInput: prompt
       ? {
-        path: null,
-        rawText: prompt,
-      }
+          path: null,
+          rawText: prompt,
+          loaded: true,
+        }
       : {
-        path: specResult.path,
-        rawText: specResult.text?.trim() ?? "",
-      },
-    primaryInputLoaded: prompt ? true : (specResult.text !== null && specResult.text.trim().length > 0),
-    notes: notesResult.text ? normalizeSupplementalLines(notesResult.text) : [],
-    constraints: constraintsResult.text ? normalizeSupplementalLines(constraintsResult.text) : [],
-    configPath: configResult.path,
-    configLoaded: configResult.text !== null,
-    focusPaths,
-    strictFocus: params.options.strictFocus === true,
+          path: specResult.path,
+          rawText: specResult.text?.trim() ?? "",
+          loaded: specResult.text !== null && specResult.text.trim().length > 0,
+        },
+    supplementalInputs: {
+      notes: notesResult.text ? normalizeSupplementalLines(notesResult.text) : [],
+      constraints: constraintsResult.text ? normalizeSupplementalLines(constraintsResult.text) : [],
+      configPath: configResult.path,
+      configLoaded: configResult.text !== null,
+      focusPaths,
+      strictFocus: params.options.strictFocus === true,
+    },
     sourceSelection: {
       specProvided: Boolean(spec),
       promptProvided: Boolean(prompt),
@@ -521,7 +547,11 @@ export async function resolveIntakeInput(params: {
 
   if (combinedBlockingIssues.length > 0) {
     return {
-      taskInput: null,
+      inputMode: loadedInput.inputMode,
+      sourceSelection: loadedInput.sourceSelection,
+      primaryInput: loadedInput.primaryInput,
+      supplementalInputs: loadedInput.supplementalInputs,
+      normalizedTaskInput: null,
       blockingIssues: combinedBlockingIssues,
       warnings,
       recommendedUserActions,
@@ -531,16 +561,24 @@ export async function resolveIntakeInput(params: {
   const validatedInput = buildValidatedIntakeInput({
     inputMode: loadedInput.inputMode,
     primaryInput: loadedInput.primaryInput,
-    notes: loadedInput.notes,
-    constraints: loadedInput.constraints,
-    configPath: loadedInput.configPath,
-    focusPaths: loadedInput.focusPaths,
+    supplementalInputs: {
+      notes: [...loadedInput.supplementalInputs.notes],
+      constraints: [...loadedInput.supplementalInputs.constraints],
+      configPath: loadedInput.supplementalInputs.configPath,
+      focusPaths: [...loadedInput.supplementalInputs.focusPaths],
+    },
     warnings,
     recommendedUserActions,
   });
 
+  const normalizedTaskInput = resolveLoadedIntakeInput(validatedInput);
+
   return {
-    taskInput: resolveLoadedIntakeInput(validatedInput),
+    inputMode: loadedInput.inputMode,
+    sourceSelection: loadedInput.sourceSelection,
+    primaryInput: loadedInput.primaryInput,
+    supplementalInputs: loadedInput.supplementalInputs,
+    normalizedTaskInput,
     blockingIssues: [],
     warnings,
     recommendedUserActions,
