@@ -161,15 +161,13 @@ function createSyntheticPromptSpec(promptDetails: PromptDetails): string {
     "# Task",
     "",
     promptDetails.goal,
+    "",
+    "## Acceptance Criteria",
+    "",
   ];
 
   if (promptDetails.requirementCandidates.some((candidate) => candidate.source === "acceptance-criteria")) {
-    lines.push(
-      "",
-      "## Acceptance Criteria",
-      "",
-      ...promptDetails.requirementCandidates.map((candidate) => `- ${candidate.text}`),
-    );
+    lines.push(...promptDetails.requirementCandidates.map((candidate) => `- ${candidate.text}`));
   }
 
   return lines.join("\n");
@@ -295,10 +293,12 @@ export function toArtifactSourceInputs(taskInput: NormalizedTaskInput): Artifact
   };
 }
 
-export function resolveTaskSource(validatedInput: ValidatedIntakeInputs): NormalizedTaskInput {
+export function resolveLoadedIntakeInput(validatedInput: ValidatedIntakeInputs): NormalizedTaskInput {
   if (validatedInput.inputMode === "prompt") {
     return resolvePromptInput(validatedInput);
   }
 
   return resolveSpecInput(validatedInput);
 }
+
+export const resolveTaskSource = resolveLoadedIntakeInput;

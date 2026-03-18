@@ -458,6 +458,124 @@ await runScenario(
   },
 );
 
+await runScenario(
+  "input module resolves loaded sources into a normalized intake input",
+  async () => {
+    const inputModule = (await import("../src/intake/input.js")) as Record<string, unknown>;
+    const resolveLoadedIntakeInput = inputModule.resolveLoadedIntakeInput;
+
+    assert.equal(
+      typeof resolveLoadedIntakeInput,
+      "function",
+      "expected input.ts to export resolveLoadedIntakeInput",
+    );
+
+    const loadedSources = {
+      inputMode: "prompt" as const,
+      primaryInput: {
+        path: null,
+        rawText: "Update src/app.ts and tests/app.test.ts for intake readiness.",
+      },
+      notes: ["Keep CLI output stable."],
+      constraints: ["Avoid changing public artifacts."],
+      configPath: null,
+      focusPaths: ["src"],
+      warnings: [],
+      recommendedUserActions: [],
+    };
+
+    const resolvedInput = (resolveLoadedIntakeInput as (value: typeof loadedSources) => {
+      inputMode: "prompt" | "spec";
+      primaryInput: {
+        path: string | null;
+        rawText: string;
+      };
+      normalizedTaskText: string;
+      parserInputText: string;
+      notes: string[];
+      constraints: string[];
+      configPath: string | null;
+      focusPaths: string[];
+      ambiguities: string[];
+      recommendedUserActions: string[];
+      promptDetails?: {
+        title: string;
+        goal: string;
+        summary: string;
+        requirementCandidates: Array<{
+          text: string;
+          source: "acceptance-criteria" | "prompt-clause";
+        }>;
+        openQuestions: Array<{
+          category: "acceptance_criteria" | "scope" | "constraints" | "repo_alignment";
+          text: string;
+        }>;
+      };
+    })(loadedSources);
+
+    assert.equal(resolvedInput.inputMode, "prompt");
+    assert.equal(resolvedInput.primaryInput.rawText, loadedSources.primaryInput.rawText);
+    assert.match(resolvedInput.normalizedTaskText, /Keep CLI output stable/i);
+    assert.match(resolvedInput.parserInputText, /Acceptance Criteria/i);
+    assert.deepEqual(resolvedInput.notes, loadedSources.notes);
+    assert.deepEqual(resolvedInput.constraints, loadedSources.constraints);
+    assert.deepEqual(resolvedInput.focusPaths, loadedSources.focusPaths);
+    assert.ok(resolvedInput.promptDetails, "expected prompt details on prompt mode input");
+  },
+);
+
+await runScenario(
+  "task parser exposes direct task-spec normalization",
+  async () => {
+    const taskParserModule = (await import("../src/intake/task-parser.js")) as Record<string, unknown>;
+    const normalizeTaskSpec = taskParserModule.normalizeTaskSpec;
+
+    assert.equal(
+      typeof normalizeTaskSpec,
+      "function",
+      "expected task-parser.ts to export normalizeTaskSpec",
+    );
+
+    const taskInput = resolveTaskSource(
+      createPromptInput(
+        [
+          "Revise src/app.ts and tests/app.test.ts.",
+          "",
+          "Acceptance Criteria",
+          "- src/app.ts is updated",
+          "- tests/app.test.ts is updated",
+        ].join("\n"),
+      ),
+    );
+
+    const taskSpec = (normalizeTaskSpec as (value: typeof taskInput) => {
+      goal: string;
+      acceptanceCriteria: string[];
+      hasAcceptanceCriteria: boolean;
+    })(taskInput);
+
+    assert.match(taskSpec.goal, /Revise src\/app\.ts/i);
+    assert.deepEqual(taskSpec.acceptanceCriteria, [
+      "src/app.ts is updated",
+      "tests/app.test.ts is updated",
+    ]);
+    assert.equal(taskSpec.hasAcceptanceCriteria, true);
+  },
+);
+
+await runScenario(
+  "analysis module exposes direct risk analysis construction",
+  async () => {
+    const analysisModule = (await import("../src/intake/analysis.js")) as Record<string, unknown>;
+
+    assert.equal(
+      typeof analysisModule.buildRiskAnalysisResult,
+      "function",
+      "expected analysis.ts to export buildRiskAnalysisResult",
+    );
+  },
+);
+
 if (process.exitCode && process.exitCode !== 0) {
   process.exit(process.exitCode);
 }

@@ -4,9 +4,10 @@ import { assembleIntakeResult } from "./assemble.js";
 import { createIntakeArtifact } from "./artifact.js";
 import { buildBoundarySafeIntakeResult } from "./boundary.js";
 import { createIntakeDebugArtifact } from "./debug.js";
+import { evaluateSuccessModel } from "./confidence.js";
 import { PersistenceError } from "./errors.js";
 import { buildInferenceResult } from "./inference.js";
-import { resolveTaskSource, toArtifactSourceInputs } from "./input.js";
+import { resolveLoadedIntakeInput, toArtifactSourceInputs } from "./input.js";
 import { resolveOptionalReasoning } from "./llm.js";
 import { resolveRuntimeOptions } from "./options.js";
 import {
@@ -17,9 +18,9 @@ import {
 import { persistIntakeOutputs } from "./persistence.js";
 import { scanRepoResult } from "./repo-context.js";
 import { createIntakeReport } from "./report.js";
-import { evaluateSuccessModel } from "./success.js";
 import { buildTaskParserResult } from "./task-parser.js";
 import { resolveGitContext } from "./git-context.js";
+import { buildInitialVerificationTargets } from "./verification-targets.js";
 import { validateIntakeInputs } from "./validation.js";
 import type {
   IntakeCommandOptions,
@@ -182,7 +183,7 @@ export async function runIntakeCommand(
     validationRecommendedUserActions = validationResult.recommendedUserActions;
 
     if (validationResult.validatedInput) {
-      taskInput = resolveTaskSource(validationResult.validatedInput);
+      taskInput = resolveLoadedIntakeInput(validationResult.validatedInput);
     }
 
     if (!failure && runtimeBlockingIssues.length > 0) {
@@ -256,6 +257,9 @@ export async function runIntakeCommand(
       warnings: successEvaluation.warnings,
       recommendedUserActions: successEvaluation.nextStepReadiness.recommendedUserActions,
     };
+    const initialVerificationTargets = buildInitialVerificationTargets(
+      finalAssembledResult.candidateTargets,
+    );
 
     try {
       return await persistResult(
@@ -267,6 +271,7 @@ export async function runIntakeCommand(
           context,
           taskInput,
           assembledResult: finalAssembledResult,
+          initialVerificationTargets,
         }),
         successEvaluation.nextStepReadiness,
         failure,
@@ -288,7 +293,7 @@ export async function runIntakeCommand(
           artifactPath: null,
           reportPath: null,
           outputRoot: context.paths.outputRoot,
-        summary:
+          summary:
             "Forge intake failed while persisting its fallback output. No durable artifact could be written.",
           nextStepReadiness: successEvaluation.nextStepReadiness,
           failure: persistenceFailure,
@@ -322,6 +327,7 @@ export async function runIntakeCommand(
             context: fallbackContext,
             taskInput,
             assembledResult: finalAssembledResult,
+            initialVerificationTargets,
           }),
           successEvaluation.nextStepReadiness,
           fallbackFailure,

@@ -1,7 +1,6 @@
 import type {
   AssembledIntakeResult,
   BoundarySafeIntakeResult,
-  CandidateTarget,
   IntakeExecutionContext,
   InitialVerificationTarget,
   NormalizedTaskInput,
@@ -19,41 +18,6 @@ function pushUnique(values: string[], value: string): void {
   }
 }
 
-function toVerificationReason(target: CandidateTarget): string {
-  if (target.kind === "test") {
-    return "Initial test surface related to the requested change.";
-  }
-
-  if (target.kind === "manifest") {
-    return "Configuration or manifest surface that may constrain later verification.";
-  }
-
-  return "Initial code surface to inspect before later verification work.";
-}
-
-function buildInitialVerificationTargets(
-  candidateTargets: CandidateTarget[],
-): InitialVerificationTarget[] {
-  const seen = new Set<string>();
-  const targets: InitialVerificationTarget[] = [];
-
-  for (const candidateTarget of candidateTargets) {
-    const key = `${candidateTarget.kind}:${candidateTarget.path}`;
-
-    if (seen.has(key)) {
-      continue;
-    }
-
-    seen.add(key);
-    targets.push({
-      path: candidateTarget.path,
-      kind: candidateTarget.kind,
-      reason: toVerificationReason(candidateTarget),
-    });
-  }
-
-  return targets;
-}
 
 function buildBoundaryNotes(params: {
   context: IntakeExecutionContext;
@@ -98,14 +62,13 @@ export function buildBoundarySafeIntakeResult(params: {
   context: IntakeExecutionContext;
   taskInput: NormalizedTaskInput | null;
   assembledResult: AssembledIntakeResult;
+  initialVerificationTargets: InitialVerificationTarget[];
 }): BoundarySafeIntakeResult {
   return {
     taskSpec: params.assembledResult.taskSpec,
     repoContext: params.assembledResult.repoContext,
     candidateTargets: params.assembledResult.candidateTargets,
-    initialVerificationTargets: buildInitialVerificationTargets(
-      params.assembledResult.candidateTargets,
-    ),
+    initialVerificationTargets: params.initialVerificationTargets,
     ambiguities: [...params.assembledResult.ambiguities],
     warnings: [...params.assembledResult.warnings],
     recommendedUserActions: [...params.assembledResult.recommendedUserActions],

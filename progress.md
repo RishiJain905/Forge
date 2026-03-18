@@ -112,9 +112,16 @@
   - Defined the gate as a compact checklist covering command contract stability, artifact contract stability, warning/failure/confidence logic, prompt/spec input handling, and report/artifact output.
   - Kept the gate lightweight by grounding it in the existing test surfaces rather than introducing a new runtime path or verification framework.
   - Documented the exit gate in `B1-done/20-summary-done.md` so Batch 2 starts only after the current Step 1 contract stays green on `dev`.
+- Batch 2.01: `part-1-intake-architecture-and-module-map.md`
+  - Stabilized the Step 1 intake architecture around clearer ownership seams for input loading, policy validation, task parsing, repo scanning, targeting, risk analysis, verification-target detection, and readiness/status helpers.
+  - Added richer internal repo-scan signals and moved focus-aware target prioritization into `candidate-targets.ts` with sibling test and manifest/config enrichment.
+  - Moved risk-analysis construction into `analysis.ts`, added a dedicated `verification-targets.ts` module, and reduced `artifact-sections.ts` to a projection layer for prebuilt analysis outputs.
+  - Exposed readiness, final status, and summary helpers directly from `confidence.ts` while keeping `success.ts` as a compatibility wrapper.
+  - Added focused architecture tests for the new seams and wired the repo-context, candidate-targets, and verification-target suites into the default `npm.cmd test` run.
 
 ## Current Branch State
 - `dev` includes the completed Batch 1.16, Batch 1.17, Batch 1.18, Batch 1.19, and Batch 1.20 implementations.
+- Worktree branch `codex/s1-b2-p1-intake-architecture` contains the completed Batch 2 Part 1 implementation and a green verification gate, and it is ready to merge back into `dev`.
 - `execution.md` now explicitly requires completed worktree branches to be merged back into their source branch before a task is considered complete, unless the user explicitly requests a PR-only workflow.
 
 ## Verification
@@ -124,4 +131,5 @@
 - `npm.cmd run smoke`
 
 ## Next
-- Batch 1 is complete. Begin Batch 2 only after the Batch 1.20 exit gate remains green on `dev`.
+- Merge Batch 2 Part 1 back into `dev`.
+- Next Batch 2 target after merge: `forge_step1_batch2/part-2-file-responsibilities-and-safe-refactor-rules.md`.

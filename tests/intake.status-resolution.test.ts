@@ -54,6 +54,10 @@ async function runScenario(name: string, scenario: () => Promise<void> | void): 
   }
 }
 
+async function loadConfidenceModule(): Promise<Record<string, unknown>> {
+  return import("../src/intake/confidence.js") as Promise<Record<string, unknown>>;
+}
+
 await runScenario("status resolver returns success for a fully ready high-confidence result", () => {
   const evaluation = evaluateSuccessModel({
     taskSpec: createTaskSpec(),
@@ -187,6 +191,26 @@ await runScenario("status resolver keeps the generic failed summary when other b
   assert.equal(
     buildSummary(status, evaluation.nextStepReadiness),
     "Forge intake is not ready for forge plan because blocking issues remain.",
+  );
+});
+
+await runScenario("confidence module exposes readiness, status, and summary helpers directly", async () => {
+  const confidenceModule = await loadConfidenceModule();
+
+  assert.equal(
+    typeof confidenceModule.evaluateSuccessModel,
+    "function",
+    "expected confidence.ts to export evaluateSuccessModel",
+  );
+  assert.equal(
+    typeof confidenceModule.resolveIntakeStatus,
+    "function",
+    "expected confidence.ts to export resolveIntakeStatus",
+  );
+  assert.equal(
+    typeof confidenceModule.buildSummary,
+    "function",
+    "expected confidence.ts to export buildSummary",
   );
 });
 

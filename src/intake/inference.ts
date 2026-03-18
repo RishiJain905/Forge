@@ -1,5 +1,4 @@
-import { resolveCandidateTargets } from "./candidate-targets.js";
-import { resolveFocusTargeting } from "./focus-policy.js";
+import { resolveCandidateTargeting } from "./candidate-targets.js";
 import type {
   InferenceResult,
   NormalizedTaskInput,
@@ -38,18 +37,17 @@ export function buildInferenceResult(params: {
     };
   }
 
-  const rawCandidateTargets = resolveCandidateTargets(
+  const targetResolution = resolveCandidateTargeting(
     params.taskInput,
     params.repoScanResult.repoContext,
+    {
+      focusPaths: params.taskInput.focusPaths,
+      strictFocus: params.strictFocus === true,
+    },
   );
-  const focusResolution = resolveFocusTargeting({
-    candidateTargets: rawCandidateTargets,
-    focusPaths: params.taskInput.focusPaths,
-    strictFocus: params.strictFocus === true,
-  });
-  const candidateTargets = focusResolution.candidateTargets;
+  const candidateTargets = targetResolution.candidateTargets;
   const inferredRequirements: string[] = [];
-  const warnings = [...focusResolution.warnings];
+  const warnings = [...targetResolution.warnings];
   const explicitTargetCount = candidateTargets.filter((target) => target.matchType === "explicit").length;
   const usedFallbackTargets =
     candidateTargets.length > 0 &&
@@ -101,10 +99,10 @@ export function buildInferenceResult(params: {
       explicitTargetCount,
       usedFallbackTargets,
       inferredRequirementCount: inferredRequirements.length,
-      focusApplied: focusResolution.signals.focusApplied,
-      strictFocusApplied: focusResolution.signals.strictFocusApplied,
-      focusMatchedTargetCount: focusResolution.signals.focusMatchedTargetCount,
-      outOfFocusTargetCount: focusResolution.signals.outOfFocusTargetCount,
+      focusApplied: targetResolution.signals.focusApplied,
+      strictFocusApplied: targetResolution.signals.strictFocusApplied,
+      focusMatchedTargetCount: targetResolution.signals.focusMatchedTargetCount,
+      outOfFocusTargetCount: targetResolution.signals.outOfFocusTargetCount,
     },
     warnings,
   };

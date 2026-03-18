@@ -3,10 +3,11 @@ import {
   FORGE_SCHEMA_VERSION,
   STEP1_BOUNDARY_POLICY,
 } from "./constants.js";
+import { buildRiskAnalysisResult } from "./analysis.js";
 import { buildArtifactSections } from "./artifact-sections.js";
 import { validateIntakeArtifact } from "./artifact-schema.js";
+import { buildSummary, resolveIntakeStatus } from "./confidence.js";
 import { toArtifactRuntimeOptions } from "./options.js";
-import { buildSummary, resolveIntakeStatus } from "./success.js";
 import type {
   ArtifactSourceInputs,
   AssembledIntakeResult,
@@ -38,6 +39,19 @@ export function createIntakeArtifact(params: {
     ambiguities,
     confidenceLevel: params.assembledResult.confidence.level,
   });
+  const riskAnalysis = buildRiskAnalysisResult({
+    taskParserResult: params.assembledResult.responsibilities.taskParser,
+    repoScanResult: params.assembledResult.responsibilities.repoScan,
+    inferenceResult: params.assembledResult.responsibilities.inference,
+    repoContextOverride: params.boundarySafeResult.repoContext,
+  });
+  const artifactSections = buildArtifactSections({
+    assembledResult: params.assembledResult,
+    boundarySafeResult: params.boundarySafeResult,
+    riskAnalysis,
+    initialVerificationTargets: params.boundarySafeResult.initialVerificationTargets,
+    nextStepReadiness: params.nextStepReadiness,
+  });
 
   const artifact: IntakeArtifact = {
     schemaVersion: FORGE_SCHEMA_VERSION,
@@ -67,11 +81,7 @@ export function createIntakeArtifact(params: {
     startedAt: params.context.startedAt,
     finishedAt: params.finishedAt,
     summary: buildSummary(status, params.nextStepReadiness),
-    ...buildArtifactSections({
-      assembledResult: params.assembledResult,
-      boundarySafeResult: params.boundarySafeResult,
-      nextStepReadiness: params.nextStepReadiness,
-    }),
+    ...artifactSections,
     failure,
   };
 
