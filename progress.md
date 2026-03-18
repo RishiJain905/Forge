@@ -156,9 +156,8 @@
   - Expanded direct parser, repo-context, schema, report, and acceptance-gate coverage and documented completion evidence in `S1-B3-done/p3-done-summary.md`.
 
 ## Current Branch State
-- `dev` includes the completed Batch 1.16, Batch 1.17, Batch 1.18, Batch 1.19, Batch 1.20, Batch 2.01, Batch 2.02, Batch 2.03, Batch 2.04, Batch 3.01, and Batch 3.02 implementations.
-- The Batch 2 Part 1 implementation from worktree branch `codex/s1-b2-p1-intake-architecture`, the Batch 2 Part 2 implementation from worktree branch `codex/s1-b2-p2-file-ownership`, the Batch 2 Part 3 implementation from worktree branch `codex/s1-b2-p3-sequential-build-order`, the Batch 2 Part 4 implementation from worktree branch `codex/s1-b2-p4-test-strategy-and-acceptance-gates`, the Batch 3 Part 1 implementation from worktree branch `codex/s1-b3-p1-umbrella`, and the Batch 3 Part 2 implementation from worktree branch `codex/s1-b3-p2-core-types-input-foundation` have been merged back into `dev`.
-- The Batch 3 Part 3 implementation is complete and verified on worktree branch `codex/s1-b3-p3-task-normalization-repo-context`, but merge-back into `dev` is still pending because the main workspace already has overlapping uncommitted edits in `src/intake/repo-context.ts` and `tests/intake.repo-context.test.ts`.
+- `dev` includes the completed Batch 1.16, Batch 1.17, Batch 1.18, Batch 1.19, Batch 1.20, Batch 2.01, Batch 2.02, Batch 2.03, Batch 2.04, Batch 3.01, Batch 3.02, and Batch 3.03 implementations.
+- The Batch 2 Part 1 implementation from worktree branch `codex/s1-b2-p1-intake-architecture`, the Batch 2 Part 2 implementation from worktree branch `codex/s1-b2-p2-file-ownership`, the Batch 2 Part 3 implementation from worktree branch `codex/s1-b2-p3-sequential-build-order`, the Batch 2 Part 4 implementation from worktree branch `codex/s1-b2-p4-test-strategy-and-acceptance-gates`, the Batch 3 Part 1 implementation from worktree branch `codex/s1-b3-p1-umbrella`, the Batch 3 Part 2 implementation from worktree branch `codex/s1-b3-p2-core-types-input-foundation`, and the Batch 3 Part 3 implementation from worktree branch `codex/s1-b3-p3-task-normalization-repo-context` have been merged back into `dev`.
 - `execution.md` now explicitly requires completed worktree branches to be merged back into their source branch before a task is considered complete, unless the user explicitly requests a PR-only workflow.
 
 ## Verification
@@ -168,4 +167,4 @@
 - `npm.cmd run smoke`
 
 ## Next
-- Batch 3 Part 3 implementation is complete in its worktree. After integration into `dev`, next work should proceed against the stabilized task-normalization and repo-context foundation with `forge_step1_batch3/part-4-stage-5-and-6-targeting-analysis-confidence.md`.
+- Batch 3 Part 3 is complete. Next work should proceed against the stabilized task-normalization and repo-context foundation with `forge_step1_batch3/part-4-stage-5-and-6-targeting-analysis-confidence.md`.

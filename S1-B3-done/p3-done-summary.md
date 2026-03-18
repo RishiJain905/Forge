@@ -46,8 +46,7 @@
 ## Final Branch State
 - Target branch: `dev`
 - Implementation worktree branch: `codex/s1-b3-p3-task-normalization-repo-context`
-- The implementation is complete and verified on the worktree branch.
-- Merge-back into `dev` is pending because the main workspace currently has overlapping uncommitted edits in `src/intake/repo-context.ts` and `tests/intake.repo-context.test.ts`.
+- The implementation has been merged back into `dev` under `execution.md`.
 
 ## Follow-On
 - Next Batch 3 target: `forge_step1_batch3/part-4-stage-5-and-6-targeting-analysis-confidence.md`
