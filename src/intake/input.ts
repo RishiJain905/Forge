@@ -1,14 +1,32 @@
+import path from "node:path";
+import { readFile, stat } from "node:fs/promises";
+
+import { validateLoadedIntakeInput } from "./validation.js";
 import type {
   ArtifactSourceInputs,
+  BlockingIssue,
+  IntakeCommandOptions,
+  LoadedIntakeInput,
   NormalizedTaskInput,
   PromptDetails,
   PromptRequirementCandidate,
+  ResolvedIntakeInput,
   ValidatedIntakeInputs,
 } from "./types.js";
 
 const acceptanceCriteriaHeading = /^(?:#{1,6}\s*)?acceptance criteria\b:?/im;
 const markdownHeading = /^#{1,6}\s+/;
 const explicitPathToken = /\b(?:[\w.-]+\/)+[\w.-]+\b/;
+
+function createBlockingIssue(code: string, message: string): BlockingIssue {
+  return { code, message };
+}
+
+function pushUnique(values: string[], value: string): void {
+  if (!values.includes(value)) {
+    values.push(value);
+  }
+}
 
 function hasAcceptanceCriteriaSection(value: string): boolean {
   return acceptanceCriteriaHeading.test(value);
@@ -29,6 +47,103 @@ function isPromptTooShortToBeActionable(prompt: string): boolean {
 
 function normalizeInlineWhitespace(value: string): string {
   return value.replace(/\s+/g, " ").trim();
+}
+
+async function readTextInput(
+  optionName: "--spec" | "--notes" | "--constraints" | "--config",
+  inputPath: string,
+  currentWorkingDirectory: string,
+  issues: BlockingIssue[],
+): Promise<{
+  path: string;
+  text: string | null;
+}> {
+  const resolvedPath = path.isAbsolute(inputPath)
+    ? path.normalize(inputPath)
+    : path.resolve(currentWorkingDirectory, inputPath);
+
+  try {
+    const rawText = await readFile(resolvedPath, "utf8");
+    return {
+      path: resolvedPath,
+      text: rawText,
+    };
+  } catch (error) {
+    const code = optionName === "--spec"
+      ? "SPEC_READ_FAILED"
+      : optionName === "--notes"
+        ? "NOTES_READ_FAILED"
+        : optionName === "--constraints"
+          ? "CONSTRAINTS_READ_FAILED"
+          : "CONFIG_READ_FAILED";
+    const detail = error instanceof Error ? error.message : "Unknown read failure.";
+
+    issues.push(
+      createBlockingIssue(
+        code,
+        `Forge intake could not read ${optionName} at ${resolvedPath}: ${detail}`,
+      ),
+    );
+    return {
+      path: resolvedPath,
+      text: null,
+    };
+  }
+}
+
+function normalizeSupplementalLines(rawText: string): string[] {
+  return rawText
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+}
+
+async function resolveFocusPaths(
+  focusPaths: string[] | undefined,
+  repoRoot: string,
+  issues: BlockingIssue[],
+): Promise<string[]> {
+  if (!focusPaths || focusPaths.length === 0) {
+    return [];
+  }
+
+  const normalizedFocusPaths: string[] = [];
+
+  for (const rawFocusPath of focusPaths) {
+    const candidatePath = path.resolve(repoRoot, rawFocusPath);
+    const normalizedCandidatePath = path.normalize(candidatePath);
+    const relativePath = path.relative(repoRoot, normalizedCandidatePath);
+
+    if (
+      relativePath.startsWith("..") ||
+      path.isAbsolute(relativePath)
+    ) {
+      issues.push(
+        createBlockingIssue(
+          "FOCUS_OUTSIDE_REPO",
+          `Forge intake could not use --focus because the path resolves outside the repo root: ${rawFocusPath}`,
+        ),
+      );
+      continue;
+    }
+
+    try {
+      await stat(normalizedCandidatePath);
+      normalizedFocusPaths.push(
+        relativePath === "" ? "." : relativePath.split(path.sep).join("/"),
+      );
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "Unknown path failure.";
+      issues.push(
+        createBlockingIssue(
+          "FOCUS_INVALID",
+          `Forge intake could not use --focus at ${normalizedCandidatePath}: ${detail}`,
+        ),
+      );
+    }
+  }
+
+  return normalizedFocusPaths;
 }
 
 function extractPromptAcceptanceCriteria(prompt: string): string[] {
@@ -161,15 +276,13 @@ function createSyntheticPromptSpec(promptDetails: PromptDetails): string {
     "# Task",
     "",
     promptDetails.goal,
+    "",
+    "## Acceptance Criteria",
+    "",
   ];
 
   if (promptDetails.requirementCandidates.some((candidate) => candidate.source === "acceptance-criteria")) {
-    lines.push(
-      "",
-      "## Acceptance Criteria",
-      "",
-      ...promptDetails.requirementCandidates.map((candidate) => `- ${candidate.text}`),
-    );
+    lines.push(...promptDetails.requirementCandidates.map((candidate) => `- ${candidate.text}`));
   }
 
   return lines.join("\n");
@@ -280,6 +393,160 @@ function resolveSpecInput(input: ValidatedIntakeInputs): NormalizedTaskInput {
   });
 }
 
+function buildValidatedIntakeInput(params: {
+  inputMode: "prompt" | "spec";
+  primaryInput: {
+    path: string | null;
+    rawText: string;
+  };
+  notes: string[];
+  constraints: string[];
+  configPath: string | null;
+  focusPaths: string[];
+  warnings: string[];
+  recommendedUserActions: string[];
+}): ValidatedIntakeInputs {
+  return {
+    inputMode: params.inputMode,
+    primaryInput: params.primaryInput,
+    notes: params.notes,
+    constraints: params.constraints,
+    configPath: params.configPath,
+    focusPaths: params.focusPaths,
+    warnings: [...params.warnings],
+    recommendedUserActions: [...params.recommendedUserActions],
+  };
+}
+
+export async function resolveIntakeInput(params: {
+  options: IntakeCommandOptions;
+  currentWorkingDirectory: string;
+  repoRoot: string;
+}): Promise<ResolvedIntakeInput> {
+  const blockingIssues: BlockingIssue[] = [];
+  const warnings: string[] = [];
+  const recommendedUserActions: string[] = [];
+  const prompt = params.options.prompt?.trim();
+  const spec = params.options.spec?.trim();
+
+  const specResult = spec
+    ? await readTextInput("--spec", spec, params.currentWorkingDirectory, blockingIssues)
+    : { path: null, text: null };
+
+  if (specResult.text !== null && specResult.text.trim().length === 0) {
+    blockingIssues.push(
+      createBlockingIssue(
+        "SPEC_EMPTY",
+        `Forge intake could not use --spec because the file is empty: ${specResult.path}`,
+      ),
+    );
+  }
+
+  const notesResult = params.options.notes?.trim()
+    ? await readTextInput("--notes", params.options.notes.trim(), params.currentWorkingDirectory, blockingIssues)
+    : { path: null, text: null };
+  const constraintsResult = params.options.constraints?.trim()
+    ? await readTextInput(
+      "--constraints",
+      params.options.constraints.trim(),
+      params.currentWorkingDirectory,
+      blockingIssues,
+    )
+    : { path: null, text: null };
+  const configResult = params.options.config?.trim()
+    ? await readTextInput("--config", params.options.config.trim(), params.currentWorkingDirectory, blockingIssues)
+    : { path: null, text: null };
+  const focusPaths = await resolveFocusPaths(params.options.focus, params.repoRoot, blockingIssues);
+
+  if (blockingIssues.length > 0) {
+    if (params.options.notes?.trim()) {
+      pushUnique(recommendedUserActions, "Provide a readable file for --notes or omit the flag.");
+    }
+
+    if (params.options.constraints?.trim()) {
+      pushUnique(recommendedUserActions, "Provide a readable file for --constraints or omit the flag.");
+    }
+
+    if (params.options.config?.trim()) {
+      pushUnique(recommendedUserActions, "Provide a readable file for --config or omit the flag.");
+    }
+
+    if ((params.options.focus?.length ?? 0) > 0) {
+      pushUnique(recommendedUserActions, "Pass only existing repo-relative paths to --focus.");
+    }
+
+    if (params.options.strictFocus) {
+      pushUnique(
+        recommendedUserActions,
+        "Pass at least one valid repo-relative path to --focus before enabling --strict-focus.",
+      );
+    }
+  }
+
+  const loadedInput: LoadedIntakeInput = {
+    inputMode: prompt ? "prompt" : "spec",
+    primaryInput: prompt
+      ? {
+        path: null,
+        rawText: prompt,
+      }
+      : {
+        path: specResult.path,
+        rawText: specResult.text?.trim() ?? "",
+      },
+    primaryInputLoaded: prompt ? true : (specResult.text !== null && specResult.text.trim().length > 0),
+    notes: notesResult.text ? normalizeSupplementalLines(notesResult.text) : [],
+    constraints: constraintsResult.text ? normalizeSupplementalLines(constraintsResult.text) : [],
+    configPath: configResult.path,
+    configLoaded: configResult.text !== null,
+    focusPaths,
+    strictFocus: params.options.strictFocus === true,
+    sourceSelection: {
+      specProvided: Boolean(spec),
+      promptProvided: Boolean(prompt),
+    },
+  };
+
+  const policyResult = validateLoadedIntakeInput(loadedInput);
+
+  for (const warning of policyResult.warnings) {
+    pushUnique(warnings, warning);
+  }
+
+  for (const action of policyResult.recommendedUserActions) {
+    pushUnique(recommendedUserActions, action);
+  }
+
+  const combinedBlockingIssues = [...blockingIssues, ...policyResult.blockingIssues];
+
+  if (combinedBlockingIssues.length > 0) {
+    return {
+      taskInput: null,
+      blockingIssues: combinedBlockingIssues,
+      warnings,
+      recommendedUserActions,
+    };
+  }
+
+  const validatedInput = buildValidatedIntakeInput({
+    inputMode: loadedInput.inputMode,
+    primaryInput: loadedInput.primaryInput,
+    notes: loadedInput.notes,
+    constraints: loadedInput.constraints,
+    configPath: loadedInput.configPath,
+    focusPaths: loadedInput.focusPaths,
+    warnings,
+    recommendedUserActions,
+  });
+
+  return {
+    taskInput: resolveLoadedIntakeInput(validatedInput),
+    blockingIssues: [],
+    warnings,
+    recommendedUserActions,
+  };
+}
+
 export function toArtifactSourceInputs(taskInput: NormalizedTaskInput): ArtifactSourceInputs {
   return {
     input_mode: taskInput.inputMode,
@@ -295,7 +562,7 @@ export function toArtifactSourceInputs(taskInput: NormalizedTaskInput): Artifact
   };
 }
 
-export function resolveTaskSource(validatedInput: ValidatedIntakeInputs): NormalizedTaskInput {
+export function resolveLoadedIntakeInput(validatedInput: ValidatedIntakeInputs): NormalizedTaskInput {
   if (validatedInput.inputMode === "prompt") {
     return resolvePromptInput(validatedInput);
   }

@@ -2,9 +2,11 @@ import { buildConfidenceResolution } from "./confidence.js";
 import {
   NON_STRICT_FOCUS_WARNING,
   STRICT_FOCUS_WARNING,
-} from "./focus-policy.js";
+} from "./candidate-targets.js";
 import type {
   AmbiguityAnalysisResult,
+  ArtifactRiskAnalysisSection,
+  ArtifactRiskZone,
   BlockingIssue,
   InferenceResult,
   IntakeFailureDetails,
@@ -37,6 +39,30 @@ function pushUnique(values: string[], value: string): void {
   }
 }
 
+function pushAmbiguityItem(
+  ambiguityItems: NonNullable<AmbiguityAnalysisResult["ambiguityItems"]>,
+  ambiguities: string[],
+  item: NonNullable<AmbiguityAnalysisResult["ambiguityItems"]>[number],
+): void {
+  if (!ambiguityItems.some((existing) => existing.type === item.type && existing.message === item.message)) {
+    ambiguityItems.push(item);
+  }
+
+  pushUnique(ambiguities, item.message);
+}
+
+function pushWarningItem(
+  warningItems: NonNullable<AmbiguityAnalysisResult["warningItems"]>,
+  warnings: string[],
+  item: NonNullable<AmbiguityAnalysisResult["warningItems"]>[number],
+): void {
+  if (!warningItems.some((existing) => existing.code === item.code && existing.message === item.message)) {
+    warningItems.push(item);
+  }
+
+  pushUnique(warnings, item.message);
+}
+
 function isTestLikePath(value: string): boolean {
   return (
     value.includes("/tests/") ||
@@ -50,15 +76,116 @@ function normalizePathForComparison(value: string): string {
   return value.replace(/\\/g, "/").toLowerCase();
 }
 
+function buildManifestOrConfigPaths(params: {
+  taskParserResult: TaskParserResult;
+  candidateTargets: InferenceResult["candidateTargets"];
+}): string[] {
+  return [
+    ...params.taskParserResult.signals.referencedPaths.filter((path) => /package\.json|tsconfig|config/i.test(path)),
+    ...params.candidateTargets
+      .filter((target) => target.kind === "manifest")
+      .map((target) => target.path),
+  ].filter((value, index, values) => values.indexOf(value) === index);
+}
+
+export function buildRiskAnalysisResult(params: {
+  taskParserResult: TaskParserResult;
+  repoScanResult: RepoScanResult;
+  inferenceResult: InferenceResult;
+  repoContextOverride?: RepoScanResult["repoContext"];
+}): ArtifactRiskAnalysisSection {
+  const riskZones: ArtifactRiskZone[] = [];
+  const repoContext = params.repoContextOverride ?? params.repoScanResult.repoContext;
+  const repoFiles = new Set(
+    repoContext.allFiles.map(normalizePathForComparison),
+  );
+  const unresolvedReferencedPaths = params.taskParserResult.signals.referencedPaths.filter(
+    (path) => !repoFiles.has(normalizePathForComparison(path)),
+  );
+
+  if (!repoContext.grounded || params.repoScanResult.signals.repoLooksSparse) {
+    riskZones.push({
+      code: "weak_repo_grounding",
+      level: "high",
+      reason: "Repo grounding is partial, so later planning may rely on weak repository evidence.",
+      evidence_paths: [],
+    });
+  }
+
+  if (unresolvedReferencedPaths.length > 0) {
+    riskZones.push({
+      code: "unresolved_referenced_paths",
+      level: "high",
+      reason: "The task references paths that were not found during repo grounding.",
+      evidence_paths: unresolvedReferencedPaths,
+    });
+  }
+
+  if (params.inferenceResult.candidateTargets.length === 0) {
+    riskZones.push({
+      code: "no_candidate_targets",
+      level: "high",
+      reason: "Intake could not produce any plausible candidate targets for the next step.",
+      evidence_paths: [],
+    });
+  }
+
+  if (
+    params.inferenceResult.candidateTargets.length > 0 &&
+    params.inferenceResult.signals.usedFallbackTargets
+  ) {
+    riskZones.push({
+      code: "fallback_targeting_only",
+      level: "medium",
+      reason: "Targeting depends entirely on fallback repo structure instead of explicit task-to-file matches.",
+      evidence_paths: params.inferenceResult.candidateTargets.map((target) => target.path),
+    });
+  }
+
+  if (repoContext.testFiles.length === 0) {
+    riskZones.push({
+      code: "no_tests_detected",
+      level: "medium",
+      reason: "No tests were detected during repo grounding, so later verification coverage may be weak.",
+      evidence_paths: [],
+    });
+  }
+
+  const manifestOrConfigPaths = buildManifestOrConfigPaths({
+    taskParserResult: params.taskParserResult,
+    candidateTargets: params.inferenceResult.candidateTargets,
+  });
+
+  if (manifestOrConfigPaths.length > 0) {
+    riskZones.push({
+      code: "manifest_or_config_impact",
+      level: "medium",
+      reason: "The task appears to affect manifest or configuration surfaces that can widen downstream impact.",
+      evidence_paths: manifestOrConfigPaths,
+    });
+  }
+
+  return {
+    initial_risk_zones: riskZones,
+  };
+}
+
 function addPromptOpenQuestionHandling(params: {
   categories: TaskParserResult["signals"]["promptOpenQuestionCategories"];
+  ambiguityItems: NonNullable<AmbiguityAnalysisResult["ambiguityItems"]>;
   ambiguities: string[];
   recommendedUserActions: string[];
 }): void {
   if (params.categories.includes("scope")) {
-    pushUnique(
+    pushAmbiguityItem(
+      params.ambiguityItems,
       params.ambiguities,
-      "Prompt scope is still unclear for the current repo. Clarify the concrete files, modules, or bounded behavior to change.",
+      {
+        type: "scope",
+        severity: "medium",
+        message:
+          "Prompt scope is still unclear for the current repo. Clarify the concrete files, modules, or bounded behavior to change.",
+      },
     );
     pushUnique(
       params.recommendedUserActions,
@@ -67,9 +194,15 @@ function addPromptOpenQuestionHandling(params: {
   }
 
   if (params.categories.includes("constraints")) {
-    pushUnique(
+    pushAmbiguityItem(
+      params.ambiguityItems,
       params.ambiguities,
-      "Prompt constraints are missing. Clarify non-goals, rollout limits, or boundaries before planning.",
+      {
+        type: "constraints",
+        severity: "medium",
+        message:
+          "Prompt constraints are missing. Clarify non-goals, rollout limits, or boundaries before planning.",
+      },
     );
     pushUnique(
       params.recommendedUserActions,
@@ -80,6 +213,7 @@ function addPromptOpenQuestionHandling(params: {
 
 function addFocusHandling(params: {
   inferenceResult: InferenceResult;
+  warningItems: NonNullable<AmbiguityAnalysisResult["warningItems"]>;
   warnings: string[];
   recommendedUserActions: string[];
 }): void {
@@ -89,9 +223,13 @@ function addFocusHandling(params: {
     return;
   }
 
-  pushUnique(
+  pushWarningItem(
+    params.warningItems,
     params.warnings,
-    signals.strictFocusApplied ? STRICT_FOCUS_WARNING : NON_STRICT_FOCUS_WARNING,
+    {
+      code: signals.strictFocusApplied ? "STRICT_FOCUS_EXCLUDED_TARGETS" : "FOCUS_OUT_OF_COVERAGE",
+      message: signals.strictFocusApplied ? STRICT_FOCUS_WARNING : NON_STRICT_FOCUS_WARNING,
+    },
   );
   pushUnique(
     params.recommendedUserActions,
@@ -132,26 +270,39 @@ export function buildAmbiguityAnalysisResult(params: {
     ...params.taskParserResult.ambiguities,
     ...optionalReasoningResult.ambiguities,
   ];
+  const ambiguityItems: AmbiguityAnalysisResult["ambiguityItems"] = [];
+  const warningItems: AmbiguityAnalysisResult["warningItems"] = [];
 
   addPromptOpenQuestionHandling({
     categories: params.taskParserResult.signals.promptOpenQuestionCategories,
+    ambiguityItems,
     ambiguities,
     recommendedUserActions,
   });
   addFocusHandling({
     inferenceResult: params.inferenceResult,
+    warningItems,
     warnings,
     recommendedUserActions,
   });
 
   if (!params.taskParserResult.signals.hasAcceptanceCriteria) {
-    pushUnique(
+    pushAmbiguityItem(
+      ambiguityItems,
       ambiguities,
-      "Acceptance criteria are missing from the task input.",
+      {
+        type: "acceptance_criteria",
+        severity: "high",
+        message: "Acceptance criteria are missing from the task input.",
+      },
     );
-    pushUnique(
+    pushWarningItem(
+      warningItems,
       warnings,
-      "Acceptance criteria are missing, so Step 2 planning may need user follow-up.",
+      {
+        code: "ACCEPTANCE_CRITERIA_MISSING",
+        message: "Acceptance criteria are missing, so Step 2 planning may need user follow-up.",
+      },
     );
     pushUnique(
       recommendedUserActions,
@@ -160,9 +311,13 @@ export function buildAmbiguityAnalysisResult(params: {
   }
 
   if (params.repoScanResult.signals.testFileCount === 0) {
-    pushUnique(
+    pushWarningItem(
+      warningItems,
       warnings,
-      "No tests were detected during repo grounding.",
+      {
+        code: "NO_TESTS_DETECTED",
+        message: "No tests were detected during repo grounding.",
+      },
     );
     pushUnique(
       recommendedUserActions,
@@ -171,9 +326,13 @@ export function buildAmbiguityAnalysisResult(params: {
   }
 
   if (params.inferenceResult.signals.usedFallbackTargets) {
-    pushUnique(
+    pushWarningItem(
+      warningItems,
       warnings,
-      "Repo mapping is partial but still usable because candidate targets were inferred from repo structure.",
+      {
+        code: "FALLBACK_TARGETING",
+        message: "Repo mapping is partial but still usable because candidate targets were inferred from repo structure.",
+      },
     );
     pushUnique(
       recommendedUserActions,
@@ -189,9 +348,14 @@ export function buildAmbiguityAnalysisResult(params: {
   );
 
   if (unresolvedReferencedPaths.length > 0) {
-    pushUnique(
+    pushAmbiguityItem(
+      ambiguityItems,
       ambiguities,
-      `Prompt references repo paths that were not found during grounding: ${unresolvedReferencedPaths.join(", ")}.`,
+      {
+        type: "repo_alignment",
+        severity: "high",
+        message: `Prompt references repo paths that were not found during grounding: ${unresolvedReferencedPaths.join(", ")}.`,
+      },
     );
     pushUnique(
       recommendedUserActions,
@@ -239,7 +403,9 @@ export function buildAmbiguityAnalysisResult(params: {
 
   return {
     ambiguities,
+    ambiguityItems,
     warnings,
+    warningItems,
     recommendedUserActions,
     confidence,
   };

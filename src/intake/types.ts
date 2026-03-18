@@ -62,6 +62,22 @@ export interface PromptDetails {
   openQuestions: PromptOpenQuestion[];
 }
 
+export interface Ambiguity {
+  type:
+    | "acceptance_criteria"
+    | "scope"
+    | "constraints"
+    | "repo_alignment"
+    | "input";
+  severity: "low" | "medium" | "high";
+  message: string;
+}
+
+export interface WarningItem {
+  code: string;
+  message: string;
+}
+
 export interface NormalizedTaskInput {
   inputMode: IntakeInputMode;
   primaryInput: {
@@ -108,11 +124,41 @@ export interface ValidatedIntakeInputs {
   recommendedUserActions: string[];
 }
 
-export interface IntakeTaskSpec {
+export interface LoadedIntakeSourceSelection {
+  specProvided: boolean;
+  promptProvided: boolean;
+}
+
+export interface LoadedIntakeInput {
+  inputMode: IntakeInputMode;
+  primaryInput: {
+    path: string | null;
+    rawText: string;
+  };
+  primaryInputLoaded?: boolean;
+  notes: string[];
+  constraints: string[];
+  configPath: string | null;
+  configLoaded: boolean;
+  focusPaths: string[];
+  strictFocus: boolean;
+  sourceSelection: LoadedIntakeSourceSelection;
+}
+
+export interface NormalizedTaskSpec {
   goal: string;
   acceptanceCriteria: string[];
   hasAcceptanceCriteria: boolean;
+  explicitRequirements?: string[];
+  constraints?: string[];
+  mentionedPaths?: string[];
+  mentionedTests?: string[];
+  mentionedModules?: string[];
+  riskyPhrases?: string[];
+  openQuestions?: PromptOpenQuestion[];
 }
+
+export type IntakeTaskSpec = NormalizedTaskSpec;
 
 export interface ArtifactTaskSpecSection {
   goal: string;
@@ -139,6 +185,20 @@ export interface ArtifactRepoContextSection {
 
 export type GitContextStatus = "available" | "not_repo" | "unavailable" | "error";
 
+export interface RepoScanSignals {
+  sourceFileCount: number;
+  testFileCount: number;
+  manifestFileCount: number;
+  repoLooksSparse: boolean;
+  languages?: string[];
+  packageManager?: string | null;
+  frameworkHints?: string[];
+  testFrameworkHints?: string[];
+  keyDirectories?: string[];
+  entryPoints?: string[];
+  layoutSummary?: string;
+}
+
 export interface GitContext {
   status: GitContextStatus;
   repoRoot: string | null;
@@ -155,12 +215,7 @@ export interface ArtifactGitContextSection {
 
 export interface RepoScanResult {
   repoContext: RepoContext;
-  signals: {
-    sourceFileCount: number;
-    testFileCount: number;
-    manifestFileCount: number;
-    repoLooksSparse: boolean;
-  };
+  signals: RepoScanSignals;
   warnings: string[];
 }
 
@@ -169,6 +224,28 @@ export interface CandidateTarget {
   kind: "source" | "test" | "manifest";
   matchType: "explicit" | "fallback";
   reason: string;
+  notes?: string[];
+  sharedRisk?: boolean;
+}
+
+export type CandidateTargets = CandidateTarget[];
+
+export interface CandidateTargetingOptions {
+  focusPaths: string[];
+  strictFocus: boolean;
+}
+
+export interface CandidateTargetingSignals {
+  focusApplied: boolean;
+  strictFocusApplied: boolean;
+  focusMatchedTargetCount: number;
+  outOfFocusTargetCount: number;
+}
+
+export interface CandidateTargetingResolution {
+  candidateTargets: CandidateTarget[];
+  warnings: string[];
+  signals: CandidateTargetingSignals;
 }
 
 export interface ArtifactCandidateTargetSectionItem {
@@ -178,11 +255,23 @@ export interface ArtifactCandidateTargetSectionItem {
   reason: string;
 }
 
-export interface InitialVerificationTarget {
+export interface VerificationTarget {
   path: string;
   kind: CandidateTarget["kind"];
+  category?:
+    | "code_surface"
+    | "test_surface"
+    | "config_surface"
+    | "retry_logic"
+    | "ownership"
+    | "api_contract"
+    | "migration_order"
+    | "parallel_overlap"
+    | "stale_write";
   reason: string;
 }
+
+export type InitialVerificationTarget = VerificationTarget;
 
 export interface ArtifactInitialVerificationTargetSectionItem {
   path: string;
@@ -259,8 +348,8 @@ export interface IntakeRunnerDependencies {
   gitCommandRunner?: GitCommandRunner;
 }
 
-export interface IntakeValidationResult {
-  validatedInput: ValidatedIntakeInputs | null;
+export interface ResolvedIntakeInput {
+  taskInput: NormalizedTaskInput | null;
   blockingIssues: BlockingIssue[];
   warnings: string[];
   recommendedUserActions: string[];
@@ -281,7 +370,9 @@ export interface ResolvedRuntimeOptions {
 
 export interface AmbiguityAnalysisResult {
   ambiguities: string[];
+  ambiguityItems?: Ambiguity[];
   warnings: string[];
+  warningItems?: WarningItem[];
   recommendedUserActions: string[];
   confidence: {
     level: IntakeConfidenceLevel;
@@ -313,6 +404,8 @@ export interface ArtifactRiskAnalysisSection {
   initial_risk_zones: ArtifactRiskZone[];
 }
 
+export type RiskAnalysis = ArtifactRiskAnalysisSection;
+
 export interface ArtifactConfidenceSection {
   level: IntakeConfidenceLevel;
   signals: {
@@ -322,6 +415,8 @@ export interface ArtifactConfidenceSection {
   };
   reasons: string[];
 }
+
+export type ConfidenceSummary = AmbiguityAnalysisResult["confidence"];
 
 export interface AssembledIntakeResult {
   responsibilities: {
@@ -439,6 +534,8 @@ export interface IntakeCommandResult {
   nextStepReadiness: NextStepReadiness | null;
   failure: IntakeFailureDetails | null;
 }
+
+export type IntakeRunResult = IntakeCommandResult;
 
 export interface IntakeDebugArtifact {
   command: string;

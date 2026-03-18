@@ -4,9 +4,10 @@ import { assembleIntakeResult } from "./assemble.js";
 import { createIntakeArtifact } from "./artifact.js";
 import { buildBoundarySafeIntakeResult } from "./boundary.js";
 import { createIntakeDebugArtifact } from "./debug.js";
+import { evaluateSuccessModel } from "./confidence.js";
 import { PersistenceError } from "./errors.js";
 import { buildInferenceResult } from "./inference.js";
-import { resolveTaskSource, toArtifactSourceInputs } from "./input.js";
+import { resolveIntakeInput, toArtifactSourceInputs } from "./input.js";
 import { resolveOptionalReasoning } from "./llm.js";
 import { resolveRuntimeOptions } from "./options.js";
 import {
@@ -17,10 +18,9 @@ import {
 import { persistIntakeOutputs } from "./persistence.js";
 import { scanRepoResult } from "./repo-context.js";
 import { createIntakeReport } from "./report.js";
-import { evaluateSuccessModel } from "./success.js";
 import { buildTaskParserResult } from "./task-parser.js";
 import { resolveGitContext } from "./git-context.js";
-import { validateIntakeInputs } from "./validation.js";
+import { buildVerificationTargets } from "./verification-targets.js";
 import type {
   IntakeCommandOptions,
   IntakeCommandResult,
@@ -176,14 +176,15 @@ export async function runIntakeCommand(
       );
     }
 
-    const validationResult = await validateIntakeInputs(options, currentWorkingDirectory, repoRoot);
-    validationBlockingIssues = validationResult.blockingIssues;
-    validationWarnings = validationResult.warnings;
-    validationRecommendedUserActions = validationResult.recommendedUserActions;
-
-    if (validationResult.validatedInput) {
-      taskInput = resolveTaskSource(validationResult.validatedInput);
-    }
+    const resolvedInput = await resolveIntakeInput({
+      options,
+      currentWorkingDirectory,
+      repoRoot,
+    });
+    validationBlockingIssues = resolvedInput.blockingIssues;
+    validationWarnings = resolvedInput.warnings;
+    validationRecommendedUserActions = resolvedInput.recommendedUserActions;
+    taskInput = resolvedInput.taskInput;
 
     if (!failure && runtimeBlockingIssues.length > 0) {
       failure = createFailureDetails(
@@ -192,7 +193,7 @@ export async function runIntakeCommand(
       );
     }
 
-    if (!failure && validationResult.blockingIssues.length > 0) {
+    if (!failure && resolvedInput.blockingIssues.length > 0) {
       failure = createFailureDetails(
         "INPUT_VALIDATION_FAILED",
         "Forge intake found blocking input validation issues.",
@@ -256,6 +257,10 @@ export async function runIntakeCommand(
       warnings: successEvaluation.warnings,
       recommendedUserActions: successEvaluation.nextStepReadiness.recommendedUserActions,
     };
+    const initialVerificationTargets = buildVerificationTargets({
+      taskParserResult,
+      candidateTargets: finalAssembledResult.candidateTargets,
+    });
 
     try {
       return await persistResult(
@@ -267,6 +272,7 @@ export async function runIntakeCommand(
           context,
           taskInput,
           assembledResult: finalAssembledResult,
+          initialVerificationTargets,
         }),
         successEvaluation.nextStepReadiness,
         failure,
@@ -288,7 +294,7 @@ export async function runIntakeCommand(
           artifactPath: null,
           reportPath: null,
           outputRoot: context.paths.outputRoot,
-        summary:
+          summary:
             "Forge intake failed while persisting its fallback output. No durable artifact could be written.",
           nextStepReadiness: successEvaluation.nextStepReadiness,
           failure: persistenceFailure,
@@ -322,6 +328,7 @@ export async function runIntakeCommand(
             context: fallbackContext,
             taskInput,
             assembledResult: finalAssembledResult,
+            initialVerificationTargets,
           }),
           successEvaluation.nextStepReadiness,
           fallbackFailure,

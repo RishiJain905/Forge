@@ -69,7 +69,7 @@ await runScenario(
           "--repo",
           repoRoot,
           "--prompt",
-          "Inspect src/app.ts and tests/app.test.ts for output artifact persistence.",
+          "Inspect retry ownership in src/app.ts and keep package.json aligned with the API contract.",
         ],
         repoRoot,
       );
@@ -80,11 +80,22 @@ await runScenario(
       const debugArtifact = await readJsonFile<{
         runtimeOptions?: { outputMode?: string };
         responsibilities?: { taskParser?: unknown };
+        boundarySafeResult?: {
+          initialVerificationTargets?: Array<{
+            path: string;
+            category?: string;
+          }>;
+        };
       }>(debugArtifactPath);
 
       assert.equal(await fileExists(debugArtifactPath), true);
       assert.equal(debugArtifact.runtimeOptions?.outputMode, "default");
       assert.ok(debugArtifact.responsibilities?.taskParser);
+      assert.ok(
+        debugArtifact.boundarySafeResult?.initialVerificationTargets?.some((target) =>
+          target.path === "src/app.ts" && target.category === "retry_logic"
+        ),
+      );
     } finally {
       if (originalDebugEnv === undefined) {
         delete process.env.FORGE_INTAKE_DEBUG;

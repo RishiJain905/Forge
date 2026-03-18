@@ -112,9 +112,34 @@
   - Defined the gate as a compact checklist covering command contract stability, artifact contract stability, warning/failure/confidence logic, prompt/spec input handling, and report/artifact output.
   - Kept the gate lightweight by grounding it in the existing test surfaces rather than introducing a new runtime path or verification framework.
   - Documented the exit gate in `B1-done/20-summary-done.md` so Batch 2 starts only after the current Step 1 contract stays green on `dev`.
+- Batch 2.01: `part-1-intake-architecture-and-module-map.md`
+  - Stabilized the Step 1 intake architecture around clearer ownership seams for input loading, policy validation, task parsing, repo scanning, targeting, risk analysis, verification-target detection, and readiness/status helpers.
+  - Added richer internal repo-scan signals and moved focus-aware target prioritization into `candidate-targets.ts` with sibling test and manifest/config enrichment.
+  - Moved risk-analysis construction into `analysis.ts`, added a dedicated `verification-targets.ts` module, and reduced `artifact-sections.ts` to a projection layer for prebuilt analysis outputs.
+  - Exposed readiness, final status, and summary helpers directly from `confidence.ts` while keeping `success.ts` as a compatibility wrapper.
+  - Added focused architecture tests for the new seams and wired the repo-context, candidate-targets, and verification-target suites into the default `npm.cmd test` run.
+- Batch 2.02: `part-2-file-responsibilities-and-safe-refactor-rules.md`
+  - Made `input.ts` the canonical runner-facing owner for file loading, focus-path normalization, and normalized intake input resolution by adding `resolveIntakeInput` and reducing `validation.ts` to policy-only rules.
+  - Tightened `runner.ts` so it now consumes one input-resolution seam instead of coordinating validation and normalization itself.
+  - Removed the ultra-thin compatibility wrappers `success.ts`, `task-spec.ts`, and `focus-policy.ts`, and updated source/test imports to the real owners `confidence.ts`, `task-parser.ts`, and `candidate-targets.ts`.
+  - Kept the existing Batch 1 CLI, artifact, and report contracts stable while adding direct ownership coverage for the canonical input resolver and direct confidence-module imports.
+  - Expanded focused automated coverage and kept the full verification gate green for the ownership cleanup.
+- Batch 2.03: `part-3-sequential-build-order.md`
+  - Stabilized the shared Step 1 type layer around richer normalized task, ambiguity, warning, candidate-target, and verification-target contracts without changing the public Batch 1 CLI, artifact, or report shape.
+  - Expanded task parsing so later build stages now receive explicit requirements, carried constraints, mentioned paths/tests/modules, risky phrases, and structured prompt open-question metadata.
+  - Extended candidate targeting and ambiguity analysis with inspectable target notes, shared-risk surfaces, and typed ambiguity/warning items so later readiness and verification stages can build on clearer intermediate results.
+  - Reworked verification-target generation so the real intake runner now derives richer verification categories such as retry logic, ownership, API contract, and config surfaces from the parser and target signals in pipeline order.
+  - Added focused automated coverage for the richer parser metadata, shared-risk targeting, structured analysis items, verification-target categorization, and debug-artifact integration while keeping the full verification gate green.
+- Batch 2.04: `part-4-test-strategy-and-acceptance-gates.md`
+  - Added dedicated `task-parser`, `analysis`, `persistence`, and `batch2-acceptance-gates` suites so the Part 4 test strategy is explicit instead of being hidden inside broad catch-all coverage.
+  - Trimmed `intake.core-responsibilities.test.ts` back to architecture seams and expanded `intake.verification-targets.test.ts` to cover `migration_order`, `parallel_overlap`, and `stale_write`.
+  - Added a dedicated Batch 2 acceptance-gates suite that exercises Gate 1 through Gate 6 plus the minimum scenarios for a strong spec, a weak prompt, invalid input, strict-focus exclusion, and no-tests/no-git repos.
+  - Wired the new suites into the default `npm.cmd test` command while keeping the Batch 1 CLI, artifact, report, and smoke behavior stable.
+  - Documented completion evidence in `S1-B2-Done/part4-done-summary.md` after the full verification gate stayed green.
 
 ## Current Branch State
-- `dev` includes the completed Batch 1.16, Batch 1.17, Batch 1.18, Batch 1.19, and Batch 1.20 implementations.
+- `dev` includes the completed Batch 1.16, Batch 1.17, Batch 1.18, Batch 1.19, Batch 1.20, Batch 2.01, Batch 2.02, Batch 2.03, and Batch 2.04 implementations.
+- The Batch 2 Part 1 implementation from worktree branch `codex/s1-b2-p1-intake-architecture`, the Batch 2 Part 2 implementation from worktree branch `codex/s1-b2-p2-file-ownership`, the Batch 2 Part 3 implementation from worktree branch `codex/s1-b2-p3-sequential-build-order`, and the Batch 2 Part 4 implementation from worktree branch `codex/s1-b2-p4-test-strategy-and-acceptance-gates` have been merged back into `dev`.
 - `execution.md` now explicitly requires completed worktree branches to be merged back into their source branch before a task is considered complete, unless the user explicitly requests a PR-only workflow.
 
 ## Verification
@@ -124,4 +149,4 @@
 - `npm.cmd run smoke`
 
 ## Next
-- Batch 1 is complete. Begin Batch 2 only after the Batch 1.20 exit gate remains green on `dev`.
+- Batch 2 is complete. Next work should proceed against the frozen Batch 2 architecture, file ownership, build order, and acceptance gates.
