@@ -498,6 +498,7 @@ export async function resolveIntakeInput(params: {
     notes: notesResult.text ? normalizeSupplementalLines(notesResult.text) : [],
     constraints: constraintsResult.text ? normalizeSupplementalLines(constraintsResult.text) : [],
     configPath: configResult.path,
+    configLoaded: configResult.text !== null,
     focusPaths,
     strictFocus: params.options.strictFocus === true,
     sourceSelection: {

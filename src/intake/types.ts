@@ -139,6 +139,7 @@ export interface LoadedIntakeInput {
   notes: string[];
   constraints: string[];
   configPath: string | null;
+  configLoaded: boolean;
   focusPaths: string[];
   strictFocus: boolean;
   sourceSelection: LoadedIntakeSourceSelection;

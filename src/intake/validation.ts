@@ -48,7 +48,7 @@ export function validateLoadedIntakeInput(
     );
   }
 
-  if (input.configPath) {
+  if (input.configPath && input.configLoaded) {
     pushUnique(
       warnings,
       "Config input was validated and recorded, but config-driven intake behavior is not implemented yet.",

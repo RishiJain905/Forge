@@ -196,6 +196,61 @@ await runScenario(
 );
 
 await runScenario(
+  "config read failures do not emit the config validation warning",
+  async () => {
+    const repoRoot = await createTempRepo();
+
+    try {
+      const inputModule = (await import("../src/intake/input.js")) as Record<string, unknown>;
+      const resolveIntakeInput = inputModule.resolveIntakeInput;
+
+      assert.equal(
+        typeof resolveIntakeInput,
+        "function",
+        "expected input.ts to export resolveIntakeInput",
+      );
+
+      const resolveIntakeInputTyped = resolveIntakeInput as (params: {
+        options: {
+          prompt?: string;
+          spec?: string;
+          strictFocus?: boolean;
+          config?: string;
+        };
+        currentWorkingDirectory: string;
+        repoRoot: string;
+      }) => Promise<{
+        taskInput: unknown | null;
+        blockingIssues: Array<{
+          code: string;
+          message: string;
+        }>;
+        warnings: string[];
+        recommendedUserActions: string[];
+      }>;
+
+      const result = await resolveIntakeInputTyped({
+        options: {
+          prompt: "Update src/app.ts and tests/app.test.ts for validation behavior.",
+          config: join(repoRoot, "missing-forge-intake.json"),
+        },
+        currentWorkingDirectory: repoRoot,
+        repoRoot,
+      });
+
+      assert.equal(result.taskInput, null);
+      assert.ok(result.blockingIssues.some((issue) => issue.code === "CONFIG_READ_FAILED"));
+      assert.ok(
+        !result.warnings.some((value) => /Config input was validated and recorded/i.test(value)),
+        "did not expect a config validation warning when the config file could not be read",
+      );
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
   "forge intake fails when --focus points outside the repo root",
   async () => {
     const repoRoot = await createTempRepo();
