@@ -6,7 +6,6 @@ import type {
   ArtifactNextStepReadinessSection,
   ArtifactRepoContextSection,
   ArtifactRiskAnalysisSection,
-  ArtifactRiskZone,
   ArtifactTaskSpecSection,
   AssembledIntakeResult,
   BoundarySafeIntakeResult,
@@ -95,102 +94,11 @@ function toArtifactNextStepReadinessSection(
   };
 }
 
-function buildInitialRiskZones(params: {
-  assembledResult: AssembledIntakeResult;
-  boundarySafeResult: BoundarySafeIntakeResult;
-}): ArtifactRiskZone[] {
-  const riskZones: ArtifactRiskZone[] = [];
-  const {
-    taskParser,
-    repoScan,
-    inference,
-  } = params.assembledResult.responsibilities;
-  const repoFiles = new Set([
-    ...params.boundarySafeResult.repoContext.allFiles,
-  ]);
-  const unresolvedReferencedPaths = taskParser.signals.referencedPaths.filter(
-    (path) => !repoFiles.has(path),
-  );
-
-  if (!params.boundarySafeResult.repoContext.grounded || repoScan.signals.repoLooksSparse) {
-    riskZones.push({
-      code: "weak_repo_grounding",
-      level: "high",
-      reason: "Repo grounding is partial, so later planning may rely on weak repository evidence.",
-      evidence_paths: [],
-    });
-  }
-
-  if (unresolvedReferencedPaths.length > 0) {
-    riskZones.push({
-      code: "unresolved_referenced_paths",
-      level: "high",
-      reason: "The task references paths that were not found during repo grounding.",
-      evidence_paths: unresolvedReferencedPaths,
-    });
-  }
-
-  if (params.boundarySafeResult.candidateTargets.length === 0) {
-    riskZones.push({
-      code: "no_candidate_targets",
-      level: "high",
-      reason: "Intake could not produce any plausible candidate targets for the next step.",
-      evidence_paths: [],
-    });
-  }
-
-  if (
-    params.boundarySafeResult.candidateTargets.length > 0 &&
-    inference.signals.usedFallbackTargets
-  ) {
-    riskZones.push({
-      code: "fallback_targeting_only",
-      level: "medium",
-      reason: "Targeting depends entirely on fallback repo structure instead of explicit task-to-file matches.",
-      evidence_paths: params.boundarySafeResult.candidateTargets.map((target) => target.path),
-    });
-  }
-
-  if (params.boundarySafeResult.repoContext.testFiles.length === 0) {
-    riskZones.push({
-      code: "no_tests_detected",
-      level: "medium",
-      reason: "No tests were detected during repo grounding, so later verification coverage may be weak.",
-      evidence_paths: [],
-    });
-  }
-
-  const manifestOrConfigPaths = [
-    ...taskParser.signals.referencedPaths.filter((path) => /package\.json|tsconfig|config/i.test(path)),
-    ...params.boundarySafeResult.candidateTargets
-      .filter((target) => target.kind === "manifest")
-      .map((target) => target.path),
-  ].filter((value, index, values) => values.indexOf(value) === index);
-
-  if (manifestOrConfigPaths.length > 0) {
-    riskZones.push({
-      code: "manifest_or_config_impact",
-      level: "medium",
-      reason: "The task appears to affect manifest or configuration surfaces that can widen downstream impact.",
-      evidence_paths: manifestOrConfigPaths,
-    });
-  }
-
-  return riskZones;
-}
-
-function buildArtifactRiskAnalysisSection(params: {
-  assembledResult: AssembledIntakeResult;
-  boundarySafeResult: BoundarySafeIntakeResult;
-}): ArtifactRiskAnalysisSection {
-  return {
-    initial_risk_zones: buildInitialRiskZones(params),
-  };
-}
-
 export function buildArtifactSections(params: {
   assembledResult: AssembledIntakeResult;
   boundarySafeResult: BoundarySafeIntakeResult;
+  riskAnalysis: ArtifactRiskAnalysisSection;
+  initialVerificationTargets: BoundarySafeIntakeResult["initialVerificationTargets"];
   nextStepReadiness: NextStepReadiness;
 }): Pick<
   import("./types.js").IntakeArtifact,
@@ -211,11 +119,8 @@ export function buildArtifactSections(params: {
     candidate_targets: params.boundarySafeResult.candidateTargets.map(
       toArtifactCandidateTargetSectionItem,
     ),
-    risk_analysis: buildArtifactRiskAnalysisSection({
-      assembledResult: params.assembledResult,
-      boundarySafeResult: params.boundarySafeResult,
-    }),
-    initial_verification_targets: params.boundarySafeResult.initialVerificationTargets.map(
+    risk_analysis: params.riskAnalysis,
+    initial_verification_targets: params.initialVerificationTargets.map(
       toArtifactInitialVerificationTargetSectionItem,
     ),
     ambiguities: [...params.boundarySafeResult.ambiguities],

@@ -108,6 +108,26 @@ export interface ValidatedIntakeInputs {
   recommendedUserActions: string[];
 }
 
+export interface LoadedIntakeSourceSelection {
+  specProvided: boolean;
+  promptProvided: boolean;
+}
+
+export interface LoadedIntakeInput {
+  inputMode: IntakeInputMode;
+  primaryInput: {
+    path: string | null;
+    rawText: string;
+  };
+  primaryInputLoaded?: boolean;
+  notes: string[];
+  constraints: string[];
+  configPath: string | null;
+  focusPaths: string[];
+  strictFocus: boolean;
+  sourceSelection: LoadedIntakeSourceSelection;
+}
+
 export interface IntakeTaskSpec {
   goal: string;
   acceptanceCriteria: string[];
@@ -139,6 +159,20 @@ export interface ArtifactRepoContextSection {
 
 export type GitContextStatus = "available" | "not_repo" | "unavailable" | "error";
 
+export interface RepoScanSignals {
+  sourceFileCount: number;
+  testFileCount: number;
+  manifestFileCount: number;
+  repoLooksSparse: boolean;
+  languages?: string[];
+  packageManager?: string | null;
+  frameworkHints?: string[];
+  testFrameworkHints?: string[];
+  keyDirectories?: string[];
+  entryPoints?: string[];
+  layoutSummary?: string;
+}
+
 export interface GitContext {
   status: GitContextStatus;
   repoRoot: string | null;
@@ -155,12 +189,7 @@ export interface ArtifactGitContextSection {
 
 export interface RepoScanResult {
   repoContext: RepoContext;
-  signals: {
-    sourceFileCount: number;
-    testFileCount: number;
-    manifestFileCount: number;
-    repoLooksSparse: boolean;
-  };
+  signals: RepoScanSignals;
   warnings: string[];
 }
 
@@ -169,6 +198,24 @@ export interface CandidateTarget {
   kind: "source" | "test" | "manifest";
   matchType: "explicit" | "fallback";
   reason: string;
+}
+
+export interface CandidateTargetingOptions {
+  focusPaths: string[];
+  strictFocus: boolean;
+}
+
+export interface CandidateTargetingSignals {
+  focusApplied: boolean;
+  strictFocusApplied: boolean;
+  focusMatchedTargetCount: number;
+  outOfFocusTargetCount: number;
+}
+
+export interface CandidateTargetingResolution {
+  candidateTargets: CandidateTarget[];
+  warnings: string[];
+  signals: CandidateTargetingSignals;
 }
 
 export interface ArtifactCandidateTargetSectionItem {

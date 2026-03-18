@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 
+import { buildArtifactSections } from "../src/intake/artifact-sections.js";
 import { createIntakeArtifact } from "../src/intake/artifact.js";
 import { resolveRuntimeOptions } from "../src/intake/options.js";
 import { STEP1_BOUNDARY_POLICY } from "../src/intake/constants.js";
@@ -396,6 +397,43 @@ await runScenario("intake artifact projects ordered confidence reasons and weak 
     "candidate targeting relies on fallback repo structure",
   ]);
 });
+
+await runScenario(
+  "artifact sections projects prebuilt risk analysis and verification targets instead of deriving them",
+  () => {
+    const sections = buildArtifactSections({
+      assembledResult: createAssembledResult(),
+      boundarySafeResult: createBoundarySafeResult(),
+      nextStepReadiness: createNextStepReadiness(),
+      riskAnalysis: {
+        initial_risk_zones: [
+          {
+            code: "manual_risk",
+            level: "high",
+            reason: "Manual risk should be projected without recomputation.",
+            evidence_paths: ["src/app.ts"],
+          },
+        ],
+      },
+      initialVerificationTargets: [
+        {
+          path: "src/app.ts",
+          kind: "source",
+          reason: "Manual verification target should be projected without recomputation.",
+        },
+      ],
+    } as any);
+
+    assert.deepEqual(
+      sections.risk_analysis.initial_risk_zones.map((zone) => zone.code),
+      ["manual_risk"],
+    );
+    assert.deepEqual(
+      sections.initial_verification_targets.map((target) => target.path),
+      ["src/app.ts"],
+    );
+  },
+);
 
 await runScenario("failed artifacts still include detailed sections with safe defaults", () => {
   const artifact = createArtifact({

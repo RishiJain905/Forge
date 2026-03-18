@@ -5,11 +5,18 @@ import type {
   BlockingIssue,
   IntakeCommandOptions,
   IntakeValidationResult,
+  LoadedIntakeInput,
   ValidatedIntakeInputs,
 } from "./types.js";
 
 function createBlockingIssue(code: string, message: string): BlockingIssue {
   return { code, message };
+}
+
+function pushUnique(values: string[], value: string): void {
+  if (!values.includes(value)) {
+    values.push(value);
+  }
 }
 
 async function readTextInput(
@@ -109,6 +116,88 @@ async function validateFocusPaths(
   return normalizedFocusPaths;
 }
 
+export function validateLoadedIntakeInput(
+  input: LoadedIntakeInput,
+): Pick<IntakeValidationResult, "blockingIssues" | "warnings" | "recommendedUserActions"> {
+  const blockingIssues: BlockingIssue[] = [];
+  const warnings: string[] = [];
+  const recommendedUserActions: string[] = [];
+
+  if (!input.sourceSelection.promptProvided && !input.sourceSelection.specProvided) {
+    blockingIssues.push(
+      createBlockingIssue(
+        "INPUT_REQUIRED",
+        "Forge intake requires exactly one primary input: pass either --spec or --prompt.",
+      ),
+    );
+  }
+
+  if (input.sourceSelection.promptProvided && input.sourceSelection.specProvided) {
+    blockingIssues.push(
+      createBlockingIssue(
+        "INPUT_CONFLICT",
+        "Forge intake accepts either --spec or --prompt, but not both in the same run.",
+      ),
+    );
+  }
+
+  if (
+    input.primaryInputLoaded !== false &&
+    input.inputMode === "spec" &&
+    input.primaryInput.rawText.trim().length === 0
+  ) {
+    blockingIssues.push(
+      createBlockingIssue(
+        "SPEC_EMPTY",
+        `Forge intake could not use --spec because the file is empty: ${input.primaryInput.path}`,
+      ),
+    );
+  }
+
+  if (input.configPath) {
+    pushUnique(
+      warnings,
+      "Config input was validated and recorded, but config-driven intake behavior is not implemented yet.",
+    );
+    pushUnique(
+      recommendedUserActions,
+      "Do not rely on --config to change intake behavior until a later batch implements config consumption.",
+    );
+  }
+
+  if (input.strictFocus && input.focusPaths.length === 0) {
+    blockingIssues.push(
+      createBlockingIssue(
+        "STRICT_FOCUS_REQUIRES_FOCUS",
+        "Forge intake requires at least one valid --focus path when --strict-focus is enabled.",
+      ),
+    );
+    pushUnique(
+      recommendedUserActions,
+      "Pass at least one valid repo-relative path to --focus before enabling --strict-focus.",
+    );
+  }
+
+  if (blockingIssues.length > 0) {
+    if (input.configPath) {
+      pushUnique(recommendedUserActions, "Provide a readable file for --config or omit the flag.");
+    }
+
+    if (
+      (input.sourceSelection.promptProvided || input.sourceSelection.specProvided) &&
+      input.focusPaths.length > 0
+    ) {
+      pushUnique(recommendedUserActions, "Pass only existing repo-relative paths to --focus.");
+    }
+  }
+
+  return {
+    blockingIssues,
+    warnings,
+    recommendedUserActions,
+  };
+}
+
 export async function validateIntakeInputs(
   options: IntakeCommandOptions,
   currentWorkingDirectory: string,
@@ -119,24 +208,6 @@ export async function validateIntakeInputs(
   const recommendedUserActions: string[] = [];
   const prompt = options.prompt?.trim();
   const spec = options.spec?.trim();
-
-  if (!prompt && !spec) {
-    blockingIssues.push(
-      createBlockingIssue(
-        "INPUT_REQUIRED",
-        "Forge intake requires exactly one primary input: pass either --spec or --prompt.",
-      ),
-    );
-  }
-
-  if (prompt && spec) {
-    blockingIssues.push(
-      createBlockingIssue(
-        "INPUT_CONFLICT",
-        "Forge intake accepts either --spec or --prompt, but not both in the same run.",
-      ),
-    );
-  }
 
   const specResult = spec
     ? await readTextInput("--spec", spec, currentWorkingDirectory, blockingIssues)
@@ -166,57 +237,31 @@ export async function validateIntakeInputs(
     ? await readTextInput("--config", options.config.trim(), currentWorkingDirectory, blockingIssues)
     : { path: null, text: null };
   const normalizedFocusPaths = await validateFocusPaths(options.focus, repoRoot, blockingIssues);
-
-  if (options.config?.trim() && configResult.path) {
-    warnings.push(
-      "Config input was validated and recorded, but config-driven intake behavior is not implemented yet.",
-    );
-    recommendedUserActions.push(
-      "Do not rely on --config to change intake behavior until a later batch implements config consumption.",
-    );
-  }
-
-  if (options.strictFocus && normalizedFocusPaths.length === 0) {
-    blockingIssues.push(
-      createBlockingIssue(
-        "STRICT_FOCUS_REQUIRES_FOCUS",
-        "Forge intake requires at least one valid --focus path when --strict-focus is enabled.",
-      ),
-    );
-  }
-
   if (blockingIssues.length > 0) {
     if (options.notes?.trim()) {
-      recommendedUserActions.push("Provide a readable file for --notes or omit the flag.");
+      pushUnique(recommendedUserActions, "Provide a readable file for --notes or omit the flag.");
     }
 
     if (options.constraints?.trim()) {
-      recommendedUserActions.push("Provide a readable file for --constraints or omit the flag.");
+      pushUnique(recommendedUserActions, "Provide a readable file for --constraints or omit the flag.");
     }
 
     if (options.config?.trim()) {
-      recommendedUserActions.push("Provide a readable file for --config or omit the flag.");
+      pushUnique(recommendedUserActions, "Provide a readable file for --config or omit the flag.");
     }
 
     if ((options.focus?.length ?? 0) > 0) {
-      recommendedUserActions.push("Pass only existing repo-relative paths to --focus.");
+      pushUnique(recommendedUserActions, "Pass only existing repo-relative paths to --focus.");
     }
 
     if (options.strictFocus) {
-      recommendedUserActions.push(
+      pushUnique(
+        recommendedUserActions,
         "Pass at least one valid repo-relative path to --focus before enabling --strict-focus.",
       );
     }
-
-    return {
-      validatedInput: null,
-      blockingIssues,
-      warnings,
-      recommendedUserActions,
-    };
   }
-
-  const validatedInput: ValidatedIntakeInputs = {
+  const loadedInput: LoadedIntakeInput = {
     inputMode: prompt ? "prompt" : "spec",
     primaryInput: prompt
       ? {
@@ -225,18 +270,53 @@ export async function validateIntakeInputs(
       }
       : {
         path: specResult.path,
-        rawText: specResult.text!.trim(),
+        rawText: specResult.text?.trim() ?? "",
       },
+    primaryInputLoaded: prompt ? true : (specResult.text !== null && specResult.text.trim().length > 0),
     notes: notesResult.text ? normalizeSupplementalLines(notesResult.text) : [],
     constraints: constraintsResult.text ? normalizeSupplementalLines(constraintsResult.text) : [],
     configPath: configResult.path,
     focusPaths: normalizedFocusPaths,
-    warnings,
-    recommendedUserActions,
+    strictFocus: options.strictFocus === true,
+    sourceSelection: {
+      specProvided: Boolean(spec),
+      promptProvided: Boolean(prompt),
+    },
   };
 
+  const policyResult = validateLoadedIntakeInput(loadedInput);
+  for (const warning of policyResult.warnings) {
+    pushUnique(warnings, warning);
+  }
+
+  for (const action of policyResult.recommendedUserActions) {
+    pushUnique(recommendedUserActions, action);
+  }
+
+  if (blockingIssues.length === 0 && policyResult.blockingIssues.length === 0) {
+    const validatedInput: ValidatedIntakeInputs = {
+      inputMode: loadedInput.inputMode,
+      primaryInput: loadedInput.primaryInput,
+      notes: loadedInput.notes,
+      constraints: loadedInput.constraints,
+      configPath: loadedInput.configPath,
+      focusPaths: loadedInput.focusPaths,
+      warnings,
+      recommendedUserActions,
+    };
+
+    return {
+      validatedInput,
+      blockingIssues: [],
+      warnings,
+      recommendedUserActions,
+    };
+  }
+
+  blockingIssues.push(...policyResult.blockingIssues);
+
   return {
-    validatedInput,
+    validatedInput: null,
     blockingIssues,
     warnings,
     recommendedUserActions,
