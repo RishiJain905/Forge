@@ -120,8 +120,8 @@
   - Added focused architecture tests for the new seams and wired the repo-context, candidate-targets, and verification-target suites into the default `npm.cmd test` run.
 
 ## Current Branch State
-- `dev` includes the completed Batch 1.16, Batch 1.17, Batch 1.18, Batch 1.19, and Batch 1.20 implementations.
-- Worktree branch `codex/s1-b2-p1-intake-architecture` contains the completed Batch 2 Part 1 implementation and a green verification gate, and it is ready to merge back into `dev`.
+- `dev` includes the completed Batch 1.16, Batch 1.17, Batch 1.18, Batch 1.19, Batch 1.20, and Batch 2.01 implementations.
+- The Batch 2 Part 1 implementation from worktree branch `codex/s1-b2-p1-intake-architecture` has been merged back into `dev`.
 - `execution.md` now explicitly requires completed worktree branches to be merged back into their source branch before a task is considered complete, unless the user explicitly requests a PR-only workflow.
 
 ## Verification
@@ -131,5 +131,4 @@
 - `npm.cmd run smoke`
 
 ## Next
-- Merge Batch 2 Part 1 back into `dev`.
-- Next Batch 2 target after merge: `forge_step1_batch2/part-2-file-responsibilities-and-safe-refactor-rules.md`.
+- Next Batch 2 target: `forge_step1_batch2/part-2-file-responsibilities-and-safe-refactor-rules.md`.

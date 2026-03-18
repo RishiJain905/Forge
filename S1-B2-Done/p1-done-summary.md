@@ -47,7 +47,7 @@
 ## Final Branch State
 - Target branch: `dev`
 - Implementation worktree branch: `codex/s1-b2-p1-intake-architecture`
-- Merge-back to `dev` is still required before the task is fully closed under `execution.md`
+- The implementation has been merged back into `dev` and the Batch 2 Part 1 task is closed under `execution.md`
 
 ## Follow-On
 - Next Batch 2 target: `forge_step1_batch2/part-2-file-responsibilities-and-safe-refactor-rules.md`
