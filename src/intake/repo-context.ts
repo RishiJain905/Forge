@@ -51,6 +51,16 @@ const manifestFileNames = new Set([
   "yarn.lock",
 ]);
 
+const manifestTextFileNames = new Set([
+  "package.json",
+  "pyproject.toml",
+  "pytest.ini",
+  "requirements-dev.txt",
+  "requirements-prod.txt",
+  "requirements.txt",
+  "setup.cfg",
+]);
+
 const codeFileExtensions = [
   ".cjs",
   ".js",
@@ -109,6 +119,10 @@ function isManifestFile(relativePath: string): boolean {
     manifestFileNames.has(baseName) ||
     normalizedPath.startsWith(".github/workflows/")
   );
+}
+
+export function shouldReadManifestText(relativePath: string): boolean {
+  return manifestTextFileNames.has(getBasename(relativePath));
 }
 
 function isTestFile(relativePath: string): boolean {
@@ -529,6 +543,10 @@ async function buildRepoSignals(
   const manifestTexts = new Map<string, string | null>();
 
   for (const manifestFile of manifestFiles) {
+    if (!shouldReadManifestText(manifestFile)) {
+      continue;
+    }
+
     manifestTexts.set(manifestFile, await readManifestText(repoRoot, manifestFile));
   }
 

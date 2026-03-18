@@ -27,7 +27,7 @@ const listItemPattern = /^(?:[-*+]|(?:\d+\.))\s+(.*)$/;
 const summaryHeadingPattern = /^(?:summary|overview|purpose|description)\b:?$/i;
 const goalHeadingPattern = /^(?:goal|objective)\b:?$/i;
 const scopeHeadingPattern = /^(?:scope|in scope|in-scope)\b:?$/i;
-const acceptanceCriteriaHeadingPattern = /^(?:acceptance criteria|acceptance criteria:|acceptance)\b:?$/i;
+const acceptanceCriteriaHeadingPattern = /^(?:#{1,6}\s*)?acceptance criteria\b:?/im;
 const constraintsHeadingPattern = /^(?:constraints|non-goals|non goals|limitations)\b:?$/i;
 const riskPhrasePatterns = [
   { phrase: "api contract", pattern: /\bapi contract\b/i },
@@ -587,7 +587,6 @@ export function buildTaskParserResult(
 
   const document = parseTaskDocument(taskInput.parserInputText.split(/\r?\n/));
   const taskSpec = normalizeTaskSpec(taskInput);
-  const analysisText = buildAnalysisText(taskSpec);
   const hasAcceptanceCriteriaSection = document.sections.acceptanceCriteria.length > 0;
   const hasScopeSection = document.sections.scope.length > 0;
   const hasConstraintsSection = document.sections.constraints.length > 0;

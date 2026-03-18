@@ -310,6 +310,35 @@ await runScenario(
 );
 
 await runScenario(
+  "task parser treats markdown acceptance criteria headings as structural signal for thin prompts",
+  async () => {
+    const text = "## Acceptance Criteria";
+
+    const result = buildTaskParserResult(createParserInput({
+      inputMode: "prompt",
+      primaryInput: {
+        path: null,
+        rawText: text,
+      },
+      normalizedTaskText: text,
+      parserInputText: text,
+    }));
+
+    assert.equal(result.signals.promptIsThin, false);
+    assert.equal(
+      result.warnings.some((warning) => /too short/i.test(warning)),
+      false,
+    );
+    assert.equal(
+      result.recommendedUserActions.some((action) => /expand the prompt/i.test(action)),
+      false,
+    );
+    assert.deepEqual(result.taskSpec.acceptanceCriteria, []);
+    assert.equal(result.taskSpec.hasAcceptanceCriteria, false);
+  },
+);
+
+await runScenario(
   "section headings do not become spec titles when no top-level title is present",
   async () => {
     const text = [

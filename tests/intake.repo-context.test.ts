@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
-import { scanRepoResult } from "../src/intake/repo-context.js";
+import { scanRepoResult, shouldReadManifestText } from "../src/intake/repo-context.js";
 
 interface RichRepoScanSignals {
   sourceFileCount: number;
@@ -63,6 +63,21 @@ async function runScenario(name: string, scenario: () => Promise<void>): Promise
     process.exitCode = 1;
   }
 }
+
+await runScenario(
+  "repo context only reads content-bearing manifest files",
+  async () => {
+    assert.equal(shouldReadManifestText("package.json"), true);
+    assert.equal(shouldReadManifestText("services/api/package.json"), true);
+    assert.equal(shouldReadManifestText("pyproject.toml"), true);
+    assert.equal(shouldReadManifestText("requirements.txt"), true);
+    assert.equal(shouldReadManifestText("yarn.lock"), false);
+    assert.equal(shouldReadManifestText("pnpm-lock.yaml"), false);
+    assert.equal(shouldReadManifestText("go.mod"), false);
+    assert.equal(shouldReadManifestText(".github/workflows/ci.yml"), false);
+    assert.equal(shouldReadManifestText("tsconfig.json"), false);
+  },
+);
 
 await runScenario(
   "repo scan result exposes richer repo layout signals without losing grounding",
