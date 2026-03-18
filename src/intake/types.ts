@@ -306,8 +306,8 @@ export interface IntakeRunnerDependencies {
   gitCommandRunner?: GitCommandRunner;
 }
 
-export interface IntakeValidationResult {
-  validatedInput: ValidatedIntakeInputs | null;
+export interface ResolvedIntakeInput {
+  taskInput: NormalizedTaskInput | null;
   blockingIssues: BlockingIssue[];
   warnings: string[];
   recommendedUserActions: string[];

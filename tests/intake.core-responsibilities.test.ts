@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import { buildAmbiguityAnalysisResult } from "../src/intake/analysis.js";
 import { assembleIntakeResult } from "../src/intake/assemble.js";
-import { resolveTaskSource } from "../src/intake/input.js";
+import { resolveLoadedIntakeInput } from "../src/intake/input.js";
 import { buildInferenceResult } from "../src/intake/inference.js";
 import { resolveRuntimeOptions } from "../src/intake/options.js";
 import { scanRepoResult } from "../src/intake/repo-context.js";
@@ -11,6 +11,7 @@ import { buildTaskParserResult } from "../src/intake/task-parser.js";
 import {
   createTempRepo,
   disposeTempRepo,
+  writeRepoFile,
 } from "./support/forge-cli.js";
 import type { ValidatedIntakeInputs } from "../src/intake/types.js";
 
@@ -44,7 +45,7 @@ async function runScenario(name: string, scenario: () => Promise<void>): Promise
 await runScenario(
   "prompt source normalization creates synthetic prompt details from structured prompt input",
   async () => {
-    const taskInput = resolveTaskSource(
+    const taskInput = resolveLoadedIntakeInput(
       createPromptInput(
         [
           "Add retry telemetry to src/app.ts and keep tests/app.test.ts aligned.",
@@ -75,7 +76,7 @@ await runScenario(
 await runScenario(
   "prompt source normalization skips markdown headings when deriving the prompt goal",
   async () => {
-    const taskInput = resolveTaskSource(
+    const taskInput = resolveLoadedIntakeInput(
       createPromptInput(
         [
           "# Title",
@@ -102,7 +103,7 @@ await runScenario(
 await runScenario(
   "task parser result includes task spec and parse signals",
   async () => {
-    const taskInput = resolveTaskSource(
+    const taskInput = resolveLoadedIntakeInput(
       createPromptInput(
         [
           "Revise src/app.ts and tests/app.test.ts.",
@@ -150,7 +151,7 @@ await runScenario(
     const repoRoot = await createTempRepo();
 
     try {
-      const taskInput = resolveTaskSource(
+      const taskInput = resolveLoadedIntakeInput(
         createPromptInput("Update src/app.ts for the new login flow."),
       );
       const taskParserResult = buildTaskParserResult(taskInput);
@@ -183,7 +184,7 @@ await runScenario(
     const repoRoot = await createTempRepo();
 
     try {
-      const taskInput = resolveTaskSource(createPromptInput("fix"));
+      const taskInput = resolveLoadedIntakeInput(createPromptInput("fix"));
       const taskParserResult = buildTaskParserResult(taskInput);
       const repoScanResult = await scanRepoResult(repoRoot, join(repoRoot, ".forge"));
       const inferenceResult = buildInferenceResult({
@@ -219,7 +220,7 @@ await runScenario(
     const repoRoot = await createTempRepo();
 
     try {
-      const taskInput = resolveTaskSource(
+      const taskInput = resolveLoadedIntakeInput(
         createPromptInput("Build a customer support dashboard for the product."),
       );
       const taskParserResult = buildTaskParserResult(taskInput);
@@ -262,7 +263,7 @@ await runScenario(
     const repoRoot = await createTempRepo();
 
     try {
-      const taskInput = resolveTaskSource(
+      const taskInput = resolveLoadedIntakeInput(
         createPromptInput(
           [
             "Update src/missing.ts and keep tests/missing.test.ts aligned.",
@@ -308,7 +309,7 @@ await runScenario(
     const repoRoot = await createTempRepo();
 
     try {
-      const taskInput = resolveTaskSource(
+      const taskInput = resolveLoadedIntakeInput(
         createPromptInput(
           [
             "Update src/app.ts and keep tests/missing.test.ts aligned.",
@@ -356,7 +357,7 @@ await runScenario(
     const repoRoot = await createTempRepo();
 
     try {
-      const taskInput = resolveTaskSource(
+      const taskInput = resolveLoadedIntakeInput(
         createPromptInput(
           [
             "Update SRC/APP.TS and keep TESTS/APP.TEST.TS aligned.",
@@ -405,7 +406,7 @@ await runScenario(
     const repoRoot = await createTempRepo();
 
     try {
-      const taskInput = resolveTaskSource(
+      const taskInput = resolveLoadedIntakeInput(
         createPromptInput(
           [
             "Revise src/app.ts and tests/app.test.ts.",
@@ -525,6 +526,66 @@ await runScenario(
 );
 
 await runScenario(
+  "input module exposes one runner-facing resolver for loading, validation, and normalization",
+  async () => {
+    const repoRoot = await createTempRepo();
+
+    try {
+      await writeRepoFile(repoRoot, "notes.md", "- Keep CLI output stable.\n");
+      await writeRepoFile(repoRoot, "constraints.md", "- Avoid output contract drift.\n");
+
+      const inputModule = (await import("../src/intake/input.js")) as Record<string, unknown>;
+      const resolveIntakeInput = inputModule.resolveIntakeInput;
+
+      assert.equal(
+        typeof resolveIntakeInput,
+        "function",
+        "expected input.ts to export resolveIntakeInput",
+      );
+
+      const resolvedInput = await (resolveIntakeInput as (params: {
+        options: {
+          prompt?: string;
+          notes?: string;
+          constraints?: string;
+          focus?: string[];
+        };
+        currentWorkingDirectory: string;
+        repoRoot: string;
+      }) => Promise<{
+        taskInput: null | {
+          inputMode: "prompt" | "spec";
+          notes: string[];
+          constraints: string[];
+          focusPaths: string[];
+        };
+        blockingIssues: Array<{ code: string; message: string }>;
+        warnings: string[];
+        recommendedUserActions: string[];
+      }>)({
+        options: {
+          prompt: "Update src/app.ts and tests/app.test.ts for intake readiness.",
+          notes: join(repoRoot, "notes.md"),
+          constraints: join(repoRoot, "constraints.md"),
+          focus: ["src"],
+        },
+        currentWorkingDirectory: repoRoot,
+        repoRoot,
+      });
+
+      assert.ok(resolvedInput.taskInput, "expected a normalized task input");
+      assert.equal(resolvedInput.taskInput?.inputMode, "prompt");
+      assert.deepEqual(resolvedInput.taskInput?.notes, ["- Keep CLI output stable."]);
+      assert.deepEqual(resolvedInput.taskInput?.constraints, ["- Avoid output contract drift."]);
+      assert.deepEqual(resolvedInput.taskInput?.focusPaths, ["src"]);
+      assert.deepEqual(resolvedInput.blockingIssues, []);
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
   "task parser exposes direct task-spec normalization",
   async () => {
     const taskParserModule = (await import("../src/intake/task-parser.js")) as Record<string, unknown>;
@@ -536,7 +597,7 @@ await runScenario(
       "expected task-parser.ts to export normalizeTaskSpec",
     );
 
-    const taskInput = resolveTaskSource(
+    const taskInput = resolveLoadedIntakeInput(
       createPromptInput(
         [
           "Revise src/app.ts and tests/app.test.ts.",

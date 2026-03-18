@@ -7,7 +7,7 @@ import { createIntakeDebugArtifact } from "./debug.js";
 import { evaluateSuccessModel } from "./confidence.js";
 import { PersistenceError } from "./errors.js";
 import { buildInferenceResult } from "./inference.js";
-import { resolveLoadedIntakeInput, toArtifactSourceInputs } from "./input.js";
+import { resolveIntakeInput, toArtifactSourceInputs } from "./input.js";
 import { resolveOptionalReasoning } from "./llm.js";
 import { resolveRuntimeOptions } from "./options.js";
 import {
@@ -21,7 +21,6 @@ import { createIntakeReport } from "./report.js";
 import { buildTaskParserResult } from "./task-parser.js";
 import { resolveGitContext } from "./git-context.js";
 import { buildInitialVerificationTargets } from "./verification-targets.js";
-import { validateIntakeInputs } from "./validation.js";
 import type {
   IntakeCommandOptions,
   IntakeCommandResult,
@@ -177,14 +176,15 @@ export async function runIntakeCommand(
       );
     }
 
-    const validationResult = await validateIntakeInputs(options, currentWorkingDirectory, repoRoot);
-    validationBlockingIssues = validationResult.blockingIssues;
-    validationWarnings = validationResult.warnings;
-    validationRecommendedUserActions = validationResult.recommendedUserActions;
-
-    if (validationResult.validatedInput) {
-      taskInput = resolveLoadedIntakeInput(validationResult.validatedInput);
-    }
+    const resolvedInput = await resolveIntakeInput({
+      options,
+      currentWorkingDirectory,
+      repoRoot,
+    });
+    validationBlockingIssues = resolvedInput.blockingIssues;
+    validationWarnings = resolvedInput.warnings;
+    validationRecommendedUserActions = resolvedInput.recommendedUserActions;
+    taskInput = resolvedInput.taskInput;
 
     if (!failure && runtimeBlockingIssues.length > 0) {
       failure = createFailureDetails(
@@ -193,7 +193,7 @@ export async function runIntakeCommand(
       );
     }
 
-    if (!failure && validationResult.blockingIssues.length > 0) {
+    if (!failure && resolvedInput.blockingIssues.length > 0) {
       failure = createFailureDetails(
         "INPUT_VALIDATION_FAILED",
         "Forge intake found blocking input validation issues.",

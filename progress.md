@@ -118,10 +118,16 @@
   - Moved risk-analysis construction into `analysis.ts`, added a dedicated `verification-targets.ts` module, and reduced `artifact-sections.ts` to a projection layer for prebuilt analysis outputs.
   - Exposed readiness, final status, and summary helpers directly from `confidence.ts` while keeping `success.ts` as a compatibility wrapper.
   - Added focused architecture tests for the new seams and wired the repo-context, candidate-targets, and verification-target suites into the default `npm.cmd test` run.
+- Batch 2.02: `part-2-file-responsibilities-and-safe-refactor-rules.md`
+  - Made `input.ts` the canonical runner-facing owner for file loading, focus-path normalization, and normalized intake input resolution by adding `resolveIntakeInput` and reducing `validation.ts` to policy-only rules.
+  - Tightened `runner.ts` so it now consumes one input-resolution seam instead of coordinating validation and normalization itself.
+  - Removed the ultra-thin compatibility wrappers `success.ts`, `task-spec.ts`, and `focus-policy.ts`, and updated source/test imports to the real owners `confidence.ts`, `task-parser.ts`, and `candidate-targets.ts`.
+  - Kept the existing Batch 1 CLI, artifact, and report contracts stable while adding direct ownership coverage for the canonical input resolver and direct confidence-module imports.
+  - Expanded focused automated coverage and kept the full verification gate green for the ownership cleanup.
 
 ## Current Branch State
-- `dev` includes the completed Batch 1.16, Batch 1.17, Batch 1.18, Batch 1.19, Batch 1.20, and Batch 2.01 implementations.
-- The Batch 2 Part 1 implementation from worktree branch `codex/s1-b2-p1-intake-architecture` has been merged back into `dev`.
+- `dev` includes the completed Batch 1.16, Batch 1.17, Batch 1.18, Batch 1.19, Batch 1.20, Batch 2.01, and Batch 2.02 implementations.
+- The Batch 2 Part 1 implementation from worktree branch `codex/s1-b2-p1-intake-architecture` and the Batch 2 Part 2 implementation from worktree branch `codex/s1-b2-p2-file-ownership` have been merged back into `dev`.
 - `execution.md` now explicitly requires completed worktree branches to be merged back into their source branch before a task is considered complete, unless the user explicitly requests a PR-only workflow.
 
 ## Verification
@@ -131,4 +137,4 @@
 - `npm.cmd run smoke`
 
 ## Next
-- Next Batch 2 target: `forge_step1_batch2/part-2-file-responsibilities-and-safe-refactor-rules.md`.
+- Next Batch 2 target: `forge_step1_batch2/part-3-sequential-build-order.md`.

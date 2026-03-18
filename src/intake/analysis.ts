@@ -2,7 +2,7 @@ import { buildConfidenceResolution } from "./confidence.js";
 import {
   NON_STRICT_FOCUS_WARNING,
   STRICT_FOCUS_WARNING,
-} from "./focus-policy.js";
+} from "./candidate-targets.js";
 import type {
   AmbiguityAnalysisResult,
   ArtifactRiskAnalysisSection,

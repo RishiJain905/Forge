@@ -322,53 +322,60 @@ await runScenario(
 );
 
 await runScenario(
-  "validation module enforces policy-only rules against loaded sources",
+  "input module surfaces validation failures through the canonical resolver",
   async () => {
-    const validationModule = (await import("../src/intake/validation.js")) as Record<string, unknown>;
-    const validateLoadedIntakeInput = validationModule.validateLoadedIntakeInput;
+    const repoRoot = await createTempRepo();
 
-    assert.equal(
-      typeof validateLoadedIntakeInput,
-      "function",
-      "expected validation.ts to export validateLoadedIntakeInput",
-    );
+    try {
+      const inputModule = (await import("../src/intake/input.js")) as Record<string, unknown>;
+      const resolveIntakeInput = inputModule.resolveIntakeInput;
 
-    const loadedInput = {
-      inputMode: "spec" as const,
-      primaryInput: {
-        path: "/repo/spec.md",
-        rawText: "",
-      },
-      promptText: "Update src/app.ts and tests/app.test.ts for validation behavior.",
-      notes: [],
-      constraints: [],
-      configPath: "/repo/forge-intake.json",
-      focusPaths: [],
-      strictFocus: true,
-      sourceSelection: {
-        specProvided: true,
-        promptProvided: true,
-      },
-    };
+      assert.equal(
+        typeof resolveIntakeInput,
+        "function",
+        "expected input.ts to export resolveIntakeInput",
+      );
 
-    const result = (validateLoadedIntakeInput as (value: typeof loadedInput) => {
-      blockingIssues: Array<{
-        code: string;
-        message: string;
-      }>;
-      warnings: string[];
-      recommendedUserActions: string[];
-    })(loadedInput);
+      const result = await (resolveIntakeInput as (params: {
+        options: {
+          prompt?: string;
+          spec?: string;
+          strictFocus?: boolean;
+          config?: string;
+        };
+        currentWorkingDirectory: string;
+        repoRoot: string;
+      }) => Promise<{
+        taskInput: unknown | null;
+        blockingIssues: Array<{
+          code: string;
+          message: string;
+        }>;
+        warnings: string[];
+        recommendedUserActions: string[];
+      }>)({
+        options: {
+          prompt: "Update src/app.ts and tests/app.test.ts for validation behavior.",
+          spec: join(repoRoot, "missing-spec.md"),
+          strictFocus: true,
+          config: join(repoRoot, "forge-intake.json"),
+        },
+        currentWorkingDirectory: repoRoot,
+        repoRoot,
+      });
 
-    assert.ok(result.blockingIssues.some((issue) => issue.code === "INPUT_CONFLICT"));
-    assert.ok(result.blockingIssues.some((issue) => issue.code === "SPEC_EMPTY"));
-    assert.ok(result.blockingIssues.some((issue) => issue.code === "STRICT_FOCUS_REQUIRES_FOCUS"));
-    assert.ok(result.warnings.some((warning) => /config/i.test(warning)));
-    assert.ok(
-      result.recommendedUserActions.some(
-        (action) => /config/i.test(action) || /focus/i.test(action),
-      ),
-    );
+      assert.equal(result.taskInput, null);
+      assert.ok(result.blockingIssues.some((issue) => issue.code === "INPUT_CONFLICT"));
+      assert.ok(result.blockingIssues.some((issue) => issue.code === "SPEC_READ_FAILED"));
+      assert.ok(result.blockingIssues.some((issue) => issue.code === "STRICT_FOCUS_REQUIRES_FOCUS"));
+      assert.ok(
+        result.recommendedUserActions.some(
+          (action) => /config/i.test(action) || /focus/i.test(action),
+        ),
+      );
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
   },
 );
 

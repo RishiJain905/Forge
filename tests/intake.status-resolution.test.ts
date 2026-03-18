@@ -4,7 +4,7 @@ import {
   buildSummary,
   evaluateSuccessModel,
   resolveIntakeStatus,
-} from "../src/intake/success.js";
+} from "../src/intake/confidence.js";
 import { createGitContext } from "./support/forge-cli.js";
 
 function createRepoContext(
