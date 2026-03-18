@@ -125,6 +125,50 @@ await runScenario(
 );
 
 await runScenario(
+  "task parser captures structured requirements, mentions, constraints, and risky phrases",
+  async () => {
+    const taskInput = resolveLoadedIntakeInput({
+      inputMode: "prompt",
+      primaryInput: {
+        path: null,
+        rawText: [
+          "Plan a migration for src/app.ts, keep tests/app.test.ts aligned, and review API contract ownership.",
+          "",
+          "Acceptance Criteria",
+          "- src/app.ts handles retry writes safely",
+          "- tests/app.test.ts covers migration order",
+        ].join("\n"),
+      },
+      notes: [],
+      constraints: ["Avoid changing the CLI contract."],
+      configPath: null,
+      focusPaths: [],
+      warnings: [],
+      recommendedUserActions: [],
+    });
+
+    const result = buildTaskParserResult(taskInput);
+
+    assert.deepEqual(result.taskSpec.explicitRequirements, [
+      "src/app.ts handles retry writes safely",
+      "tests/app.test.ts covers migration order",
+    ]);
+    assert.deepEqual(result.taskSpec.constraints, [
+      "Avoid changing the CLI contract.",
+    ]);
+    assert.deepEqual(result.taskSpec.mentionedPaths, [
+      "src/app.ts",
+      "tests/app.test.ts",
+    ]);
+    assert.deepEqual(result.taskSpec.mentionedTests, ["tests/app.test.ts"]);
+    assert.ok((result.taskSpec.riskyPhrases ?? []).includes("migration"));
+    assert.ok((result.taskSpec.riskyPhrases ?? []).includes("retry"));
+    assert.ok((result.taskSpec.riskyPhrases ?? []).includes("api contract"));
+    assert.ok((result.taskSpec.riskyPhrases ?? []).includes("ownership"));
+  },
+);
+
+await runScenario(
   "repo scan result includes repo context and scan signals",
   async () => {
     const repoRoot = await createTempRepo();
@@ -208,6 +252,12 @@ await runScenario(
       assert.equal(result.confidence.level, "low");
       assert.ok(result.ambiguities.some((value: string) => /too short|acceptance criteria/i.test(value)));
       assert.ok(result.warnings.some((value: string) => /confidence|fallback|partial/i.test(value)));
+      assert.ok(
+        (result.ambiguityItems ?? []).some((item) => item.type === "acceptance_criteria" && item.severity !== "low"),
+      );
+      assert.ok(
+        (result.warningItems ?? []).some((item) => item.code === "FALLBACK_TARGETING"),
+      );
     } finally {
       await disposeTempRepo(repoRoot);
     }

@@ -23,12 +23,15 @@ function buildCandidateTarget(
   kind: CandidateTarget["kind"],
   matchType: CandidateTarget["matchType"],
   reason: string,
+  notes: string[] = [],
 ): CandidateTarget {
   return {
     path: pathValue,
     kind,
     matchType,
     reason,
+    notes,
+    sharedRisk: isSharedRiskPath(pathValue, kind),
   };
 }
 
@@ -50,6 +53,17 @@ function normalizeFileStem(filePath: string): string {
   const baseName = path.posix.basename(normalizePathForComparison(filePath));
   const withoutExtension = baseName.replace(/\.[^.]+$/, "");
   return withoutExtension.replace(/\.(test|spec)$/i, "");
+}
+
+function isSharedRiskPath(
+  filePath: string,
+  kind: CandidateTarget["kind"],
+): boolean {
+  if (kind === "manifest") {
+    return true;
+  }
+
+  return /(^|\/)(app|index|main|server|cli)\.[^.]+$/i.test(filePath);
 }
 
 function textMentionsPath(text: string, filePath: string): boolean {
@@ -100,6 +114,7 @@ function resolveSiblingTestTargets(
       "test",
       "fallback",
       `Derived a sibling test surface from explicit source target \`${sourceTarget.path}\`.`,
+      ["Derived from an explicitly referenced source target."],
     ),
   );
 }
@@ -126,6 +141,7 @@ function resolveExplicitCandidateTargets(
           "source",
           "explicit",
           "Matched a source file path mentioned in the task input.",
+          ["Matched an explicit task-to-file reference."],
         ),
       );
     }
@@ -140,6 +156,7 @@ function resolveExplicitCandidateTargets(
           "test",
           "explicit",
           "Matched a test file path mentioned in the task input.",
+          ["Matched an explicit test reference from the task input."],
         ),
       );
     }
@@ -154,6 +171,10 @@ function resolveExplicitCandidateTargets(
           "manifest",
           "explicit",
           "Matched a manifest or configuration file mentioned in the task input.",
+          [
+            "Matched an explicit manifest/config reference from the task input.",
+            "Manifest/config surfaces are shared-risk files for downstream planning.",
+          ],
         ),
       );
     }
@@ -186,6 +207,7 @@ function resolveFallbackCandidateTargets(repoContext: RepoContext): CandidateTar
         "source",
         "fallback",
         "Inferred a likely source target from the repo layout.",
+        ["Fell back to repo-layout targeting because the task had no explicit file match."],
       ),
     );
   }
@@ -197,6 +219,7 @@ function resolveFallbackCandidateTargets(repoContext: RepoContext): CandidateTar
         "test",
         "fallback",
         "Inferred a likely test target from the repo layout.",
+        ["Fell back to repo-layout targeting because the task had no explicit file match."],
       ),
     );
   }
@@ -212,6 +235,10 @@ function resolveFallbackCandidateTargets(repoContext: RepoContext): CandidateTar
         "manifest",
         "fallback",
         "Inferred a likely manifest target from the repo layout.",
+        [
+          "Fell back to repo-layout targeting because the task had no explicit file match.",
+          "Manifest/config surfaces are shared-risk files for downstream planning.",
+        ],
       ),
     ];
   }

@@ -125,6 +125,19 @@ await runScenario(
       assert.ok(
         targets.some((target) => target.path === "tsconfig.json" && target.kind === "manifest"),
       );
+      assert.ok(
+        targets.some((target) =>
+          target.path === "package.json" &&
+          target.sharedRisk === true &&
+          (target.notes ?? []).some((note) => /manifest|shared-risk/i.test(note))
+        ),
+      );
+      assert.ok(
+        targets.some((target) =>
+          target.path === "src/app.ts" &&
+          (target.notes ?? []).some((note) => /explicit/i.test(note))
+        ),
+      );
     } finally {
       await disposeTempRepo(repoRoot);
     }

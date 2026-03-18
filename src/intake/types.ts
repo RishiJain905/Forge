@@ -62,6 +62,22 @@ export interface PromptDetails {
   openQuestions: PromptOpenQuestion[];
 }
 
+export interface Ambiguity {
+  type:
+    | "acceptance_criteria"
+    | "scope"
+    | "constraints"
+    | "repo_alignment"
+    | "input";
+  severity: "low" | "medium" | "high";
+  message: string;
+}
+
+export interface WarningItem {
+  code: string;
+  message: string;
+}
+
 export interface NormalizedTaskInput {
   inputMode: IntakeInputMode;
   primaryInput: {
@@ -128,11 +144,20 @@ export interface LoadedIntakeInput {
   sourceSelection: LoadedIntakeSourceSelection;
 }
 
-export interface IntakeTaskSpec {
+export interface NormalizedTaskSpec {
   goal: string;
   acceptanceCriteria: string[];
   hasAcceptanceCriteria: boolean;
+  explicitRequirements?: string[];
+  constraints?: string[];
+  mentionedPaths?: string[];
+  mentionedTests?: string[];
+  mentionedModules?: string[];
+  riskyPhrases?: string[];
+  openQuestions?: PromptOpenQuestion[];
 }
+
+export type IntakeTaskSpec = NormalizedTaskSpec;
 
 export interface ArtifactTaskSpecSection {
   goal: string;
@@ -198,7 +223,11 @@ export interface CandidateTarget {
   kind: "source" | "test" | "manifest";
   matchType: "explicit" | "fallback";
   reason: string;
+  notes?: string[];
+  sharedRisk?: boolean;
 }
+
+export type CandidateTargets = CandidateTarget[];
 
 export interface CandidateTargetingOptions {
   focusPaths: string[];
@@ -225,11 +254,23 @@ export interface ArtifactCandidateTargetSectionItem {
   reason: string;
 }
 
-export interface InitialVerificationTarget {
+export interface VerificationTarget {
   path: string;
   kind: CandidateTarget["kind"];
+  category?:
+    | "code_surface"
+    | "test_surface"
+    | "config_surface"
+    | "retry_logic"
+    | "ownership"
+    | "api_contract"
+    | "migration_order"
+    | "parallel_overlap"
+    | "stale_write";
   reason: string;
 }
+
+export type InitialVerificationTarget = VerificationTarget;
 
 export interface ArtifactInitialVerificationTargetSectionItem {
   path: string;
@@ -328,7 +369,9 @@ export interface ResolvedRuntimeOptions {
 
 export interface AmbiguityAnalysisResult {
   ambiguities: string[];
+  ambiguityItems?: Ambiguity[];
   warnings: string[];
+  warningItems?: WarningItem[];
   recommendedUserActions: string[];
   confidence: {
     level: IntakeConfidenceLevel;
@@ -360,6 +403,8 @@ export interface ArtifactRiskAnalysisSection {
   initial_risk_zones: ArtifactRiskZone[];
 }
 
+export type RiskAnalysis = ArtifactRiskAnalysisSection;
+
 export interface ArtifactConfidenceSection {
   level: IntakeConfidenceLevel;
   signals: {
@@ -369,6 +414,8 @@ export interface ArtifactConfidenceSection {
   };
   reasons: string[];
 }
+
+export type ConfidenceSummary = AmbiguityAnalysisResult["confidence"];
 
 export interface AssembledIntakeResult {
   responsibilities: {
@@ -486,6 +533,8 @@ export interface IntakeCommandResult {
   nextStepReadiness: NextStepReadiness | null;
   failure: IntakeFailureDetails | null;
 }
+
+export type IntakeRunResult = IntakeCommandResult;
 
 export interface IntakeDebugArtifact {
   command: string;
