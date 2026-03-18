@@ -6,6 +6,8 @@ import type {
   RepoScanResult,
   TaskParserResult,
 } from "./types.js";
+import { buildRiskAnalysisResult } from "./analysis.js";
+import { buildVerificationTargets } from "./verification-targets.js";
 
 export function assembleIntakeResult(params: {
   taskInput: NormalizedTaskInput | null;
@@ -24,6 +26,15 @@ export function assembleIntakeResult(params: {
     taskSpec: params.taskParserResult.taskSpec,
     repoContext: params.repoScanResult.repoContext,
     candidateTargets: params.inferenceResult.candidateTargets,
+    riskAnalysis: buildRiskAnalysisResult({
+      taskParserResult: params.taskParserResult,
+      repoScanResult: params.repoScanResult,
+      inferenceResult: params.inferenceResult,
+    }),
+    verificationTargets: buildVerificationTargets({
+      taskParserResult: params.taskParserResult,
+      candidateTargets: params.inferenceResult.candidateTargets,
+    }),
     ambiguities: [...params.ambiguityAnalysisResult.ambiguities],
     warnings: [...params.ambiguityAnalysisResult.warnings],
     recommendedUserActions: [...params.ambiguityAnalysisResult.recommendedUserActions],

@@ -39,7 +39,7 @@ export function createIntakeArtifact(params: {
     ambiguities,
     confidenceLevel: params.assembledResult.confidence.level,
   });
-  const riskAnalysis = buildRiskAnalysisResult({
+  const riskAnalysis = params.assembledResult.riskAnalysis ?? buildRiskAnalysisResult({
     taskParserResult: params.assembledResult.responsibilities.taskParser,
     repoScanResult: params.assembledResult.responsibilities.repoScan,
     inferenceResult: params.assembledResult.responsibilities.inference,
@@ -49,7 +49,8 @@ export function createIntakeArtifact(params: {
     assembledResult: params.assembledResult,
     boundarySafeResult: params.boundarySafeResult,
     riskAnalysis,
-    initialVerificationTargets: params.boundarySafeResult.initialVerificationTargets,
+    initialVerificationTargets:
+      params.assembledResult.verificationTargets ?? params.boundarySafeResult.initialVerificationTargets,
     nextStepReadiness: params.nextStepReadiness,
   });
 

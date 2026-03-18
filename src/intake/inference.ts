@@ -12,6 +12,27 @@ function pushUnique(values: string[], value: string): void {
   }
 }
 
+function buildStructuredTargetingInput(
+  taskInput: NormalizedTaskInput,
+  taskParserResult: TaskParserResult,
+): NormalizedTaskInput {
+  const taskSpec = taskParserResult.taskSpec;
+  const structuredFragments = [
+    ...(taskSpec.scope ?? []),
+    ...(taskSpec.mentionedPaths ?? []),
+    ...(taskSpec.mentionedTests ?? []),
+    ...taskSpec.acceptanceCriteria,
+    ...(taskSpec.constraints ?? []),
+  ];
+  const structuredText = structuredFragments.join("\n").trim();
+
+  return {
+    ...taskInput,
+    normalizedTaskText: [taskInput.normalizedTaskText, structuredText].filter(Boolean).join("\n\n"),
+    parserInputText: [taskInput.parserInputText, structuredText].filter(Boolean).join("\n\n"),
+  };
+}
+
 export function buildInferenceResult(params: {
   taskInput: NormalizedTaskInput | null;
   taskParserResult: TaskParserResult;
@@ -37,11 +58,12 @@ export function buildInferenceResult(params: {
     };
   }
 
+  const structuredTaskInput = buildStructuredTargetingInput(params.taskInput, params.taskParserResult);
   const targetResolution = resolveCandidateTargeting(
-    params.taskInput,
+    structuredTaskInput,
     params.repoScanResult.repoContext,
     {
-      focusPaths: params.taskInput.focusPaths,
+      focusPaths: structuredTaskInput.focusPaths,
       strictFocus: params.strictFocus === true,
     },
   );

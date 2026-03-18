@@ -526,6 +526,114 @@ await runScenario("intake report renders prompt-mode open questions and recommen
   assert.match(report, /Expand the prompt with the intended files and success criteria\./);
 });
 
+await runScenario("intake report renders richer Batch 3 task and repo metadata", () => {
+  const report = createIntakeReport(createArtifact({
+    mutateBoundarySafeResult: (result) => {
+      result.taskSpec = {
+        title: "Update app behavior",
+        summary: "Spec summary",
+        goal: "Revise src/app.ts and keep tests aligned.",
+        scope: ["src/app.ts"],
+        explicitRequirements: ["Keep the retry flow stable"],
+        constraints: ["Do not change public APIs."],
+        mentionedPaths: ["src/app.ts", "tests/app.test.ts"],
+        mentionedTests: ["tests/app.test.ts"],
+        mentionedModules: ["app"],
+        riskyPhrases: ["migration"],
+        openQuestions: [
+          {
+            category: "scope",
+            text: "Which surface should change?",
+          },
+        ],
+        acceptanceCriteria: [
+          "src/app.ts is updated",
+        ],
+        hasAcceptanceCriteria: true,
+      };
+      result.repoContext = {
+        grounded: true,
+        sourceFiles: ["src/app.ts"],
+        testFiles: ["tests/app.test.ts"],
+        manifestFiles: ["package.json"],
+        allFiles: ["package.json", "src/app.ts", "tests/app.test.ts"],
+        gitContext: createGitContext({
+          status: "available",
+          repoRoot: "C:/repo",
+          branch: "main",
+          recentFiles: ["src/app.ts"],
+        }),
+        languages: ["typescript"],
+        frameworkHints: ["Node.js", "TypeScript"],
+        packageManager: "npm",
+        keyDirectories: ["src", "tests"],
+        entryPoints: ["src/app.ts"],
+        testFrameworkHints: ["Vitest"],
+        layoutSummary:
+          "languages: typescript; package manager: npm; key directories: src, tests; entry points: src/app.ts; manifests: package.json",
+      };
+    },
+    mutateAssembledResult: (result) => {
+      result.taskSpec = {
+        title: "Update app behavior",
+        summary: "Spec summary",
+        goal: "Revise src/app.ts and keep tests aligned.",
+        scope: ["src/app.ts"],
+        explicitRequirements: ["Keep the retry flow stable"],
+        constraints: ["Do not change public APIs."],
+        mentionedPaths: ["src/app.ts", "tests/app.test.ts"],
+        mentionedTests: ["tests/app.test.ts"],
+        mentionedModules: ["app"],
+        riskyPhrases: ["migration"],
+        openQuestions: [
+          {
+            category: "scope",
+            text: "Which surface should change?",
+          },
+        ],
+        acceptanceCriteria: [
+          "src/app.ts is updated",
+        ],
+        hasAcceptanceCriteria: true,
+      };
+      result.repoContext = {
+        grounded: true,
+        sourceFiles: ["src/app.ts"],
+        testFiles: ["tests/app.test.ts"],
+        manifestFiles: ["package.json"],
+        allFiles: ["package.json", "src/app.ts", "tests/app.test.ts"],
+        gitContext: createGitContext({
+          status: "available",
+          repoRoot: "C:/repo",
+          branch: "main",
+          recentFiles: ["src/app.ts"],
+        }),
+        languages: ["typescript"],
+        frameworkHints: ["Node.js", "TypeScript"],
+        packageManager: "npm",
+        keyDirectories: ["src", "tests"],
+        entryPoints: ["src/app.ts"],
+        testFrameworkHints: ["Vitest"],
+        layoutSummary:
+          "languages: typescript; package manager: npm; key directories: src, tests; entry points: src/app.ts; manifests: package.json",
+      };
+    },
+  }));
+
+  assert.match(report, /## Task Spec/);
+  assert.match(report, /Title:\s+Update app behavior/);
+  assert.match(report, /Summary:\s+Spec summary/);
+  assert.match(report, /Scope:\s+src\/app\.ts/);
+  assert.match(report, /### Explicit Requirements/);
+  assert.match(report, /### Open Questions/);
+  assert.match(report, /## Repo Context/);
+  assert.match(report, /Languages:\s+typescript/);
+  assert.match(report, /Framework Hints:\s+Node\.js, TypeScript/);
+  assert.match(report, /Package Manager:\s+npm/);
+  assert.match(report, /Entry Points:\s+src\/app\.ts/);
+  assert.match(report, /Layout Summary:\s+languages: typescript/i);
+});
+
 await runScenario("intake report keeps output file metadata accurate in report-only mode", () => {
   const report = createIntakeReport(createArtifact({
     runtimeOptions: resolveRuntimeOptions({ reportOnly: true }),

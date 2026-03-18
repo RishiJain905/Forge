@@ -57,6 +57,161 @@ async function runScenario(name: string, scenario: () => Promise<void>): Promise
 }
 
 await runScenario(
+  "prompt mode keeps title stable when notes and constraints are appended",
+  async () => {
+    const taskInput = resolveLoadedIntakeInput(
+      createPromptInput(
+        "Refine retry telemetry for src/app.ts.",
+        {
+          notes: ["Preserve existing CLI behavior."],
+          constraints: ["Do not change the output format."],
+        },
+      ),
+    );
+
+    const result = buildTaskParserResult(taskInput);
+
+    assert.equal(result.taskSpec.title, "Refine retry telemetry for src/app.ts");
+    assert.equal(result.taskSpec.goal, "Refine retry telemetry for src/app.ts.");
+  },
+);
+
+await runScenario(
+  "task parser surfaces heading title and separate prose goal for structured specs",
+  async () => {
+    const result = buildTaskParserResult(createParserInput({
+      inputMode: "spec",
+      primaryInput: {
+        path: "/repo/spec.md",
+        rawText: [
+          "# Update app behavior",
+          "",
+          "Add retry telemetry to src/app.ts and keep tests/app.test.ts aligned.",
+          "",
+          "Summary",
+          "This update tightens retry visibility for the app runtime and tests.",
+          "",
+          "Scope",
+          "- src/app.ts",
+          "- tests/app.test.ts",
+          "",
+          "Acceptance Criteria",
+          "- src/app.ts emits retry telemetry",
+          "- tests/app.test.ts validates the retry telemetry output",
+        ].join("\n"),
+      },
+      normalizedTaskText: [
+        "# Update app behavior",
+        "",
+        "Add retry telemetry to src/app.ts and keep tests/app.test.ts aligned.",
+        "",
+        "Summary",
+        "This update tightens retry visibility for the app runtime and tests.",
+        "",
+        "Scope",
+        "- src/app.ts",
+        "- tests/app.test.ts",
+        "",
+        "Acceptance Criteria",
+        "- src/app.ts emits retry telemetry",
+        "- tests/app.test.ts validates the retry telemetry output",
+      ].join("\n"),
+      parserInputText: [
+        "# Update app behavior",
+        "",
+        "Add retry telemetry to src/app.ts and keep tests/app.test.ts aligned.",
+        "",
+        "Summary",
+        "This update tightens retry visibility for the app runtime and tests.",
+        "",
+        "Scope",
+        "- src/app.ts",
+        "- tests/app.test.ts",
+        "",
+        "Acceptance Criteria",
+        "- src/app.ts emits retry telemetry",
+        "- tests/app.test.ts validates the retry telemetry output",
+      ].join("\n"),
+    }));
+
+    assert.equal(result.taskSpec.title, "Update app behavior");
+    assert.equal(result.taskSpec.goal, "Add retry telemetry to src/app.ts and keep tests/app.test.ts aligned.");
+    assert.match(result.taskSpec.summary ?? "", /retry visibility/i);
+    assert.deepEqual(result.taskSpec.scope, ["src/app.ts", "tests/app.test.ts"]);
+    assert.deepEqual(result.taskSpec.explicitRequirements, [
+      "src/app.ts emits retry telemetry",
+      "tests/app.test.ts validates the retry telemetry output",
+    ]);
+  },
+);
+
+await runScenario(
+  "headingless spec titles ignore appended supplemental sections",
+  async () => {
+    const rawText = "Implement retry telemetry for src/app.ts.";
+    const result = buildTaskParserResult(createParserInput({
+      inputMode: "spec",
+      primaryInput: {
+        path: "/repo/spec.md",
+        rawText,
+      },
+      normalizedTaskText: [
+        rawText,
+        "",
+        "## Notes",
+        "",
+        "Preserve current CLI output.",
+        "",
+        "## Constraints",
+        "",
+        "Do not change the output format.",
+      ].join("\n"),
+      parserInputText: [
+        rawText,
+        "",
+        "## Notes",
+        "",
+        "Preserve current CLI output.",
+        "",
+        "## Constraints",
+        "",
+        "Do not change the output format.",
+      ].join("\n"),
+    }));
+
+    assert.equal(result.taskSpec.title, "Implement retry telemetry for src/app.ts.");
+    assert.equal(result.taskSpec.goal, "Implement retry telemetry for src/app.ts.");
+  },
+);
+
+await runScenario(
+  "section headings do not become spec titles when no top-level title is present",
+  async () => {
+    const text = [
+      "## Summary",
+      "",
+      "Implement retry telemetry for src/app.ts.",
+      "",
+      "## Scope",
+      "",
+      "- src/app.ts",
+    ].join("\n");
+    const result = buildTaskParserResult(createParserInput({
+      inputMode: "spec",
+      primaryInput: {
+        path: "/repo/spec.md",
+        rawText: text,
+      },
+      normalizedTaskText: text,
+      parserInputText: text,
+    }));
+
+    assert.equal(result.taskSpec.title, "Implement retry telemetry for src/app.ts.");
+    assert.equal(result.taskSpec.goal, "Implement retry telemetry for src/app.ts.");
+  },
+);
+
+await runScenario(
   "prompt normalization creates synthetic prompt details from structured prompt input",
   async () => {
     const taskInput = resolveLoadedIntakeInput(

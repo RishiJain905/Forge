@@ -78,6 +78,13 @@ await runScenario(
       const signals = result.signals as unknown as RichRepoScanSignals;
 
       assert.equal(result.repoContext.grounded, true);
+      assert.ok(Array.isArray(result.repoContext.languages), "expected repoContext.languages");
+      assert.ok(Array.isArray(result.repoContext.frameworkHints), "expected repoContext.frameworkHints");
+      assert.equal(result.repoContext.packageManager, "npm");
+      assert.ok(Array.isArray(result.repoContext.keyDirectories), "expected repoContext.keyDirectories");
+      assert.ok(Array.isArray(result.repoContext.entryPoints), "expected repoContext.entryPoints");
+      assert.ok(Array.isArray(result.repoContext.testFrameworkHints), "expected repoContext.testFrameworkHints");
+      assert.equal((result.repoContext.layoutSummary ?? "").length > 0, true);
       assert.equal(signals.sourceFileCount >= 2, true);
       assert.equal(signals.testFileCount >= 1, true);
       assert.equal(signals.manifestFileCount >= 2, true);

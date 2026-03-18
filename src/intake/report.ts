@@ -177,14 +177,51 @@ function renderRuntimeOptionsSection(artifact: IntakeArtifact): string {
 }
 
 function renderTaskSpecSection(artifact: IntakeArtifact): string {
-  return renderSection("Task Spec", [
+  const taskSpecLines = [
     "This is the normalized task understanding that later workflow steps will consume.",
+    `- Title: ${artifact.task_spec.title || "none"}`,
+    `- Summary: ${artifact.task_spec.summary || "none"}`,
     `- Goal: ${artifact.task_spec.goal || "none"}`,
+    artifact.task_spec.scope.length > 0
+      ? `- Scope: ${artifact.task_spec.scope.join(", ")}`
+      : "- Scope: none",
     `- Acceptance criteria present: \`${artifact.task_spec.has_acceptance_criteria}\``,
     "",
     "### Acceptance Criteria",
     "",
     renderList(artifact.task_spec.acceptance_criteria),
+    "",
+    "### Explicit Requirements",
+    "",
+    renderList(artifact.task_spec.explicit_requirements),
+    "",
+    "### Constraints",
+    "",
+    renderList(artifact.task_spec.constraints),
+    "",
+    "### Mentioned Paths",
+    "",
+    renderList(artifact.task_spec.mentioned_paths),
+    "",
+    "### Mentioned Tests",
+    "",
+    renderList(artifact.task_spec.mentioned_tests),
+    "",
+    "### Mentioned Modules",
+    "",
+    renderList(artifact.task_spec.mentioned_modules),
+    "",
+    "### Risky Phrases",
+    "",
+    renderList(artifact.task_spec.risky_phrases),
+    "",
+    "### Open Questions",
+    "",
+    renderList(artifact.task_spec.open_questions.map((question) => `${question.category}: ${question.text}`)),
+  ];
+
+  return renderSection("Task Spec", [
+    ...taskSpecLines,
   ]);
 }
 
@@ -197,6 +234,25 @@ function renderRepoContextSection(artifact: IntakeArtifact): string {
     `- Source files found: ${artifact.repo_context.source_files.length}`,
     `- Test files found: ${artifact.repo_context.test_files.length}`,
     `- Manifest files found: ${artifact.repo_context.manifest_files.length}`,
+    artifact.repo_context.languages.length > 0
+      ? `- Languages: ${artifact.repo_context.languages.join(", ")}`
+      : "- Languages: none",
+    artifact.repo_context.framework_hints.length > 0
+      ? `- Framework Hints: ${artifact.repo_context.framework_hints.join(", ")}`
+      : "- Framework Hints: none",
+    artifact.repo_context.package_manager
+      ? `- Package Manager: ${artifact.repo_context.package_manager}`
+      : "- Package Manager: none",
+    artifact.repo_context.key_directories.length > 0
+      ? `- Key Directories: ${artifact.repo_context.key_directories.join(", ")}`
+      : "- Key Directories: none",
+    artifact.repo_context.entry_points.length > 0
+      ? `- Entry Points: ${artifact.repo_context.entry_points.join(", ")}`
+      : "- Entry Points: none",
+    artifact.repo_context.test_framework_hints.length > 0
+      ? `- Test Framework Hints: ${artifact.repo_context.test_framework_hints.join(", ")}`
+      : "- Test Framework Hints: none",
+    `- Layout Summary: ${artifact.repo_context.layout_summary}`,
     `- Git status: \`${gitContext.status}\``,
     gitContext.repo_root
       ? `- Git repo root: \`${gitContext.repo_root}\``

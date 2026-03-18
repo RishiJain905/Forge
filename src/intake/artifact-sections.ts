@@ -17,9 +17,19 @@ function toArtifactTaskSpecSection(
   taskSpec: BoundarySafeIntakeResult["taskSpec"],
 ): ArtifactTaskSpecSection {
   return {
+    title: taskSpec.title ?? "",
+    summary: taskSpec.summary ?? "",
     goal: taskSpec.goal,
+    scope: [...(taskSpec.scope ?? [])],
     acceptance_criteria: [...taskSpec.acceptanceCriteria],
     has_acceptance_criteria: taskSpec.hasAcceptanceCriteria,
+    explicit_requirements: [...(taskSpec.explicitRequirements ?? [])],
+    constraints: [...(taskSpec.constraints ?? [])],
+    mentioned_paths: [...(taskSpec.mentionedPaths ?? [])],
+    mentioned_tests: [...(taskSpec.mentionedTests ?? [])],
+    mentioned_modules: [...(taskSpec.mentionedModules ?? [])],
+    risky_phrases: [...(taskSpec.riskyPhrases ?? [])],
+    open_questions: [...(taskSpec.openQuestions ?? [])],
   };
 }
 
@@ -42,6 +52,13 @@ function toArtifactRepoContextSection(
     source_files: [...repoContext.sourceFiles],
     test_files: [...repoContext.testFiles],
     manifest_files: [...repoContext.manifestFiles],
+    languages: [...(repoContext.languages ?? [])],
+    framework_hints: [...(repoContext.frameworkHints ?? [])],
+    package_manager: repoContext.packageManager ?? null,
+    key_directories: [...(repoContext.keyDirectories ?? [])],
+    entry_points: [...(repoContext.entryPoints ?? [])],
+    test_framework_hints: [...(repoContext.testFrameworkHints ?? [])],
+    layout_summary: repoContext.layoutSummary ?? "No repository layout signals were detected.",
     git_context: toArtifactGitContextSection(repoContext.gitContext),
   };
 }
