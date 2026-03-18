@@ -25,6 +25,7 @@ function toArtifactTaskSpecSection(
     acceptance_criteria: [...taskSpec.acceptanceCriteria],
     has_acceptance_criteria: taskSpec.hasAcceptanceCriteria,
     explicit_requirements: [...(taskSpec.explicitRequirements ?? [])],
+    implementation_necessities: [...(taskSpec.implementationNecessities ?? [])],
     constraints: [...(taskSpec.constraints ?? [])],
     mentioned_paths: [...(taskSpec.mentionedPaths ?? [])],
     mentioned_tests: [...(taskSpec.mentionedTests ?? [])],
@@ -59,6 +60,8 @@ function toArtifactRepoContextSection(
     key_directories: [...(repoContext.keyDirectories ?? [])],
     entry_points: [...(repoContext.entryPoints ?? [])],
     test_framework_hints: [...(repoContext.testFrameworkHints ?? [])],
+    test_command_hints: [...(repoContext.testCommandHints ?? [])],
+    ci_hints: [...(repoContext.ciHints ?? [])],
     layout_summary: repoContext.layoutSummary ?? "No repository layout signals were detected.",
     git_context: toArtifactGitContextSection(repoContext.gitContext),
   };

@@ -90,6 +90,7 @@ export const intakeArtifactSchema = z.object({
     acceptance_criteria: z.array(z.string().min(1)),
     has_acceptance_criteria: z.boolean(),
     explicit_requirements: z.array(z.string().min(1)),
+    implementation_necessities: z.array(z.string().min(1)),
     constraints: z.array(z.string().min(1)),
     mentioned_paths: z.array(z.string().min(1)),
     mentioned_tests: z.array(z.string().min(1)),
@@ -113,6 +114,8 @@ export const intakeArtifactSchema = z.object({
     key_directories: z.array(z.string().min(1)),
     entry_points: z.array(z.string().min(1)),
     test_framework_hints: z.array(z.string().min(1)),
+    test_command_hints: z.array(z.string().min(1)),
+    ci_hints: z.array(z.string().min(1)),
     layout_summary: z.string().min(1),
     git_context: z.object({
       status: z.enum(["available", "not_repo", "unavailable", "error"]),

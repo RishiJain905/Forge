@@ -123,6 +123,8 @@ export interface TaskParserResult {
     promptRequirementCandidateCount: number;
     promptOpenQuestionCategories: PromptOpenQuestion["category"][];
   };
+  ambiguityItems?: Ambiguity[];
+  warningItems?: WarningItem[];
   ambiguities: string[];
   warnings: string[];
   recommendedUserActions: string[];
@@ -156,6 +158,7 @@ export interface NormalizedTaskSpec {
   acceptanceCriteria: string[];
   hasAcceptanceCriteria: boolean;
   explicitRequirements?: string[];
+  implementationNecessities?: string[];
   constraints?: string[];
   mentionedPaths?: string[];
   mentionedTests?: string[];
@@ -174,6 +177,7 @@ export interface ArtifactTaskSpecSection {
   acceptance_criteria: string[];
   has_acceptance_criteria: boolean;
   explicit_requirements: string[];
+  implementation_necessities: string[];
   constraints: string[];
   mentioned_paths: string[];
   mentioned_tests: string[];
@@ -195,6 +199,8 @@ export interface RepoContext {
   keyDirectories?: string[];
   entryPoints?: string[];
   testFrameworkHints?: string[];
+  testCommandHints?: string[];
+  ciHints?: string[];
   layoutSummary?: string;
 }
 
@@ -209,6 +215,8 @@ export interface ArtifactRepoContextSection {
   key_directories: string[];
   entry_points: string[];
   test_framework_hints: string[];
+  test_command_hints: string[];
+  ci_hints: string[];
   layout_summary: string;
   git_context: ArtifactGitContextSection;
 }
@@ -227,6 +235,8 @@ export interface RepoScanSignals {
   keyDirectories?: string[];
   entryPoints?: string[];
   layoutSummary?: string;
+  testCommandHints?: string[];
+  ciHints?: string[];
 }
 
 export interface GitContext {

@@ -376,9 +376,29 @@ await runScenario("intake artifact includes deterministic typed risk analysis zo
 });
 
 await runScenario("artifact sections project the richer Batch 3 task and repo context surface", () => {
+  const assembledResult = createAssembledResult() as AssembledIntakeResult & {
+    taskSpec: Record<string, unknown>;
+    repoContext: Record<string, unknown>;
+  };
+  const boundarySafeResult = createBoundarySafeResult() as BoundarySafeIntakeResult & {
+    taskSpec: Record<string, unknown>;
+    repoContext: Record<string, unknown>;
+  };
+
+  assembledResult.taskSpec.implementationNecessities = [
+    "Add or update tests for the touched behavior.",
+  ];
+  assembledResult.repoContext.testCommandHints = ["npm test"];
+  assembledResult.repoContext.ciHints = ["GitHub Actions"];
+  boundarySafeResult.taskSpec.implementationNecessities = [
+    "Add or update tests for the touched behavior.",
+  ];
+  boundarySafeResult.repoContext.testCommandHints = ["npm test"];
+  boundarySafeResult.repoContext.ciHints = ["GitHub Actions"];
+
   const sections = buildArtifactSections({
-    assembledResult: createAssembledResult(),
-    boundarySafeResult: createBoundarySafeResult(),
+    assembledResult,
+    boundarySafeResult,
     nextStepReadiness: createNextStepReadiness(),
     riskAnalysis: {
       initialRiskZones: [],
@@ -391,6 +411,9 @@ await runScenario("artifact sections project the richer Batch 3 task and repo co
   assert.deepEqual((sections.task_spec as unknown as Record<string, unknown>).scope, ["src/app.ts"]);
   assert.deepEqual((sections.task_spec as unknown as Record<string, unknown>).explicit_requirements, [
     "Keep the retry flow stable",
+  ]);
+  assert.deepEqual((sections.task_spec as unknown as Record<string, unknown>).implementation_necessities, [
+    "Add or update tests for the touched behavior.",
   ]);
   assert.deepEqual((sections.task_spec as unknown as Record<string, unknown>).constraints, [
     "Do not change public APIs.",
@@ -431,6 +454,12 @@ await runScenario("artifact sections project the richer Batch 3 task and repo co
   ]);
   assert.deepEqual((sections.repo_context as unknown as Record<string, unknown>).test_framework_hints, [
     "Vitest",
+  ]);
+  assert.deepEqual((sections.repo_context as unknown as Record<string, unknown>).test_command_hints, [
+    "npm test",
+  ]);
+  assert.deepEqual((sections.repo_context as unknown as Record<string, unknown>).ci_hints, [
+    "GitHub Actions",
   ]);
   assert.match(
     String((sections.repo_context as unknown as Record<string, unknown>).layout_summary ?? ""),

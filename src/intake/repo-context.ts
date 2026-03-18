@@ -14,18 +14,53 @@ import type { GitContextResolution } from "./git-context.js";
 const ignoredDirectoryNames = new Set([
   ".git",
   ".forge",
-  "node_modules",
+  ".idea",
+  ".mypy_cache",
+  ".nox",
+  ".pytest_cache",
+  ".ruff_cache",
+  ".tox",
+  ".venv",
+  ".vscode",
+  "__pycache__",
+  "build",
+  "coverage",
   "dist",
   "dist-tests",
+  "env",
+  "node_modules",
+  "site-packages",
+  "venv",
 ]);
 
 const manifestFileNames = new Set([
-  "package.json",
-  "tsconfig.json",
-  "pyproject.toml",
-  "go.mod",
+  "bun.lock",
+  "bun.lockb",
   "cargo.toml",
+  "go.mod",
+  "package-lock.json",
+  "package.json",
+  "pnpm-lock.yaml",
+  "pyproject.toml",
+  "pytest.ini",
+  "requirements-dev.txt",
+  "requirements-prod.txt",
+  "requirements.txt",
+  "setup.cfg",
+  "tsconfig.json",
+  "yarn.lock",
 ]);
+
+const codeFileExtensions = [
+  ".cjs",
+  ".js",
+  ".jsx",
+  ".mjs",
+  ".py",
+  ".pyi",
+  ".ts",
+  ".tsx",
+];
 
 const languagePriority = [
   "typescript",
@@ -42,32 +77,79 @@ function normalizeRelativePath(repoRoot: string, filePath: string): string {
   return path.relative(repoRoot, filePath).split(path.sep).join("/");
 }
 
-function isTestFile(relativePath: string): boolean {
+function normalizePathForComparison(value: string): string {
+  return value.replace(/\\/g, "/").toLowerCase();
+}
+
+function dedupeStable(values: string[]): string[] {
+  const seen = new Set<string>();
+  const deduped: string[] = [];
+
+  for (const value of values) {
+    if (seen.has(value)) {
+      continue;
+    }
+
+    seen.add(value);
+    deduped.push(value);
+  }
+
+  return deduped;
+}
+
+function getBasename(relativePath: string): string {
+  return path.posix.basename(normalizePathForComparison(relativePath));
+}
+
+function isManifestFile(relativePath: string): boolean {
+  const normalizedPath = normalizePathForComparison(relativePath);
+  const baseName = getBasename(relativePath);
+
   return (
-    relativePath.includes("/tests/") ||
-    relativePath.includes("/__tests__/") ||
-    /\.test\./i.test(relativePath) ||
-    /\.spec\./i.test(relativePath)
+    manifestFileNames.has(baseName) ||
+    normalizedPath.startsWith(".github/workflows/")
+  );
+}
+
+function isTestFile(relativePath: string): boolean {
+  const normalizedPath = normalizePathForComparison(relativePath);
+  const baseName = getBasename(relativePath);
+
+  return (
+    normalizedPath.includes("/tests/") ||
+    normalizedPath.includes("/__tests__/") ||
+    normalizedPath.includes("/test/") ||
+    baseName.startsWith("test_") ||
+    baseName.endsWith("_test.ts") ||
+    baseName.endsWith("_test.tsx") ||
+    baseName.endsWith("_test.js") ||
+    baseName.endsWith("_test.jsx") ||
+    baseName.endsWith("_test.py") ||
+    /\.test\./i.test(normalizedPath) ||
+    /\.spec\./i.test(normalizedPath)
   );
 }
 
 function isSourceFile(relativePath: string): boolean {
+  const normalizedPath = normalizePathForComparison(relativePath);
+
   return (
-    relativePath.startsWith("src/") ||
-    relativePath.startsWith("app/") ||
-    relativePath.startsWith("lib/")
+    codeFileExtensions.some((extension) => normalizedPath.endsWith(extension)) &&
+    !isTestFile(relativePath) &&
+    !isManifestFile(relativePath)
   );
 }
 
 function hasExtension(relativePath: string, extensions: string[]): boolean {
-  return extensions.some((extension) => relativePath.toLowerCase().endsWith(extension));
+  const normalizedPath = normalizePathForComparison(relativePath);
+  return extensions.some((extension) => normalizedPath.endsWith(extension));
 }
 
 function detectLanguages(files: string[]): string[] {
   const languages = new Set<string>();
 
   for (const filePath of files) {
-    const normalizedPath = filePath.toLowerCase();
+    const normalizedPath = normalizePathForComparison(filePath);
 
     if (hasExtension(normalizedPath, [".ts", ".tsx"])) {
       languages.add("typescript");
@@ -105,32 +187,98 @@ function detectLanguages(files: string[]): string[] {
   return languagePriority.filter((language) => languages.has(language));
 }
 
-function detectPackageManager(files: string[]): string | null {
-  if (files.some((filePath) => path.posix.basename(filePath).toLowerCase() === "bun.lockb")) {
-    return "bun";
+interface PackageManagerDetection {
+  packageManager: string | null;
+  clues: string[];
+  ecosystems: Set<string>;
+}
+
+function detectPackageManager(params: {
+  files: string[];
+  manifestTexts: Map<string, string | null>;
+}): PackageManagerDetection {
+  const clues: string[] = [];
+  const ecosystems = new Set<string>();
+
+  const hasFile = (name: string): boolean =>
+    params.files.some((filePath) => getBasename(filePath) === name);
+
+  const hasText = (name: string): boolean => {
+    const text = params.manifestTexts.get(name);
+    return Boolean(text && text.trim().length > 0);
+  };
+
+  if (hasFile("bun.lockb") || hasFile("bun.lock")) {
+    ecosystems.add("node");
+    clues.push("bun");
   }
 
-  if (files.some((filePath) => path.posix.basename(filePath).toLowerCase() === "bun.lock")) {
-    return "bun";
+  if (hasFile("pnpm-lock.yaml")) {
+    ecosystems.add("node");
+    clues.push("pnpm");
   }
 
-  if (files.some((filePath) => path.posix.basename(filePath).toLowerCase() === "pnpm-lock.yaml")) {
-    return "pnpm";
+  if (hasFile("yarn.lock")) {
+    ecosystems.add("node");
+    clues.push("yarn");
   }
 
-  if (files.some((filePath) => path.posix.basename(filePath).toLowerCase() === "yarn.lock")) {
-    return "yarn";
+  if (hasFile("package-lock.json") || hasFile("package.json")) {
+    ecosystems.add("node");
+    clues.push("npm");
   }
 
-  if (files.some((filePath) => path.posix.basename(filePath).toLowerCase() === "package-lock.json")) {
-    return "npm";
+  if (hasFile("go.mod")) {
+    ecosystems.add("go");
+    clues.push("go");
   }
 
-  if (files.some((filePath) => path.posix.basename(filePath).toLowerCase() === "package.json")) {
-    return "npm";
+  if (hasFile("cargo.toml")) {
+    ecosystems.add("rust");
+    clues.push("cargo");
   }
 
-  return null;
+  const pythonManifestPresent =
+    hasFile("pyproject.toml") ||
+    hasFile("requirements.txt") ||
+    hasFile("requirements-dev.txt") ||
+    hasFile("requirements-prod.txt") ||
+    hasFile("pytest.ini") ||
+    hasFile("setup.cfg");
+
+  if (pythonManifestPresent) {
+    ecosystems.add("python");
+
+    if (hasText("pyproject.toml") && /\[tool\.poetry\]/i.test(params.manifestTexts.get("pyproject.toml") ?? "")) {
+      clues.push("poetry");
+    } else {
+      clues.push("pip");
+    }
+  }
+
+  const packageManager = clues.includes("bun")
+    ? "bun"
+    : clues.includes("pnpm")
+      ? "pnpm"
+      : clues.includes("yarn")
+        ? "yarn"
+        : clues.includes("npm")
+          ? "npm"
+          : clues.includes("poetry")
+            ? "poetry"
+            : clues.includes("pip")
+              ? "pip"
+              : clues.includes("cargo")
+                ? "cargo"
+                : clues.includes("go")
+                  ? "go"
+                  : null;
+
+  return {
+    packageManager,
+    clues: [...new Set(clues)],
+    ecosystems,
+  };
 }
 
 function collectKeyDirectories(files: string[]): string[] {
@@ -165,7 +313,7 @@ function collectKeyDirectories(files: string[]): string[] {
 
 function collectEntryPoints(sourceFiles: string[]): string[] {
   const prioritized = sourceFiles.filter((filePath) =>
-    /(^|\/)(app|index|main|server|cli)\.(ts|tsx|js|jsx|mjs|cjs)$/i.test(filePath),
+    /(^|\/)(app|index|main|server|cli)\.(ts|tsx|js|jsx|mjs|cjs|py)$/i.test(filePath),
   );
   const ordered = [...prioritized, ...sourceFiles];
   const seen = new Set<string>();
@@ -195,21 +343,43 @@ async function readManifestText(repoRoot: string, relativePath: string): Promise
   }
 }
 
-function collectFrameworkHints(params: {
+function collectFrameworkSignals(params: {
   manifestFiles: string[];
   sourceFiles: string[];
-  packageJsonText: string | null;
-}): { frameworkHints: string[]; testFrameworkHints: string[] } {
+  allFiles: string[];
+  manifestTexts: Map<string, string | null>;
+}): {
+  frameworkHints: string[];
+  testFrameworkHints: string[];
+  testCommandHints: string[];
+  ciHints: string[];
+  warnings: string[];
+} {
   const frameworkHints = new Set<string>();
   const testFrameworkHints = new Set<string>();
+  const testCommandHints = new Set<string>();
+  const ciHints = new Set<string>();
+  const warnings = new Set<string>();
 
-  if (params.manifestFiles.some((filePath) => path.posix.basename(filePath).toLowerCase() === "package.json")) {
+  const packageJsonText = params.manifestTexts.get("package.json") ?? null;
+  const pyprojectText = params.manifestTexts.get("pyproject.toml") ?? null;
+  const setupCfgText = params.manifestTexts.get("setup.cfg") ?? null;
+  const pytestIniText = params.manifestTexts.get("pytest.ini") ?? null;
+  const requirementsText = [
+    params.manifestTexts.get("requirements.txt"),
+    params.manifestTexts.get("requirements-dev.txt"),
+    params.manifestTexts.get("requirements-prod.txt"),
+  ]
+    .filter((value): value is string => Boolean(value))
+    .join("\n");
+
+  if (params.manifestFiles.some((filePath) => getBasename(filePath) === "package.json")) {
     frameworkHints.add("Node.js");
   }
 
   if (
     params.sourceFiles.some((filePath) => hasExtension(filePath, [".ts", ".tsx"])) ||
-    params.manifestFiles.some((filePath) => path.posix.basename(filePath).toLowerCase() === "tsconfig.json")
+    params.manifestFiles.some((filePath) => getBasename(filePath) === "tsconfig.json")
   ) {
     frameworkHints.add("TypeScript");
   }
@@ -218,36 +388,96 @@ function collectFrameworkHints(params: {
     frameworkHints.add("JavaScript");
   }
 
-  if (params.packageJsonText) {
-    if (/vitest/i.test(params.packageJsonText)) {
+  if (params.sourceFiles.some((filePath) => hasExtension(filePath, [".py", ".pyi"]))) {
+    frameworkHints.add("Python");
+  }
+
+  if (packageJsonText) {
+    if (/vitest/i.test(packageJsonText)) {
       frameworkHints.add("Vite");
       testFrameworkHints.add("Vitest");
+      testCommandHints.add("vitest run");
     }
 
-    if (/jest/i.test(params.packageJsonText)) {
+    if (/jest/i.test(packageJsonText)) {
       testFrameworkHints.add("Jest");
+      testCommandHints.add("jest");
     }
 
-    if (/mocha/i.test(params.packageJsonText)) {
+    if (/mocha/i.test(packageJsonText)) {
       testFrameworkHints.add("Mocha");
+      testCommandHints.add("mocha");
     }
 
-    if (/node:test|--test/i.test(params.packageJsonText)) {
+    if (/node:test|--test/i.test(packageJsonText)) {
       testFrameworkHints.add("node:test");
+      testCommandHints.add("node --test");
     }
 
-    if (/express/i.test(params.packageJsonText)) {
+    if (/express/i.test(packageJsonText)) {
       frameworkHints.add("Express");
     }
 
-    if (/fastify/i.test(params.packageJsonText)) {
+    if (/fastify/i.test(packageJsonText)) {
       frameworkHints.add("Fastify");
     }
+  }
+
+  const pythonTestSignal =
+    /pytest/i.test(requirementsText) ||
+    /pytest/i.test(pyprojectText ?? "") ||
+    /pytest/i.test(setupCfgText ?? "") ||
+    /pytest/i.test(pytestIniText ?? "") ||
+    params.sourceFiles.some((filePath) => isTestFile(filePath) && hasExtension(filePath, [".py", ".pyi"]));
+
+  if (pythonTestSignal) {
+    testFrameworkHints.add("Pytest");
+    testCommandHints.add("pytest");
+    testCommandHints.add("python -m pytest");
+  }
+
+  if (pyprojectText && /\[tool\.poetry\]/i.test(pyprojectText)) {
+    frameworkHints.add("Poetry");
+  }
+
+  if (testFrameworkHints.has("Pytest") && /poetry/i.test(pyprojectText ?? "")) {
+    testCommandHints.add("poetry run pytest");
+  }
+
+  if (packageJsonText && /["']test["']\s*:\s*["'][^"']+/i.test(packageJsonText)) {
+    testCommandHints.add("npm test");
+  }
+
+  if (params.allFiles.some((filePath) => normalizePathForComparison(filePath).startsWith(".github/workflows/"))) {
+    ciHints.add("GitHub Actions");
+  }
+
+  if (params.allFiles.some((filePath) => normalizePathForComparison(filePath).startsWith(".gitlab-ci"))) {
+    ciHints.add("GitLab CI");
+  }
+
+  if (params.allFiles.some((filePath) => normalizePathForComparison(filePath).includes("azure-pipelines"))) {
+    ciHints.add("Azure Pipelines");
+  }
+
+  if (params.allFiles.some((filePath) => normalizePathForComparison(filePath).includes(".circleci/"))) {
+    ciHints.add("CircleCI");
+  }
+
+  if (params.manifestFiles.length > 0 && testFrameworkHints.size === 0) {
+    warnings.add("No test framework hint was detected during repo grounding.");
+  }
+
+  if (params.manifestFiles.length > 0 && testCommandHints.size === 0) {
+    warnings.add("Manifest inspection did not reveal a test command, so tooling inference remains partial.");
   }
 
   return {
     frameworkHints: [...frameworkHints],
     testFrameworkHints: [...testFrameworkHints],
+    testCommandHints: [...testCommandHints],
+    ciHints: [...ciHints],
+    warnings: [...warnings],
   };
 }
 
@@ -291,38 +521,64 @@ async function buildRepoSignals(
   sourceFiles: string[],
   testFiles: string[],
   manifestFiles: string[],
-): Promise<RepoScanSignals> {
+): Promise<{
+  signals: RepoScanSignals;
+  warnings: string[];
+}> {
   const languages = detectLanguages(files);
-  const packageManager = detectPackageManager(files);
-  const packageJsonText = manifestFiles.includes("package.json")
-    ? await readManifestText(repoRoot, "package.json")
-    : null;
-  const { frameworkHints, testFrameworkHints } = collectFrameworkHints({
+  const manifestTexts = new Map<string, string | null>();
+
+  for (const manifestFile of manifestFiles) {
+    manifestTexts.set(manifestFile, await readManifestText(repoRoot, manifestFile));
+  }
+
+  const packageManagerDetection = detectPackageManager({
+    files,
+    manifestTexts,
+  });
+  const frameworkSignals = collectFrameworkSignals({
     manifestFiles,
     sourceFiles,
-    packageJsonText,
+    allFiles: files,
+    manifestTexts,
   });
   const keyDirectories = collectKeyDirectories(files);
   const entryPoints = collectEntryPoints(sourceFiles);
+  const warnings = [...frameworkSignals.warnings];
+
+  if (packageManagerDetection.ecosystems.size > 1) {
+    warnings.unshift(
+      `Mixed package-manager clues were detected (${packageManagerDetection.clues.join(", ")}), so repo context kept the first strong match.`,
+    );
+  }
+
+  if (testFiles.length === 0) {
+    warnings.push("No tests were detected during repo grounding.");
+  }
 
   return {
-    sourceFileCount: sourceFiles.length,
-    testFileCount: testFiles.length,
-    manifestFileCount: manifestFiles.length,
-    repoLooksSparse: sourceFiles.length + testFiles.length + manifestFiles.length <= 1,
-    languages,
-    packageManager,
-    frameworkHints,
-    testFrameworkHints,
-    keyDirectories,
-    entryPoints,
-    layoutSummary: buildLayoutSummary({
+    signals: {
+      sourceFileCount: sourceFiles.length,
+      testFileCount: testFiles.length,
+      manifestFileCount: manifestFiles.length,
+      repoLooksSparse: sourceFiles.length + testFiles.length + manifestFiles.length <= 1,
       languages,
-      packageManager,
+      packageManager: packageManagerDetection.packageManager,
+      frameworkHints: frameworkSignals.frameworkHints,
+      testFrameworkHints: frameworkSignals.testFrameworkHints,
       keyDirectories,
       entryPoints,
-      manifestFiles,
-    }),
+      testCommandHints: frameworkSignals.testCommandHints,
+      ciHints: frameworkSignals.ciHints,
+      layoutSummary: buildLayoutSummary({
+        languages,
+        packageManager: packageManagerDetection.packageManager,
+        keyDirectories,
+        entryPoints,
+        manifestFiles,
+      }),
+    },
+    warnings,
   };
 }
 
@@ -333,17 +589,16 @@ async function buildRepoScanData(params: {
 }): Promise<{
   repoContext: RepoContext;
   signals: RepoScanSignals;
+  warnings: string[];
 }> {
   const files: string[] = [];
   await collectRepoFiles(params.repoRoot, params.repoRoot, params.outputRoot, files);
 
   const allFiles = [...files].sort((left, right) => left.localeCompare(right));
-  const manifestFiles = allFiles.filter((filePath) =>
-    manifestFileNames.has(path.posix.basename(filePath).toLowerCase()),
-  );
+  const manifestFiles = allFiles.filter((filePath) => isManifestFile(filePath));
   const testFiles = allFiles.filter((filePath) => isTestFile(filePath));
-  const sourceFiles = allFiles.filter((filePath) => isSourceFile(filePath) && !isTestFile(filePath));
-  const signals = await buildRepoSignals(
+  const sourceFiles = allFiles.filter((filePath) => isSourceFile(filePath));
+  const signalResult = await buildRepoSignals(
     params.repoRoot,
     allFiles,
     sourceFiles,
@@ -360,15 +615,18 @@ async function buildRepoScanData(params: {
       manifestFiles,
       allFiles,
       gitContext: params.gitContext,
-      languages: signals.languages,
-      frameworkHints: signals.frameworkHints,
-      packageManager: signals.packageManager,
-      keyDirectories: signals.keyDirectories,
-      entryPoints: signals.entryPoints,
-      testFrameworkHints: signals.testFrameworkHints,
-      layoutSummary: signals.layoutSummary,
+      languages: signalResult.signals.languages,
+      frameworkHints: signalResult.signals.frameworkHints,
+      packageManager: signalResult.signals.packageManager,
+      keyDirectories: signalResult.signals.keyDirectories,
+      entryPoints: signalResult.signals.entryPoints,
+      testFrameworkHints: signalResult.signals.testFrameworkHints,
+      testCommandHints: signalResult.signals.testCommandHints,
+      ciHints: signalResult.signals.ciHints,
+      layoutSummary: signalResult.signals.layoutSummary,
     },
-    signals,
+    signals: signalResult.signals,
+    warnings: dedupeStable(signalResult.warnings),
   };
 }
 
@@ -383,12 +641,13 @@ async function collectRepoFiles(
   for (const entry of entries) {
     const fullPath = path.join(currentPath, entry.name);
     const relativePath = normalizeRelativePath(repoRoot, fullPath);
+    const outputRootRelative = path.relative(repoRoot, outputRoot).split(path.sep).join("/");
 
     if (entry.isDirectory()) {
       if (
         ignoredDirectoryNames.has(entry.name) ||
         fullPath === outputRoot ||
-        relativePath === path.relative(repoRoot, outputRoot).split(path.sep).join("/")
+        relativePath === outputRootRelative
       ) {
         continue;
       }
@@ -443,6 +702,9 @@ export async function scanRepoResult(
   return {
     repoContext: scanData.repoContext,
     signals: scanData.signals,
-    warnings: gitContextResult.warning ? [gitContextResult.warning] : [],
+    warnings: dedupeStable([
+      ...(gitContextResult.warning ? [gitContextResult.warning] : []),
+      ...scanData.warnings,
+    ]),
   };
 }

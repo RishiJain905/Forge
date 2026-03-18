@@ -197,12 +197,15 @@ export function buildRiskAnalysisResult(params: {
   };
 }
 
-function addPromptOpenQuestionHandling(params: {
+function addParserOpenQuestionHandling(params: {
+  inputMode: NormalizedTaskInput["inputMode"] | null;
   categories: TaskParserResult["signals"]["promptOpenQuestionCategories"];
   ambiguityItems: NonNullable<AmbiguityAnalysisResult["ambiguityItems"]>;
   ambiguities: string[];
   recommendedUserActions: string[];
 }): void {
+  const subject = params.inputMode === "prompt" ? "Prompt" : "Task";
+
   if (params.categories.includes("scope")) {
     pushAmbiguityItem(
       params.ambiguityItems,
@@ -211,12 +214,12 @@ function addPromptOpenQuestionHandling(params: {
         type: "scope",
         severity: "medium",
         message:
-          "Prompt scope is still unclear for the current repo. Clarify the concrete files, modules, or bounded behavior to change.",
+          `${subject} scope is still unclear for the current repo. Clarify the concrete files, modules, or bounded behavior to change.`,
       },
     );
     pushUnique(
       params.recommendedUserActions,
-      "Clarify the exact repo surfaces or bounded behavior this prompt should change before planning.",
+      `Clarify the exact repo surfaces or bounded behavior this ${params.inputMode === "prompt" ? "prompt" : "task"} should change before planning.`,
     );
   }
 
@@ -228,7 +231,7 @@ function addPromptOpenQuestionHandling(params: {
         type: "constraints",
         severity: "medium",
         message:
-          "Prompt constraints are missing. Clarify non-goals, rollout limits, or boundaries before planning.",
+          `${subject} constraints are missing. Clarify non-goals, rollout limits, or boundaries before planning.`,
       },
     );
     pushUnique(
@@ -300,7 +303,8 @@ export function buildAmbiguityAnalysisResult(params: {
   const ambiguityItems: AmbiguityAnalysisResult["ambiguityItems"] = [];
   const warningItems: AmbiguityAnalysisResult["warningItems"] = [];
 
-  addPromptOpenQuestionHandling({
+  addParserOpenQuestionHandling({
+    inputMode: params.taskInput?.inputMode ?? null,
     categories: params.taskParserResult.signals.promptOpenQuestionCategories,
     ambiguityItems,
     ambiguities,

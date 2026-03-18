@@ -77,6 +77,9 @@ const gate1TypeChecks = {
     goal: "Update src/app.ts.",
     acceptanceCriteria: ["src/app.ts is updated"],
     hasAcceptanceCriteria: true,
+    implementationNecessities: [
+      "Add or update tests for the touched behavior.",
+    ],
   } satisfies NormalizedTaskSpec,
   repoContext: {
     grounded: true,
@@ -90,6 +93,8 @@ const gate1TypeChecks = {
       branch: null,
       recentFiles: [],
     },
+    testCommandHints: ["npm test"],
+    ciHints: ["GitHub Actions"],
   } satisfies RepoContext,
   candidateTargets: [
     {

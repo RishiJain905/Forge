@@ -195,6 +195,10 @@ function renderTaskSpecSection(artifact: IntakeArtifact): string {
     "",
     renderList(artifact.task_spec.explicit_requirements),
     "",
+    "### Implementation Necessities",
+    "",
+    renderList(artifact.task_spec.implementation_necessities),
+    "",
     "### Constraints",
     "",
     renderList(artifact.task_spec.constraints),
@@ -252,6 +256,12 @@ function renderRepoContextSection(artifact: IntakeArtifact): string {
     artifact.repo_context.test_framework_hints.length > 0
       ? `- Test Framework Hints: ${artifact.repo_context.test_framework_hints.join(", ")}`
       : "- Test Framework Hints: none",
+    artifact.repo_context.test_command_hints.length > 0
+      ? `- Test Command Hints: ${artifact.repo_context.test_command_hints.join(", ")}`
+      : "- Test Command Hints: none",
+    artifact.repo_context.ci_hints.length > 0
+      ? `- CI Hints: ${artifact.repo_context.ci_hints.join(", ")}`
+      : "- CI Hints: none",
     `- Layout Summary: ${artifact.repo_context.layout_summary}`,
     `- Git status: \`${gitContext.status}\``,
     gitContext.repo_root

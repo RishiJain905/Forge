@@ -156,6 +156,121 @@ await runScenario(
 );
 
 await runScenario(
+  "task parser extracts repeated sections and dedupes stable fields",
+  async () => {
+    const text = [
+      "# Update app behavior",
+      "",
+      "Refine retry telemetry for src/app.ts.",
+      "",
+      "Summary",
+      "Keep retry visibility aligned for src/app.ts.",
+      "",
+      "Scope",
+      "- src/app.ts",
+      "- tests/app.test.ts",
+      "",
+      "Scope",
+      "- src/app.ts",
+      "- tests/app.test.ts",
+      "",
+      "Acceptance Criteria",
+      "- src/app.ts emits retry telemetry",
+      "- tests/app.test.ts validates retry telemetry",
+      "",
+      "Acceptance Criteria",
+      "- src/app.ts emits retry telemetry",
+      "- tests/app.test.ts validates retry telemetry",
+    ].join("\n");
+
+    const result = buildTaskParserResult(createParserInput({
+      inputMode: "spec",
+      primaryInput: {
+        path: "/repo/spec.md",
+        rawText: text,
+      },
+      normalizedTaskText: text,
+      parserInputText: text,
+    }));
+
+    assert.equal(result.taskSpec.title, "Update app behavior");
+    assert.equal(result.taskSpec.goal, "Refine retry telemetry for src/app.ts.");
+    assert.equal(result.taskSpec.summary, "Keep retry visibility aligned for src/app.ts.");
+    assert.deepEqual(result.taskSpec.scope, ["src/app.ts", "tests/app.test.ts"]);
+    assert.deepEqual(result.taskSpec.acceptanceCriteria, [
+      "src/app.ts emits retry telemetry",
+      "tests/app.test.ts validates retry telemetry",
+    ]);
+    assert.deepEqual(result.taskSpec.explicitRequirements, [
+      "src/app.ts emits retry telemetry",
+      "tests/app.test.ts validates retry telemetry",
+    ]);
+  },
+);
+
+await runScenario(
+  "task parser extracts prose acceptance criteria from semistructured specs",
+  async () => {
+    const text = [
+      "# Update app behavior",
+      "",
+      "Refine retry telemetry for src/app.ts.",
+      "",
+      "Acceptance Criteria",
+      "The app logs retry telemetry for each retry attempt.",
+      "- tests/app.test.ts validates the retry telemetry output",
+    ].join("\n");
+
+    const result = buildTaskParserResult(createParserInput({
+      inputMode: "spec",
+      primaryInput: {
+        path: "/repo/spec.md",
+        rawText: text,
+      },
+      normalizedTaskText: text,
+      parserInputText: text,
+    }));
+
+    assert.deepEqual(result.taskSpec.acceptanceCriteria, [
+      "The app logs retry telemetry for each retry attempt.",
+      "tests/app.test.ts validates the retry telemetry output",
+    ]);
+    assert.equal(result.taskSpec.hasAcceptanceCriteria, true);
+  },
+);
+
+await runScenario(
+  "task parser surfaces missing scope and constraints as parser-owned open questions for specs",
+  async () => {
+    const text = [
+      "# Update app behavior",
+      "",
+      "Refine retry telemetry behavior.",
+      "",
+      "Acceptance Criteria",
+      "- retry telemetry is emitted for each retry attempt",
+    ].join("\n");
+
+    const result = buildTaskParserResult(createParserInput({
+      inputMode: "spec",
+      primaryInput: {
+        path: "/repo/spec.md",
+        rawText: text,
+      },
+      normalizedTaskText: text,
+      parserInputText: text,
+    }));
+
+    assert.deepEqual(result.taskSpec.openQuestions?.map((question) => question.category), [
+      "scope",
+      "constraints",
+    ]);
+    assert.ok(result.ambiguityItems?.some((item) => item.type === "scope"));
+    assert.ok(result.warningItems?.some((item) => item.code === "SCOPE_MISSING"));
+  },
+);
+
+await runScenario(
   "headingless spec titles ignore appended supplemental sections",
   async () => {
     const rawText = "Implement retry telemetry for src/app.ts.";
@@ -345,6 +460,64 @@ await runScenario(
 );
 
 await runScenario(
+  "task parser keeps casual risk phrase mentions out of risky phrases",
+  async () => {
+    const text = [
+      "Background: the API contract is documented elsewhere and migration history is preserved for reference.",
+      "",
+      "Implementation: update src/app.ts and keep tests/app.test.ts aligned.",
+    ].join("\n");
+
+    const result = buildTaskParserResult(createParserInput({
+      inputMode: "spec",
+      primaryInput: {
+        path: "/repo/spec.md",
+        rawText: text,
+      },
+      normalizedTaskText: text,
+      parserInputText: text,
+    }));
+
+    assert.deepEqual(result.taskSpec.riskyPhrases, []);
+  },
+);
+
+await runScenario(
+  "task parser infers conservative implementation necessities from implementation-scoped task text",
+  async () => {
+    const text = [
+      "# Update app behavior",
+      "",
+      "Migrate src/app.ts and keep tests/app.test.ts aligned while reviewing package.json and the API contract.",
+      "",
+      "Acceptance Criteria",
+      "- src/app.ts keeps retry behavior stable",
+      "- tests/app.test.ts covers stale write handling",
+    ].join("\n");
+
+    const result = buildTaskParserResult(createParserInput({
+      inputMode: "spec",
+      primaryInput: {
+        path: "/repo/spec.md",
+        rawText: text,
+      },
+      normalizedTaskText: text,
+      parserInputText: text,
+    }));
+
+    assert.deepEqual(result.taskSpec.implementationNecessities, [
+      "Update or add tests for the impacted behavior.",
+      "Review manifest or configuration impact before implementation.",
+      "Plan migration sequencing before implementation.",
+      "Coordinate ownership and parallelization before implementation.",
+      "Verify retry behavior before implementation.",
+      "Verify stale write handling before implementation.",
+      "Verify API contract impact before implementation.",
+    ]);
+  },
+);
+
+await runScenario(
   "vague prompts surface open questions in the normalized task parser output",
   async () => {
     const taskInput = resolveLoadedIntakeInput(
@@ -353,10 +526,6 @@ await runScenario(
     const result = buildTaskParserResult(taskInput);
 
     assert.deepEqual(
-      taskInput.promptDetails?.openQuestions.map((question) => question.category),
-      ["acceptance_criteria", "scope", "constraints"],
-    );
-    assert.deepEqual(
       result.taskSpec.openQuestions?.map((question) => question.category),
       ["acceptance_criteria", "scope", "constraints"],
     );
@@ -364,7 +533,8 @@ await runScenario(
       result.signals.promptOpenQuestionCategories,
       ["acceptance_criteria", "scope", "constraints"],
     );
-    assert.equal(result.ambiguities.length, 0);
+    assert.ok(result.ambiguityItems?.some((item) => item.type === "acceptance_criteria"));
+    assert.ok(result.warningItems?.some((item) => item.code === "ACCEPTANCE_CRITERIA_MISSING"));
   },
 );
 

@@ -319,6 +319,7 @@ await runScenario("artifact schema accepts richer Batch 3 task and repo context 
     summary: "Spec summary",
     scope: ["src/app.ts"],
     explicit_requirements: ["Keep the retry flow stable"],
+    implementation_necessities: ["Add or update tests for the touched behavior."],
     constraints: ["Do not change public APIs."],
     mentioned_paths: ["src/app.ts", "tests/app.test.ts"],
     mentioned_tests: ["tests/app.test.ts"],
@@ -340,6 +341,8 @@ await runScenario("artifact schema accepts richer Batch 3 task and repo context 
     key_directories: ["src", "tests"],
     entry_points: ["src/app.ts"],
     test_framework_hints: ["Vitest"],
+    test_command_hints: ["npm test"],
+    ci_hints: ["GitHub Actions"],
     layout_summary:
       "languages: typescript; package manager: npm; key directories: src, tests; entry points: src/app.ts; manifests: package.json",
   };
@@ -350,6 +353,7 @@ await runScenario("artifact schema accepts richer Batch 3 task and repo context 
       summary?: string | null;
       scope?: string[];
       explicit_requirements?: string[];
+      implementation_necessities?: string[];
       constraints?: string[];
       mentioned_paths?: string[];
       mentioned_tests?: string[];
@@ -364,6 +368,8 @@ await runScenario("artifact schema accepts richer Batch 3 task and repo context 
       key_directories?: string[];
       entry_points?: string[];
       test_framework_hints?: string[];
+      test_command_hints?: string[];
+      ci_hints?: string[];
       layout_summary?: string | null;
     };
   };
@@ -372,6 +378,9 @@ await runScenario("artifact schema accepts richer Batch 3 task and repo context 
   assert.equal(parsed.task_spec.summary, "Spec summary");
   assert.deepEqual(parsed.task_spec.scope, ["src/app.ts"]);
   assert.deepEqual(parsed.task_spec.explicit_requirements, ["Keep the retry flow stable"]);
+  assert.deepEqual(parsed.task_spec.implementation_necessities, [
+    "Add or update tests for the touched behavior.",
+  ]);
   assert.deepEqual(parsed.task_spec.constraints, ["Do not change public APIs."]);
   assert.deepEqual(parsed.task_spec.mentioned_paths, ["src/app.ts", "tests/app.test.ts"]);
   assert.deepEqual(parsed.task_spec.mentioned_tests, ["tests/app.test.ts"]);
@@ -389,6 +398,8 @@ await runScenario("artifact schema accepts richer Batch 3 task and repo context 
   assert.deepEqual(parsed.repo_context.key_directories, ["src", "tests"]);
   assert.deepEqual(parsed.repo_context.entry_points, ["src/app.ts"]);
   assert.deepEqual(parsed.repo_context.test_framework_hints, ["Vitest"]);
+  assert.deepEqual(parsed.repo_context.test_command_hints, ["npm test"]);
+  assert.deepEqual(parsed.repo_context.ci_hints, ["GitHub Actions"]);
   assert.match(parsed.repo_context.layout_summary ?? "", /languages: typescript/i);
 });
 
