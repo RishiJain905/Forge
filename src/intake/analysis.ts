@@ -88,6 +88,31 @@ function buildManifestOrConfigPaths(params: {
   ].filter((value, index, values) => values.indexOf(value) === index);
 }
 
+function buildSurfaceRiskReason(params: {
+  taskParserResult: TaskParserResult;
+}): string {
+  const riskSignals: string[] = [];
+
+  if (params.taskParserResult.taskSpec.riskyPhrases?.includes("migration")) {
+    riskSignals.push("migration");
+  }
+
+  if (params.taskParserResult.taskSpec.riskyPhrases?.includes("api contract")) {
+    riskSignals.push("API contract");
+  }
+
+  if (params.taskParserResult.taskSpec.riskyPhrases?.includes("parallel") === true ||
+    params.taskParserResult.taskSpec.riskyPhrases?.includes("ownership") === true) {
+    riskSignals.push("coordination");
+  }
+
+  if (riskSignals.length === 0) {
+    return "The task appears to affect manifest or configuration surfaces that can widen downstream impact.";
+  }
+
+  return `The task appears to affect manifest or configuration surfaces and also carries ${riskSignals.join(", ")} risk.`;
+}
+
 export function buildRiskAnalysisResult(params: {
   taskParserResult: TaskParserResult;
   repoScanResult: RepoScanResult;
@@ -160,7 +185,9 @@ export function buildRiskAnalysisResult(params: {
     riskZones.push({
       code: "manifest_or_config_impact",
       level: "medium",
-      reason: "The task appears to affect manifest or configuration surfaces that can widen downstream impact.",
+      reason: buildSurfaceRiskReason({
+        taskParserResult: params.taskParserResult,
+      }),
       evidence_paths: manifestOrConfigPaths,
     });
   }

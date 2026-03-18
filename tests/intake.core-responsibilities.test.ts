@@ -153,6 +153,8 @@ await runScenario(
       "src/app.ts is updated",
       "tests/app.test.ts is updated",
     ]);
+    assert.ok(assembled.riskAnalysis, "expected assembled result to carry riskAnalysis");
+    assert.ok(assembled.verificationTargets, "expected assembled result to carry verificationTargets");
     assert.equal(assembled.repoContext.manifestFiles[0], "package.json");
     assert.equal(assembled.candidateTargets[1]?.path, "tests/app.test.ts");
     assert.deepEqual(assembled.ambiguities, []);

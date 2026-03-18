@@ -146,7 +146,10 @@ export interface LoadedIntakeInput {
 }
 
 export interface NormalizedTaskSpec {
+  title?: string;
+  summary?: string;
   goal: string;
+  scope?: string[];
   acceptanceCriteria: string[];
   hasAcceptanceCriteria: boolean;
   explicitRequirements?: string[];
@@ -161,9 +164,19 @@ export interface NormalizedTaskSpec {
 export type IntakeTaskSpec = NormalizedTaskSpec;
 
 export interface ArtifactTaskSpecSection {
+  title: string;
+  summary: string;
   goal: string;
+  scope: string[];
   acceptance_criteria: string[];
   has_acceptance_criteria: boolean;
+  explicit_requirements: string[];
+  constraints: string[];
+  mentioned_paths: string[];
+  mentioned_tests: string[];
+  mentioned_modules: string[];
+  risky_phrases: string[];
+  open_questions: PromptOpenQuestion[];
 }
 
 export interface RepoContext {
@@ -173,6 +186,13 @@ export interface RepoContext {
   manifestFiles: string[];
   allFiles: string[];
   gitContext: GitContext;
+  languages?: string[];
+  frameworkHints?: string[];
+  packageManager?: string | null;
+  keyDirectories?: string[];
+  entryPoints?: string[];
+  testFrameworkHints?: string[];
+  layoutSummary?: string;
 }
 
 export interface ArtifactRepoContextSection {
@@ -180,6 +200,13 @@ export interface ArtifactRepoContextSection {
   source_files: string[];
   test_files: string[];
   manifest_files: string[];
+  languages: string[];
+  framework_hints: string[];
+  package_manager: string | null;
+  key_directories: string[];
+  entry_points: string[];
+  test_framework_hints: string[];
+  layout_summary: string;
   git_context: ArtifactGitContextSection;
 }
 
@@ -428,6 +455,8 @@ export interface AssembledIntakeResult {
   taskSpec: IntakeTaskSpec;
   repoContext: RepoContext;
   candidateTargets: CandidateTarget[];
+  riskAnalysis?: ArtifactRiskAnalysisSection;
+  verificationTargets?: VerificationTarget[];
   ambiguities: string[];
   warnings: string[];
   recommendedUserActions: string[];

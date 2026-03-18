@@ -113,6 +113,83 @@ async function runScenario(name: string, scenario: () => Promise<void>): Promise
 }
 
 await runScenario(
+  "buildRiskAnalysisResult surfaces migration, api contract, coordination, config, and test risk through existing observable zones",
+  async () => {
+    const { taskParserResult } = createTaskParserResult(
+      [
+        "Migrate src/app.ts and package.json together while coordinating ownership and keeping the API contract stable.",
+        "",
+        "Acceptance Criteria",
+        "- src/app.ts is updated for the migration",
+        "- package.json stays aligned with the API contract",
+      ].join("\n"),
+    );
+    const repoScanResult = createRepoScanResult({
+      repoContext: createRepoContext({
+        testFiles: [],
+        allFiles: ["src/app.ts", "src/worker.ts", "package.json"],
+      }),
+      signals: {
+        sourceFileCount: 2,
+        testFileCount: 0,
+        manifestFileCount: 1,
+        repoLooksSparse: false,
+      },
+    });
+    const inferenceResult = createInferenceResult({
+      candidateTargets: [
+        {
+          path: "src/app.ts",
+          kind: "source",
+          matchType: "explicit",
+          reason: "Matched a source file path mentioned in the task input.",
+          notes: ["Matched an explicit task-to-file reference."],
+          sharedRisk: true,
+        },
+        {
+          path: "src/worker.ts",
+          kind: "source",
+          matchType: "fallback",
+          reason: "Inferred a likely source target from the repo layout.",
+          notes: ["Fell back to repo-layout targeting because the task had no explicit file match."],
+          sharedRisk: true,
+        },
+        {
+          path: "package.json",
+          kind: "manifest",
+          matchType: "explicit",
+          reason: "Matched a manifest mentioned in the task input.",
+          notes: ["Manifest/config surface can widen downstream impact."],
+          sharedRisk: true,
+        },
+      ],
+      signals: {
+        explicitTargetCount: 2,
+        usedFallbackTargets: true,
+        inferredRequirementCount: 0,
+        focusApplied: false,
+        strictFocusApplied: false,
+        focusMatchedTargetCount: 0,
+        outOfFocusTargetCount: 0,
+      },
+    });
+
+    const result = buildRiskAnalysisResult({
+      taskParserResult,
+      repoScanResult,
+      inferenceResult,
+    });
+
+    const manifestRisk = result.initial_risk_zones.find((zone) => zone.code === "manifest_or_config_impact");
+    assert.ok(manifestRisk);
+    assert.match(manifestRisk?.reason ?? "", /migration/i);
+    assert.match(manifestRisk?.reason ?? "", /API contract/i);
+    assert.match(manifestRisk?.reason ?? "", /coordination/i);
+    assert.ok(result.initial_risk_zones.some((zone) => zone.code === "no_tests_detected"));
+  },
+);
+
+await runScenario(
   "buildRiskAnalysisResult flags weak grounding, unresolved referenced paths, and no-tests risk zones",
   async () => {
     const { taskParserResult } = createTaskParserResult(

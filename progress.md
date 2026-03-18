@@ -136,10 +136,16 @@
   - Added a dedicated Batch 2 acceptance-gates suite that exercises Gate 1 through Gate 6 plus the minimum scenarios for a strong spec, a weak prompt, invalid input, strict-focus exclusion, and no-tests/no-git repos.
   - Wired the new suites into the default `npm.cmd test` command while keeping the Batch 1 CLI, artifact, report, and smoke behavior stable.
   - Documented completion evidence in `S1-B2-Done/part4-done-summary.md` after the full verification gate stayed green.
+- Batch 3.01: `part-1-step1-batch3-goal-and-boundaries.md`
+  - Expanded the normalized Step 1 task and repo-context contracts so the real spec-mode intake path now carries the richer Batch 3 task metadata and repo grounding signals end to end.
+  - Made structured parser-owned task signals materially drive inference, promoted risk analysis and verification targets to first-class assembled outputs, and reused those assembled outputs in artifact generation and runner sequencing.
+  - Expanded the public nested `task_spec` and `repo_context` artifact/report sections while keeping the top-level CLI and artifact contract stable.
+  - Added dedicated Batch 3 runnable-milestone coverage for `forge intake --spec <file>` and fixed title/targeting regressions so synthetic headings do not create false explicit matches or incorrect task titles.
+  - Documented completion evidence in `S1-B3-done/p1-done-summary.md` after the full verification gate stayed green.
 
 ## Current Branch State
-- `dev` includes the completed Batch 1.16, Batch 1.17, Batch 1.18, Batch 1.19, Batch 1.20, Batch 2.01, Batch 2.02, Batch 2.03, and Batch 2.04 implementations.
-- The Batch 2 Part 1 implementation from worktree branch `codex/s1-b2-p1-intake-architecture`, the Batch 2 Part 2 implementation from worktree branch `codex/s1-b2-p2-file-ownership`, the Batch 2 Part 3 implementation from worktree branch `codex/s1-b2-p3-sequential-build-order`, and the Batch 2 Part 4 implementation from worktree branch `codex/s1-b2-p4-test-strategy-and-acceptance-gates` have been merged back into `dev`.
+- `dev` includes the completed Batch 1.16, Batch 1.17, Batch 1.18, Batch 1.19, Batch 1.20, Batch 2.01, Batch 2.02, Batch 2.03, Batch 2.04, and Batch 3.01 implementations.
+- The Batch 2 Part 1 implementation from worktree branch `codex/s1-b2-p1-intake-architecture`, the Batch 2 Part 2 implementation from worktree branch `codex/s1-b2-p2-file-ownership`, the Batch 2 Part 3 implementation from worktree branch `codex/s1-b2-p3-sequential-build-order`, the Batch 2 Part 4 implementation from worktree branch `codex/s1-b2-p4-test-strategy-and-acceptance-gates`, and the Batch 3 Part 1 implementation from worktree branch `codex/s1-b3-p1-umbrella` have been merged back into `dev`.
 - `execution.md` now explicitly requires completed worktree branches to be merged back into their source branch before a task is considered complete, unless the user explicitly requests a PR-only workflow.
 
 ## Verification
@@ -149,4 +155,4 @@
 - `npm.cmd run smoke`
 
 ## Next
-- Batch 2 is complete. Next work should proceed against the frozen Batch 2 architecture, file ownership, build order, and acceptance gates.
+- Batch 3 Part 1 is complete. Next work should proceed against the frozen Batch 2 foundation and the now-real Batch 3 spec-mode path, starting with `forge_step1_batch3/part-2-stage-1-and-2-core-types-and-input-foundation.md`.

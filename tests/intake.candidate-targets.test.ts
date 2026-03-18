@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import { join } from "node:path";
 
+import { buildInferenceResult } from "../src/intake/inference.js";
 import { resolveCandidateTargets } from "../src/intake/candidate-targets.js";
 import { scanRepoResult } from "../src/intake/repo-context.js";
 import type {
   CandidateTarget,
   NormalizedTaskInput,
+  TaskParserResult,
   RepoContext,
 } from "../src/intake/types.js";
 import {
@@ -62,6 +64,110 @@ function resolveWithFocus(
     focusOptions: FocusAwareTargetingOptions,
   ) => CandidateTarget[])(taskInput, repoContext, options);
 }
+
+await runScenario(
+  "buildInferenceResult uses structured task signals to target files that raw prompt text does not name",
+  async () => {
+    const repoRoot = await createTempRepo();
+
+    try {
+      await writeRepoFile(
+        repoRoot,
+        "package.json",
+        [
+          "{",
+          '  "name": "fixture-repo",',
+          '  "private": true,',
+          '  "type": "module"',
+          "}",
+        ].join("\n"),
+      );
+      await writeRepoFile(repoRoot, "src/app.ts", "export const app = true;\n");
+      await writeRepoFile(repoRoot, "src/goal.ts", "export const goal = true;\n");
+      await writeRepoFile(repoRoot, "src/summary.ts", "export const summary = true;\n");
+      await writeRepoFile(repoRoot, "src/zebra.ts", "export const zebra = true;\n");
+      await writeRepoFile(repoRoot, "tests/app.test.ts", "export const appTest = true;\n");
+      await writeRepoFile(repoRoot, "tests/zebra.test.ts", "export const zebraTest = true;\n");
+
+      const taskInput: NormalizedTaskInput = {
+        inputMode: "prompt",
+        primaryInput: {
+          path: null,
+          rawText: "Refine rollout behavior.",
+        },
+        normalizedTaskText: "Refine rollout behavior.",
+        parserInputText: "Refine rollout behavior.",
+        notes: [],
+        constraints: [],
+        configPath: null,
+        focusPaths: [],
+        ambiguities: [],
+        recommendedUserActions: [],
+      };
+      const taskParserResult: TaskParserResult = {
+        taskSpec: {
+          title: "Refine rollout behavior",
+          summary: "",
+          goal: "Refine rollout behavior.",
+          scope: ["src/zebra.ts"],
+          acceptanceCriteria: [],
+          hasAcceptanceCriteria: false,
+          explicitRequirements: [],
+          constraints: [],
+          mentionedPaths: ["src/zebra.ts"],
+          mentionedTests: ["tests/zebra.test.ts"],
+          mentionedModules: ["zebra"],
+          riskyPhrases: ["migration"],
+          openQuestions: [],
+        },
+        signals: {
+          hasGoal: true,
+          hasAcceptanceCriteria: false,
+          referencedPaths: [],
+          promptIsThin: false,
+          promptRequirementCandidateCount: 0,
+          promptOpenQuestionCategories: [],
+        },
+        ambiguities: [],
+        warnings: [],
+        recommendedUserActions: [],
+      };
+
+      const repoScanResult = await scanRepoResult(repoRoot, join(repoRoot, ".forge"));
+      const inferenceResult = buildInferenceResult({
+        taskInput,
+        taskParserResult,
+        repoScanResult,
+      });
+
+      assert.ok(
+        inferenceResult.candidateTargets.some(
+          (target) => target.path === "src/zebra.ts" && target.matchType === "explicit",
+        ),
+      );
+      assert.ok(
+        inferenceResult.candidateTargets.some(
+          (target) => target.path === "tests/zebra.test.ts" && target.kind === "test",
+        ),
+      );
+      assert.ok(
+        !inferenceResult.candidateTargets.some(
+          (target) => target.path === "src/summary.ts" && target.matchType === "explicit",
+        ),
+      );
+      assert.ok(
+        !inferenceResult.candidateTargets.some(
+          (target) => target.path === "src/goal.ts" && target.matchType === "explicit",
+        ),
+      );
+      assert.ok(
+        inferenceResult.candidateTargets.every((target) => target.path !== "src/app.ts" || target.matchType !== "fallback"),
+      );
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
 
 await runScenario(
   "candidate targeting enriches explicit source matches with sibling tests and manifest mentions",

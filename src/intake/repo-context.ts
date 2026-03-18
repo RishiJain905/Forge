@@ -163,12 +163,6 @@ function collectKeyDirectories(files: string[]): string[] {
     .map(([directory]) => directory);
 }
 
-function normalizeSourceStem(filePath: string): string {
-  const baseName = path.posix.basename(filePath).toLowerCase();
-  const withoutExtension = baseName.replace(/\.[^.]+$/, "");
-  return withoutExtension.replace(/\.(test|spec)$/i, "");
-}
-
 function collectEntryPoints(sourceFiles: string[]): string[] {
   const prioritized = sourceFiles.filter((filePath) =>
     /(^|\/)(app|index|main|server|cli)\.(ts|tsx|js|jsx|mjs|cjs)$/i.test(filePath),
@@ -332,6 +326,52 @@ async function buildRepoSignals(
   };
 }
 
+async function buildRepoScanData(params: {
+  repoRoot: string;
+  outputRoot: string;
+  gitContext: GitContext;
+}): Promise<{
+  repoContext: RepoContext;
+  signals: RepoScanSignals;
+}> {
+  const files: string[] = [];
+  await collectRepoFiles(params.repoRoot, params.repoRoot, params.outputRoot, files);
+
+  const allFiles = [...files].sort((left, right) => left.localeCompare(right));
+  const manifestFiles = allFiles.filter((filePath) =>
+    manifestFileNames.has(path.posix.basename(filePath).toLowerCase()),
+  );
+  const testFiles = allFiles.filter((filePath) => isTestFile(filePath));
+  const sourceFiles = allFiles.filter((filePath) => isSourceFile(filePath) && !isTestFile(filePath));
+  const signals = await buildRepoSignals(
+    params.repoRoot,
+    allFiles,
+    sourceFiles,
+    testFiles,
+    manifestFiles,
+  );
+
+  return {
+    repoContext: {
+      grounded:
+        sourceFiles.length > 0 || testFiles.length > 0 || manifestFiles.length > 0,
+      sourceFiles,
+      testFiles,
+      manifestFiles,
+      allFiles,
+      gitContext: params.gitContext,
+      languages: signals.languages,
+      frameworkHints: signals.frameworkHints,
+      packageManager: signals.packageManager,
+      keyDirectories: signals.keyDirectories,
+      entryPoints: signals.entryPoints,
+      testFrameworkHints: signals.testFrameworkHints,
+      layoutSummary: signals.layoutSummary,
+    },
+    signals,
+  };
+}
+
 async function collectRepoFiles(
   repoRoot: string,
   currentPath: string,
@@ -368,25 +408,13 @@ export async function scanRepoContext(
   outputRoot: string,
   gitContext: GitContext,
 ): Promise<RepoContext> {
-  const files: string[] = [];
-  await collectRepoFiles(repoRoot, repoRoot, outputRoot, files);
-
-  const allFiles = [...files].sort((left, right) => left.localeCompare(right));
-  const manifestFiles = allFiles.filter((filePath) =>
-    manifestFileNames.has(path.posix.basename(filePath).toLowerCase()),
-  );
-  const testFiles = allFiles.filter((filePath) => isTestFile(filePath));
-  const sourceFiles = allFiles.filter((filePath) => isSourceFile(filePath) && !isTestFile(filePath));
-
-  return {
-    grounded:
-      sourceFiles.length > 0 || testFiles.length > 0 || manifestFiles.length > 0,
-    sourceFiles,
-    testFiles,
-    manifestFiles,
-    allFiles,
+  const scanData = await buildRepoScanData({
+    repoRoot,
+    outputRoot,
     gitContext,
-  };
+  });
+
+  return scanData.repoContext;
 }
 
 export async function scanRepoResult(
@@ -406,22 +434,15 @@ export async function scanRepoResult(
             ? gitContextResolutionOrRunner
             : gitCommandRunner,
         );
-  const repoContext = await scanRepoContext(
+  const scanData = await buildRepoScanData({
     repoRoot,
     outputRoot,
-    gitContextResult.gitContext,
-  );
-  const signals = await buildRepoSignals(
-    repoRoot,
-    repoContext.allFiles,
-    repoContext.sourceFiles,
-    repoContext.testFiles,
-    repoContext.manifestFiles,
-  );
+    gitContext: gitContextResult.gitContext,
+  });
 
   return {
-    repoContext,
-    signals,
+    repoContext: scanData.repoContext,
+    signals: scanData.signals,
     warnings: gitContextResult.warning ? [gitContextResult.warning] : [],
   };
 }

@@ -20,7 +20,6 @@ import { scanRepoResult } from "./repo-context.js";
 import { createIntakeReport } from "./report.js";
 import { buildTaskParserResult } from "./task-parser.js";
 import { resolveGitContext } from "./git-context.js";
-import { buildVerificationTargets } from "./verification-targets.js";
 import type {
   IntakeCommandOptions,
   IntakeCommandResult,
@@ -253,14 +252,14 @@ export async function runIntakeCommand(
     });
     const finalAssembledResult = {
       ...assembledResult,
+      riskAnalysis: assembledResult.riskAnalysis,
+      verificationTargets: assembledResult.verificationTargets,
       ambiguities: successEvaluation.ambiguities,
       warnings: successEvaluation.warnings,
       recommendedUserActions: successEvaluation.nextStepReadiness.recommendedUserActions,
     };
-    const initialVerificationTargets = buildVerificationTargets({
-      taskParserResult,
-      candidateTargets: finalAssembledResult.candidateTargets,
-    });
+    const initialVerificationTargets =
+      finalAssembledResult.verificationTargets ?? [];
 
     try {
       return await persistResult(
