@@ -11,7 +11,7 @@ Git can improve repo grounding, but Step 1 must still work without it.
 - Graceful fallback when git is absent or broken.
 
 ## Required implementation tasks
-- Implement repo root detection with git when available.
+- mplement repo root detection with git when available.
 - Capture current branch and optionally recent file hints when cheap/reliable.
 - Fall back to filesystem logic when git is unavailable.
 
