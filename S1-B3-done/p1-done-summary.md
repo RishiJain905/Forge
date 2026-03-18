@@ -50,7 +50,7 @@
 ## Final Branch State
 - Target branch: `dev`
 - Implementation worktree branch: `codex/s1-b3-p1-umbrella`
-- The implementation is ready to merge back into `dev` under `execution.md`
+- The implementation has been merged back into `dev` and the Batch 3 Part 1 task is closed under `execution.md`
 
 ## Follow-On
 - Next Batch 3 target: `forge_step1_batch3/part-2-stage-1-and-2-core-types-and-input-foundation.md`
