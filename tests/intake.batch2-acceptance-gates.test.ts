@@ -36,7 +36,25 @@ import {
 
 const gate1TypeChecks = {
   resolvedInput: {
-    taskInput: {
+    inputMode: "prompt",
+    sourceSelection: {
+      specProvided: false,
+      promptProvided: true,
+    },
+    primaryInput: {
+      path: null,
+      rawText: "Update src/app.ts.",
+      loaded: true,
+    },
+    supplementalInputs: {
+      notes: [],
+      constraints: [],
+      configPath: null,
+      configLoaded: false,
+      focusPaths: [],
+      strictFocus: false,
+    },
+    normalizedTaskInput: {
       inputMode: "prompt",
       primaryInput: {
         path: null,
@@ -84,7 +102,7 @@ const gate1TypeChecks = {
     },
   ] satisfies CandidateTarget[],
   riskAnalysis: {
-    initial_risk_zones: [],
+    initialRiskZones: [],
   } satisfies RiskAnalysis,
   ambiguity: {
     type: "acceptance_criteria",
@@ -230,10 +248,12 @@ await runScenario(
       });
 
       assert.equal(specResolution.blockingIssues.length, 0);
-      assert.ok(specResolution.taskInput);
-      assert.equal(specResolution.taskInput?.inputMode, "spec");
+      assert.ok(specResolution.normalizedTaskInput);
+      assert.equal(specResolution.normalizedTaskInput?.inputMode, "spec");
+      assert.equal(specResolution.primaryInput.loaded, true);
+      assert.equal(specResolution.primaryInput.path, specPath);
 
-      const specParserResult = buildTaskParserResult(specResolution.taskInput);
+      const specParserResult = buildTaskParserResult(specResolution.normalizedTaskInput);
       assert.equal(specParserResult.signals.hasGoal, true);
       assert.equal(specParserResult.signals.hasAcceptanceCriteria, true);
       assert.deepEqual(specParserResult.signals.referencedPaths, [
@@ -250,17 +270,17 @@ await runScenario(
       });
 
       assert.equal(promptResolution.blockingIssues.length, 0);
-      assert.equal(promptResolution.taskInput?.inputMode, "prompt");
+      assert.equal(promptResolution.normalizedTaskInput?.inputMode, "prompt");
       assert.ok(
-        promptResolution.taskInput?.promptDetails?.openQuestions.some((question) =>
+        promptResolution.normalizedTaskInput?.promptDetails?.openQuestions.some((question) =>
           question.category === "acceptance_criteria",
         ),
       );
       assert.ok(
-        promptResolution.taskInput?.ambiguities.some((ambiguity) => /too short/i.test(ambiguity)),
+        promptResolution.normalizedTaskInput?.ambiguities.some((ambiguity) => /too short/i.test(ambiguity)),
       );
 
-      const promptParserResult = buildTaskParserResult(promptResolution.taskInput);
+      const promptParserResult = buildTaskParserResult(promptResolution.normalizedTaskInput);
       assert.equal(promptParserResult.signals.promptIsThin, true);
       assert.deepEqual(promptParserResult.signals.promptOpenQuestionCategories, [
         "acceptance_criteria",
@@ -274,12 +294,12 @@ await runScenario(
         repoRoot,
       });
 
-      assert.equal(invalidResolution.taskInput, null);
+      assert.equal(invalidResolution.normalizedTaskInput, null);
       assert.ok(
         invalidResolution.blockingIssues.some((issue) => issue.code === "INPUT_REQUIRED"),
       );
 
-      const fallbackParserResult = buildTaskParserResult(invalidResolution.taskInput);
+      const fallbackParserResult = buildTaskParserResult(invalidResolution.normalizedTaskInput);
       assert.equal(fallbackParserResult.taskSpec.goal, "");
       assert.ok(
         fallbackParserResult.warnings.some((warning) =>
@@ -356,10 +376,10 @@ await runScenario(
       });
 
       const candidateTargets = resolveCandidateTargets(
-        resolvedInput.taskInput,
+        resolvedInput.normalizedTaskInput,
         repoScanResult.repoContext,
         {
-          focusPaths: resolvedInput.taskInput?.focusPaths ?? [],
+          focusPaths: resolvedInput.normalizedTaskInput?.focusPaths ?? [],
           strictFocus: true,
         },
       );
@@ -393,10 +413,10 @@ await runScenario(
         currentWorkingDirectory: repoRoot,
         repoRoot,
       });
-      const taskParserResult = buildTaskParserResult(resolvedInput.taskInput);
+      const taskParserResult = buildTaskParserResult(resolvedInput.normalizedTaskInput);
       const repoScanResult = await scanRepoResult(repoRoot, join(repoRoot, ".forge"));
       const inferenceResult = buildInferenceResult({
-        taskInput: resolvedInput.taskInput,
+        taskInput: resolvedInput.normalizedTaskInput,
         taskParserResult,
         repoScanResult,
       });
@@ -406,7 +426,7 @@ await runScenario(
         inferenceResult,
       });
       const ambiguityAnalysis = buildAmbiguityAnalysisResult({
-        taskInput: resolvedInput.taskInput,
+        taskInput: resolvedInput.normalizedTaskInput,
         taskParserResult,
         repoScanResult,
         inferenceResult,
@@ -418,7 +438,7 @@ await runScenario(
       });
 
       assert.ok(
-        riskAnalysis.initial_risk_zones.some((zone) => zone.code === "no_tests_detected"),
+        riskAnalysis.initialRiskZones.some((zone) => zone.code === "no_tests_detected"),
       );
       assert.equal(ambiguityAnalysis.confidence.level, "low");
       assert.ok(

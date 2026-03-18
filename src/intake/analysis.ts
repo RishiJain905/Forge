@@ -5,13 +5,13 @@ import {
 } from "./candidate-targets.js";
 import type {
   AmbiguityAnalysisResult,
-  ArtifactRiskAnalysisSection,
-  ArtifactRiskZone,
   BlockingIssue,
   InferenceResult,
   IntakeFailureDetails,
   NormalizedTaskInput,
   RepoScanResult,
+  RiskAnalysis,
+  RiskZone,
   ResolvedRuntimeOptions,
   TaskParserResult,
   OptionalReasoningResolution,
@@ -118,8 +118,8 @@ export function buildRiskAnalysisResult(params: {
   repoScanResult: RepoScanResult;
   inferenceResult: InferenceResult;
   repoContextOverride?: RepoScanResult["repoContext"];
-}): ArtifactRiskAnalysisSection {
-  const riskZones: ArtifactRiskZone[] = [];
+}): RiskAnalysis {
+  const riskZones: RiskZone[] = [];
   const repoContext = params.repoContextOverride ?? params.repoScanResult.repoContext;
   const repoFiles = new Set(
     repoContext.allFiles.map(normalizePathForComparison),
@@ -133,7 +133,7 @@ export function buildRiskAnalysisResult(params: {
       code: "weak_repo_grounding",
       level: "high",
       reason: "Repo grounding is partial, so later planning may rely on weak repository evidence.",
-      evidence_paths: [],
+      evidencePaths: [],
     });
   }
 
@@ -142,7 +142,7 @@ export function buildRiskAnalysisResult(params: {
       code: "unresolved_referenced_paths",
       level: "high",
       reason: "The task references paths that were not found during repo grounding.",
-      evidence_paths: unresolvedReferencedPaths,
+      evidencePaths: unresolvedReferencedPaths,
     });
   }
 
@@ -151,7 +151,7 @@ export function buildRiskAnalysisResult(params: {
       code: "no_candidate_targets",
       level: "high",
       reason: "Intake could not produce any plausible candidate targets for the next step.",
-      evidence_paths: [],
+      evidencePaths: [],
     });
   }
 
@@ -163,7 +163,7 @@ export function buildRiskAnalysisResult(params: {
       code: "fallback_targeting_only",
       level: "medium",
       reason: "Targeting depends entirely on fallback repo structure instead of explicit task-to-file matches.",
-      evidence_paths: params.inferenceResult.candidateTargets.map((target) => target.path),
+      evidencePaths: params.inferenceResult.candidateTargets.map((target) => target.path),
     });
   }
 
@@ -172,7 +172,7 @@ export function buildRiskAnalysisResult(params: {
       code: "no_tests_detected",
       level: "medium",
       reason: "No tests were detected during repo grounding, so later verification coverage may be weak.",
-      evidence_paths: [],
+      evidencePaths: [],
     });
   }
 
@@ -188,12 +188,12 @@ export function buildRiskAnalysisResult(params: {
       reason: buildSurfaceRiskReason({
         taskParserResult: params.taskParserResult,
       }),
-      evidence_paths: manifestOrConfigPaths,
+      evidencePaths: manifestOrConfigPaths,
     });
   }
 
   return {
-    initial_risk_zones: riskZones,
+    initialRiskZones: riskZones,
   };
 }
 

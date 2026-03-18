@@ -183,7 +183,7 @@ export async function runIntakeCommand(
     validationBlockingIssues = resolvedInput.blockingIssues;
     validationWarnings = resolvedInput.warnings;
     validationRecommendedUserActions = resolvedInput.recommendedUserActions;
-    taskInput = resolvedInput.taskInput;
+    taskInput = resolvedInput.normalizedTaskInput;
 
     if (!failure && runtimeBlockingIssues.length > 0) {
       failure = createFailureDetails(

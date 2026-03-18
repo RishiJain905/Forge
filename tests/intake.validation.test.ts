@@ -220,7 +220,25 @@ await runScenario(
         currentWorkingDirectory: string;
         repoRoot: string;
       }) => Promise<{
-        taskInput: unknown | null;
+        inputMode: "spec" | "prompt";
+        sourceSelection: {
+          specProvided: boolean;
+          promptProvided: boolean;
+        };
+        primaryInput: {
+          path: string | null;
+          rawText: string;
+          loaded: boolean;
+        };
+        supplementalInputs: {
+          notes: string[];
+          constraints: string[];
+          configPath: string | null;
+          configLoaded: boolean;
+          focusPaths: string[];
+          strictFocus: boolean;
+        };
+        normalizedTaskInput: unknown | null;
         blockingIssues: Array<{
           code: string;
           message: string;
@@ -238,7 +256,9 @@ await runScenario(
         repoRoot,
       });
 
-      assert.equal(result.taskInput, null);
+      assert.equal(result.normalizedTaskInput, null);
+      assert.equal(result.supplementalInputs.configPath, join(repoRoot, "missing-forge-intake.json"));
+      assert.equal(result.supplementalInputs.configLoaded, false);
       assert.ok(result.blockingIssues.some((issue) => issue.code === "CONFIG_READ_FAILED"));
       assert.ok(
         !result.warnings.some((value) => /Config input was validated and recorded/i.test(value)),
@@ -401,7 +421,25 @@ await runScenario(
         currentWorkingDirectory: string;
         repoRoot: string;
       }) => Promise<{
-        taskInput: unknown | null;
+        inputMode: "spec" | "prompt";
+        sourceSelection: {
+          specProvided: boolean;
+          promptProvided: boolean;
+        };
+        primaryInput: {
+          path: string | null;
+          rawText: string;
+          loaded: boolean;
+        };
+        supplementalInputs: {
+          notes: string[];
+          constraints: string[];
+          configPath: string | null;
+          configLoaded: boolean;
+          focusPaths: string[];
+          strictFocus: boolean;
+        };
+        normalizedTaskInput: unknown | null;
         blockingIssues: Array<{
           code: string;
           message: string;
@@ -419,7 +457,12 @@ await runScenario(
         repoRoot,
       });
 
-      assert.equal(result.taskInput, null);
+      assert.equal(result.normalizedTaskInput, null);
+      assert.equal(result.inputMode, "prompt");
+      assert.equal(result.sourceSelection.specProvided, true);
+      assert.equal(result.sourceSelection.promptProvided, true);
+      assert.equal(result.primaryInput.path, null);
+      assert.equal(result.supplementalInputs.strictFocus, true);
       assert.ok(result.blockingIssues.some((issue) => issue.code === "INPUT_CONFLICT"));
       assert.ok(result.blockingIssues.some((issue) => issue.code === "SPEC_READ_FAILED"));
       assert.ok(result.blockingIssues.some((issue) => issue.code === "STRICT_FOCUS_REQUIRES_FOCUS"));

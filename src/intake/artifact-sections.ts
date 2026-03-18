@@ -11,6 +11,7 @@ import type {
   BoundarySafeIntakeResult,
   CandidateTarget,
   NextStepReadiness,
+  RiskAnalysis,
 } from "./types.js";
 
 function toArtifactTaskSpecSection(
@@ -98,6 +99,19 @@ function toArtifactConfidenceSection(
   };
 }
 
+function toArtifactRiskAnalysisSection(
+  riskAnalysis: RiskAnalysis,
+): ArtifactRiskAnalysisSection {
+  return {
+    initial_risk_zones: riskAnalysis.initialRiskZones.map((zone) => ({
+      code: zone.code,
+      level: zone.level,
+      reason: zone.reason,
+      evidence_paths: [...zone.evidencePaths],
+    })),
+  };
+}
+
 function toArtifactNextStepReadinessSection(
   nextStepReadiness: NextStepReadiness,
 ): ArtifactNextStepReadinessSection {
@@ -114,7 +128,7 @@ function toArtifactNextStepReadinessSection(
 export function buildArtifactSections(params: {
   assembledResult: AssembledIntakeResult;
   boundarySafeResult: BoundarySafeIntakeResult;
-  riskAnalysis: ArtifactRiskAnalysisSection;
+  riskAnalysis: RiskAnalysis;
   initialVerificationTargets: BoundarySafeIntakeResult["initialVerificationTargets"];
   nextStepReadiness: NextStepReadiness;
 }): Pick<
@@ -136,7 +150,7 @@ export function buildArtifactSections(params: {
     candidate_targets: params.boundarySafeResult.candidateTargets.map(
       toArtifactCandidateTargetSectionItem,
     ),
-    risk_analysis: params.riskAnalysis,
+    risk_analysis: toArtifactRiskAnalysisSection(params.riskAnalysis),
     initial_verification_targets: params.initialVerificationTargets.map(
       toArtifactInitialVerificationTargetSectionItem,
     ),

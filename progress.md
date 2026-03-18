@@ -142,10 +142,16 @@
   - Expanded the public nested `task_spec` and `repo_context` artifact/report sections while keeping the top-level CLI and artifact contract stable.
   - Added dedicated Batch 3 runnable-milestone coverage for `forge intake --spec <file>` and fixed title/targeting regressions so synthetic headings do not create false explicit matches or incorrect task titles.
   - Documented completion evidence in `S1-B3-done/p1-done-summary.md` after the full verification gate stayed green.
+- Batch 3.02: `part-2-stage-1-and-2-core-types-and-input-foundation.md`
+  - Canonicalized the Step 1 intake type layer so domain contracts now live independently from artifact/report projection shapes.
+  - Reworked `ResolvedIntakeInput` into one runner-facing bundle that carries source selection, loaded input metadata, normalized task input, and validation output together.
+  - Kept `input.ts` as the single owner of load-and-normalize behavior while keeping `validation.ts` policy-only and updating `runner.ts` to consume the canonical resolved bundle.
+  - Promoted risk analysis and confidence to explicit domain types while keeping the public Batch 1 artifact/report contract stable through projection helpers.
+  - Expanded direct architecture, validation, analysis, and acceptance-gate coverage for the new Stage 1/2 foundation and documented completion evidence in `S1-B3-done/p2-done-summary.md`.
 
 ## Current Branch State
-- `dev` includes the completed Batch 1.16, Batch 1.17, Batch 1.18, Batch 1.19, Batch 1.20, Batch 2.01, Batch 2.02, Batch 2.03, Batch 2.04, and Batch 3.01 implementations.
-- The Batch 2 Part 1 implementation from worktree branch `codex/s1-b2-p1-intake-architecture`, the Batch 2 Part 2 implementation from worktree branch `codex/s1-b2-p2-file-ownership`, the Batch 2 Part 3 implementation from worktree branch `codex/s1-b2-p3-sequential-build-order`, the Batch 2 Part 4 implementation from worktree branch `codex/s1-b2-p4-test-strategy-and-acceptance-gates`, and the Batch 3 Part 1 implementation from worktree branch `codex/s1-b3-p1-umbrella` have been merged back into `dev`.
+- `dev` includes the completed Batch 1.16, Batch 1.17, Batch 1.18, Batch 1.19, Batch 1.20, Batch 2.01, Batch 2.02, Batch 2.03, Batch 2.04, Batch 3.01, and Batch 3.02 implementations.
+- The Batch 2 Part 1 implementation from worktree branch `codex/s1-b2-p1-intake-architecture`, the Batch 2 Part 2 implementation from worktree branch `codex/s1-b2-p2-file-ownership`, the Batch 2 Part 3 implementation from worktree branch `codex/s1-b2-p3-sequential-build-order`, the Batch 2 Part 4 implementation from worktree branch `codex/s1-b2-p4-test-strategy-and-acceptance-gates`, the Batch 3 Part 1 implementation from worktree branch `codex/s1-b3-p1-umbrella`, and the Batch 3 Part 2 implementation from worktree branch `codex/s1-b3-p2-core-types-input-foundation` have been merged back into `dev`.
 - `execution.md` now explicitly requires completed worktree branches to be merged back into their source branch before a task is considered complete, unless the user explicitly requests a PR-only workflow.
 
 ## Verification
@@ -155,4 +161,4 @@
 - `npm.cmd run smoke`
 
 ## Next
-- Batch 3 Part 1 is complete. Next work should proceed against the frozen Batch 2 foundation and the now-real Batch 3 spec-mode path, starting with `forge_step1_batch3/part-2-stage-1-and-2-core-types-and-input-foundation.md`.
+- Batch 3 Part 2 is complete. Next work should proceed against the stabilized core type/input foundation with `forge_step1_batch3/part-3-stage-3-and-4-task-normalization-and-repo-context.md`.

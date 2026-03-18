@@ -18,19 +18,25 @@ function createPromptInput(
   prompt: string,
   overrides: Partial<ValidatedIntakeInputs> = {},
 ): ValidatedIntakeInputs {
+  const { supplementalInputs: supplementalOverrides, ...otherOverrides } = overrides;
+  const supplementalInputs = {
+    notes: [],
+    constraints: [],
+    configPath: null,
+    focusPaths: [],
+    ...supplementalOverrides,
+  };
+
   return {
     inputMode: "prompt",
     primaryInput: {
       path: null,
       rawText: prompt,
     },
-    notes: [],
-    constraints: [],
-    configPath: null,
-    focusPaths: [],
+    supplementalInputs,
     warnings: [],
     recommendedUserActions: [],
-    ...overrides,
+    ...otherOverrides,
   };
 }
 
@@ -180,12 +186,12 @@ await runScenario(
       inferenceResult,
     });
 
-    const manifestRisk = result.initial_risk_zones.find((zone) => zone.code === "manifest_or_config_impact");
+    const manifestRisk = result.initialRiskZones.find((zone) => zone.code === "manifest_or_config_impact");
     assert.ok(manifestRisk);
     assert.match(manifestRisk?.reason ?? "", /migration/i);
     assert.match(manifestRisk?.reason ?? "", /API contract/i);
     assert.match(manifestRisk?.reason ?? "", /coordination/i);
-    assert.ok(result.initial_risk_zones.some((zone) => zone.code === "no_tests_detected"));
+    assert.ok(result.initialRiskZones.some((zone) => zone.code === "no_tests_detected"));
   },
 );
 
@@ -217,15 +223,15 @@ await runScenario(
     });
 
     assert.deepEqual(
-      result.initial_risk_zones.map((zone) => zone.code),
+      result.initialRiskZones.map((zone) => zone.code),
       [
         "weak_repo_grounding",
         "unresolved_referenced_paths",
         "no_tests_detected",
       ],
     );
-    assert.equal(result.initial_risk_zones[0]?.level, "high");
-    assert.deepEqual(result.initial_risk_zones[1]?.evidence_paths, [
+    assert.equal(result.initialRiskZones[0]?.level, "high");
+    assert.deepEqual(result.initialRiskZones[1]?.evidencePaths, [
       "src/missing.ts",
       "tests/missing.test.ts",
     ]);
@@ -238,7 +244,12 @@ await runScenario(
     const { taskInput, taskParserResult } = createTaskParserResult(
       "Update src/app.ts and tests/app.test.ts.",
       {
-        focusPaths: ["tests"],
+        supplementalInputs: {
+          notes: [],
+          constraints: [],
+          configPath: null,
+          focusPaths: ["tests"],
+        },
       },
     );
     const repoScanResult = createRepoScanResult();

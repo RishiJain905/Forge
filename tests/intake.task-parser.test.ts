@@ -8,19 +8,25 @@ function createPromptInput(
   prompt: string,
   overrides: Partial<ValidatedIntakeInputs> = {},
 ): ValidatedIntakeInputs {
+  const { supplementalInputs: supplementalOverrides, ...otherOverrides } = overrides;
+  const supplementalInputs = {
+    notes: [],
+    constraints: [],
+    configPath: null,
+    focusPaths: [],
+    ...supplementalOverrides,
+  };
+
   return {
     inputMode: "prompt",
     primaryInput: {
       path: null,
       rawText: prompt,
     },
-    notes: [],
-    constraints: [],
-    configPath: null,
-    focusPaths: [],
+    supplementalInputs,
     warnings: [],
     recommendedUserActions: [],
-    ...overrides,
+    ...otherOverrides,
   };
 }
 
@@ -63,8 +69,12 @@ await runScenario(
       createPromptInput(
         "Refine retry telemetry for src/app.ts.",
         {
-          notes: ["Preserve existing CLI behavior."],
-          constraints: ["Do not change the output format."],
+          supplementalInputs: {
+            notes: ["Preserve existing CLI behavior."],
+            constraints: ["Do not change the output format."],
+            configPath: null,
+            focusPaths: [],
+          },
         },
       ),
     );
@@ -302,7 +312,12 @@ await runScenario(
           "- tests/app.test.ts covers migration order",
         ].join("\n"),
         {
-          constraints: ["Avoid changing the CLI contract."],
+          supplementalInputs: {
+            notes: [],
+            constraints: ["Avoid changing the CLI contract."],
+            configPath: null,
+            focusPaths: [],
+          },
         },
       ),
     );

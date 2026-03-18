@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 
 import { assembleIntakeResult } from "../src/intake/assemble.js";
-import { resolveLoadedIntakeInput } from "../src/intake/input.js";
+import { resolveIntakeInput, resolveLoadedIntakeInput } from "../src/intake/input.js";
+import { createTempRepo, disposeTempRepo } from "./support/forge-cli.js";
 import type { ValidatedIntakeInputs } from "../src/intake/types.js";
 
 function createPromptInput(prompt: string): ValidatedIntakeInputs {
@@ -11,10 +12,12 @@ function createPromptInput(prompt: string): ValidatedIntakeInputs {
       path: null,
       rawText: prompt,
     },
-    notes: [],
-    constraints: [],
-    configPath: null,
-    focusPaths: [],
+    supplementalInputs: {
+      notes: [],
+      constraints: [],
+      configPath: null,
+      focusPaths: [],
+    },
     warnings: [],
     recommendedUserActions: [],
   };
@@ -30,6 +33,39 @@ async function runScenario(name: string, scenario: () => Promise<void>): Promise
     process.exitCode = 1;
   }
 }
+
+await runScenario(
+  "input module returns one resolved bundle with canonical normalized task metadata",
+  async () => {
+    const repoRoot = await createTempRepo();
+
+    try {
+      const resolvedInput = await resolveIntakeInput({
+        options: {
+          prompt: "Update src/app.ts and keep tests aligned.",
+        },
+        currentWorkingDirectory: repoRoot,
+        repoRoot,
+      });
+
+      assert.equal(resolvedInput.inputMode, "prompt");
+      assert.equal(resolvedInput.sourceSelection.promptProvided, true);
+      assert.equal(resolvedInput.sourceSelection.specProvided, false);
+      assert.equal(resolvedInput.primaryInput.path, null);
+      assert.equal(resolvedInput.primaryInput.loaded, true);
+      assert.equal(resolvedInput.primaryInput.rawText, "Update src/app.ts and keep tests aligned.");
+      assert.deepEqual(resolvedInput.supplementalInputs.notes, []);
+      assert.deepEqual(resolvedInput.supplementalInputs.constraints, []);
+      assert.equal(resolvedInput.supplementalInputs.configPath, null);
+      assert.equal(resolvedInput.supplementalInputs.configLoaded, false);
+      assert.deepEqual(resolvedInput.supplementalInputs.focusPaths, []);
+      assert.equal(resolvedInput.supplementalInputs.strictFocus, false);
+      assert.equal(resolvedInput.normalizedTaskInput?.inputMode, "prompt");
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
 
 await runScenario(
   "assembled intake result keeps all four responsibility outputs on the final path",
@@ -154,6 +190,8 @@ await runScenario(
       "tests/app.test.ts is updated",
     ]);
     assert.ok(assembled.riskAnalysis, "expected assembled result to carry riskAnalysis");
+    assert.ok(Array.isArray(assembled.riskAnalysis?.initialRiskZones));
+    assert.deepEqual(assembled.riskAnalysis?.initialRiskZones, []);
     assert.ok(assembled.verificationTargets, "expected assembled result to carry verificationTargets");
     assert.equal(assembled.repoContext.manifestFiles[0], "package.json");
     assert.equal(assembled.candidateTargets[1]?.path, "tests/app.test.ts");

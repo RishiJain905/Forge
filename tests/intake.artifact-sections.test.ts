@@ -381,7 +381,7 @@ await runScenario("artifact sections project the richer Batch 3 task and repo co
     boundarySafeResult: createBoundarySafeResult(),
     nextStepReadiness: createNextStepReadiness(),
     riskAnalysis: {
-      initial_risk_zones: [],
+      initialRiskZones: [],
     },
     initialVerificationTargets: [],
   } as any);
@@ -538,12 +538,12 @@ await runScenario(
       boundarySafeResult: createBoundarySafeResult(),
       nextStepReadiness: createNextStepReadiness(),
       riskAnalysis: {
-        initial_risk_zones: [
+        initialRiskZones: [
           {
-            code: "manual_risk",
+            code: "manifest_or_config_impact",
             level: "high",
             reason: "Manual risk should be projected without recomputation.",
-            evidence_paths: ["src/app.ts"],
+            evidencePaths: ["src/app.ts"],
           },
         ],
       },
@@ -558,7 +558,7 @@ await runScenario(
 
     assert.deepEqual(
       sections.risk_analysis.initial_risk_zones.map((zone) => zone.code),
-      ["manual_risk"],
+      ["manifest_or_config_impact"],
     );
     assert.deepEqual(
       sections.initial_verification_targets.map((target) => target.path),

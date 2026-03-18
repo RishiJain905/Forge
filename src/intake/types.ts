@@ -78,18 +78,36 @@ export interface WarningItem {
   message: string;
 }
 
-export interface NormalizedTaskInput {
-  inputMode: IntakeInputMode;
-  primaryInput: {
-    path: string | null;
-    rawText: string;
-  };
-  normalizedTaskText: string;
-  parserInputText: string;
+export interface IntakePrimaryInput {
+  path: string | null;
+  rawText: string;
+}
+
+export interface LoadedIntakePrimaryInput extends IntakePrimaryInput {
+  loaded: boolean;
+}
+
+export interface IntakeSupplementalInputs {
   notes: string[];
   constraints: string[];
   configPath: string | null;
   focusPaths: string[];
+}
+
+export interface LoadedIntakeSupplementalInputs extends IntakeSupplementalInputs {
+  configLoaded: boolean;
+  strictFocus: boolean;
+}
+
+export interface NormalizedTaskInput {
+  inputMode: IntakeInputMode;
+  primaryInput: IntakePrimaryInput;
+  normalizedTaskText: string;
+  parserInputText: string;
+  notes: IntakeSupplementalInputs["notes"];
+  constraints: IntakeSupplementalInputs["constraints"];
+  configPath: IntakeSupplementalInputs["configPath"];
+  focusPaths: IntakeSupplementalInputs["focusPaths"];
   ambiguities: string[];
   recommendedUserActions: string[];
   promptDetails?: PromptDetails;
@@ -112,14 +130,8 @@ export interface TaskParserResult {
 
 export interface ValidatedIntakeInputs {
   inputMode: IntakeInputMode;
-  primaryInput: {
-    path: string | null;
-    rawText: string;
-  };
-  notes: string[];
-  constraints: string[];
-  configPath: string | null;
-  focusPaths: string[];
+  primaryInput: IntakePrimaryInput;
+  supplementalInputs: IntakeSupplementalInputs;
   warnings: string[];
   recommendedUserActions: string[];
 }
@@ -131,17 +143,8 @@ export interface LoadedIntakeSourceSelection {
 
 export interface LoadedIntakeInput {
   inputMode: IntakeInputMode;
-  primaryInput: {
-    path: string | null;
-    rawText: string;
-  };
-  primaryInputLoaded?: boolean;
-  notes: string[];
-  constraints: string[];
-  configPath: string | null;
-  configLoaded: boolean;
-  focusPaths: string[];
-  strictFocus: boolean;
+  primaryInput: LoadedIntakePrimaryInput;
+  supplementalInputs: LoadedIntakeSupplementalInputs;
   sourceSelection: LoadedIntakeSourceSelection;
 }
 
@@ -376,7 +379,11 @@ export interface IntakeRunnerDependencies {
 }
 
 export interface ResolvedIntakeInput {
-  taskInput: NormalizedTaskInput | null;
+  inputMode: IntakeInputMode;
+  sourceSelection: LoadedIntakeSourceSelection;
+  primaryInput: LoadedIntakePrimaryInput;
+  supplementalInputs: LoadedIntakeSupplementalInputs;
+  normalizedTaskInput: NormalizedTaskInput | null;
   blockingIssues: BlockingIssue[];
   warnings: string[];
   recommendedUserActions: string[];
@@ -401,15 +408,7 @@ export interface AmbiguityAnalysisResult {
   warnings: string[];
   warningItems?: WarningItem[];
   recommendedUserActions: string[];
-  confidence: {
-    level: IntakeConfidenceLevel;
-    signals: {
-      taskParsing: IntakeConfidenceSignalStrength;
-      repoInspection: IntakeConfidenceSignalStrength;
-      targeting: IntakeConfidenceSignalStrength;
-    };
-    reasons: string[];
-  };
+  confidence: ConfidenceSummary;
 }
 
 export type ArtifactRiskZoneCode =
@@ -427,11 +426,20 @@ export interface ArtifactRiskZone {
   evidence_paths: string[];
 }
 
+export interface RiskZone {
+  code: ArtifactRiskZoneCode;
+  level: "medium" | "high";
+  reason: string;
+  evidencePaths: string[];
+}
+
+export interface RiskAnalysis {
+  initialRiskZones: RiskZone[];
+}
+
 export interface ArtifactRiskAnalysisSection {
   initial_risk_zones: ArtifactRiskZone[];
 }
-
-export type RiskAnalysis = ArtifactRiskAnalysisSection;
 
 export interface ArtifactConfidenceSection {
   level: IntakeConfidenceLevel;
@@ -443,7 +451,15 @@ export interface ArtifactConfidenceSection {
   reasons: string[];
 }
 
-export type ConfidenceSummary = AmbiguityAnalysisResult["confidence"];
+export interface ConfidenceSummary {
+  level: IntakeConfidenceLevel;
+  signals: {
+    taskParsing: IntakeConfidenceSignalStrength;
+    repoInspection: IntakeConfidenceSignalStrength;
+    targeting: IntakeConfidenceSignalStrength;
+  };
+  reasons: string[];
+}
 
 export interface AssembledIntakeResult {
   responsibilities: {
@@ -452,19 +468,19 @@ export interface AssembledIntakeResult {
     inference: InferenceResult;
     analysis: AmbiguityAnalysisResult;
   };
-  taskSpec: IntakeTaskSpec;
+  taskSpec: NormalizedTaskSpec;
   repoContext: RepoContext;
   candidateTargets: CandidateTarget[];
-  riskAnalysis?: ArtifactRiskAnalysisSection;
+  riskAnalysis?: RiskAnalysis;
   verificationTargets?: VerificationTarget[];
   ambiguities: string[];
   warnings: string[];
   recommendedUserActions: string[];
-  confidence: AmbiguityAnalysisResult["confidence"];
+  confidence: ConfidenceSummary;
 }
 
 export interface BoundarySafeIntakeResult {
-  taskSpec: IntakeTaskSpec;
+  taskSpec: NormalizedTaskSpec;
   repoContext: RepoContext;
   candidateTargets: CandidateTarget[];
   initialVerificationTargets: InitialVerificationTarget[];
@@ -553,7 +569,7 @@ export interface IntakeArtifact {
   failure: IntakeFailureDetails | null;
 }
 
-export interface IntakeCommandResult {
+export interface IntakeRunResult {
   status: IntakeStatus;
   artifact: IntakeArtifact | null;
   artifactPath: string | null;
@@ -564,7 +580,7 @@ export interface IntakeCommandResult {
   failure: IntakeFailureDetails | null;
 }
 
-export type IntakeRunResult = IntakeCommandResult;
+export type IntakeCommandResult = IntakeRunResult;
 
 export interface IntakeDebugArtifact {
   command: string;
@@ -588,13 +604,13 @@ export interface IntakeDebugArtifact {
   sourceInputs: ArtifactSourceInputs | null;
   responsibilities: AssembledIntakeResult["responsibilities"];
   assembledResult: {
-    taskSpec: IntakeTaskSpec;
+    taskSpec: NormalizedTaskSpec;
     repoContext: RepoContext;
     candidateTargets: CandidateTarget[];
     ambiguities: string[];
     warnings: string[];
     recommendedUserActions: string[];
-    confidence: AmbiguityAnalysisResult["confidence"];
+    confidence: ConfidenceSummary;
   };
   optionalReasoning: OptionalReasoningResolution;
   boundarySafeResult: BoundarySafeIntakeResult;
