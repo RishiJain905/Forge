@@ -1,0 +1,3 @@
+## 2025-02-13 - [Caching `isPromptTooShortToBeActionable` Results]
+**Learning:** Calling `isPromptTooShortToBeActionable` multiple times per input text parses the string and executes multiple regular expressions repeatedly. Also, when extracting regexes to a shared constants file, JavaScript `RegExp` objects with the `/g` flag are stateful (`lastIndex`). Reusing a `/g` RegExp with `.test()` will result in unpredictable failures because it doesn't reset `lastIndex`.
+**Action:** Caches the result of `isPromptTooShortToBeActionable` into a `promptIsThin` boolean early in the process and passes it down. When sharing regexes, keep a non-global (`NoG`) version specifically for `.test()` checks to avoid state-mutation bugs, or use `/g` only with `.match()`.

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
+import type { IntakeArtifact } from "../src/intake/types.js";
 import {
   createTempRepo,
   disposeTempRepo,
@@ -268,6 +269,114 @@ await runScenario(
       assert.match(report, /Initial Verification Targets/);
       assert.match(report, /tests\/app\.test\.ts/);
       assert.match(report, /test_surface/);
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "forge intake persists artifact and report with parity on a success or warning prompt-mode run",
+  async () => {
+    const repoRoot = await createTempRepo();
+
+    try {
+      const result = await runForgeCli(
+        [
+          "intake",
+          "--repo",
+          repoRoot,
+          "--prompt",
+          "Inspect src/app.ts for the app entry point.",
+        ],
+        repoRoot,
+      );
+
+      assert.equal(result.code, 0, result.stderr);
+
+      const artifactPath = join(repoRoot, ".forge", "intake.json");
+      const reportPath = join(repoRoot, ".forge", "reports", "intake-report.md");
+
+      assert.equal(await fileExists(artifactPath), true);
+      assert.equal(await fileExists(reportPath), true);
+
+      const artifact = await readJsonFile<{
+        status: IntakeArtifact["status"];
+        input_mode: IntakeArtifact["input_mode"];
+        task_spec?: { title?: string; goal?: string; scope?: string[] };
+        repo_context?: { grounded?: boolean; languages?: string[] };
+        candidate_targets?: Array<{ path?: string }>;
+        confidence?: { level?: string };
+        next_step_readiness?: { ready?: boolean };
+      }>(artifactPath);
+      const report = await readTextFile(reportPath);
+
+      assert.ok(
+        artifact.status === "success" || artifact.status === "warning",
+        `expected success or warning, got: ${artifact.status}`,
+      );
+      assert.equal(artifact.input_mode, "prompt");
+      assert.ok(artifact.task_spec?.goal, "artifact must have task_spec.goal");
+      assert.equal(artifact.repo_context?.grounded, true);
+      assert.ok((artifact.candidate_targets?.length ?? 0) > 0, "expected candidate targets");
+      assert.ok(artifact.confidence?.level, "artifact must have confidence.level");
+      assert.equal(artifact.next_step_readiness?.ready, true);
+
+      assert.match(report, /## Overview/);
+      assert.match(report, /## Task Spec/);
+      assert.match(report, /## Repo Context/);
+      assert.match(report, /## Candidate Targets/);
+      assert.match(report, /## Confidence/);
+      assert.match(report, /## Next Step Readiness/);
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "forge intake persists artifact and report with visible required sections on failed persistence",
+  async () => {
+    const repoRoot = await createTempRepo();
+    const blockedOutputPath = join(repoRoot, "blocked-output");
+
+    try {
+      await writeFile(blockedOutputPath, "not a directory\n", "utf8");
+
+      const result = await runForgeCli(
+        [
+          "intake",
+          "--repo",
+          repoRoot,
+          "--output-dir",
+          "blocked-output",
+          "--prompt",
+          "Inspect src/app.ts for output artifact persistence.",
+        ],
+        repoRoot,
+      );
+
+      assert.notEqual(result.code, 0, "blocked output root should cause failure");
+
+      const fallbackArtifactPath = join(repoRoot, ".forge", "intake.json");
+      const fallbackReportPath = join(repoRoot, ".forge", "reports", "intake-report.md");
+
+      assert.equal(await fileExists(fallbackArtifactPath), true);
+      assert.equal(await fileExists(fallbackReportPath), true);
+
+      const artifact = await readJsonFile<IntakeArtifact>(fallbackArtifactPath);
+      const report = await readTextFile(fallbackReportPath);
+
+      assert.equal(artifact.status, "failed");
+      assert.match(artifact.outputRoot ?? "", /\.forge$/);
+      assert.ok(
+        artifact.failure?.code || artifact.failure?.message || result.stderr,
+        "artifact must have failure details",
+      );
+
+      assert.match(report, /## Overview/);
+      assert.match(report, /## Next Step Readiness/);
+      assert.match(report, /failed|error|persistence/i);
     } finally {
       await disposeTempRepo(repoRoot);
     }
