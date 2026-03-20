@@ -160,12 +160,18 @@
   - Kept the top-level Step 1 artifact/report contract stable while expanding nested Stage 5/6 output with candidate target notes/shared-risk, `risk_analysis.derived_risk_zones`, `risk_analysis.supporting_analysis`, and verification-target categories.
   - Added focused unit, schema, report, end-to-end, and acceptance-gate coverage for the new targeting, analysis, confidence/readiness, and persisted output behavior.
   - Documented completion evidence in `S1-B3-done/p4-done-summary.md` after the full verification gate stayed green in the implementation worktree.
+- Batch 3.05: `part-5-stage-7-and-8-artifacts-report-persistence-and-runner.md`
+  - Confirmed that the existing Stage 7 artifact/report assembly and Stage 8 persistence/runner behavior were already present, so Part 5 focused on direct regression coverage instead of production-code rewrites.
+  - Strengthened `intake.output-artifacts` coverage for artifact/report parity and partial-failed-run CLI output when persistence leaves no durable artifact.
+  - Added a dedicated `intake.runner` suite that asserts `runIntakeCommand()` result semantics directly for repo-resolution failure, configured-output fallback semantics, null durable-path behavior when configured and fallback persistence both fail, json-only/report-only path semantics, and debug artifact placement under custom roots and fallback.
+  - Updated `package.json` so the default `npm.cmd test` wiring includes the new runner suite.
+  - Documented completion evidence in `S1-B3-done/p5-done-summary.md` after the full verification gate passed in the Part 5 implementation worktree.
 
 ## Current Branch State
-- `dev` includes the completed Batch 1.16, Batch 1.17, Batch 1.18, Batch 1.19, Batch 1.20, Batch 2.01, Batch 2.02, Batch 2.03, Batch 2.04, Batch 3.01, Batch 3.02, and Batch 3.03 implementations.
-- The Batch 2 Part 1 implementation from worktree branch `codex/s1-b2-p1-intake-architecture`, the Batch 2 Part 2 implementation from worktree branch `codex/s1-b2-p2-file-ownership`, the Batch 2 Part 3 implementation from worktree branch `codex/s1-b2-p3-sequential-build-order`, the Batch 2 Part 4 implementation from worktree branch `codex/s1-b2-p4-test-strategy-and-acceptance-gates`, the Batch 3 Part 1 implementation from worktree branch `codex/s1-b3-p1-umbrella`, the Batch 3 Part 2 implementation from worktree branch `codex/s1-b3-p2-core-types-input-foundation`, and the Batch 3 Part 3 implementation from worktree branch `codex/s1-b3-p3-task-normalization-repo-context` have been merged back into `dev`.
-- The Batch 3 Part 4 implementation is complete and fully verified on worktree branch `codex/s1-b3-p4-targeting-analysis-confidence`, but it has not been merged back into `dev` in this session.
-- `execution.md` now explicitly requires completed worktree branches to be merged back into their source branch before a task is considered complete, unless the user explicitly requests a PR-only workflow.
+- `dev` already includes the completed Batch 1.16, Batch 1.17, Batch 1.18, Batch 1.19, Batch 1.20, Batch 2.01, Batch 2.02, Batch 2.03, Batch 2.04, Batch 3.01, Batch 3.02, Batch 3.03, and Batch 3.04 implementations.
+- Batch 3 Part 4 is already on `dev` via commit `c484864` (`Implement Batch 3 Part 4 targeting analysis and confidence`), so the earlier stale note that it was only complete in a worktree is corrected here.
+- The current worktree branch `codex/s1-b3-p5-artifacts-report-persistence-runner` contains the Batch 3 Part 5 regression coverage and doc updates; this file does not claim that Part 5 was merged in this session.
+- `execution.md` now explicitly requires integration onto the target branch and fresh verification there before completion is claimed.
 
 ## Verification
 - `npm.cmd test`
@@ -174,4 +180,4 @@
 - `npm.cmd run smoke`
 
 ## Next
-- Batch 3 Part 4 is complete in the worktree. After merge, next work should proceed with `forge_step1_batch3/part-5-stage-7-and-8-artifacts-report-persistence-and-runner.md`.
+- Next work should proceed with `forge_step1_batch3/part-6-stage-9-cli-wiring-tests-and-runnable-milestone.md`.
