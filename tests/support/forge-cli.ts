@@ -20,8 +20,8 @@ type TestIntakeCommandOptions = IntakeCommandOptions & {
 };
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
-const repoRoot = resolve(currentDirectory, "..", "..", "..");
-const forgeEntrypointPath = resolve(repoRoot, "dist", "src", "index.js");
+const projectRoot = resolve(currentDirectory, "..", "..", "..");
+const forgeEntrypointPath = resolve(projectRoot, "dist", "src", "index.js");
 
 export async function createTempRepo(prefix = "forge-intake-"): Promise<string> {
   const repoRoot = await mkdtemp(join(tmpdir(), prefix));
@@ -77,7 +77,7 @@ export async function runForgeCli(args: string[], cwd: string): Promise<ForgeRun
   };
 }
 
-export async function runForgeBinary(args: string[], cwd: string): Promise<ForgeRunResult> {
+export function runForgeBinary(args: string[], cwd: string): ForgeRunResult {
   const result = spawnSync(process.execPath, [forgeEntrypointPath, ...args], {
     cwd,
     encoding: "utf8",

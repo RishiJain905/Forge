@@ -71,11 +71,11 @@ await runScenario(
 
       const artifactPath = join(repoRoot, ".forge", "intake.json");
       const reportPath = join(repoRoot, ".forge", "reports", "intake-report.md");
-      const artifact = await readJsonFile<IntakeArtifact>(artifactPath);
-      const report = await readTextFile(reportPath);
-
       assert.equal(await fileExists(artifactPath), true);
       assert.equal(await fileExists(reportPath), true);
+
+      const artifact = await readJsonFile<IntakeArtifact>(artifactPath);
+      const report = await readTextFile(reportPath);
       assert.equal(artifact.status, "success");
       assert.equal(artifact.input_mode, "spec");
       assert.match(report, /Forge Intake Report/);
@@ -109,15 +109,16 @@ await runScenario(
         cwd,
       );
 
-      const artifactPath = join(repoRoot, ".forge", "intake.json");
-      const reportPath = join(repoRoot, ".forge", "reports", "intake-report.md");
-      const artifact = await readJsonFile<IntakeArtifact>(artifactPath);
-      const report = await readTextFile(reportPath);
-
       assert.equal(result.code, 0, result.stderr);
       assert.match(result.stdout, /Status: warning/);
+
+      const artifactPath = join(repoRoot, ".forge", "intake.json");
+      const reportPath = join(repoRoot, ".forge", "reports", "intake-report.md");
       assert.equal(await fileExists(artifactPath), true);
       assert.equal(await fileExists(reportPath), true);
+
+      const artifact = await readJsonFile<IntakeArtifact>(artifactPath);
+      const report = await readTextFile(reportPath);
       assert.equal(artifact.status, "warning");
       assert.equal(artifact.input_mode, "spec");
       assert.match(report, /Forge Intake Report/);
@@ -141,16 +142,17 @@ await runScenario(
         cwd,
       );
 
-      const artifactPath = join(repoRoot, ".forge", "intake.json");
-      const reportPath = join(repoRoot, ".forge", "reports", "intake-report.md");
-      const artifact = await readJsonFile<IntakeArtifact>(artifactPath);
-
       assert.equal(result.code, 1);
       assert.equal(result.stdout, "");
       assert.match(result.stderr, /Status: failed/);
       assert.match(result.stderr, /INPUT_VALIDATION_FAILED/);
+
+      const artifactPath = join(repoRoot, ".forge", "intake.json");
+      const reportPath = join(repoRoot, ".forge", "reports", "intake-report.md");
       assert.equal(await fileExists(artifactPath), true);
       assert.equal(await fileExists(reportPath), true);
+
+      const artifact = await readJsonFile<IntakeArtifact>(artifactPath);
       assert.equal(artifact.status, "failed");
       assert.equal(artifact.input_mode ?? null, null);
       assert.ok(
