@@ -1,3 +1,4 @@
+import { acceptanceCriteriaHeadingPattern, explicitPathTokenPattern } from "./patterns.js";
 import type {
   Ambiguity,
   IntakeTaskSpec,
@@ -20,14 +21,12 @@ interface ParsedTaskDocument {
   sections: Record<TaskSectionKey, string[]>;
 }
 
-const explicitPathToken = /\b(?:[\w.-]+\/)+[\w.-]+\b/g;
 const headingPattern = /^#{1,6}\s*(.+)$/;
 const checklistItemPattern = /^(?:[-*+]|(?:\d+\.))\s+\[[ xX]\]\s+(.*)$/;
 const listItemPattern = /^(?:[-*+]|(?:\d+\.))\s+(.*)$/;
 const summaryHeadingPattern = /^(?:summary|overview|purpose|description)\b:?$/i;
 const goalHeadingPattern = /^(?:goal|objective)\b:?$/i;
 const scopeHeadingPattern = /^(?:scope|in scope|in-scope)\b:?$/i;
-const acceptanceCriteriaHeadingPattern = /^(?:#{1,6}\s*)?acceptance criteria\b:?/im;
 const constraintsHeadingPattern = /^(?:constraints|non-goals|non goals|limitations)\b:?$/i;
 const riskPhrasePatterns = [
   { phrase: "api contract", pattern: /\bapi contract\b/i },
@@ -290,7 +289,7 @@ function buildAnalysisText(taskSpec: IntakeTaskSpec): string {
 }
 
 function extractReferencedPaths(value: string): string[] {
-  const matches = value.match(explicitPathToken) ?? [];
+  const matches = value.match(explicitPathTokenPattern) ?? [];
   return dedupeStable(matches);
 }
 
@@ -447,7 +446,7 @@ function isPromptTooShortToBeActionable(taskInput: NormalizedTaskInput): boolean
   const nonWhitespaceLength = prompt.replace(/\s+/g, "").length;
   const wordCount = prompt.trim().split(/\s+/).filter(Boolean).length;
   const hasStructuralSignal =
-    Boolean(prompt.match(explicitPathToken)) ||
+    Boolean(prompt.match(explicitPathTokenPattern)) ||
     acceptanceCriteriaHeadingPattern.test(prompt);
 
   return (nonWhitespaceLength < 20 || wordCount < 4) && !hasStructuralSignal;
@@ -459,6 +458,7 @@ function buildOpenQuestions(params: {
   hasAcceptanceCriteriaSection: boolean;
   hasScopeSection: boolean;
   hasConstraintsSection: boolean;
+  promptIsThin: boolean;
 }): PromptOpenQuestion[] {
   const openQuestions: PromptOpenQuestion[] = [];
   const hasGroundedScope =
@@ -468,7 +468,7 @@ function buildOpenQuestions(params: {
   const shouldAskForConstraints =
     !params.hasConstraintsSection &&
     (
-      isPromptTooShortToBeActionable(params.taskInput) ||
+      params.promptIsThin ||
       (params.taskSpec.riskyPhrases?.length ?? 0) > 0 ||
       (
         params.taskInput.inputMode === "prompt" &&
@@ -649,19 +649,21 @@ export function buildTaskParserResult(
   const hasAcceptanceCriteriaSection = document.sections.acceptanceCriteria.length > 0;
   const hasScopeSection = document.sections.scope.length > 0;
   const hasConstraintsSection = document.sections.constraints.length > 0;
+  const promptIsThin = isPromptTooShortToBeActionable(taskInput);
   const openQuestions = buildOpenQuestions({
     taskSpec,
     taskInput,
     hasAcceptanceCriteriaSection,
     hasScopeSection,
     hasConstraintsSection,
+    promptIsThin,
   });
   const ambiguityItems = toAmbiguityItems(openQuestions);
   const warningItems = toWarningItems(openQuestions);
   const parserWarnings: string[] = [];
   const recommendedUserActions = [...taskInput.recommendedUserActions];
 
-  if (isPromptTooShortToBeActionable(taskInput)) {
+  if (promptIsThin) {
     addIfMissing(
       parserWarnings,
       "Prompt mode input is too short to be actionable without follow-up. Clarify the goal, relevant files, or acceptance criteria.",
@@ -681,7 +683,7 @@ export function buildTaskParserResult(
       hasGoal: taskSpec.goal.trim().length > 0,
       hasAcceptanceCriteria: taskSpec.hasAcceptanceCriteria,
       referencedPaths: [...(taskSpec.mentionedPaths ?? [])],
-      promptIsThin: isPromptTooShortToBeActionable(taskInput),
+      promptIsThin,
       promptRequirementCandidateCount: taskInput.promptDetails?.requirementCandidates.length ?? 0,
       promptOpenQuestionCategories: openQuestions.map((question) => question.category),
     },
