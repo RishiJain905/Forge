@@ -361,6 +361,15 @@ export interface BlockingIssue {
   message: string;
 }
 
+export interface OptionalReasoningTaskWording {
+  title?: string;
+  summary?: string;
+  goal?: string;
+  implementationNecessities?: string[];
+  explicitRequirements?: string[];
+  openQuestions?: PromptOpenQuestion[];
+}
+
 export interface OptionalReasoningSuggestion {
   provider: string;
   ambiguities?: string[];
@@ -368,6 +377,7 @@ export interface OptionalReasoningSuggestion {
   recommendedUserActions?: string[];
   confidenceNotes?: string[];
   suggestedTargetPaths?: string[];
+  taskWording?: OptionalReasoningTaskWording;
 }
 
 export interface OptionalReasoningInput {
@@ -403,6 +413,7 @@ export interface OptionalReasoningResolution {
   confidenceNotes: string[];
   suggestedTargetPaths: string[];
   ignoredTargetPaths: string[];
+  taskWording: OptionalReasoningTaskWording | null;
 }
 
 export interface IntakeRunnerDependencies {

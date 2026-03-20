@@ -3,7 +3,7 @@ import { buildAmbiguityAnalysisResult } from "./analysis.js";
 import { assembleIntakeResult } from "./assemble.js";
 import { createIntakeArtifact } from "./artifact.js";
 import { buildBoundarySafeIntakeResult } from "./boundary.js";
-import { createIntakeDebugArtifact } from "./debug.js";
+import { createIntakeDebugWrites } from "./debug.js";
 import { evaluateSuccessModel } from "./confidence.js";
 import { PersistenceError } from "./errors.js";
 import { buildInferenceResult } from "./inference.js";
@@ -30,6 +30,9 @@ import type {
   NormalizedTaskInput,
   BoundarySafeIntakeResult,
   AssembledIntakeResult,
+  NormalizedTaskSpec,
+  OptionalReasoningTaskWording,
+  PromptOpenQuestion,
 } from "./types.js";
 
 async function createContext(
@@ -57,6 +60,78 @@ function createFailureDetails(
   };
 }
 
+function dedupeStable(values: string[]): string[] {
+  const seen = new Set<string>();
+  const deduped: string[] = [];
+
+  for (const value of values) {
+    const normalized = value.trim();
+    if (!normalized || seen.has(normalized)) {
+      continue;
+    }
+
+    seen.add(normalized);
+    deduped.push(normalized);
+  }
+
+  return deduped;
+}
+
+function dedupeOpenQuestions(
+  questions: PromptOpenQuestion[],
+): PromptOpenQuestion[] {
+  const seen = new Set<string>();
+  const deduped: PromptOpenQuestion[] = [];
+
+  for (const question of questions) {
+    const text = question.text.trim();
+    if (!text) {
+      continue;
+    }
+
+    const key = `${question.category}:${text.toLowerCase()}`;
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    deduped.push({
+      category: question.category,
+      text,
+    });
+  }
+
+  return deduped;
+}
+
+function applyOptionalTaskWording(
+  taskSpec: NormalizedTaskSpec,
+  taskWording: OptionalReasoningTaskWording | null,
+): NormalizedTaskSpec {
+  if (!taskWording) {
+    return taskSpec;
+  }
+
+  return {
+    ...taskSpec,
+    title: taskWording.title ?? taskSpec.title,
+    summary: taskWording.summary ?? taskSpec.summary,
+    goal: taskWording.goal ?? taskSpec.goal,
+    explicitRequirements: dedupeStable([
+      ...(taskSpec.explicitRequirements ?? []),
+      ...(taskWording.explicitRequirements ?? []),
+    ]),
+    implementationNecessities: dedupeStable([
+      ...(taskSpec.implementationNecessities ?? []),
+      ...(taskWording.implementationNecessities ?? []),
+    ]),
+    openQuestions: dedupeOpenQuestions([
+      ...(taskSpec.openQuestions ?? []),
+      ...(taskWording.openQuestions ?? []),
+    ]),
+  };
+}
+
 async function persistResult(
   context: IntakeExecutionContext,
   runtimeOptions: ReturnType<typeof resolveRuntimeOptions>,
@@ -80,10 +155,11 @@ async function persistResult(
     failure,
   });
   const report = createIntakeReport(artifact);
-  const debugArtifact = runtimeOptions.writeDebugArtifact
-    ? createIntakeDebugArtifact({
+  const debugWrites = runtimeOptions.writeDebugArtifact
+    ? createIntakeDebugWrites({
         context,
         runtimeOptions,
+        taskInput,
         sourceInputs,
         assembledResult,
         optionalReasoningResult,
@@ -109,12 +185,7 @@ async function persistResult(
             }]
           : []),
       ],
-      debugWrite: debugArtifact
-        ? {
-            filePath: context.paths.debugArtifactPath,
-            contents: `${JSON.stringify(debugArtifact, null, 2)}\n`,
-          }
-        : null,
+      debugWrites,
     });
   } catch (error) {
     throw new PersistenceError(
@@ -238,8 +309,12 @@ export async function runIntakeCommand(
       inferenceResult,
       ambiguityAnalysisResult,
     });
+    const enrichedTaskSpec = applyOptionalTaskWording(
+      assembledResult.taskSpec,
+      optionalReasoningResult.taskWording,
+    );
     const successEvaluation = evaluateSuccessModel({
-      taskSpec: assembledResult.taskSpec,
+      taskSpec: enrichedTaskSpec,
       repoContext: assembledResult.repoContext,
       candidateTargets: assembledResult.candidateTargets,
       failure,
@@ -253,6 +328,7 @@ export async function runIntakeCommand(
     });
     const finalAssembledResult = {
       ...assembledResult,
+      taskSpec: enrichedTaskSpec,
       riskAnalysis: assembledResult.riskAnalysis,
       verificationTargets: assembledResult.verificationTargets,
       ambiguities: successEvaluation.ambiguities,

@@ -1,3 +1,8 @@
+import {
+  DEBUG_DIRECTORY,
+  INTAKE_DEBUG_ARTIFACT_NAME,
+} from "./constants.js";
+import { resolveOutputFilePath } from "./path-policy.js";
 import type {
   ArtifactSourceInputs,
   AssembledIntakeResult,
@@ -6,9 +11,15 @@ import type {
   IntakeExecutionContext,
   IntakeFailureDetails,
   NextStepReadiness,
+  NormalizedTaskInput,
   OptionalReasoningResolution,
   ResolvedRuntimeOptions,
 } from "./types.js";
+
+interface DebugWrite {
+  filePath: string;
+  contents: string;
+}
 
 export function createIntakeDebugArtifact(params: {
   context: IntakeExecutionContext;
@@ -57,4 +68,76 @@ export function createIntakeDebugArtifact(params: {
     nextStepReadiness: params.nextStepReadiness,
     failure: params.failure,
   };
+}
+
+export function createIntakeDebugWrites(params: {
+  context: IntakeExecutionContext;
+  runtimeOptions: ResolvedRuntimeOptions;
+  taskInput: NormalizedTaskInput | null;
+  sourceInputs: ArtifactSourceInputs | null;
+  assembledResult: AssembledIntakeResult;
+  optionalReasoningResult: OptionalReasoningResolution;
+  boundarySafeResult: BoundarySafeIntakeResult;
+  nextStepReadiness: NextStepReadiness;
+  failure: IntakeFailureDetails | null;
+}): DebugWrite[] {
+  const aggregate = createIntakeDebugArtifact({
+    context: params.context,
+    runtimeOptions: params.runtimeOptions,
+    sourceInputs: params.sourceInputs,
+    assembledResult: params.assembledResult,
+    optionalReasoningResult: params.optionalReasoningResult,
+    boundarySafeResult: params.boundarySafeResult,
+    nextStepReadiness: params.nextStepReadiness,
+    failure: params.failure,
+  });
+  const debugRoot = resolveOutputFilePath(
+    params.context.paths.outputRoot,
+    DEBUG_DIRECTORY,
+  );
+
+  const writes: Array<{ name: string; payload: unknown }> = [
+    {
+      name: INTAKE_DEBUG_ARTIFACT_NAME,
+      payload: aggregate,
+    },
+    {
+      name: "spec-parse.json",
+      payload: {
+        taskInput: params.taskInput,
+        taskParserResult: params.assembledResult.responsibilities.taskParser,
+        optionalReasoningTaskWording: params.optionalReasoningResult.taskWording,
+      },
+    },
+    {
+      name: "repo-scan.json",
+      payload: params.assembledResult.responsibilities.repoScan,
+    },
+    {
+      name: "candidate-files.json",
+      payload: {
+        candidateTargets: params.assembledResult.candidateTargets,
+        verificationTargets:
+          params.assembledResult.verificationTargets ??
+          params.boundarySafeResult.initialVerificationTargets,
+      },
+    },
+    {
+      name: "warnings.json",
+      payload: {
+        warnings: params.assembledResult.warnings,
+        ambiguities: params.assembledResult.ambiguities,
+        ambiguityItems: params.assembledResult.responsibilities.analysis.ambiguityItems ?? [],
+        warningItems: params.assembledResult.responsibilities.analysis.warningItems ?? [],
+        confidence: params.assembledResult.confidence,
+        nextStepReadiness: params.nextStepReadiness,
+        failure: params.failure,
+      },
+    },
+  ];
+
+  return writes.map((write) => ({
+    filePath: resolveOutputFilePath(debugRoot, write.name),
+    contents: `${JSON.stringify(write.payload, null, 2)}\n`,
+  }));
 }

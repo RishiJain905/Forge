@@ -48,7 +48,7 @@ await runScenario(
             contents: "# report\n",
           },
         ],
-        debugWrite: null,
+        debugWrites: null,
       });
 
       assert.equal(await fileExists(artifactPath), true);
@@ -122,10 +122,10 @@ await runScenario(
             contents: "# report\n",
           },
         ],
-        debugWrite: {
+        debugWrites: [{
           filePath: debugPath,
           contents: '{"debug":true}\n',
-        },
+        }],
       });
 
       assert.equal(await fileExists(artifactPath), true);
