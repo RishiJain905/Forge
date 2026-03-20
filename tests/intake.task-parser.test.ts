@@ -602,6 +602,41 @@ await runScenario(
   },
 );
 
+await runScenario(
+  "prompt mode explicitRequirements are empty when acceptance criteria are absent",
+  async () => {
+    const taskInput = resolveLoadedIntakeInput(
+      createPromptInput("Improve the retry handling for the auth module."),
+    );
+    const result = buildTaskParserResult(taskInput);
+
+    // For prompt mode without acceptance criteria, explicitRequirements must be empty
+    // to avoid overstating how concrete a vague prompt is
+    assert.deepEqual(result.taskSpec.explicitRequirements, []);
+    assert.equal(result.taskSpec.hasAcceptanceCriteria, false);
+  },
+);
+
+await runScenario(
+  "spec mode still falls back to goal as explicitRequirements when acceptance criteria are absent",
+  async () => {
+    const specResult = buildTaskParserResult(createParserInput({
+      inputMode: "spec",
+      primaryInput: {
+        path: "/repo/spec.md",
+        rawText: "Refactor the retry handling across the codebase.",
+      },
+      normalizedTaskText: "Refactor the retry handling across the codebase.",
+      parserInputText: "Refactor the retry handling across the codebase.",
+    }));
+
+    // Spec mode is allowed to fall back to goal as explicitRequirements
+    assert.deepEqual(specResult.taskSpec.explicitRequirements, [
+      "Refactor the retry handling across the codebase.",
+    ]);
+  },
+);
+
 if (process.exitCode && process.exitCode !== 0) {
   process.exit(process.exitCode);
 }

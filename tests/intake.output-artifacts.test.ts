@@ -448,6 +448,122 @@ await runScenario(
   },
 );
 
+await runScenario(
+  "forge intake prompt mode with supplemental inputs surfaces meaningful Step 1 content in artifact and report",
+  async () => {
+    const repoRoot = await createTempRepo();
+    const notesPath = join(repoRoot, "notes.md");
+    const constraintsPath = join(repoRoot, "constraints.md");
+
+    try {
+      await writeRepoFile(
+        repoRoot,
+        "notes.md",
+        ["Keep focus on the retry logic only.", "Do not refactor unrelated code."].join("\n"),
+      );
+      await writeRepoFile(
+        repoRoot,
+        "constraints.md",
+        ["Do not change public API.", "Maintain backward compatibility."].join("\n"),
+      );
+
+      const result = await runForgeCli(
+        [
+          "intake",
+          "--repo",
+          repoRoot,
+          "--prompt",
+          "Inspect src/app.ts for the retry ownership pattern.",
+          "--notes",
+          notesPath,
+          "--constraints",
+          constraintsPath,
+          "--focus",
+          "src",
+        ],
+        repoRoot,
+      );
+
+      assert.equal(result.code, 0, result.stderr);
+
+      const artifactPath = join(repoRoot, ".forge", "intake.json");
+      const reportPath = join(repoRoot, ".forge", "reports", "intake-report.md");
+      const artifact = await readJsonFile<{
+        status: IntakeArtifact["status"];
+        input_mode: IntakeArtifact["input_mode"];
+        source_inputs?: {
+          notes?: string[];
+          constraints?: string[];
+          focus_paths?: string[];
+          normalized_task_text?: string;
+        };
+        task_spec?: { goal?: string; scope?: string[] };
+        candidate_targets?: Array<{ path?: string }>;
+        confidence?: { level?: string };
+        next_step_readiness?: { ready?: boolean };
+      }>(artifactPath);
+      const report = await readTextFile(reportPath);
+
+      assert.ok(
+        artifact.status === "success" || artifact.status === "warning",
+        `expected success or warning, got: ${artifact.status}`,
+      );
+      assert.equal(artifact.input_mode, "prompt");
+      assert.deepEqual(artifact.source_inputs?.notes, [
+        "Keep focus on the retry logic only.",
+        "Do not refactor unrelated code.",
+      ]);
+      assert.deepEqual(artifact.source_inputs?.constraints, [
+        "Do not change public API.",
+        "Maintain backward compatibility.",
+      ]);
+      assert.deepEqual(artifact.source_inputs?.focus_paths, ["src"]);
+
+      // Validate meaningful Step 1 content in artifact
+      assert.ok(artifact.task_spec?.goal, "artifact must have task_spec.goal");
+      assert.ok(
+        (artifact.candidate_targets?.length ?? 0) > 0,
+        "prompt mode should produce candidate targets",
+      );
+      assert.ok(artifact.confidence?.level, "artifact must have confidence.level");
+      assert.equal(artifact.next_step_readiness?.ready, true);
+
+      // Validate report reflects key Step 1 sections and supplemental counts
+      assert.match(report, /## Source Inputs/);
+      assert.match(report, /Notes count:\s+2/);
+      assert.match(report, /Constraints count:\s+2/);
+      assert.match(report, /Focus paths:\s+src/);
+      assert.match(report, /## Task Spec/);
+      assert.match(report, /## Candidate Targets/);
+      assert.match(report, /## Confidence/);
+      assert.match(report, /## Next Step Readiness/);
+      assert.match(report, /## Risk Analysis/);
+
+      // Tie report content to artifact values using safe string checks
+      assert.ok(report.includes(`status \`${artifact.status}\``), "report should contain artifact status");
+      assert.ok(report.includes(artifact.task_spec?.goal ?? ""), "report should contain artifact goal");
+      assert.ok(report.includes(`Level: \`${artifact.confidence?.level}\``), "report should contain confidence level");
+      assert.ok(
+        report.includes(`Ready for \`forge plan\`: \`${artifact.next_step_readiness?.ready}\``),
+        "report should contain readiness value",
+      );
+      // Candidate target paths appear in report (use string includes, not regex, for safety)
+      for (const target of artifact.candidate_targets ?? []) {
+        if (target.path) {
+          assert.ok(report.includes(target.path), `report should contain target path: ${target.path}`);
+        }
+      }
+      // Note content appears in artifact normalized_task_text
+      assert.ok(
+        artifact.source_inputs?.normalized_task_text?.includes("Keep focus on the retry logic only"),
+        "normalized_task_text should include note content",
+      );
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
 if (process.exitCode && process.exitCode !== 0) {
   process.exit(process.exitCode);
 }

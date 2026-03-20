@@ -25,8 +25,8 @@ async function runScenario(name: string, scenario: () => Promise<void>): Promise
 }
 
 function assertBatch4HandoffShape(artifact: IntakeArtifact, report: string): void {
-  assert.ok(artifact.task_spec.title.length >= 0);
-  assert.ok(typeof artifact.task_spec.goal === "string");
+  assert.ok(typeof artifact.task_spec.title === "string");
+  assert.ok(artifact.task_spec.goal.length > 0, "goal must be non-empty");
   assert.ok(Array.isArray(artifact.candidate_targets));
   assert.ok(Array.isArray(artifact.initial_verification_targets));
   assert.ok(Array.isArray(artifact.risk_analysis.initial_risk_zones));
@@ -176,6 +176,61 @@ await runScenario(
         process.env.FORGE_INTAKE_DEBUG = originalDebugEnv;
       }
 
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "forge intake mode-conflict (--spec and --prompt) fails with proper blocking issue at CLI level",
+  async () => {
+    const repoRoot = await createTempRepo();
+    const specPath = join(repoRoot, "task.md");
+
+    try {
+      await writeRepoFile(
+        repoRoot,
+        "task.md",
+        [
+          "# Update app behavior",
+          "",
+          "Revise `src/app.ts` and keep `tests/app.test.ts` aligned.",
+          "",
+          "## Acceptance Criteria",
+          "",
+          "- `src/app.ts` is updated",
+          "- `tests/app.test.ts` stays aligned",
+        ].join("\n"),
+      );
+
+      const result = await runForgeCli(
+        [
+          "intake",
+          "--repo",
+          repoRoot,
+          "--spec",
+          specPath,
+          "--prompt",
+          "Update src/app.ts with a conflicting inline prompt.",
+        ],
+        repoRoot,
+      );
+
+      assert.notEqual(result.code, 0, "mode conflict should fail");
+
+      const artifactPath = join(repoRoot, ".forge", "intake.json");
+      const artifact = await readJsonFile<IntakeArtifact>(artifactPath);
+
+      assert.equal(artifact.status, "failed");
+      assert.equal(artifact.next_step_readiness?.ready, false);
+      assert.ok(
+        artifact.next_step_readiness?.blocking_issues?.some((issue) =>
+          /INPUT_CONFLICT|spec.*prompt|prompt.*spec/i.test(issue.code ?? "") ||
+          /INPUT_CONFLICT|spec.*prompt|prompt.*spec/i.test(issue.message ?? ""),
+        ),
+        "expected INPUT_CONFLICT blocking issue for mode conflict",
+      );
+    } finally {
       await disposeTempRepo(repoRoot);
     }
   },
