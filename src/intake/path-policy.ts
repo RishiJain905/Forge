@@ -9,7 +9,7 @@ import {
   INTAKE_REPORT_NAME,
   REPORTS_DIRECTORY,
 } from "./constants.js";
-import { BoundaryPolicyError, RepoResolutionError } from "./errors.js";
+import { BoundaryPolicyError, RepoResolutionError, hasErrorCode } from "./errors.js";
 import { resolveGitContext } from "./git-context.js";
 import type { GitContextResolution } from "./git-context.js";
 import type { ResolvedOutputPaths, ResolvedOutputRoot } from "./types.js";
@@ -22,15 +22,6 @@ function isPathWithinRoot(root: string, candidatePath: string): boolean {
   return (
     relative === "" ||
     (!relative.startsWith("..") && !path.isAbsolute(relative))
-  );
-}
-
-function hasErrorCode(error: unknown, code: string): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    (error as { code: unknown }).code === code
   );
 }
 

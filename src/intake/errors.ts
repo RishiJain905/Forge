@@ -28,3 +28,14 @@ export class PersistenceError extends IntakeError {
     this.name = "PersistenceError";
   }
 }
+
+export function extractErrorCode(error: unknown): string | undefined {
+  if (typeof error === "object" && error !== null && "code" in error) {
+    return String((error as { code: unknown }).code);
+  }
+  return undefined;
+}
+
+export function hasErrorCode(error: unknown, code: string): boolean {
+  return extractErrorCode(error) === code;
+}
