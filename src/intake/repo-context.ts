@@ -613,9 +613,21 @@ async function buildRepoScanData(params: {
   await collectRepoFiles(params.repoRoot, params.repoRoot, params.outputRoot, files);
 
   const allFiles = [...files].sort((left, right) => left.localeCompare(right));
-  const manifestFiles = allFiles.filter((filePath) => isManifestFile(filePath));
-  const testFiles = allFiles.filter((filePath) => isTestFile(filePath));
-  const sourceFiles = allFiles.filter((filePath) => isSourceFile(filePath));
+  const manifestFiles: string[] = [];
+  const testFiles: string[] = [];
+  const sourceFiles: string[] = [];
+
+  for (const filePath of allFiles) {
+    if (isManifestFile(filePath)) {
+      manifestFiles.push(filePath);
+    }
+    if (isTestFile(filePath)) {
+      testFiles.push(filePath);
+    }
+    if (isSourceFile(filePath)) {
+      sourceFiles.push(filePath);
+    }
+  }
   const signalResult = await buildRepoSignals(
     params.repoRoot,
     allFiles,
