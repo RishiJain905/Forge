@@ -248,6 +248,7 @@ export async function runIntakeCommand(
       validationBlockingIssues: [...runtimeBlockingIssues, ...validationBlockingIssues],
       inputWarnings: assembledResult.warnings,
       inputAmbiguities: assembledResult.ambiguities,
+      inputAmbiguityItems: assembledResult.responsibilities.analysis.ambiguityItems,
       inputRecommendedUserActions: assembledResult.recommendedUserActions,
     });
     const finalAssembledResult = {

@@ -21,6 +21,7 @@ function buildStructuredTargetingInput(
     ...(taskSpec.scope ?? []),
     ...(taskSpec.mentionedPaths ?? []),
     ...(taskSpec.mentionedTests ?? []),
+    ...(taskSpec.mentionedModules ?? []),
     ...taskSpec.acceptanceCriteria,
     ...(taskSpec.constraints ?? []),
   ];
@@ -65,6 +66,7 @@ export function buildInferenceResult(params: {
     {
       focusPaths: structuredTaskInput.focusPaths,
       strictFocus: params.strictFocus === true,
+      moduleSignals: params.taskParserResult.taskSpec.mentionedModules ?? [],
     },
   );
   const candidateTargets = targetResolution.candidateTargets;

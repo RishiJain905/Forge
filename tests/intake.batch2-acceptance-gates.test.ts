@@ -551,6 +551,169 @@ await runScenario(
   },
 );
 
+await runScenario(
+  "Gate 7 - stage 5 and 6 artifact surfaces stay stable for risk, fallback, focus, and low-confidence runs",
+  async () => {
+    const repoRoot = await createTempRepo();
+
+    try {
+      await writeRepoFile(
+        repoRoot,
+        "tsconfig.json",
+        [
+          "{",
+          '  "compilerOptions": {',
+          '    "target": "ES2022",',
+          '    "module": "NodeNext"',
+          "  }",
+          "}",
+        ].join("\n"),
+      );
+
+      const riskResult = await runIntakeCommand(
+        {
+          prompt: [
+            "Update src/app.ts and tsconfig.json to handle the retry migration safely.",
+            "",
+            "Acceptance Criteria",
+            "- src/app.ts preserves retry behavior during the migration",
+            "- tsconfig.json remains aligned with the migration rollout",
+          ].join("\n"),
+        },
+        repoRoot,
+      );
+
+      assert.equal(riskResult.status, "warning");
+      assert.equal(riskResult.artifact?.next_step_readiness.ready, true);
+      assert.ok(
+        riskResult.artifact?.candidate_targets.some((candidate) =>
+          candidate.path === "src/app.ts"
+            && candidate.match_type === "explicit"
+            && candidate.shared_risk === true
+            && candidate.notes.length > 0
+        ),
+        "expected shared-risk source target detail",
+      );
+      assert.ok(
+        riskResult.artifact?.candidate_targets.some((candidate) =>
+          candidate.path === "tsconfig.json"
+            && candidate.match_type === "explicit"
+            && candidate.shared_risk === true
+            && candidate.notes.length > 0
+        ),
+        "expected shared-risk config target detail",
+      );
+      assert.ok(
+        riskResult.artifact?.risk_analysis.derived_risk_zones.some((zone) => zone.code === "migration_risk"),
+      );
+      assert.ok(
+        riskResult.artifact?.risk_analysis.derived_risk_zones.length,
+        "expected at least one derived risk zone",
+      );
+      assert.ok(
+        riskResult.artifact?.risk_analysis.initial_risk_zones.some((zone) => zone.code === "manifest_or_config_impact"),
+        "expected manifest or config impact to remain visible",
+      );
+      assert.ok(Array.isArray(riskResult.artifact?.risk_analysis.supporting_analysis.ambiguity_items));
+      assert.ok(Array.isArray(riskResult.artifact?.risk_analysis.supporting_analysis.warning_items));
+      assert.ok(
+        riskResult.artifact?.initial_verification_targets.some((target) =>
+          target.path === "src/app.ts" && target.category === "retry_logic"
+        ),
+      );
+      assert.ok(
+        riskResult.artifact?.initial_verification_targets.some((target) =>
+          target.path === "src/app.ts" && target.category === "parallel_overlap"
+        ),
+      );
+      assert.ok(
+        riskResult.artifact?.initial_verification_targets.some((target) =>
+          target.path === "tsconfig.json" && target.category === "config_surface"
+        ),
+      );
+
+      const fallbackPrompt = [
+        "Improve the checkout retry flow without changing behavior outside the current repo.",
+        "",
+        "Acceptance Criteria",
+        "- the existing implementation remains covered by the current tests",
+      ].join("\n");
+
+      const fallbackResult = await runIntakeCommand(
+        {
+          prompt: fallbackPrompt,
+        },
+        repoRoot,
+      );
+      assert.equal(fallbackResult.status, "warning");
+      assert.equal(fallbackResult.artifact?.next_step_readiness.ready, true);
+      assert.ok(
+        fallbackResult.artifact?.candidate_targets.every((candidate) => candidate.match_type === "fallback"),
+      );
+      assert.ok(
+        fallbackResult.artifact?.risk_analysis.initial_risk_zones.some((zone) => zone.code === "fallback_targeting_only"),
+      );
+
+      const strictFocusResult = await runIntakeCommand(
+        {
+          prompt: [
+            "Revise src/app.ts and tests/app.test.ts.",
+            "",
+            "Acceptance Criteria",
+            "- src/app.ts is updated",
+            "- tests/app.test.ts stays aligned",
+          ].join("\n"),
+          focus: ["tests"],
+          strictFocus: true,
+        },
+        repoRoot,
+      );
+      assert.equal(strictFocusResult.status, "warning");
+      assert.equal(strictFocusResult.artifact?.next_step_readiness.ready, true);
+      assert.equal(strictFocusResult.artifact?.repo_context.grounded, true);
+      assert.deepEqual(
+        strictFocusResult.artifact?.candidate_targets.map((candidate) => candidate.path),
+        ["tests/app.test.ts"],
+      );
+      assert.ok(
+        strictFocusResult.artifact?.warnings.some((warning) => /strict focus/i.test(warning)),
+      );
+
+      const lowConfidenceDefault = await runIntakeCommand(
+        {
+          prompt: "fix",
+        },
+        repoRoot,
+      );
+      assert.equal(lowConfidenceDefault.status, "warning");
+      assert.equal(lowConfidenceDefault.artifact?.next_step_readiness.ready, true);
+      assert.equal(
+        lowConfidenceDefault.artifact?.next_step_readiness.blocking_issues.some(
+          (issue) => issue.code === "LOW_CONFIDENCE_ESCALATED",
+        ),
+        false,
+      );
+
+      const lowConfidenceEscalated = await runIntakeCommand(
+        {
+          prompt: "fix",
+          failOnLowConfidence: true,
+        },
+        repoRoot,
+      );
+      assert.equal(lowConfidenceEscalated.status, "failed");
+      assert.equal(lowConfidenceEscalated.artifact?.next_step_readiness.ready, false);
+      assert.ok(
+        lowConfidenceEscalated.artifact?.next_step_readiness.blocking_issues.some(
+          (issue) => issue.code === "LOW_CONFIDENCE_ESCALATED",
+        ),
+      );
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
 if (process.exitCode && process.exitCode !== 0) {
   process.exit(process.exitCode);
 }

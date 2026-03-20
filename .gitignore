@@ -5,3 +5,4 @@ dist-tests/
 coverage/
 .worktrees/
 .DS_Store
+.opencode

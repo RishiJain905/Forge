@@ -1,4 +1,5 @@
 import type {
+  Ambiguity,
   BlockingIssue,
   CandidateTarget,
   ConfidenceSummary,
@@ -207,6 +208,21 @@ function hasBlockingIssue(blockingIssues: BlockingIssue[], code: string): boolea
   return blockingIssues.some((issue) => issue.code === code);
 }
 
+function getBlockingIssueForAmbiguity(item: Ambiguity): BlockingIssue | null {
+  if (item.severity !== "high") {
+    return null;
+  }
+
+  switch (item.type) {
+    case "repo_alignment":
+      return createBlockingIssue("AMBIGUITY_REPO_ALIGNMENT", item.message);
+    case "input":
+      return createBlockingIssue("AMBIGUITY_INPUT", item.message);
+    default:
+      return null;
+  }
+}
+
 export function evaluateSuccessModel(params: {
   taskSpec: NormalizedTaskSpec;
   repoContext: RepoContext;
@@ -217,12 +233,21 @@ export function evaluateSuccessModel(params: {
   validationBlockingIssues?: BlockingIssue[];
   inputWarnings?: string[];
   inputAmbiguities?: string[];
+  inputAmbiguityItems?: Ambiguity[];
   inputRecommendedUserActions?: string[];
 }): SuccessEvaluation {
   const warnings = [...(params.inputWarnings ?? [])];
   const ambiguities = [...(params.inputAmbiguities ?? [])];
   const recommendedUserActions = [...(params.inputRecommendedUserActions ?? [])];
   const blockingIssues = [...(params.validationBlockingIssues ?? [])];
+
+  for (const item of params.inputAmbiguityItems ?? []) {
+    const blockingIssue = getBlockingIssueForAmbiguity(item);
+
+    if (blockingIssue && !hasBlockingIssue(blockingIssues, blockingIssue.code)) {
+      blockingIssues.push(blockingIssue);
+    }
+  }
 
   if (params.failure && blockingIssues.length === 0) {
     blockingIssues.push(createBlockingIssue(params.failure.code, params.failure.message));

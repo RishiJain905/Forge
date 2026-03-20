@@ -55,6 +55,32 @@ function normalizeFileStem(filePath: string): string {
   return withoutExtension.replace(/\.(test|spec)$/i, "");
 }
 
+function normalizeModuleSignal(value: string): string {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+function tokenizeModuleCandidates(filePath: string): string[] {
+  const normalizedPath = normalizePathForComparison(filePath);
+  const stem = normalizeFileStem(filePath);
+  const tokens = normalizedPath
+    .split("/")
+    .flatMap((segment) => segment.split(/[^a-z0-9]+/i))
+    .concat(stem.split(/[^a-z0-9]+/i))
+    .map((segment) => normalizeModuleSignal(segment))
+    .filter((segment) => segment.length > 0);
+
+  return [...new Set(tokens)];
+}
+
+function matchesModuleSignal(filePath: string, moduleSignals: string[]): boolean {
+  if (moduleSignals.length === 0) {
+    return false;
+  }
+
+  const candidateTokens = tokenizeModuleCandidates(filePath);
+  return moduleSignals.some((moduleSignal) => candidateTokens.includes(normalizeModuleSignal(moduleSignal)));
+}
+
 function isSharedRiskPath(
   filePath: string,
   kind: CandidateTarget["kind"],
@@ -69,13 +95,8 @@ function isSharedRiskPath(
 function textMentionsPath(text: string, filePath: string): boolean {
   const normalizedPath = normalizePathForComparison(filePath);
   const baseName = path.posix.basename(normalizedPath);
-  const stem = normalizeFileStem(filePath);
 
-  return (
-    text.includes(normalizedPath) ||
-    text.includes(baseName) ||
-    (stem.length > 0 && text.includes(stem))
-  );
+  return text.includes(normalizedPath) || text.includes(baseName);
 }
 
 function normalizeFocusPath(value: string): string {
@@ -122,6 +143,7 @@ function resolveSiblingTestTargets(
 function resolveExplicitCandidateTargets(
   taskInput: NormalizedTaskInput | null,
   repoContext: RepoContext,
+  moduleSignals: string[] = [],
 ): CandidateTarget[] {
   if (!taskInput) {
     return [];
@@ -133,30 +155,48 @@ function resolveExplicitCandidateTargets(
   const explicitTargets: CandidateTarget[] = [];
 
   for (const sourceFile of repoContext.sourceFiles) {
-    if (textMentionsPath(text, sourceFile)) {
+    const matchedByPathText = textMentionsPath(text, sourceFile);
+    const matchedByModule = !matchedByPathText && matchesModuleSignal(sourceFile, moduleSignals);
+
+    if (matchedByPathText || matchedByModule) {
       pushCandidateTarget(
         explicitTargets,
         buildCandidateTarget(
           sourceFile,
           "source",
           "explicit",
-          "Matched a source file path mentioned in the task input.",
-          ["Matched an explicit task-to-file reference."],
+          matchedByModule
+            ? "Matched a parser-derived module signal to a source file."
+            : "Matched a source file path mentioned in the task input.",
+          [
+            matchedByModule
+              ? "Matched an explicit module signal derived by the task parser."
+              : "Matched an explicit task-to-file reference.",
+          ],
         ),
       );
     }
   }
 
   for (const testFile of repoContext.testFiles) {
-    if (textMentionsPath(text, testFile)) {
+    const matchedByPathText = textMentionsPath(text, testFile);
+    const matchedByModule = !matchedByPathText && matchesModuleSignal(testFile, moduleSignals);
+
+    if (matchedByPathText || matchedByModule) {
       pushCandidateTarget(
         explicitTargets,
         buildCandidateTarget(
           testFile,
           "test",
           "explicit",
-          "Matched a test file path mentioned in the task input.",
-          ["Matched an explicit test reference from the task input."],
+          matchedByModule
+            ? "Matched a parser-derived module signal to a test file."
+            : "Matched a test file path mentioned in the task input.",
+          [
+            matchedByModule
+              ? "Matched an explicit module signal derived by the task parser."
+              : "Matched an explicit test reference from the task input.",
+          ],
         ),
       );
     }
@@ -198,28 +238,93 @@ function resolveExplicitCandidateTargets(
 }
 
 function resolveFallbackCandidateTargets(repoContext: RepoContext): CandidateTarget[] {
-  const fallbackTargets: CandidateTarget[] = [];
+  const rankByPreferredOrder = (candidates: string[], priorityOrder: string[]): string[] => {
+    const priorityIndex = new Map<string, number>();
 
-  if (repoContext.sourceFiles.length > 0) {
+    priorityOrder.forEach((value, index) => {
+      const normalizedValue = normalizePathForComparison(value);
+
+      if (!priorityIndex.has(normalizedValue)) {
+        priorityIndex.set(normalizedValue, index);
+      }
+    });
+
+    return [...candidates].sort((left, right) => {
+      const leftKey = normalizePathForComparison(left);
+      const rightKey = normalizePathForComparison(right);
+      const leftPriority = priorityIndex.get(leftKey);
+      const rightPriority = priorityIndex.get(rightKey);
+
+      if (leftPriority !== undefined || rightPriority !== undefined) {
+        if (leftPriority === undefined) {
+          return 1;
+        }
+
+        if (rightPriority === undefined) {
+          return -1;
+        }
+
+        if (leftPriority !== rightPriority) {
+          return leftPriority - rightPriority;
+        }
+      }
+
+      const leftSharedRisk = isSharedRiskPath(left, "source") ? 1 : 0;
+      const rightSharedRisk = isSharedRiskPath(right, "source") ? 1 : 0;
+
+      if (leftSharedRisk !== rightSharedRisk) {
+        return rightSharedRisk - leftSharedRisk;
+      }
+
+      return left.localeCompare(right);
+    });
+  };
+
+  const rankManifestFallbacks = (manifestFiles: string[]): string[] => {
+    const manifestPriority = ["package.json", "pyproject.toml", "setup.cfg", "tsconfig.json"];
+
+    return rankByPreferredOrder(manifestFiles, manifestPriority);
+  };
+
+  const fallbackTargets: CandidateTarget[] = [];
+  const rankedSourceFiles = rankByPreferredOrder(repoContext.sourceFiles, repoContext.entryPoints ?? []);
+  const primarySourceTarget = rankedSourceFiles[0];
+
+  if (primarySourceTarget) {
     fallbackTargets.push(
       buildCandidateTarget(
-        repoContext.sourceFiles[0],
+        primarySourceTarget,
         "source",
         "fallback",
         "Inferred a likely source target from the repo layout.",
-        ["Fell back to repo-layout targeting because the task had no explicit file match."],
+        [
+          "Fell back to repo-layout targeting because the task had no explicit file match.",
+          "Repo entry points shape fallback ordering when explicit evidence is weak.",
+        ],
       ),
     );
   }
 
-  if (repoContext.testFiles.length > 0) {
+  const rankedTestFiles = rankByPreferredOrder(repoContext.testFiles, [
+    ...(primarySourceTarget
+      ? repoContext.testFiles.filter(
+          (testFile) => normalizeFileStem(testFile) === normalizeFileStem(primarySourceTarget),
+        )
+      : []),
+  ]);
+  const primaryTestTarget = rankedTestFiles[0];
+
+  if (primaryTestTarget) {
     fallbackTargets.push(
       buildCandidateTarget(
-        repoContext.testFiles[0],
+        primaryTestTarget,
         "test",
         "fallback",
         "Inferred a likely test target from the repo layout.",
-        ["Fell back to repo-layout targeting because the task had no explicit file match."],
+        [
+          "Fell back to repo-layout targeting because the task had no explicit file match.",
+          "Fallback test ordering prefers sibling coverage for the most plausible source target when available.",
+        ],
       ),
     );
   }
@@ -229,9 +334,15 @@ function resolveFallbackCandidateTargets(repoContext: RepoContext): CandidateTar
   }
 
   if (repoContext.manifestFiles.length > 0) {
+    const primaryManifestTarget = rankManifestFallbacks(repoContext.manifestFiles)[0];
+
+    if (!primaryManifestTarget) {
+      return [];
+    }
+
     return [
       buildCandidateTarget(
-        repoContext.manifestFiles[0],
+        primaryManifestTarget,
         "manifest",
         "fallback",
         "Inferred a likely manifest target from the repo layout.",
@@ -348,7 +459,11 @@ export function resolveCandidateTargeting(
     };
   }
 
-  const explicitTargets = resolveExplicitCandidateTargets(taskInput, repoContext);
+  const explicitTargets = resolveExplicitCandidateTargets(
+    taskInput,
+    repoContext,
+    focusOptions?.moduleSignals ?? [],
+  );
   const rawCandidateTargets =
     explicitTargets.length > 0 ? explicitTargets : resolveFallbackCandidateTargets(repoContext);
   const focusPaths = focusOptions?.focusPaths ?? [];

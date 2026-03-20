@@ -81,6 +81,12 @@ await runScenario(
       const debugArtifact = await readJsonFile<{
         runtimeOptions?: { outputMode?: string };
         responsibilities?: { taskParser?: unknown };
+        assembledResult?: {
+          riskAnalysis?: {
+            typedRiskZones?: Array<{ code?: string }>;
+          };
+          verificationTargets?: Array<{ category?: string; path?: string }>;
+        };
         boundarySafeResult?: {
           initialVerificationTargets?: Array<{
             path: string;
@@ -92,6 +98,16 @@ await runScenario(
       assert.equal(await fileExists(debugArtifactPath), true);
       assert.equal(debugArtifact.runtimeOptions?.outputMode, "default");
       assert.ok(debugArtifact.responsibilities?.taskParser);
+      assert.ok(
+        debugArtifact.assembledResult?.riskAnalysis?.typedRiskZones?.some((zone) =>
+          zone.code === "api_compatibility_risk"
+        ),
+      );
+      assert.ok(
+        debugArtifact.assembledResult?.verificationTargets?.some((target) =>
+          target.path === "src/app.ts" && target.category === "retry_logic"
+        ),
+      );
       assert.ok(
         debugArtifact.boundarySafeResult?.initialVerificationTargets?.some((target) =>
           target.path === "src/app.ts" && target.category === "retry_logic"
@@ -189,8 +205,20 @@ await runScenario(
           test_framework_hints?: string[];
           layout_summary?: string | null;
         };
-        candidate_targets?: Array<{ path?: string; kind?: string }>;
-        initial_verification_targets?: Array<{ path?: string; kind?: string }>;
+        candidate_targets?: Array<{
+          path?: string;
+          kind?: string;
+          notes?: string[];
+          shared_risk?: boolean;
+        }>;
+        risk_analysis?: {
+          derived_risk_zones?: Array<{ code?: string }>;
+          supporting_analysis?: {
+            ambiguity_items?: Array<{ type?: string; severity?: string; message?: string }>;
+            warning_items?: Array<{ code?: string; message?: string }>;
+          };
+        };
+        initial_verification_targets?: Array<{ path?: string; kind?: string; category?: string }>;
       }>(artifactPath);
       const report = await readTextFile(reportPath);
 
@@ -214,15 +242,32 @@ await runScenario(
         "expected src/app.ts candidate target",
       );
       assert.ok(
-        artifact.initial_verification_targets?.some((target) => target.path === "tests/app.test.ts"),
+        artifact.candidate_targets?.some((candidate) =>
+          candidate.path === "src/app.ts"
+            && Array.isArray(candidate.notes)
+            && typeof candidate.shared_risk === "boolean"
+        ),
+        "expected src/app.ts candidate target detail",
+      );
+      assert.ok(Array.isArray(artifact.risk_analysis?.derived_risk_zones));
+      assert.ok(Array.isArray(artifact.risk_analysis?.supporting_analysis?.ambiguity_items));
+      assert.ok(Array.isArray(artifact.risk_analysis?.supporting_analysis?.warning_items));
+      assert.ok(
+        artifact.initial_verification_targets?.some((target) =>
+          target.path === "tests/app.test.ts" && target.category === "test_surface"
+        ),
         "expected tests/app.test.ts initial verification target",
       );
       assert.match(report, /## Task Spec/);
       assert.match(report, /Title:\s+Update app behavior/);
       assert.match(report, /## Repo Context/);
       assert.match(report, /Package Manager:\s+npm/);
+      assert.match(report, /## Candidate Targets[\s\S]*shared risk: (yes|no)/i);
+      assert.match(report, /## Risk Analysis[\s\S]*Derived Risk Zones/);
+      assert.match(report, /## Risk Analysis[\s\S]*Supporting Analysis/);
       assert.match(report, /Initial Verification Targets/);
       assert.match(report, /tests\/app\.test\.ts/);
+      assert.match(report, /test_surface/);
     } finally {
       await disposeTempRepo(repoRoot);
     }

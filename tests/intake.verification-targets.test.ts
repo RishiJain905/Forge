@@ -224,6 +224,80 @@ await runScenario(
   },
 );
 
+await runScenario(
+  "initial verification targets include default code, test, and config surfaces and dedupe repeats by path and category",
+  async () => {
+    const moduleUrl = new URL("../src/intake/verification-targets.js", import.meta.url).href;
+    const verificationTargetsModule = (await import(moduleUrl)) as {
+      buildInitialVerificationTargets?: (candidateTargets: Array<{
+        path: string;
+        kind: "source" | "test" | "manifest";
+        matchType: "explicit" | "fallback";
+        reason: string;
+        sharedRisk?: boolean;
+        notes?: string[];
+      }>) => Array<{
+        path: string;
+        kind: "source" | "test" | "manifest";
+        category: string;
+        reason: string;
+      }>;
+    };
+
+    const targets = verificationTargetsModule.buildInitialVerificationTargets?.([
+      {
+        path: "src/app.ts",
+        kind: "source",
+        matchType: "explicit",
+        reason: "Direct match.",
+      },
+      {
+        path: "src/app.ts",
+        kind: "source",
+        matchType: "fallback",
+        reason: "Fallback duplicate.",
+      },
+      {
+        path: "tests/app.test.ts",
+        kind: "test",
+        matchType: "explicit",
+        reason: "Direct test match.",
+      },
+      {
+        path: "tests/app.test.ts",
+        kind: "test",
+        matchType: "fallback",
+        reason: "Fallback test duplicate.",
+      },
+      {
+        path: "package.json",
+        kind: "manifest",
+        matchType: "explicit",
+        reason: "Direct manifest match.",
+      },
+      {
+        path: "package.json",
+        kind: "manifest",
+        matchType: "fallback",
+        reason: "Fallback manifest duplicate.",
+      },
+    ]) ?? [];
+
+    assert.equal(
+      targets.filter((target) => target.path === "src/app.ts" && target.category === "code_surface").length,
+      1,
+    );
+    assert.equal(
+      targets.filter((target) => target.path === "tests/app.test.ts" && target.category === "test_surface").length,
+      1,
+    );
+    assert.equal(
+      targets.filter((target) => target.path === "package.json" && target.category === "config_surface").length,
+      1,
+    );
+  },
+);
+
 if (process.exitCode && process.exitCode !== 0) {
   process.exit(process.exitCode);
 }

@@ -125,6 +125,124 @@ await runScenario("status resolver keeps low-confidence usable output as warning
   assert.equal(buildSummary(status, evaluation.nextStepReadiness), "Forge intake is ready for forge plan with warnings.");
 });
 
+await runScenario("status resolver blocks readiness for high-severity repo-alignment ambiguity", () => {
+  const evaluation = evaluateSuccessModel({
+    taskSpec: createTaskSpec(),
+    repoContext: createRepoContext(),
+    candidateTargets: createCandidateTargets(),
+    failure: null,
+    confidenceLevel: "medium",
+    failOnLowConfidence: false,
+    validationBlockingIssues: [],
+    inputWarnings: [],
+    inputAmbiguities: ["Prompt references repo paths that were not found during grounding."],
+    inputAmbiguityItems: [
+      {
+        type: "repo_alignment",
+        severity: "high",
+        message: "Prompt references repo paths that were not found during grounding.",
+      },
+    ],
+    inputRecommendedUserActions: ["Fix the missing repo reference before planning."],
+  });
+
+  assert.equal(evaluation.nextStepReadiness.ready, false);
+  assert.ok(evaluation.nextStepReadiness.blockingIssues.some((issue) => issue.code === "AMBIGUITY_REPO_ALIGNMENT"));
+
+  const status = resolveIntakeStatus({
+    failure: null,
+    nextStepReadiness: evaluation.nextStepReadiness,
+    warnings: evaluation.warnings,
+    ambiguities: evaluation.ambiguities,
+    confidenceLevel: "medium",
+  });
+
+  assert.equal(status, "failed");
+});
+
+await runScenario("status resolver blocks readiness for high-severity input ambiguity", () => {
+  const evaluation = evaluateSuccessModel({
+    taskSpec: createTaskSpec(),
+    repoContext: createRepoContext(),
+    candidateTargets: createCandidateTargets(),
+    failure: null,
+    confidenceLevel: "medium",
+    failOnLowConfidence: false,
+    validationBlockingIssues: [],
+    inputWarnings: [],
+    inputAmbiguities: ["The task input could not be interpreted safely."],
+    inputAmbiguityItems: [
+      {
+        type: "input",
+        severity: "high",
+        message: "The task input could not be interpreted safely.",
+      },
+    ],
+    inputRecommendedUserActions: ["Clarify the task input before planning."],
+  });
+
+  assert.equal(evaluation.nextStepReadiness.ready, false);
+  assert.ok(evaluation.nextStepReadiness.blockingIssues.some((issue) => issue.code === "AMBIGUITY_INPUT"));
+});
+
+await runScenario("status resolver keeps missing acceptance criteria as warnings by default", () => {
+  const evaluation = evaluateSuccessModel({
+    taskSpec: createTaskSpec({
+      acceptanceCriteria: [],
+      hasAcceptanceCriteria: false,
+    }),
+    repoContext: createRepoContext(),
+    candidateTargets: createCandidateTargets(),
+    failure: null,
+    confidenceLevel: "medium",
+    failOnLowConfidence: false,
+    validationBlockingIssues: [],
+    inputWarnings: ["Acceptance criteria are missing, so Step 2 planning may need user follow-up."],
+    inputAmbiguities: ["Acceptance criteria are missing from the task input."],
+    inputAmbiguityItems: [
+      {
+        type: "acceptance_criteria",
+        severity: "high",
+        message: "Acceptance criteria are missing from the task input.",
+      },
+    ],
+    inputRecommendedUserActions: ["Add explicit acceptance criteria to the task input before planning."],
+  });
+
+  assert.equal(evaluation.nextStepReadiness.ready, true);
+  assert.equal(
+    evaluation.nextStepReadiness.blockingIssues.some((issue) => issue.code === "AMBIGUITY_ACCEPTANCE_CRITERIA"),
+    false,
+  );
+});
+
+await runScenario("status resolver keeps fallback-only targeting and strict-focus exclusion as warnings by default", () => {
+  const evaluation = evaluateSuccessModel({
+    taskSpec: createTaskSpec(),
+    repoContext: createRepoContext(),
+    candidateTargets: [{
+      path: "src/app.ts",
+      kind: "source" as const,
+      matchType: "fallback" as const,
+      reason: "Fallback repo mapping.",
+    }],
+    failure: null,
+    confidenceLevel: "medium",
+    failOnLowConfidence: false,
+    validationBlockingIssues: [],
+    inputWarnings: [
+      "Repo mapping is partial but still usable because candidate targets were inferred from repo structure.",
+      "Strict focus excluded likely relevant candidate targets.",
+    ],
+    inputAmbiguities: [],
+    inputAmbiguityItems: [],
+    inputRecommendedUserActions: [],
+  });
+
+  assert.equal(evaluation.nextStepReadiness.ready, true);
+  assert.deepEqual(evaluation.nextStepReadiness.blockingIssues, []);
+});
+
 await runScenario("status resolver escalates low confidence to failed when requested", () => {
   const evaluation = evaluateSuccessModel({
     taskSpec: createTaskSpec(),

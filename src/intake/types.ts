@@ -273,6 +273,7 @@ export type CandidateTargets = CandidateTarget[];
 export interface CandidateTargetingOptions {
   focusPaths: string[];
   strictFocus: boolean;
+  moduleSignals?: string[];
 }
 
 export interface CandidateTargetingSignals {
@@ -293,6 +294,8 @@ export interface ArtifactCandidateTargetSectionItem {
   kind: CandidateTarget["kind"];
   match_type: CandidateTarget["matchType"];
   reason: string;
+  notes: string[];
+  shared_risk: boolean;
 }
 
 export interface VerificationTarget {
@@ -316,7 +319,26 @@ export type InitialVerificationTarget = VerificationTarget;
 export interface ArtifactInitialVerificationTargetSectionItem {
   path: string;
   kind: InitialVerificationTarget["kind"];
+  category: InitialVerificationTarget["category"] | null;
   reason: string;
+}
+
+export interface ArtifactAnalysisRiskZone {
+  code: AnalysisRiskZoneCode;
+  level: "medium" | "high";
+  reason: string;
+  evidence_paths: string[];
+}
+
+export interface ArtifactAmbiguityItem {
+  type: Ambiguity["type"];
+  severity: Ambiguity["severity"];
+  message: string;
+}
+
+export interface ArtifactWarningItem {
+  code: string;
+  message: string;
 }
 
 export interface InferenceResult {
@@ -429,6 +451,13 @@ export type ArtifactRiskZoneCode =
   | "no_tests_detected"
   | "manifest_or_config_impact";
 
+export type AnalysisRiskZoneCode =
+  | ArtifactRiskZoneCode
+  | "migration_risk"
+  | "api_compatibility_risk"
+  | "coordination_overlap_risk"
+  | "test_strategy_risk";
+
 export interface ArtifactRiskZone {
   code: ArtifactRiskZoneCode;
   level: "medium" | "high";
@@ -443,12 +472,25 @@ export interface RiskZone {
   evidencePaths: string[];
 }
 
+export interface AnalysisRiskZone {
+  code: AnalysisRiskZoneCode;
+  level: "medium" | "high";
+  reason: string;
+  evidencePaths: string[];
+}
+
 export interface RiskAnalysis {
   initialRiskZones: RiskZone[];
+  typedRiskZones?: AnalysisRiskZone[];
 }
 
 export interface ArtifactRiskAnalysisSection {
   initial_risk_zones: ArtifactRiskZone[];
+  derived_risk_zones: ArtifactAnalysisRiskZone[];
+  supporting_analysis: {
+    ambiguity_items: ArtifactAmbiguityItem[];
+    warning_items: ArtifactWarningItem[];
+  };
 }
 
 export interface ArtifactConfidenceSection {
@@ -617,6 +659,8 @@ export interface IntakeDebugArtifact {
     taskSpec: NormalizedTaskSpec;
     repoContext: RepoContext;
     candidateTargets: CandidateTarget[];
+    riskAnalysis?: RiskAnalysis;
+    verificationTargets?: VerificationTarget[];
     ambiguities: string[];
     warnings: string[];
     recommendedUserActions: string[];

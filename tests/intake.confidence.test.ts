@@ -20,6 +20,10 @@ interface ConfidenceResolutionInput {
     explicitTargetCount: number;
     usedFallbackTargets: boolean;
     unresolvedReferencedPathCount: number;
+    focusApplied?: boolean;
+    strictFocusApplied?: boolean;
+    focusMatchedTargetCount?: number;
+    outOfFocusTargetCount?: number;
   };
 }
 
@@ -63,6 +67,10 @@ function createStrongInput(): ConfidenceResolutionInput {
       explicitTargetCount: 2,
       usedFallbackTargets: false,
       unresolvedReferencedPathCount: 0,
+      focusApplied: false,
+      strictFocusApplied: false,
+      focusMatchedTargetCount: 0,
+      outOfFocusTargetCount: 0,
     },
   };
 }
@@ -183,6 +191,69 @@ await runScenario("confidence resolver treats unresolved referenced paths as wea
   assert.equal(result.level, "low");
   assert.equal(result.signals.targeting, "weak");
   assert.ok(result.reasons.some((reason) => /unresolved/i.test(reason)));
+});
+
+await runScenario("confidence resolver degrades targeting when focus excludes likely targets", async () => {
+  const { buildConfidenceResolution } = await loadResolver();
+
+  const result = buildConfidenceResolution({
+    ...createStrongInput(),
+    targeting: {
+      candidateTargetCount: 2,
+      explicitTargetCount: 2,
+      usedFallbackTargets: false,
+      unresolvedReferencedPathCount: 0,
+      focusApplied: true,
+      strictFocusApplied: false,
+      focusMatchedTargetCount: 1,
+      outOfFocusTargetCount: 1,
+    },
+  });
+
+  assert.equal(result.level, "medium");
+  assert.equal(result.signals.targeting, "partial");
+  assert.ok(result.reasons.some((reason) => /focus paths/i.test(reason)));
+});
+
+await runScenario("confidence resolver treats missing candidate targets as weak targeting", async () => {
+  const { buildConfidenceResolution } = await loadResolver();
+
+  const result = buildConfidenceResolution({
+    ...createStrongInput(),
+    targeting: {
+      candidateTargetCount: 0,
+      explicitTargetCount: 0,
+      usedFallbackTargets: false,
+      unresolvedReferencedPathCount: 0,
+      focusApplied: false,
+      strictFocusApplied: false,
+      focusMatchedTargetCount: 0,
+      outOfFocusTargetCount: 0,
+    },
+  });
+
+  assert.equal(result.level, "low");
+  assert.equal(result.signals.targeting, "weak");
+  assert.ok(result.reasons.some((reason) => /candidate targeting could not produce/i.test(reason)));
+});
+
+await runScenario("confidence resolver keeps grounded repos without tests at partial unless a referenced test path is missing", async () => {
+  const { buildConfidenceResolution } = await loadResolver();
+
+  const result = buildConfidenceResolution({
+    ...createStrongInput(),
+    repoInspection: {
+      grounded: true,
+      repoLooksSparse: false,
+      sourceFileCount: 3,
+      testFileCount: 0,
+      missingExplicitTestReference: false,
+    },
+  });
+
+  assert.equal(result.level, "medium");
+  assert.equal(result.signals.repoInspection, "partial");
+  assert.ok(result.reasons.some((reason) => /no test files/i.test(reason)));
 });
 
 await runScenario("confidence resolver is reproducible for the same inputs", async () => {

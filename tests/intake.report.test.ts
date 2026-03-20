@@ -417,7 +417,7 @@ await runScenario("intake report derives assumptions from artifact evidence with
   assert.match(report, /no test files/i);
   assert.match(report, /## Confidence/);
   assert.match(report, /low/);
-  assert.doesNotMatch(report, /high confidence|certain|definitive/i);
+  assert.doesNotMatch(report, /\bhigh confidence\b|\bcertain\b|\bdefinitive\b/i);
 });
 
 await runScenario("intake report keeps useful repo context visible when candidate targets are missing", () => {
@@ -671,6 +671,77 @@ await runScenario("intake report renders strict focus in runtime options", () =>
   const report = createIntakeReport(artifact as IntakeArtifact);
 
   assert.match(report, /## Runtime Options[\s\S]*Strict focus:\s+`true`/i);
+});
+
+await runScenario("intake report renders nested targeting and typed analysis detail under existing headings", () => {
+  const report = createIntakeReport(createArtifact({
+    mutateAssembledResult: (result) => {
+      result.responsibilities.analysis.ambiguityItems = [
+        {
+          type: "scope",
+          severity: "medium",
+          message: "The exact implementation surface is still unclear.",
+        },
+      ];
+      result.responsibilities.analysis.warningItems = [
+        {
+          code: "NO_TESTS_DETECTED",
+          message: "No tests were detected during repo grounding.",
+        },
+      ];
+      result.riskAnalysis = {
+        initialRiskZones: [
+          {
+            code: "manifest_or_config_impact",
+            level: "medium",
+            reason: "Manifest impact should be reviewed.",
+            evidencePaths: ["package.json"],
+          },
+        ],
+        typedRiskZones: [
+          {
+            code: "api_compatibility_risk",
+            level: "medium",
+            reason: "Downstream API callers may need explicit validation.",
+            evidencePaths: ["package.json", "src/app.ts"],
+          },
+        ],
+      };
+      result.verificationTargets = [
+        {
+          path: "src/app.ts",
+          kind: "source",
+          category: "retry_logic",
+          reason: "Retry behavior around `src/app.ts` should be verified before execution planning.",
+        },
+      ];
+    },
+    mutateBoundarySafeResult: (result) => {
+      result.candidateTargets = [
+        {
+          path: "src/app.ts",
+          kind: "source",
+          matchType: "explicit",
+          reason: "The task explicitly references src/app.ts.",
+          notes: ["Referenced directly by the task.", "Touches shared retry behavior."],
+          sharedRisk: true,
+        },
+      ];
+    },
+  }));
+
+  assert.match(report, /## Candidate Targets[\s\S]*Referenced directly by the task\./);
+  assert.match(report, /## Candidate Targets[\s\S]*Shared risk:\s+yes/i);
+  assert.match(report, /## Risk Analysis[\s\S]*Derived Risk Zones/);
+  assert.match(report, /api_compatibility_risk/);
+  assert.doesNotMatch(report, /## Risk Analysis[\s\S]*weak_repo_grounding[\s\S]*Derived Risk Zones[\s\S]*weak_repo_grounding/);
+  assert.match(report, /## Risk Analysis[\s\S]*Supporting Analysis/);
+  assert.match(report, /## Risk Analysis[\s\S]*Ambiguity Items/);
+  assert.match(report, /`scope` \(medium\)/i);
+  assert.match(report, /## Risk Analysis[\s\S]*Warning Items/);
+  assert.match(report, /NO_TESTS_DETECTED/);
+  assert.match(report, /## Initial Verification Targets[\s\S]*retry_logic/);
+  assert.deepEqual(extractLevelTwoHeadings(report), [...REQUIRED_HEADINGS]);
 });
 
 if (process.exitCode && process.exitCode !== 0) {

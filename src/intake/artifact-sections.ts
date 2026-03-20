@@ -75,6 +75,8 @@ function toArtifactCandidateTargetSectionItem(
     kind: target.kind,
     match_type: target.matchType,
     reason: target.reason,
+    notes: [...(target.notes ?? [])],
+    shared_risk: target.sharedRisk ?? false,
   };
 }
 
@@ -84,6 +86,7 @@ function toArtifactInitialVerificationTargetSectionItem(
   return {
     path: target.path,
     kind: target.kind,
+    category: target.category ?? null,
     reason: target.reason,
   };
 }
@@ -104,6 +107,7 @@ function toArtifactConfidenceSection(
 
 function toArtifactRiskAnalysisSection(
   riskAnalysis: RiskAnalysis,
+  assembledResult: AssembledIntakeResult,
 ): ArtifactRiskAnalysisSection {
   return {
     initial_risk_zones: riskAnalysis.initialRiskZones.map((zone) => ({
@@ -112,6 +116,25 @@ function toArtifactRiskAnalysisSection(
       reason: zone.reason,
       evidence_paths: [...zone.evidencePaths],
     })),
+    derived_risk_zones: (riskAnalysis.typedRiskZones ?? [])
+      .filter((zone) => !riskAnalysis.initialRiskZones.some((initialZone) => initialZone.code === zone.code))
+      .map((zone) => ({
+        code: zone.code,
+        level: zone.level,
+        reason: zone.reason,
+        evidence_paths: [...zone.evidencePaths],
+      })),
+    supporting_analysis: {
+      ambiguity_items: (assembledResult.responsibilities.analysis.ambiguityItems ?? []).map((item) => ({
+        type: item.type,
+        severity: item.severity,
+        message: item.message,
+      })),
+      warning_items: (assembledResult.responsibilities.analysis.warningItems ?? []).map((item) => ({
+        code: item.code,
+        message: item.message,
+      })),
+    },
   };
 }
 
@@ -153,7 +176,7 @@ export function buildArtifactSections(params: {
     candidate_targets: params.boundarySafeResult.candidateTargets.map(
       toArtifactCandidateTargetSectionItem,
     ),
-    risk_analysis: toArtifactRiskAnalysisSection(params.riskAnalysis),
+    risk_analysis: toArtifactRiskAnalysisSection(params.riskAnalysis, params.assembledResult),
     initial_verification_targets: params.initialVerificationTargets.map(
       toArtifactInitialVerificationTargetSectionItem,
     ),

@@ -6,6 +6,7 @@ import { resolveRuntimeOptions } from "../src/intake/options.js";
 import { buildTaskParserResult } from "../src/intake/task-parser.js";
 import type {
   InferenceResult,
+  NormalizedTaskInput,
   RepoContext,
   RepoScanResult,
   ResolvedRuntimeOptions,
@@ -93,6 +94,30 @@ function createInferenceResult(overrides: Partial<InferenceResult> = {}): Infere
   };
 }
 
+function createFallbackOnlyInferenceResult(paths: string[]): InferenceResult {
+  return {
+    candidateTargets: paths.map((path) => ({
+      path,
+      kind: path.endsWith(".json") ? "manifest" : "source",
+      matchType: "fallback",
+      reason: "Inferred a likely target from the repo layout.",
+      notes: ["Fell back to repo-layout targeting because the task had no explicit file match."],
+      sharedRisk: true,
+    })),
+    inferredRequirements: [],
+    signals: {
+      explicitTargetCount: 0,
+      usedFallbackTargets: true,
+      inferredRequirementCount: 0,
+      focusApplied: false,
+      strictFocusApplied: false,
+      focusMatchedTargetCount: 0,
+      outOfFocusTargetCount: 0,
+    },
+    warnings: [],
+  };
+}
+
 function createTaskParserResult(
   prompt: string,
   overrides: Partial<ValidatedIntakeInputs> = {},
@@ -104,6 +129,34 @@ function createTaskParserResult(
   return {
     taskInput,
     taskParserResult: buildTaskParserResult(taskInput),
+  };
+}
+
+function createSpecTaskParserResult(specText: string): {
+  taskInput: NormalizedTaskInput;
+  taskParserResult: TaskParserResult;
+} {
+  const taskInput: ValidatedIntakeInputs = {
+    inputMode: "spec",
+    primaryInput: {
+      path: "/repo/spec.md",
+      rawText: specText,
+    },
+    supplementalInputs: {
+      notes: [],
+      constraints: [],
+      configPath: null,
+      focusPaths: [],
+    },
+    warnings: [],
+    recommendedUserActions: [],
+  };
+
+  const resolvedTaskInput = resolveLoadedIntakeInput(taskInput);
+
+  return {
+    taskInput: resolvedTaskInput,
+    taskParserResult: buildTaskParserResult(resolvedTaskInput),
   };
 }
 
@@ -119,7 +172,7 @@ async function runScenario(name: string, scenario: () => Promise<void>): Promise
 }
 
 await runScenario(
-  "buildRiskAnalysisResult surfaces migration, api contract, coordination, config, and test risk through existing observable zones",
+  "buildRiskAnalysisResult records typed stage-6 risks for migration, api compatibility, coordination, and test coverage without fallback-only on mixed targeting",
   async () => {
     const { taskParserResult } = createTaskParserResult(
       [
@@ -171,7 +224,7 @@ await runScenario(
       ],
       signals: {
         explicitTargetCount: 2,
-        usedFallbackTargets: true,
+        usedFallbackTargets: false,
         inferredRequirementCount: 0,
         focusApplied: false,
         strictFocusApplied: false,
@@ -186,12 +239,122 @@ await runScenario(
       inferenceResult,
     });
 
-    const manifestRisk = result.initialRiskZones.find((zone) => zone.code === "manifest_or_config_impact");
-    assert.ok(manifestRisk);
-    assert.match(manifestRisk?.reason ?? "", /migration/i);
-    assert.match(manifestRisk?.reason ?? "", /API contract/i);
-    assert.match(manifestRisk?.reason ?? "", /coordination/i);
+    assert.deepEqual(
+      result.typedRiskZones?.map((zone) => zone.code),
+      [
+        "no_tests_detected",
+        "migration_risk",
+        "api_compatibility_risk",
+        "coordination_overlap_risk",
+        "test_strategy_risk",
+        "manifest_or_config_impact",
+      ],
+    );
+    const migrationRisk = result.typedRiskZones?.find((zone) => zone.code === "migration_risk");
+    assert.match(migrationRisk?.reason ?? "", /migration sequencing/i);
+    const apiRisk = result.typedRiskZones?.find((zone) => zone.code === "api_compatibility_risk");
+    assert.match(apiRisk?.reason ?? "", /API compatibility/i);
+    const coordinationRisk = result.typedRiskZones?.find((zone) => zone.code === "coordination_overlap_risk");
+    assert.match(coordinationRisk?.reason ?? "", /coordination|parallel/i);
+    const testRisk = result.typedRiskZones?.find((zone) => zone.code === "test_strategy_risk");
+    assert.match(testRisk?.reason ?? "", /test/i);
+    assert.ok(result.typedRiskZones?.every((zone) => zone.code !== "fallback_targeting_only"));
     assert.ok(result.initialRiskZones.some((zone) => zone.code === "no_tests_detected"));
+  },
+);
+
+await runScenario(
+  "buildRiskAnalysisResult emits fallback-targeting-only only for valid all-fallback targeting and keeps shared codes aligned",
+  async () => {
+    const { taskParserResult } = createTaskParserResult(
+      [
+        "Migrate the runtime and package manifest while keeping the API contract stable.",
+        "",
+        "Acceptance Criteria",
+        "- the migration plan is reflected in the runtime",
+      ].join("\n"),
+    );
+    const repoScanResult = createRepoScanResult({
+      repoContext: createRepoContext({
+        testFiles: [],
+        allFiles: ["src/app.ts", "package.json"],
+      }),
+      signals: {
+        sourceFileCount: 1,
+        testFileCount: 0,
+        manifestFileCount: 1,
+        repoLooksSparse: false,
+      },
+    });
+    const inferenceResult = createFallbackOnlyInferenceResult(["src/app.ts", "package.json"]);
+
+    const result = buildRiskAnalysisResult({
+      taskParserResult,
+      repoScanResult,
+      inferenceResult,
+    });
+
+    assert.ok(result.initialRiskZones.some((zone) => zone.code === "fallback_targeting_only"));
+    assert.ok(result.typedRiskZones?.some((zone) => zone.code === "fallback_targeting_only"));
+
+    const sharedCodes = new Set(result.initialRiskZones.map((zone) => zone.code));
+    assert.ok(
+      [...sharedCodes].every((code) => result.typedRiskZones?.some((zone) => zone.code === code)),
+    );
+  },
+);
+
+await runScenario(
+  "buildRiskAnalysisResult records typed no-candidate and unresolved-path risks without relying on manifest impact",
+  async () => {
+    const { taskParserResult } = createTaskParserResult(
+      "Update src/missing.ts and keep tests/missing.test.ts aligned.",
+    );
+    const repoScanResult = createRepoScanResult({
+      repoContext: createRepoContext({
+        grounded: false,
+        testFiles: [],
+        allFiles: ["src/app.ts", "package.json"],
+      }),
+      signals: {
+        sourceFileCount: 1,
+        testFileCount: 0,
+        manifestFileCount: 1,
+        repoLooksSparse: true,
+      },
+    });
+    const inferenceResult = createInferenceResult({
+      candidateTargets: [],
+      signals: {
+        explicitTargetCount: 0,
+        usedFallbackTargets: false,
+        inferredRequirementCount: 0,
+        focusApplied: false,
+        strictFocusApplied: false,
+        focusMatchedTargetCount: 0,
+        outOfFocusTargetCount: 0,
+      },
+    });
+
+    const result = buildRiskAnalysisResult({
+      taskParserResult,
+      repoScanResult,
+      inferenceResult,
+    });
+
+    assert.deepEqual(
+      result.typedRiskZones?.map((zone) => zone.code),
+      [
+        "weak_repo_grounding",
+        "unresolved_referenced_paths",
+        "no_candidate_targets",
+        "no_tests_detected",
+        "test_strategy_risk",
+      ],
+    );
+    assert.ok(
+      result.typedRiskZones?.every((zone) => zone.code !== "manifest_or_config_impact"),
+    );
   },
 );
 
@@ -326,6 +489,121 @@ await runScenario(
       ),
     );
     assert.equal(result.confidence.level, "medium");
+  },
+);
+
+await runScenario(
+  "buildAmbiguityAnalysisResult emits strict-focus and fallback-targeting warnings with spec-aware repo-alignment wording",
+  async () => {
+    const { taskInput, taskParserResult } = createSpecTaskParserResult(
+      [
+        "# Tighten intake targeting",
+        "",
+        "Update src/missing.ts while keeping tests/missing.test.ts aligned.",
+        "",
+        "Acceptance Criteria",
+        "- src/missing.ts behavior is updated",
+      ].join("\n"),
+    );
+    const repoScanResult = createRepoScanResult({
+      repoContext: createRepoContext({
+        allFiles: ["src/app.ts", "tests/app.test.ts", "package.json"],
+      }),
+    });
+    const inferenceResult = {
+      ...createFallbackOnlyInferenceResult(["src/app.ts"]),
+      signals: {
+        ...createFallbackOnlyInferenceResult(["src/app.ts"]).signals,
+        focusApplied: true,
+        strictFocusApplied: true,
+        outOfFocusTargetCount: 1,
+      },
+    } satisfies InferenceResult;
+
+    const result = buildAmbiguityAnalysisResult({
+      taskInput,
+      taskParserResult,
+      repoScanResult,
+      inferenceResult,
+      runtimeOptions: resolveRuntimeOptions({}) as ResolvedRuntimeOptions,
+      failure: null,
+      validationBlockingIssues: [
+        {
+          code: "EXAMPLE_BLOCKER",
+          message: "A blocking issue exists but should not be mirrored as a generic warning.",
+        },
+      ],
+      validationWarnings: [],
+      validationRecommendedUserActions: [],
+    });
+
+    assert.ok(
+      result.warningItems?.some((item) => item.code === "STRICT_FOCUS_EXCLUDED_TARGETS"),
+    );
+    assert.ok(
+      result.warningItems?.some((item) => item.code === "FALLBACK_TARGETING"),
+    );
+    const repoAlignment = result.ambiguityItems?.find((item) => item.type === "repo_alignment");
+    assert.match(repoAlignment?.message ?? "", /^Spec references repo paths/i);
+    assert.ok(
+      result.recommendedUserActions.some((action) =>
+        /widen --focus or drop --strict-focus/i.test(action),
+      ),
+    );
+    assert.ok(
+      result.recommendedUserActions.some((action) =>
+        /reference concrete files or directories in the spec/i.test(action),
+      ),
+    );
+    assert.ok(
+      result.recommendedUserActions.some((action) =>
+        /fix the missing repo references in the spec/i.test(action),
+      ),
+    );
+    assert.ok(
+      result.warnings.every((warning) => !/blocking issue exists/i.test(warning)),
+    );
+  },
+);
+
+await runScenario(
+  "buildAmbiguityAnalysisResult uses natural fallback wording when input mode is unavailable",
+  async () => {
+    const { taskParserResult } = createTaskParserResult(
+      "Update src/missing.ts while keeping tests/missing.test.ts aligned.",
+    );
+    const repoScanResult = createRepoScanResult({
+      repoContext: createRepoContext({
+        allFiles: ["src/app.ts", "tests/app.test.ts", "package.json"],
+      }),
+    });
+    const inferenceResult = createFallbackOnlyInferenceResult(["src/app.ts"]);
+
+    const result = buildAmbiguityAnalysisResult({
+      taskInput: null,
+      taskParserResult,
+      repoScanResult,
+      inferenceResult,
+      runtimeOptions: resolveRuntimeOptions({}) as ResolvedRuntimeOptions,
+      failure: null,
+      validationBlockingIssues: [],
+      validationWarnings: [],
+      validationRecommendedUserActions: [],
+    });
+
+    assert.ok(
+      result.recommendedUserActions.some((action) =>
+        /reference concrete files or directories in the task input/i.test(action),
+      ),
+    );
+    assert.ok(
+      result.recommendedUserActions.some((action) =>
+        /fix the missing repo references in the input or clarify the intended replacement paths/i.test(action),
+      ),
+    );
+    assert.ok(
+      result.recommendedUserActions.every((action) => !/task input's/i.test(action)),
+    );
   },
 );
 

@@ -154,10 +154,17 @@
   - Reworked `repo-context.ts` to ground richer JS/TS layouts, add best-effort Python support, detect nonstandard test locations, derive test-command and CI hints, and emit non-blocking warnings for mixed package-manager clues and weak test signals.
   - Expanded the nested public `task_spec` and `repo_context` artifact/report sections with `implementation_necessities`, `test_command_hints`, and `ci_hints` while keeping the top-level Step 1 contract stable.
   - Expanded direct parser, repo-context, schema, report, and acceptance-gate coverage and documented completion evidence in `S1-B3-done/p3-done-summary.md`.
+- Batch 3.04: `part-4-stage-5-and-6-targeting-analysis-confidence.md`
+  - Reworked Stage 5 targeting so parser-owned prose module mentions, focus-aware ordering, shared-risk cues, and repo-layout fallback ranking now drive candidate selection without broad prose-token false positives.
+  - Expanded Stage 6 analysis so intake now emits richer typed risk zones, typed ambiguity and warning diagnostics, verification-target categories, and selective readiness blockers for genuinely blocking repo-alignment or input ambiguities.
+  - Kept the top-level Step 1 artifact/report contract stable while expanding nested Stage 5/6 output with candidate target notes/shared-risk, `risk_analysis.derived_risk_zones`, `risk_analysis.supporting_analysis`, and verification-target categories.
+  - Added focused unit, schema, report, end-to-end, and acceptance-gate coverage for the new targeting, analysis, confidence/readiness, and persisted output behavior.
+  - Documented completion evidence in `S1-B3-done/p4-done-summary.md` after the full verification gate stayed green in the implementation worktree.
 
 ## Current Branch State
 - `dev` includes the completed Batch 1.16, Batch 1.17, Batch 1.18, Batch 1.19, Batch 1.20, Batch 2.01, Batch 2.02, Batch 2.03, Batch 2.04, Batch 3.01, Batch 3.02, and Batch 3.03 implementations.
 - The Batch 2 Part 1 implementation from worktree branch `codex/s1-b2-p1-intake-architecture`, the Batch 2 Part 2 implementation from worktree branch `codex/s1-b2-p2-file-ownership`, the Batch 2 Part 3 implementation from worktree branch `codex/s1-b2-p3-sequential-build-order`, the Batch 2 Part 4 implementation from worktree branch `codex/s1-b2-p4-test-strategy-and-acceptance-gates`, the Batch 3 Part 1 implementation from worktree branch `codex/s1-b3-p1-umbrella`, the Batch 3 Part 2 implementation from worktree branch `codex/s1-b3-p2-core-types-input-foundation`, and the Batch 3 Part 3 implementation from worktree branch `codex/s1-b3-p3-task-normalization-repo-context` have been merged back into `dev`.
+- The Batch 3 Part 4 implementation is complete and fully verified on worktree branch `codex/s1-b3-p4-targeting-analysis-confidence`, but it has not been merged back into `dev` in this session.
 - `execution.md` now explicitly requires completed worktree branches to be merged back into their source branch before a task is considered complete, unless the user explicitly requests a PR-only workflow.
 
 ## Verification
@@ -167,4 +174,4 @@
 - `npm.cmd run smoke`
 
 ## Next
-- Batch 3 Part 3 is complete. Next work should proceed against the stabilized task-normalization and repo-context foundation with `forge_step1_batch3/part-4-stage-5-and-6-targeting-analysis-confidence.md`.
+- Batch 3 Part 4 is complete in the worktree. After merge, next work should proceed with `forge_step1_batch3/part-5-stage-7-and-8-artifacts-report-persistence-and-runner.md`.
