@@ -2,7 +2,8 @@ import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promise
 import { constants as fsConstants } from "node:fs";
 import { execFileSync, spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { formatIntakeCommandOutput } from "../../src/cli.js";
 import { runIntakeCommand } from "../../src/intake/runner.js";
@@ -17,6 +18,10 @@ export interface ForgeRunResult {
 type TestIntakeCommandOptions = IntakeCommandOptions & {
   strictFocus?: boolean;
 };
+
+const currentDirectory = dirname(fileURLToPath(import.meta.url));
+const projectRoot = resolve(currentDirectory, "..", "..", "..");
+const forgeEntrypointPath = resolve(projectRoot, "dist", "src", "index.js");
 
 export async function createTempRepo(prefix = "forge-intake-"): Promise<string> {
   const repoRoot = await mkdtemp(join(tmpdir(), prefix));
@@ -69,6 +74,26 @@ export async function runForgeCli(args: string[], cwd: string): Promise<ForgeRun
     code: result.status === "failed" ? 1 : 0,
     stdout: result.status === "failed" ? "" : output,
     stderr: result.status === "failed" ? output : "",
+  };
+}
+
+export function runForgeBinary(args: string[], cwd: string): ForgeRunResult {
+  const result = spawnSync(process.execPath, [forgeEntrypointPath, ...args], {
+    cwd,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+    },
+  });
+
+  if (result.error) {
+    throw result.error;
+  }
+
+  return {
+    code: typeof result.status === "number" ? result.status : 1,
+    stdout: result.stdout ?? "",
+    stderr: result.stderr ?? "",
   };
 }
 

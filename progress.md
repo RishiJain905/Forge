@@ -166,11 +166,15 @@
   - Added a dedicated `intake.runner` suite that asserts `runIntakeCommand()` result semantics directly for repo-resolution failure, configured-output fallback semantics, null durable-path behavior when configured and fallback persistence both fail, json-only/report-only path semantics, and debug artifact placement under custom roots and fallback.
   - Updated `package.json` so the default `npm.cmd test` wiring includes the new runner suite.
   - Documented completion evidence in `S1-B3-done/p5-done-summary.md` after the full verification gate passed in the Part 5 implementation worktree.
+- Batch 3.06: `part-6-stage-9-cli-wiring-tests-and-runnable-milestone.md`
+  - Added process-level packaged-entrypoint coverage for spec mode from a non-repo working directory, a weak-spec warning run, and a missing-spec failure run with persisted outputs.
+  - Reworked `scripts/smoke.mjs` so the runnable milestone now exercises `dist/src/index.js` in spec mode and asserts artifact/report output directly.
+  - Added `tests/intake.cli-entrypoint.test.ts` to the default `npm.cmd test` wiring while keeping the existing helper-based CLI harness intact.
+  - Confirmed that no `src/*` wiring change was necessary because the packaged CLI entrypoint already satisfied the new contract.
 
 ## Current Branch State
-- `dev` already includes the completed Batch 1.16, Batch 1.17, Batch 1.18, Batch 1.19, Batch 1.20, Batch 2.01, Batch 2.02, Batch 2.03, Batch 2.04, Batch 3.01, Batch 3.02, Batch 3.03, and Batch 3.04 implementations.
-- Batch 3 Part 4 is already on `dev` via commit `c484864` (`Implement Batch 3 Part 4 targeting analysis and confidence`), so the earlier stale note that it was only complete in a worktree is corrected here.
-- The current worktree branch `codex/s1-b3-p5-artifacts-report-persistence-runner` contains the Batch 3 Part 5 regression coverage and doc updates; this file does not claim that Part 5 was merged in this session.
+- `dev` includes the completed Batch 1.16, Batch 1.17, Batch 1.18, Batch 1.19, Batch 1.20, Batch 2.01, Batch 2.02, Batch 2.03, Batch 2.04, Batch 3.01, Batch 3.02, Batch 3.03, Batch 3.04, Batch 3.05, and Batch 3.06 implementations.
+- Batch 3 is complete on `dev`, including the Part 6 packaged-entrypoint coverage, smoke milestone update, and default test wiring for the new process-level CLI suite.
 - `execution.md` now explicitly requires integration onto the target branch and fresh verification there before completion is claimed.
 
 ## Verification
@@ -180,4 +184,4 @@
 - `npm.cmd run smoke`
 
 ## Next
-- Next work should proceed with `forge_step1_batch3/part-6-stage-9-cli-wiring-tests-and-runnable-milestone.md`.
+- Batch 3 is complete on `dev`. The next batch has not been defined yet.
