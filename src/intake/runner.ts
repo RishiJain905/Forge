@@ -5,7 +5,7 @@ import { createIntakeArtifact } from "./artifact.js";
 import { buildBoundarySafeIntakeResult } from "./boundary.js";
 import { createIntakeDebugWrites } from "./debug.js";
 import { evaluateSuccessModel } from "./confidence.js";
-import { PersistenceError } from "./errors.js";
+import { PersistenceError, extractErrorCode } from "./errors.js";
 import { buildInferenceResult } from "./inference.js";
 import { resolveIntakeInput, toArtifactSourceInputs } from "./input.js";
 import { resolveOptionalReasoning } from "./llm.js";
@@ -356,9 +356,7 @@ export async function runIntakeCommand(
       );
     } catch (error) {
       const persistenceFailure = createFailureDetails(
-        error instanceof Error && "code" in error
-          ? String((error as { code: unknown }).code)
-          : "PERSISTENCE_FAILED",
+        extractErrorCode(error) ?? "PERSISTENCE_FAILED",
         error instanceof Error ? error.message : "Unknown persistence failure.",
         context.paths.fallbackReason ?? undefined,
       );
@@ -426,9 +424,7 @@ export async function runIntakeCommand(
     }
   } catch (error) {
     const failure = createFailureDetails(
-      error instanceof Error && "code" in error
-        ? String((error as { code: unknown }).code)
-        : "REPO_RESOLUTION_FAILED",
+      extractErrorCode(error) ?? "REPO_RESOLUTION_FAILED",
       error instanceof Error ? error.message : "Unknown repo resolution failure.",
     );
 

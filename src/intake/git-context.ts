@@ -8,6 +8,8 @@ import type {
   GitContext,
 } from "./types.js";
 
+import { hasErrorCode, extractErrorCode } from "./errors.js";
+
 const execFileAsync = promisify(execFile);
 const RECENT_COMMIT_COUNT = 3;
 const RECENT_FILE_LIMIT = 5;
@@ -46,15 +48,6 @@ function createErrorGitContext(): GitContext {
   };
 }
 
-function hasErrorCode(error: unknown, code: string): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    (error as { code: unknown }).code === code
-  );
-}
-
 function getErrorMessage(error: unknown): string {
   return error instanceof Error
     ? error.message
@@ -64,9 +57,7 @@ function getErrorMessage(error: unknown): string {
 }
 
 function toGitCommandResult(error: unknown): GitCommandResult {
-  const code = typeof error === "object" && error !== null && "code" in error
-    ? (error as { code: unknown }).code
-    : null;
+  const code = extractErrorCode(error) ?? null;
   const stdout = typeof error === "object" && error !== null && "stdout" in error
     ? (error as { stdout: unknown }).stdout
     : "";
