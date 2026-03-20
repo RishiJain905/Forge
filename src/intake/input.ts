@@ -106,39 +106,54 @@ async function resolveFocusPaths(
     return [];
   }
 
+  type ResolvedResult =
+    | { type: "issue"; issue: BlockingIssue }
+    | { type: "path"; path: string };
+
+  const results = await Promise.all(
+    focusPaths.map(async (rawFocusPath): Promise<ResolvedResult> => {
+      const candidatePath = path.resolve(repoRoot, rawFocusPath);
+      const normalizedCandidatePath = path.normalize(candidatePath);
+      const relativePath = path.relative(repoRoot, normalizedCandidatePath);
+
+      if (
+        relativePath.startsWith("..") ||
+        path.isAbsolute(relativePath)
+      ) {
+        return {
+          type: "issue",
+          issue: createBlockingIssue(
+            "FOCUS_OUTSIDE_REPO",
+            `Forge intake could not use --focus because the path resolves outside the repo root: ${rawFocusPath}`,
+          ),
+        };
+      }
+
+      try {
+        await stat(normalizedCandidatePath);
+        return {
+          type: "path",
+          path: relativePath === "" ? "." : relativePath.split(path.sep).join("/"),
+        };
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : "Unknown path failure.";
+        return {
+          type: "issue",
+          issue: createBlockingIssue(
+            "FOCUS_INVALID",
+            `Forge intake could not use --focus at ${normalizedCandidatePath}: ${detail}`,
+          ),
+        };
+      }
+    }),
+  );
+
   const normalizedFocusPaths: string[] = [];
-
-  for (const rawFocusPath of focusPaths) {
-    const candidatePath = path.resolve(repoRoot, rawFocusPath);
-    const normalizedCandidatePath = path.normalize(candidatePath);
-    const relativePath = path.relative(repoRoot, normalizedCandidatePath);
-
-    if (
-      relativePath.startsWith("..") ||
-      path.isAbsolute(relativePath)
-    ) {
-      issues.push(
-        createBlockingIssue(
-          "FOCUS_OUTSIDE_REPO",
-          `Forge intake could not use --focus because the path resolves outside the repo root: ${rawFocusPath}`,
-        ),
-      );
-      continue;
-    }
-
-    try {
-      await stat(normalizedCandidatePath);
-      normalizedFocusPaths.push(
-        relativePath === "" ? "." : relativePath.split(path.sep).join("/"),
-      );
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : "Unknown path failure.";
-      issues.push(
-        createBlockingIssue(
-          "FOCUS_INVALID",
-          `Forge intake could not use --focus at ${normalizedCandidatePath}: ${detail}`,
-        ),
-      );
+  for (const result of results) {
+    if (result.type === "issue") {
+      issues.push(result.issue);
+    } else if (result.type === "path") {
+      normalizedFocusPaths.push(result.path);
     }
   }
 
