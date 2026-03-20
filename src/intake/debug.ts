@@ -45,6 +45,8 @@ export function createIntakeDebugArtifact(params: {
       taskSpec: params.assembledResult.taskSpec,
       repoContext: params.assembledResult.repoContext,
       candidateTargets: params.assembledResult.candidateTargets,
+      riskAnalysis: params.assembledResult.riskAnalysis,
+      verificationTargets: params.assembledResult.verificationTargets,
       ambiguities: params.assembledResult.ambiguities,
       warnings: params.assembledResult.warnings,
       recommendedUserActions: params.assembledResult.recommendedUserActions,

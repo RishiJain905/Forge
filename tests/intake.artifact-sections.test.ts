@@ -596,6 +596,131 @@ await runScenario(
   },
 );
 
+await runScenario("artifact sections project nested typed targeting and analysis detail", () => {
+  const sections = buildArtifactSections({
+    assembledResult: {
+      ...createAssembledResult(),
+      responsibilities: {
+        ...createAssembledResult().responsibilities,
+        analysis: {
+          ...createAssembledResult().responsibilities.analysis,
+          ambiguityItems: [
+            {
+              type: "scope",
+              severity: "medium",
+              message: "The exact implementation surface is still unclear.",
+            },
+          ],
+          warningItems: [
+            {
+              code: "NO_TESTS_DETECTED",
+              message: "No tests were detected during repo grounding.",
+            },
+          ],
+        },
+      },
+    },
+    boundarySafeResult: {
+      ...createBoundarySafeResult(),
+      candidateTargets: [
+        {
+          path: "src/app.ts",
+          kind: "source",
+          matchType: "explicit",
+          reason: "Explicitly mentioned in task input.",
+          notes: ["Referenced directly by the task.", "Touches shared retry behavior."],
+          sharedRisk: true,
+        },
+      ],
+    },
+    nextStepReadiness: createNextStepReadiness(),
+    riskAnalysis: {
+      initialRiskZones: [
+        {
+          code: "weak_repo_grounding",
+          level: "high",
+          reason: "Repo grounding is partial.",
+          evidencePaths: [],
+        },
+      ],
+      typedRiskZones: [
+        {
+          code: "weak_repo_grounding",
+          level: "high",
+          reason: "Repo grounding is partial.",
+          evidencePaths: [],
+        },
+        {
+          code: "test_strategy_risk",
+          level: "medium",
+          reason: "Verification coverage still needs explicit confirmation.",
+          evidencePaths: ["tests/app.test.ts"],
+        },
+      ],
+    },
+    initialVerificationTargets: [
+      {
+        path: "src/app.ts",
+        kind: "source",
+        category: "retry_logic",
+        reason: "Retry behavior around `src/app.ts` should be verified before execution planning.",
+      },
+    ],
+  });
+
+  assert.deepEqual(sections.candidate_targets, [
+    {
+      path: "src/app.ts",
+      kind: "source",
+      match_type: "explicit",
+      reason: "Explicitly mentioned in task input.",
+      notes: ["Referenced directly by the task.", "Touches shared retry behavior."],
+      shared_risk: true,
+    },
+  ]);
+  assert.deepEqual(sections.initial_verification_targets, [
+    {
+      path: "src/app.ts",
+      kind: "source",
+      category: "retry_logic",
+      reason: "Retry behavior around `src/app.ts` should be verified before execution planning.",
+    },
+  ]);
+  assert.deepEqual(sections.risk_analysis, {
+    initial_risk_zones: [
+      {
+        code: "weak_repo_grounding",
+        level: "high",
+        reason: "Repo grounding is partial.",
+        evidence_paths: [],
+      },
+    ],
+    derived_risk_zones: [
+      {
+        code: "test_strategy_risk",
+        level: "medium",
+        reason: "Verification coverage still needs explicit confirmation.",
+        evidence_paths: ["tests/app.test.ts"],
+      },
+    ],
+    supporting_analysis: {
+      ambiguity_items: [
+        {
+          type: "scope",
+          severity: "medium",
+          message: "The exact implementation surface is still unclear.",
+        },
+      ],
+      warning_items: [
+        {
+          code: "NO_TESTS_DETECTED",
+          message: "No tests were detected during repo grounding.",
+        },
+      ],
+    },
+  });
+});
+
 await runScenario("failed artifacts still include detailed sections with safe defaults", () => {
   const artifact = createArtifact({
     assembledResult: {

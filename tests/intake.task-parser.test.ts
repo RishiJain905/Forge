@@ -489,6 +489,41 @@ await runScenario(
 );
 
 await runScenario(
+  "task parser extracts prose-only module mentions from explicit module nouns",
+  async () => {
+    const taskInput = resolveLoadedIntakeInput(
+      createPromptInput(
+        [
+          "Update auth module retry handling and keep login behavior stable.",
+          "",
+          "Acceptance Criteria",
+          "- auth module retry handling is hardened",
+        ].join("\n"),
+      ),
+    );
+
+    const result = buildTaskParserResult(taskInput);
+
+    assert.deepEqual(result.taskSpec.mentionedPaths, []);
+    assert.deepEqual(result.taskSpec.mentionedTests, []);
+    assert.deepEqual(result.taskSpec.mentionedModules, ["auth"]);
+  },
+);
+
+await runScenario(
+  "task parser does not infer modules from generic prose nouns alone",
+  async () => {
+    const taskInput = resolveLoadedIntakeInput(
+      createPromptInput("Improve rollout flow and plan the next step for the service."),
+    );
+
+    const result = buildTaskParserResult(taskInput);
+
+    assert.deepEqual(result.taskSpec.mentionedModules, []);
+  },
+);
+
+await runScenario(
   "task parser keeps casual risk phrase mentions out of risky phrases",
   async () => {
     const text = [

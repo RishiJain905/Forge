@@ -42,6 +42,39 @@ const actionableLinePattern =
 const backgroundLinePattern =
   /^(?:background|context|note|notes|for context|reference|references|history)\s*:/i;
 const genericTitlePattern = /^(?:task|spec|request)$/i;
+const proseModuleMentionPattern =
+  /\b(?:(?:the|this|that|these|those|our|their|its|a|an)\s+)?([a-z0-9][a-z0-9_-]*)\s+(module|component|service)\b/gi;
+const genericModuleCandidateWords = new Set([
+  "a",
+  "an",
+  "code",
+  "common",
+  "component",
+  "current",
+  "existing",
+  "feature",
+  "file",
+  "flow",
+  "general",
+  "logic",
+  "main",
+  "module",
+  "new",
+  "next",
+  "old",
+  "our",
+  "plan",
+  "service",
+  "shared",
+  "step",
+  "system",
+  "that",
+  "the",
+  "their",
+  "these",
+  "this",
+  "those",
+ ]);
 
 function normalizeWhitespace(value: string): string {
   return value.replace(/\s+/g, " ").trim();
@@ -282,6 +315,26 @@ function extractMentionedModules(referencedPaths: string[]): string[] {
     if (moduleName.length > 0) {
       modules.push(moduleName);
     }
+  }
+
+  return dedupeStable(modules);
+}
+
+function normalizeModuleMention(value: string): string {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+function extractProseMentionedModules(value: string): string[] {
+  const modules: string[] = [];
+
+  for (const match of value.matchAll(proseModuleMentionPattern)) {
+    const candidate = normalizeModuleMention(match[1] ?? "");
+
+    if (!candidate || genericModuleCandidateWords.has(candidate)) {
+      continue;
+    }
+
+    modules.push(candidate);
   }
 
   return dedupeStable(modules);
@@ -542,13 +595,19 @@ export function normalizeTaskSpec(taskInput: NormalizedTaskInput): IntakeTaskSpe
     scope: finalScope,
     mentionedPaths,
     mentionedTests: mentionedPaths.filter(isTestPath),
-    mentionedModules: extractMentionedModules(mentionedPaths),
+    mentionedModules: dedupeStable([
+      ...extractMentionedModules(mentionedPaths),
+      ...extractProseMentionedModules(analysisText),
+    ]),
     riskyPhrases: extractRiskyPhrases({
       ...taskSpec,
       scope: finalScope,
       mentionedPaths,
       mentionedTests: mentionedPaths.filter(isTestPath),
-      mentionedModules: extractMentionedModules(mentionedPaths),
+      mentionedModules: dedupeStable([
+        ...extractMentionedModules(mentionedPaths),
+        ...extractProseMentionedModules(analysisText),
+      ]),
       implementationNecessities: [],
       riskyPhrases: [],
       openQuestions: [],

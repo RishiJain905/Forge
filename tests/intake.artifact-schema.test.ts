@@ -403,6 +403,94 @@ await runScenario("artifact schema accepts richer Batch 3 task and repo context 
   assert.match(parsed.repo_context.layout_summary ?? "", /languages: typescript/i);
 });
 
+await runScenario("artifact schema accepts richer nested targeting and analysis detail without changing top-level keys", () => {
+  const artifact = createValidArtifact() as unknown as Record<string, unknown> & {
+    candidate_targets: Array<Record<string, unknown>>;
+    initial_verification_targets: Array<Record<string, unknown>>;
+    risk_analysis: Record<string, unknown>;
+  };
+
+  artifact.candidate_targets = [
+    {
+      ...artifact.candidate_targets[0],
+      notes: ["Referenced directly by the task.", "Touches shared retry behavior."],
+      shared_risk: true,
+    },
+  ];
+  artifact.initial_verification_targets = [
+    {
+      ...artifact.initial_verification_targets[0],
+      category: "retry_logic",
+    },
+  ];
+  artifact.risk_analysis = {
+    ...artifact.risk_analysis,
+    derived_risk_zones: [
+      {
+        code: "test_strategy_risk",
+        level: "medium",
+        reason: "Verification coverage still needs explicit confirmation.",
+        evidence_paths: ["tests/app.test.ts"],
+      },
+    ],
+    supporting_analysis: {
+      ambiguity_items: [
+        {
+          type: "scope",
+          severity: "medium",
+          message: "The exact implementation surface is still unclear.",
+        },
+      ],
+      warning_items: [
+        {
+          code: "NO_TESTS_DETECTED",
+          message: "No tests were detected during repo grounding.",
+        },
+      ],
+    },
+  };
+
+  const parsed = validateIntakeArtifact(artifact) as IntakeArtifact & {
+    candidate_targets: Array<{ notes?: string[]; shared_risk?: boolean }>;
+    initial_verification_targets: Array<{ category?: string }>;
+    risk_analysis: {
+      derived_risk_zones?: Array<Record<string, unknown>>;
+      supporting_analysis?: {
+        ambiguity_items?: Array<Record<string, unknown>>;
+        warning_items?: Array<Record<string, unknown>>;
+      };
+    };
+  };
+
+  assert.deepEqual(parsed.candidate_targets[0]?.notes, [
+    "Referenced directly by the task.",
+    "Touches shared retry behavior.",
+  ]);
+  assert.equal(parsed.candidate_targets[0]?.shared_risk, true);
+  assert.equal(parsed.initial_verification_targets[0]?.category, "retry_logic");
+  assert.deepEqual(parsed.risk_analysis.derived_risk_zones, [
+    {
+      code: "test_strategy_risk",
+      level: "medium",
+      reason: "Verification coverage still needs explicit confirmation.",
+      evidence_paths: ["tests/app.test.ts"],
+    },
+  ]);
+  assert.deepEqual(parsed.risk_analysis.supporting_analysis?.ambiguity_items, [
+    {
+      type: "scope",
+      severity: "medium",
+      message: "The exact implementation surface is still unclear.",
+    },
+  ]);
+  assert.deepEqual(parsed.risk_analysis.supporting_analysis?.warning_items, [
+    {
+      code: "NO_TESTS_DETECTED",
+      message: "No tests were detected during repo grounding.",
+    },
+  ]);
+});
+
 if (process.exitCode && process.exitCode !== 0) {
   process.exit(process.exitCode);
 }

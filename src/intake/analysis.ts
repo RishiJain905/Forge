@@ -4,6 +4,7 @@ import {
   STRICT_FOCUS_WARNING,
 } from "./candidate-targets.js";
 import type {
+  AnalysisRiskZone,
   AmbiguityAnalysisResult,
   BlockingIssue,
   InferenceResult,
@@ -113,6 +114,69 @@ function buildSurfaceRiskReason(params: {
   return `The task appears to affect manifest or configuration surfaces and also carries ${riskSignals.join(", ")} risk.`;
 }
 
+function pushRiskZone(
+  riskZones: AnalysisRiskZone[],
+  zone: AnalysisRiskZone,
+): void {
+  if (!riskZones.some((existing) => existing.code === zone.code && existing.reason === zone.reason)) {
+    riskZones.push(zone);
+  }
+}
+
+function getRiskEvidencePaths(params: {
+  taskParserResult: TaskParserResult;
+  inferenceResult: InferenceResult;
+}): string[] {
+  const evidencePaths = [
+    ...params.taskParserResult.signals.referencedPaths,
+    ...params.inferenceResult.candidateTargets.map((target) => target.path),
+  ];
+
+  return evidencePaths.filter((value, index, values) => values.indexOf(value) === index);
+}
+
+function registerSharedRiskZone(params: {
+  initialRiskZones: RiskZone[];
+  typedRiskZones: AnalysisRiskZone[];
+  zone: RiskZone;
+}): void {
+  params.initialRiskZones.push(params.zone);
+  pushRiskZone(params.typedRiskZones, params.zone);
+}
+
+function isFallbackOnlyTargeting(inferenceResult: InferenceResult): boolean {
+  return (
+    inferenceResult.candidateTargets.length > 0 &&
+    inferenceResult.signals.usedFallbackTargets &&
+    inferenceResult.signals.explicitTargetCount === 0 &&
+    inferenceResult.candidateTargets.every((target) => target.matchType === "fallback")
+  );
+}
+
+function getInputModeLabel(inputMode: NormalizedTaskInput["inputMode"] | null): string {
+  if (inputMode === "prompt") {
+    return "prompt";
+  }
+
+  if (inputMode === "spec") {
+    return "spec";
+  }
+
+  return "task input";
+}
+
+function getInputModeReferenceLabel(inputMode: NormalizedTaskInput["inputMode"] | null): string {
+  if (inputMode === "prompt") {
+    return "prompt";
+  }
+
+  if (inputMode === "spec") {
+    return "spec";
+  }
+
+  return "input";
+}
+
 export function buildRiskAnalysisResult(params: {
   taskParserResult: TaskParserResult;
   repoScanResult: RepoScanResult;
@@ -120,6 +184,7 @@ export function buildRiskAnalysisResult(params: {
   repoContextOverride?: RepoScanResult["repoContext"];
 }): RiskAnalysis {
   const riskZones: RiskZone[] = [];
+  const typedRiskZones: AnalysisRiskZone[] = [];
   const repoContext = params.repoContextOverride ?? params.repoScanResult.repoContext;
   const repoFiles = new Set(
     repoContext.allFiles.map(normalizePathForComparison),
@@ -129,50 +194,101 @@ export function buildRiskAnalysisResult(params: {
   );
 
   if (!repoContext.grounded || params.repoScanResult.signals.repoLooksSparse) {
-    riskZones.push({
+    const zone = {
       code: "weak_repo_grounding",
       level: "high",
       reason: "Repo grounding is partial, so later planning may rely on weak repository evidence.",
       evidencePaths: [],
-    });
+    } satisfies RiskZone;
+
+    registerSharedRiskZone({ initialRiskZones: riskZones, typedRiskZones, zone });
   }
 
   if (unresolvedReferencedPaths.length > 0) {
-    riskZones.push({
+    const zone = {
       code: "unresolved_referenced_paths",
       level: "high",
       reason: "The task references paths that were not found during repo grounding.",
       evidencePaths: unresolvedReferencedPaths,
-    });
+    } satisfies RiskZone;
+
+    registerSharedRiskZone({ initialRiskZones: riskZones, typedRiskZones, zone });
   }
 
   if (params.inferenceResult.candidateTargets.length === 0) {
-    riskZones.push({
+    const zone = {
       code: "no_candidate_targets",
       level: "high",
       reason: "Intake could not produce any plausible candidate targets for the next step.",
       evidencePaths: [],
-    });
+    } satisfies RiskZone;
+
+    registerSharedRiskZone({ initialRiskZones: riskZones, typedRiskZones, zone });
   }
 
-  if (
-    params.inferenceResult.candidateTargets.length > 0 &&
-    params.inferenceResult.signals.usedFallbackTargets
-  ) {
-    riskZones.push({
+  if (isFallbackOnlyTargeting(params.inferenceResult)) {
+    const zone = {
       code: "fallback_targeting_only",
       level: "medium",
       reason: "Targeting depends entirely on fallback repo structure instead of explicit task-to-file matches.",
       evidencePaths: params.inferenceResult.candidateTargets.map((target) => target.path),
-    });
+    } satisfies RiskZone;
+
+    registerSharedRiskZone({ initialRiskZones: riskZones, typedRiskZones, zone });
   }
 
   if (repoContext.testFiles.length === 0) {
-    riskZones.push({
+    const zone = {
       code: "no_tests_detected",
       level: "medium",
       reason: "No tests were detected during repo grounding, so later verification coverage may be weak.",
       evidencePaths: [],
+    } satisfies RiskZone;
+
+    registerSharedRiskZone({ initialRiskZones: riskZones, typedRiskZones, zone });
+  }
+
+  const riskEvidencePaths = getRiskEvidencePaths({
+    taskParserResult: params.taskParserResult,
+    inferenceResult: params.inferenceResult,
+  });
+
+  if (params.taskParserResult.taskSpec.riskyPhrases?.includes("migration")) {
+    pushRiskZone(typedRiskZones, {
+      code: "migration_risk",
+      level: "medium",
+      reason: "The task includes migration work, so migration sequencing and rollout order may need explicit validation.",
+      evidencePaths: riskEvidencePaths,
+    });
+  }
+
+  if (params.taskParserResult.taskSpec.riskyPhrases?.includes("api contract")) {
+    pushRiskZone(typedRiskZones, {
+      code: "api_compatibility_risk",
+      level: "medium",
+      reason: "The task touches API compatibility, so downstream callers may need explicit contract validation.",
+      evidencePaths: riskEvidencePaths,
+    });
+  }
+
+  if (
+    params.taskParserResult.taskSpec.riskyPhrases?.includes("parallel") === true ||
+    params.taskParserResult.taskSpec.riskyPhrases?.includes("ownership") === true
+  ) {
+    pushRiskZone(typedRiskZones, {
+      code: "coordination_overlap_risk",
+      level: "medium",
+      reason: "The task implies coordination or parallel overlap risk, so ownership boundaries may need explicit alignment.",
+      evidencePaths: riskEvidencePaths,
+    });
+  }
+
+  if (repoContext.testFiles.length === 0 || unresolvedReferencedPaths.some(isTestLikePath)) {
+    pushRiskZone(typedRiskZones, {
+      code: "test_strategy_risk",
+      level: "medium",
+      reason: "Test coverage is uncertain for this task, so verification targets or missing test paths may need clarification.",
+      evidencePaths: unresolvedReferencedPaths.filter(isTestLikePath),
     });
   }
 
@@ -182,18 +298,21 @@ export function buildRiskAnalysisResult(params: {
   });
 
   if (manifestOrConfigPaths.length > 0) {
-    riskZones.push({
+    const zone = {
       code: "manifest_or_config_impact",
       level: "medium",
       reason: buildSurfaceRiskReason({
         taskParserResult: params.taskParserResult,
       }),
       evidencePaths: manifestOrConfigPaths,
-    });
+    } satisfies RiskZone;
+
+    registerSharedRiskZone({ initialRiskZones: riskZones, typedRiskZones, zone });
   }
 
   return {
     initialRiskZones: riskZones,
+    typedRiskZones,
   };
 }
 
@@ -357,6 +476,8 @@ export function buildAmbiguityAnalysisResult(params: {
   }
 
   if (params.inferenceResult.signals.usedFallbackTargets) {
+    const inputModeLabel = getInputModeLabel(params.taskInput?.inputMode ?? null);
+
     pushWarningItem(
       warningItems,
       warnings,
@@ -367,7 +488,7 @@ export function buildAmbiguityAnalysisResult(params: {
     );
     pushUnique(
       recommendedUserActions,
-      "Reference concrete files or directories in the task input to strengthen repo grounding.",
+      `Reference concrete files or directories in the ${inputModeLabel} to strengthen repo grounding.`,
     );
   }
 
@@ -379,18 +500,26 @@ export function buildAmbiguityAnalysisResult(params: {
   );
 
   if (unresolvedReferencedPaths.length > 0) {
+    const inputModeLabel = getInputModeLabel(params.taskInput?.inputMode ?? null);
+    const inputModeReferenceLabel = getInputModeReferenceLabel(params.taskInput?.inputMode ?? null);
+    const subject = inputModeLabel === "prompt"
+      ? "Prompt"
+      : inputModeLabel === "spec"
+        ? "Spec"
+        : "Task input";
+
     pushAmbiguityItem(
       ambiguityItems,
       ambiguities,
       {
         type: "repo_alignment",
         severity: "high",
-        message: `Prompt references repo paths that were not found during grounding: ${unresolvedReferencedPaths.join(", ")}.`,
+        message: `${subject} references repo paths that were not found during grounding: ${unresolvedReferencedPaths.join(", ")}.`,
       },
     );
     pushUnique(
       recommendedUserActions,
-      "Fix the prompt's missing repo references or clarify the intended replacement paths before planning.",
+      `Fix the missing repo references in the ${inputModeReferenceLabel} or clarify the intended replacement paths before planning.`,
     );
   }
 

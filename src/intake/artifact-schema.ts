@@ -130,6 +130,8 @@ export const intakeArtifactSchema = z.object({
       kind: z.enum(["source", "test", "manifest"]),
       match_type: z.enum(["explicit", "fallback"]),
       reason: z.string().min(1),
+      notes: z.array(z.string().min(1)),
+      shared_risk: z.boolean(),
     }),
   ),
   risk_analysis: z.object({
@@ -148,11 +150,56 @@ export const intakeArtifactSchema = z.object({
         evidence_paths: z.array(z.string().min(1)),
       }),
     ),
+    derived_risk_zones: z.array(
+      z.object({
+        code: z.enum([
+          "weak_repo_grounding",
+          "unresolved_referenced_paths",
+          "no_candidate_targets",
+          "fallback_targeting_only",
+          "no_tests_detected",
+          "manifest_or_config_impact",
+          "migration_risk",
+          "api_compatibility_risk",
+          "coordination_overlap_risk",
+          "test_strategy_risk",
+        ]),
+        level: z.enum(["medium", "high"]),
+        reason: z.string().min(1),
+        evidence_paths: z.array(z.string().min(1)),
+      }),
+    ),
+    supporting_analysis: z.object({
+      ambiguity_items: z.array(
+        z.object({
+          type: z.enum(["acceptance_criteria", "scope", "constraints", "repo_alignment", "input"]),
+          severity: z.enum(["low", "medium", "high"]),
+          message: z.string().min(1),
+        }),
+      ),
+      warning_items: z.array(
+        z.object({
+          code: z.string().min(1),
+          message: z.string().min(1),
+        }),
+      ),
+    }),
   }),
   initial_verification_targets: z.array(
     z.object({
       path: z.string().min(1),
       kind: z.enum(["source", "test", "manifest"]),
+      category: z.enum([
+        "code_surface",
+        "test_surface",
+        "config_surface",
+        "retry_logic",
+        "ownership",
+        "api_contract",
+        "migration_order",
+        "parallel_overlap",
+        "stale_write",
+      ]).nullable(),
       reason: z.string().min(1),
     }),
   ),

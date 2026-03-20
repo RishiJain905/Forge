@@ -155,7 +155,14 @@ await runScenario(
         warnings: [],
       },
       ambiguityAnalysisResult: {
-        ambiguities: [],
+        ambiguities: ["Prompt references repo paths that were not found during grounding."],
+        ambiguityItems: [
+          {
+            type: "repo_alignment",
+            severity: "high",
+            message: "Prompt references repo paths that were not found during grounding.",
+          },
+        ],
         warnings: [],
         recommendedUserActions: [],
         confidence: {
@@ -185,6 +192,7 @@ await runScenario(
     assert.equal(assembled.responsibilities.inference.candidateTargets[0]?.path, "src/app.ts");
     assert.equal(assembled.responsibilities.inference.signals.explicitTargetCount, 2);
     assert.equal(assembled.responsibilities.analysis.confidence.level, "high");
+    assert.equal(assembled.responsibilities.analysis.ambiguityItems?.[0]?.type, "repo_alignment");
     assert.deepEqual(assembled.taskSpec.acceptanceCriteria, [
       "src/app.ts is updated",
       "tests/app.test.ts is updated",
@@ -195,7 +203,9 @@ await runScenario(
     assert.ok(assembled.verificationTargets, "expected assembled result to carry verificationTargets");
     assert.equal(assembled.repoContext.manifestFiles[0], "package.json");
     assert.equal(assembled.candidateTargets[1]?.path, "tests/app.test.ts");
-    assert.deepEqual(assembled.ambiguities, []);
+    assert.deepEqual(assembled.ambiguities, [
+      "Prompt references repo paths that were not found during grounding.",
+    ]);
     assert.deepEqual(assembled.warnings, []);
     assert.deepEqual(assembled.recommendedUserActions, []);
     assert.equal(assembled.confidence.level, "high");

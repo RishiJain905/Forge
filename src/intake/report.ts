@@ -48,7 +48,11 @@ function renderCandidateTargets(
   }
 
   return items
-    .map((item) => `- \`${item.path}\` (${item.kind}, ${item.match_type}) - ${item.reason}`)
+    .map((item) => {
+      const notes = item.notes.length > 0 ? ` [notes: ${item.notes.join("; ")}]` : "";
+      const sharedRisk = ` [shared risk: ${item.shared_risk ? "yes" : "no"}]`;
+      return `- \`${item.path}\` (${item.kind}, ${item.match_type}) - ${item.reason}${notes}${sharedRisk}`;
+    })
     .join("\n");
 }
 
@@ -60,7 +64,10 @@ function renderInitialVerificationTargets(
   }
 
   return items
-    .map((item) => `- \`${item.path}\` (${item.kind}) - ${item.reason}`)
+    .map((item) => {
+      const category = item.category ? `, ${item.category}` : "";
+      return `- \`${item.path}\` (${item.kind}${category}) - ${item.reason}`;
+    })
     .join("\n");
 }
 
@@ -88,6 +95,41 @@ function renderRiskAnalysis(
         : "";
       return `- \`${item.code}\` (${item.level}) - ${item.reason}${evidence}`;
     })
+    .join("\n");
+}
+
+function renderTypedRiskAnalysis(items: IntakeArtifact["risk_analysis"]["derived_risk_zones"]): string {
+  if (items.length === 0) {
+    return "- none";
+  }
+
+  return items
+    .map((item) => {
+      const evidence = item.evidence_paths.length > 0
+        ? ` [evidence: ${item.evidence_paths.join(", ")}]`
+        : "";
+      return `- \`${item.code}\` (${item.level}) - ${item.reason}${evidence}`;
+    })
+    .join("\n");
+}
+
+function renderAmbiguityItems(items: IntakeArtifact["risk_analysis"]["supporting_analysis"]["ambiguity_items"]): string {
+  if (items.length === 0) {
+    return "- none";
+  }
+
+  return items
+    .map((item) => `- \`${item.type}\` (${item.severity}) - ${item.message}`)
+    .join("\n");
+}
+
+function renderWarningItems(items: IntakeArtifact["risk_analysis"]["supporting_analysis"]["warning_items"]): string {
+  if (items.length === 0) {
+    return "- none";
+  }
+
+  return items
+    .map((item) => `- \`${item.code}\` - ${item.message}`)
     .join("\n");
 }
 
@@ -295,6 +337,22 @@ function renderRiskAnalysisSection(artifact: IntakeArtifact): string {
   return renderSection("Risk Analysis", [
     "Initial risk zones call out areas where later planning or verification should be more careful.",
     renderRiskAnalysis(artifact.risk_analysis.initial_risk_zones),
+    "",
+    "### Derived Risk Zones",
+    "",
+    renderTypedRiskAnalysis(artifact.risk_analysis.derived_risk_zones),
+    "",
+    "### Supporting Analysis",
+    "",
+    "Typed ambiguity and warning details remain visible here for later diagnosis.",
+    "",
+    "### Ambiguity Items",
+    "",
+    renderAmbiguityItems(artifact.risk_analysis.supporting_analysis.ambiguity_items),
+    "",
+    "### Warning Items",
+    "",
+    renderWarningItems(artifact.risk_analysis.supporting_analysis.warning_items),
   ]);
 }
 
