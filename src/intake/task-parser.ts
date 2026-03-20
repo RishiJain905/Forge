@@ -616,11 +616,15 @@ export function normalizeTaskSpec(taskInput: NormalizedTaskInput): IntakeTaskSpe
   const scope = extractScope(document, []);
   const acceptanceCriteria = extractAcceptanceCriteria(document, taskInput.promptDetails);
   const constraints = sectionEntries(document.sections.constraints);
+  // For prompt mode, be more conservative: don't use goal as implicit explicitRequirement
+  // since that can overstate how concrete a vague prompt actually is
   const explicitRequirements = acceptanceCriteria.length > 0
     ? [...acceptanceCriteria]
-    : goal
-      ? [goal]
-      : [];
+    : taskInput.inputMode === "prompt"
+      ? []
+      : goal
+        ? [goal]
+        : [];
   const taskSpec: IntakeTaskSpec = {
     title,
     summary,

@@ -165,6 +165,86 @@ await runScenario(
   },
 );
 
+await runScenario(
+  "forge intake prompt mode runs from non-repo cwd with --repo pointing to a valid repo",
+  async () => {
+    const repoRoot = await createTempRepo();
+    const cwd = await createTempWorkingDirectory();
+
+    try {
+      await writeRepoFile(
+        repoRoot,
+        "src/app.ts",
+        "export const app = {};\n",
+      );
+
+      const result = await runForgeBinary(
+        ["intake", "--repo", repoRoot, "--prompt", "Inspect src/app.ts for the entry point."],
+        cwd,
+      );
+
+      assert.equal(result.code, 0, result.stderr);
+      assert.match(result.stdout, /Status: (success|warning)/);
+
+      const artifactPath = join(repoRoot, ".forge", "intake.json");
+      const reportPath = join(repoRoot, ".forge", "reports", "intake-report.md");
+      assert.equal(await fileExists(artifactPath), true);
+      assert.equal(await fileExists(reportPath), true);
+
+      const artifact = await readJsonFile<IntakeArtifact>(artifactPath);
+      const report = await readTextFile(reportPath);
+      assert.ok(artifact.status === "success" || artifact.status === "warning");
+      assert.equal(artifact.input_mode, "prompt");
+      assert.match(report, /Forge Intake Report/);
+    } finally {
+      await disposeTempRepo(repoRoot);
+      await rm(cwd, { force: true, recursive: true });
+    }
+  },
+);
+
+await runScenario(
+  "forge intake prompt mode runs from nested subdirectory within the repo",
+  async () => {
+    const repoRoot = await createTempRepo();
+
+    try {
+      await writeRepoFile(
+        repoRoot,
+        "src/app.ts",
+        "export const app = {};\n",
+      );
+      await writeRepoFile(
+        repoRoot,
+        "src/nested/deep/file.ts",
+        "export const nested = true;\n",
+      );
+
+      const nestedCwd = join(repoRoot, "src", "nested");
+
+      const result = await runForgeBinary(
+        ["intake", "--repo", repoRoot, "--prompt", "Inspect app.ts for the entry point."],
+        nestedCwd,
+      );
+
+      assert.equal(result.code, 0, result.stderr);
+      assert.match(result.stdout, /Status: (success|warning)/);
+
+      const artifactPath = join(repoRoot, ".forge", "intake.json");
+      const reportPath = join(repoRoot, ".forge", "reports", "intake-report.md");
+      assert.equal(await fileExists(artifactPath), true);
+      assert.equal(await fileExists(reportPath), true);
+
+      const artifact = await readJsonFile<IntakeArtifact>(artifactPath);
+      const report = await readTextFile(reportPath);
+      assert.equal(artifact.input_mode, "prompt");
+      assert.match(report, /Forge Intake Report/);
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
 if (process.exitCode && process.exitCode !== 0) {
   process.exit(process.exitCode);
 }

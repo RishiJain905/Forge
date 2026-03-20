@@ -20,6 +20,15 @@ interface IntakeArtifact {
       raw_text?: string;
     };
     normalized_task_text?: string;
+    notes?: string[];
+    constraints?: string[];
+    focus_paths?: string[];
+  };
+  runtime_options?: {
+    output_mode?: "default" | "json-only" | "report-only";
+    llm_mode?: "deterministic" | "assist";
+    strict_focus?: boolean;
+    fail_on_low_confidence?: boolean;
   };
   repo_context?: {
     grounded?: boolean;
@@ -65,6 +74,14 @@ interface IntakeArtifact {
   }>;
   ambiguities?: string[];
   warnings?: string[];
+  confidence?: {
+    level?: "high" | "medium" | "low";
+    signals?: {
+      task_parsing?: string;
+      repo_inspection?: string;
+      targeting?: string;
+    };
+  };
   next_step_readiness?: {
     ready?: boolean;
     blocking_issues?: Array<{
@@ -903,6 +920,327 @@ await runScenario(
         artifact.candidate_targets?.map((candidate) => candidate.path),
         ["tests/app.test.ts"],
       );
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "forge intake spec mode with --notes and --constraints surfaces them in artifact",
+  async () => {
+    const repoRoot = await createTempRepo();
+    const specPath = join(repoRoot, "task.md");
+    const notesPath = join(repoRoot, "notes.md");
+    const constraintsPath = join(repoRoot, "constraints.md");
+
+    try {
+      await writeRepoFile(
+        repoRoot,
+        "notes.md",
+        ["Keep logging behavior stable.", "Preserve error message format."].join("\n"),
+      );
+      await writeRepoFile(
+        repoRoot,
+        "constraints.md",
+        ["Do not modify database schema.", "Keep API contract unchanged."].join("\n"),
+      );
+      await writeRepoFile(
+        repoRoot,
+        "task.md",
+        [
+          "# Update app behavior",
+          "",
+          "Revise `src/app.ts` and keep `tests/app.test.ts` aligned.",
+          "",
+          "## Acceptance Criteria",
+          "",
+          "- `src/app.ts` is updated",
+          "- `tests/app.test.ts` stays aligned",
+        ].join("\n"),
+      );
+
+      const result = await runForgeCli(
+        [
+          "intake",
+          "--repo",
+          repoRoot,
+          "--spec",
+          specPath,
+          "--notes",
+          notesPath,
+          "--constraints",
+          constraintsPath,
+        ],
+        repoRoot,
+      );
+
+      assert.equal(result.code, 0, result.stderr);
+
+      const artifactPath = join(repoRoot, ".forge", "intake.json");
+      const artifact = await readJsonFile<IntakeArtifact>(artifactPath);
+
+      assert.equal(artifact.status, "success");
+      assert.equal(artifact.input_mode, "spec");
+      assert.deepEqual(artifact.source_inputs?.notes, [
+        "Keep logging behavior stable.",
+        "Preserve error message format.",
+      ]);
+      assert.deepEqual(artifact.source_inputs?.constraints, [
+        "Do not modify database schema.",
+        "Keep API contract unchanged.",
+      ]);
+      assert.ok(
+        artifact.source_inputs?.normalized_task_text?.includes("Keep logging behavior stable"),
+        "expected notes content in normalized_task_text",
+      );
+      assert.ok(
+        artifact.source_inputs?.normalized_task_text?.includes("Keep API contract unchanged"),
+        "expected constraints content in normalized_task_text",
+      );
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "forge intake spec mode with --focus warns when focus path excludes referenced targets and preserves out-of-focus evidence",
+  async () => {
+    const repoRoot = await createTempRepo();
+    const specPath = join(repoRoot, "task.md");
+
+    try {
+      await writeRepoFile(
+        repoRoot,
+        "package.json",
+        "{\n  \"name\": \"focus-fixture\"\n}\n",
+      );
+      await writeRepoFile(
+        repoRoot,
+        "task.md",
+        [
+          "# Update app behavior",
+          "",
+          "Revise `src/app.ts` and keep `tests/app.test.ts` aligned.",
+          "",
+          "## Acceptance Criteria",
+          "",
+          "- `src/app.ts` is updated",
+          "- `tests/app.test.ts` stays aligned",
+        ].join("\n"),
+      );
+
+      const result = await runForgeCli(
+        [
+          "intake",
+          "--repo",
+          repoRoot,
+          "--spec",
+          specPath,
+          "--focus",
+          "src",
+        ],
+        repoRoot,
+      );
+
+      assert.equal(result.code, 0, result.stderr);
+
+      const artifactPath = join(repoRoot, ".forge", "intake.json");
+      const artifact = await readJsonFile<IntakeArtifact>(artifactPath);
+
+      assert.equal(artifact.status, "warning", "focus excluding referenced tests should warn");
+      assert.equal(artifact.input_mode, "spec");
+      assert.deepEqual(artifact.source_inputs?.focus_paths, ["src"]);
+      assert.equal(artifact.runtime_options?.strict_focus, false);
+      assert.ok(
+        artifact.warnings?.some((w) => /focus/i.test(w) && /(exclude|outside|likely)/i.test(w)),
+        "expected a warning that focus path may exclude relevant targets",
+      );
+      assert.ok(
+        artifact.next_step_readiness?.ready === true,
+        "focus exclusion with warnings should still be ready",
+      );
+      // Out-of-focus evidence is preserved in non-strict mode
+      assert.ok(
+        artifact.candidate_targets?.some((c) => c.path === "src/app.ts"),
+        "in-focus source target should be present",
+      );
+      assert.ok(
+        artifact.candidate_targets?.some((c) => c.path === "tests/app.test.ts"),
+        "out-of-focus test target should still be preserved in non-strict mode",
+      );
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "forge intake spec mode with --focus and --strict-focus filters candidates and surfaces exclusion warning",
+  async () => {
+    const repoRoot = await createTempRepo();
+    const specPath = join(repoRoot, "task.md");
+
+    try {
+      await writeRepoFile(
+        repoRoot,
+        "package.json",
+        "{\n  \"name\": \"strict-focus-fixture\"\n}\n",
+      );
+      await writeRepoFile(
+        repoRoot,
+        "task.md",
+        [
+          "# Update app behavior",
+          "",
+          "Revise `src/app.ts` and keep `tests/app.test.ts` aligned.",
+          "",
+          "## Acceptance Criteria",
+          "",
+          "- `src/app.ts` is updated",
+          "- `tests/app.test.ts` stays aligned",
+        ].join("\n"),
+      );
+
+      const result = await runForgeCli(
+        [
+          "intake",
+          "--repo",
+          repoRoot,
+          "--spec",
+          specPath,
+          "--focus",
+          "tests",
+          "--strict-focus",
+        ],
+        repoRoot,
+      );
+
+      assert.equal(result.code, 0, result.stderr);
+
+      const artifactPath = join(repoRoot, ".forge", "intake.json");
+      const artifact = await readJsonFile<IntakeArtifact>(artifactPath);
+
+      assert.equal(artifact.status, "warning");
+      assert.equal(artifact.input_mode, "spec");
+      assert.deepEqual(artifact.source_inputs?.focus_paths, ["tests"]);
+      assert.equal(artifact.runtime_options?.strict_focus, true);
+      // Strict focus filters to only in-focus candidates
+      assert.deepEqual(
+        artifact.candidate_targets?.map((candidate) => candidate.path),
+        ["tests/app.test.ts"],
+      );
+      // Strict focus surfaces exclusion warning
+      assert.ok(
+        artifact.warnings?.some((w) => /strict focus/i.test(w) && /(exclude|outside|likely)/i.test(w)),
+        "expected strict-focus exclusion warning text",
+      );
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "forge intake prompt mode with multiple features but no acceptance criteria surfaces ambiguity not false concrete scope",
+  async () => {
+    const repoRoot = await createTempRepo();
+
+    try {
+      await writeRepoFile(
+        repoRoot,
+        "src/auth.ts",
+        "export const authenticate = (user: string) => user;\n",
+      );
+      await writeRepoFile(
+        repoRoot,
+        "src/billing.ts",
+        "export const compute = (amount: number) => amount * 1.2;\n",
+      );
+      await writeRepoFile(
+        repoRoot,
+        "src/notify.ts",
+        "export const notify = (msg: string) => console.log(msg);\n",
+      );
+
+      const result = await runForgeCli(
+        [
+          "intake",
+          "--repo",
+          repoRoot,
+          "--prompt",
+          "Update authentication, billing, and notification to handle edge cases.",
+        ],
+        repoRoot,
+      );
+
+      assert.equal(result.code, 0, result.stderr);
+
+      const artifactPath = join(repoRoot, ".forge", "intake.json");
+      const artifact = await readJsonFile<IntakeArtifact>(artifactPath);
+
+      // Should be warning because scope is underdefined despite being multi-feature
+      assert.equal(artifact.status, "warning");
+      assert.equal(artifact.input_mode, "prompt");
+      // Ambiguity should be surfaced, not silently resolved to a false concrete scope
+      assert.ok(
+        (artifact.ambiguities?.length ?? 0) > 0,
+        "multiple-feature prompt without acceptance criteria should surface ambiguity",
+      );
+      assert.ok(
+        artifact.next_step_readiness?.ready === true,
+        "ambiguity should not block readiness but should warn",
+      );
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "forge intake prompt mode with risky underdefined language treats as low-confidence warning without inventing detail",
+  async () => {
+    const repoRoot = await createTempRepo();
+
+    try {
+      await writeRepoFile(
+        repoRoot,
+        "src/app.ts",
+        "export const process = (data: unknown) => data;\n",
+      );
+
+      const result = await runForgeCli(
+        [
+          "intake",
+          "--repo",
+          repoRoot,
+          "--prompt",
+          "Make the app faster and more robust.",
+        ],
+        repoRoot,
+      );
+
+      assert.equal(result.code, 0, result.stderr);
+
+      const artifactPath = join(repoRoot, ".forge", "intake.json");
+      const artifact = await readJsonFile<IntakeArtifact>(artifactPath);
+
+      // Should be warning due to low confidence from underdefined language
+      assert.equal(artifact.status, "warning");
+      assert.equal(artifact.input_mode, "prompt");
+      // Confidence should be degraded
+      assert.ok(
+        artifact.confidence?.level === "medium" || artifact.confidence?.level === "low",
+        "underdefined prompt should result in degraded confidence",
+      );
+      // Should surface open questions about what "faster" and "robust" mean
+      assert.ok(
+        artifact.next_step_readiness?.ready === true,
+        "low confidence without blocking issues should still be ready",
+      );
+      // Should NOT have high confidence despite having a source file to anchor to
+      assert.notEqual(artifact.confidence?.level, "high");
     } finally {
       await disposeTempRepo(repoRoot);
     }

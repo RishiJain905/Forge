@@ -86,13 +86,31 @@ async function main() {
     assert.match(report, /Confidence/);
     assert.match(report, /Next Step Readiness/);
 
-    const promptResult = spawnSync(process.execPath, [
+    // Test prompt mode with supplemental inputs (notes, constraints, focus)
+    await writeFile(
+      join(tempRepo, "notes.md"),
+      "Keep focus on the retry logic only.\n",
+      "utf8",
+    );
+    await writeFile(
+      join(tempRepo, "constraints.md"),
+      "Do not change public API.\n",
+      "utf8",
+    );
+
+    const promptWithSupplementalResult = spawnSync(process.execPath, [
       entryPointPath,
       "intake",
       "--repo",
       tempRepo,
       "--prompt",
-      "Update src/app.ts and keep tests aligned, but the exact acceptance criteria are still open.",
+      "Inspect src/app.ts for retry ownership.",
+      "--notes",
+      join(tempRepo, "notes.md"),
+      "--constraints",
+      join(tempRepo, "constraints.md"),
+      "--focus",
+      "src",
     ], {
       cwd: tempRepo,
       encoding: "utf8",
@@ -101,23 +119,76 @@ async function main() {
       },
     });
 
-    if (promptResult.error) {
-      throw promptResult.error;
+    if (promptWithSupplementalResult.error) {
+      throw promptWithSupplementalResult.error;
     }
 
-    assert.equal(promptResult.status, 0);
-    assert.match(promptResult.stdout, /Status: warning/);
+    assert.equal(promptWithSupplementalResult.status, 0);
+    assert.match(promptWithSupplementalResult.stdout, /Status: (success|warning)/);
 
     const promptArtifact = JSON.parse(await readFile(artifactPath, "utf8"));
     const promptReport = await readFile(reportPath, "utf8");
 
-    assert.equal(promptArtifact.status, "warning");
     assert.equal(promptArtifact.input_mode, "prompt");
-    assert.equal(promptArtifact.next_step_readiness.ready, true);
-    assert.ok(Array.isArray(promptArtifact.ambiguities));
-    assert.ok(promptArtifact.ambiguities.length > 0);
-    assert.match(promptReport, /## Ambiguities/);
+    assert.deepEqual(promptArtifact.source_inputs.notes, ["Keep focus on the retry logic only."]);
+    assert.deepEqual(promptArtifact.source_inputs.constraints, ["Do not change public API."]);
+    assert.deepEqual(promptArtifact.source_inputs.focus_paths, ["src"]);
+
+    // Validate meaningful Step 1 content for prompt mode
+    assert.ok(promptArtifact.task_spec?.goal, "prompt artifact must have task_spec.goal");
+    assert.ok(promptArtifact.next_step_readiness?.ready === true, "prompt should be ready");
+    assert.ok(promptArtifact.confidence?.level, "prompt artifact must have confidence.level");
+    assert.ok(Array.isArray(promptArtifact.candidate_targets), "prompt should produce candidate targets");
+    assert.ok(promptArtifact.candidate_targets.length > 0, "prompt should have at least one target");
+
+    // Validate report sections and supplemental input metadata
+    assert.match(promptReport, /Notes count:\s+1/);
+    assert.match(promptReport, /Constraints count:\s+1/);
+    assert.match(promptReport, /Focus paths:\s+src/);
+    assert.match(promptReport, /## Task Spec/);
+    assert.match(promptReport, /## Candidate Targets/);
+    assert.match(promptReport, /## Confidence/);
     assert.match(promptReport, /## Next Step Readiness/);
+    assert.match(promptReport, /## Risk Analysis/);
+    // Constraint content renders in the report; note content does not (only count is shown)
+    assert.match(promptReport, /Do not change public API/);
+
+    // Test mode-conflict (--spec and --prompt together)
+    const conflictResult = spawnSync(process.execPath, [
+      entryPointPath,
+      "intake",
+      "--repo",
+      tempRepo,
+      "--spec",
+      join(tempRepo, "task.md"),
+      "--prompt",
+      "Conflicting inline prompt.",
+    ], {
+      cwd: tempRepo,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+      },
+    });
+
+    if (conflictResult.error) {
+      throw conflictResult.error;
+    }
+
+    assert.notEqual(conflictResult.status, 0, "mode conflict should fail");
+    assert.match(conflictResult.stderr, /Status: failed/);
+    assert.match(conflictResult.stderr, /INPUT_VALIDATION_FAILED/i);
+
+    const conflictArtifact = JSON.parse(await readFile(artifactPath, "utf8"));
+    assert.equal(conflictArtifact.status, "failed");
+    assert.equal(conflictArtifact.next_step_readiness.ready, false);
+    assert.ok(
+      conflictArtifact.next_step_readiness.blocking_issues.some((issue) =>
+        /INPUT_CONFLICT|spec.*prompt|prompt.*spec/i.test(issue.code ?? "") ||
+        /INPUT_CONFLICT|spec.*prompt|prompt.*spec/i.test(issue.message ?? ""),
+      ),
+      "expected INPUT_CONFLICT blocking issue for mode conflict",
+    );
   } finally {
     await rm(tempRepo, { recursive: true, force: true });
   }

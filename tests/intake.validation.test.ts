@@ -199,71 +199,16 @@ await runScenario(
   "config read failures do not emit the config validation warning",
   async () => {
     const repoRoot = await createTempRepo();
-
     try {
-      const inputModule = (await import("../src/intake/input.js")) as Record<string, unknown>;
-      const resolveIntakeInput = inputModule.resolveIntakeInput;
-
-      assert.equal(
-        typeof resolveIntakeInput,
-        "function",
-        "expected input.ts to export resolveIntakeInput",
-      );
-
-      const resolveIntakeInputTyped = resolveIntakeInput as (params: {
-        options: {
-          prompt?: string;
-          spec?: string;
-          strictFocus?: boolean;
-          config?: string;
-        };
-        currentWorkingDirectory: string;
-        repoRoot: string;
-      }) => Promise<{
-        inputMode: "spec" | "prompt";
-        sourceSelection: {
-          specProvided: boolean;
-          promptProvided: boolean;
-        };
-        primaryInput: {
-          path: string | null;
-          rawText: string;
-          loaded: boolean;
-        };
-        supplementalInputs: {
-          notes: string[];
-          constraints: string[];
-          configPath: string | null;
-          configLoaded: boolean;
-          focusPaths: string[];
-          strictFocus: boolean;
-        };
-        normalizedTaskInput: unknown | null;
-        blockingIssues: Array<{
-          code: string;
-          message: string;
-        }>;
-        warnings: string[];
-        recommendedUserActions: string[];
-      }>;
-
-      const result = await resolveIntakeInputTyped({
-        options: {
-          prompt: "Update src/app.ts and tests/app.test.ts for validation behavior.",
-          config: join(repoRoot, "missing-forge-intake.json"),
-        },
-        currentWorkingDirectory: repoRoot,
-        repoRoot,
+      const result = await resolveInputForTest(repoRoot, {
+        prompt: "Update src/app.ts and tests/app.test.ts for validation behavior.",
+        config: join(repoRoot, "missing-forge-intake.json"),
       });
-
       assert.equal(result.normalizedTaskInput, null);
       assert.equal(result.supplementalInputs.configPath, join(repoRoot, "missing-forge-intake.json"));
       assert.equal(result.supplementalInputs.configLoaded, false);
-      assert.ok(result.blockingIssues.some((issue) => issue.code === "CONFIG_READ_FAILED"));
-      assert.ok(
-        !result.warnings.some((value) => /Config input was validated and recorded/i.test(value)),
-        "did not expect a config validation warning when the config file could not be read",
-      );
+      assert.ok(result.blockingIssues.some((i: { code: string }) => i.code === "CONFIG_READ_FAILED"));
+      assert.ok(!result.warnings.some((v: string) => /Config input was validated and recorded/i.test(v)));
     } finally {
       await disposeTempRepo(repoRoot);
     }
@@ -400,77 +345,122 @@ await runScenario(
   "input module surfaces validation failures through the canonical resolver",
   async () => {
     const repoRoot = await createTempRepo();
-
     try {
-      const inputModule = (await import("../src/intake/input.js")) as Record<string, unknown>;
-      const resolveIntakeInput = inputModule.resolveIntakeInput;
-
-      assert.equal(
-        typeof resolveIntakeInput,
-        "function",
-        "expected input.ts to export resolveIntakeInput",
-      );
-
-      const result = await (resolveIntakeInput as (params: {
-        options: {
-          prompt?: string;
-          spec?: string;
-          strictFocus?: boolean;
-          config?: string;
-        };
-        currentWorkingDirectory: string;
-        repoRoot: string;
-      }) => Promise<{
-        inputMode: "spec" | "prompt";
-        sourceSelection: {
-          specProvided: boolean;
-          promptProvided: boolean;
-        };
-        primaryInput: {
-          path: string | null;
-          rawText: string;
-          loaded: boolean;
-        };
-        supplementalInputs: {
-          notes: string[];
-          constraints: string[];
-          configPath: string | null;
-          configLoaded: boolean;
-          focusPaths: string[];
-          strictFocus: boolean;
-        };
-        normalizedTaskInput: unknown | null;
-        blockingIssues: Array<{
-          code: string;
-          message: string;
-        }>;
-        warnings: string[];
-        recommendedUserActions: string[];
-      }>)({
-        options: {
-          prompt: "Update src/app.ts and tests/app.test.ts for validation behavior.",
-          spec: join(repoRoot, "missing-spec.md"),
-          strictFocus: true,
-          config: join(repoRoot, "forge-intake.json"),
-        },
-        currentWorkingDirectory: repoRoot,
-        repoRoot,
+      const result = await resolveInputForTest(repoRoot, {
+        prompt: "Update src/app.ts and tests/app.test.ts for validation behavior.",
+        spec: join(repoRoot, "missing-spec.md"),
+        strictFocus: true,
+        config: join(repoRoot, "forge-intake.json"),
       });
-
       assert.equal(result.normalizedTaskInput, null);
       assert.equal(result.inputMode, "prompt");
       assert.equal(result.sourceSelection.specProvided, true);
       assert.equal(result.sourceSelection.promptProvided, true);
       assert.equal(result.primaryInput.path, null);
       assert.equal(result.supplementalInputs.strictFocus, true);
-      assert.ok(result.blockingIssues.some((issue) => issue.code === "INPUT_CONFLICT"));
-      assert.ok(result.blockingIssues.some((issue) => issue.code === "SPEC_READ_FAILED"));
-      assert.ok(result.blockingIssues.some((issue) => issue.code === "STRICT_FOCUS_REQUIRES_FOCUS"));
-      assert.ok(
-        result.recommendedUserActions.some(
-          (action) => /config/i.test(action) || /focus/i.test(action),
-        ),
-      );
+      assert.ok(result.blockingIssues.some((i: { code: string }) => i.code === "INPUT_CONFLICT"));
+      assert.ok(result.blockingIssues.some((i: { code: string }) => i.code === "SPEC_READ_FAILED"));
+      assert.ok(result.blockingIssues.some((i: { code: string }) => i.code === "STRICT_FOCUS_REQUIRES_FOCUS"));
+      assert.ok(result.recommendedUserActions.some((a: string) => /config/i.test(a) || /focus/i.test(a)));
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+interface ResolvedResult {
+  inputMode: "spec" | "prompt";
+  sourceSelection: { specProvided: boolean; promptProvided: boolean };
+  primaryInput: { path: string | null; rawText: string; loaded: boolean };
+  supplementalInputs: {
+    notes: string[]; constraints: string[]; configPath: string | null;
+    configLoaded: boolean; focusPaths: string[]; strictFocus: boolean;
+  };
+  normalizedTaskInput: unknown | null;
+  blockingIssues: Array<{ code: string; message: string }>;
+  warnings: string[];
+  recommendedUserActions: string[];
+}
+
+async function resolveInputForTest(
+  repoRoot: string,
+  options: Record<string, unknown>,
+): Promise<ResolvedResult> {
+  const inputModule = (await import("../src/intake/input.js")) as Record<string, unknown>;
+  const resolveIntakeInput = inputModule.resolveIntakeInput as (params: {
+    options: Record<string, unknown>;
+    currentWorkingDirectory: string;
+    repoRoot: string;
+  }) => Promise<ResolvedResult>;
+  return resolveIntakeInput({ options, currentWorkingDirectory: repoRoot, repoRoot });
+}
+
+await runScenario(
+  "input resolver rejects whitespace-only --prompt",
+  async () => {
+    const repoRoot = await createTempRepo();
+    try {
+      const result = await resolveInputForTest(repoRoot, { prompt: "   " });
+      assert.equal(result.normalizedTaskInput, null);
+      assert.equal(result.sourceSelection.promptProvided, false);
+      assert.ok(result.blockingIssues.some((i: { code: string }) => i.code === "INPUT_REQUIRED"));
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "input resolver rejects empty string --prompt",
+  async () => {
+    const repoRoot = await createTempRepo();
+    try {
+      const result = await resolveInputForTest(repoRoot, { prompt: "" });
+      assert.equal(result.normalizedTaskInput, null);
+      assert.equal(result.sourceSelection.promptProvided, false);
+      assert.ok(result.blockingIssues.some((i: { code: string }) => i.code === "INPUT_REQUIRED"));
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "input resolver accumulates all blocking issues from mixed inputs",
+  async () => {
+    const repoRoot = await createTempRepo();
+    try {
+      const result = await resolveInputForTest(repoRoot, {
+        prompt: "some task",
+        spec: join(repoRoot, "missing-spec.md"),
+        notes: join(repoRoot, "missing-notes.md"),
+        constraints: join(repoRoot, "missing-constraints.md"),
+      });
+      assert.equal(result.normalizedTaskInput, null);
+      assert.ok(result.blockingIssues.some((i: { code: string }) => i.code === "INPUT_CONFLICT"));
+      assert.ok(result.blockingIssues.some((i: { code: string }) => i.code === "NOTES_READ_FAILED"));
+      assert.ok(result.blockingIssues.some((i: { code: string }) => i.code === "CONSTRAINTS_READ_FAILED"));
+      assert.ok(result.blockingIssues.some((i: { code: string }) => i.code === "SPEC_READ_FAILED"));
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "input resolver rejects whitespace-only --prompt even with missing supplemental inputs",
+  async () => {
+    const repoRoot = await createTempRepo();
+    try {
+      const result = await resolveInputForTest(repoRoot, {
+        prompt: "   ",
+        notes: join(repoRoot, "missing-notes.md"),
+        constraints: join(repoRoot, "missing-constraints.md"),
+      });
+      assert.equal(result.normalizedTaskInput, null);
+      assert.ok(result.blockingIssues.some((i: { code: string }) => i.code === "INPUT_REQUIRED"));
+      assert.ok(result.blockingIssues.some((i: { code: string }) => i.code === "NOTES_READ_FAILED"));
+      assert.ok(result.blockingIssues.some((i: { code: string }) => i.code === "CONSTRAINTS_READ_FAILED"));
     } finally {
       await disposeTempRepo(repoRoot);
     }
