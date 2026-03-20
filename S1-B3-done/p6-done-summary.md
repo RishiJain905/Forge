@@ -18,7 +18,7 @@
 - [x] Missing spec path exits `1` and still persists the failed artifact/report
 - [x] Smoke now proves the runnable milestone through `dist/src/index.js` in spec mode
 - [x] The new test is wired into the default `npm.cmd test` suite
-- [x] Full verification gate passed in the Part 6 worktree
+- [x] Fresh verification gate passed on `dev` after integration
 
 ## Key Files
 - `tests/intake.cli-entrypoint.test.ts`
@@ -27,15 +27,14 @@
 - `package.json`
 
 ## Verification
-- `npm.cmd run build` PASS
-- `npx tsc -p tsconfig.test.json` PASS
-- `node dist-tests/tests/intake.cli-entrypoint.test.js` PASS
-- `npm.cmd run smoke` PASS
 - `npm.cmd test` PASS
+- `npm.cmd run typecheck` PASS
+- `npm.cmd run build` PASS
+- `npm.cmd run smoke` PASS
 
 ## Final Branch State
 - Target branch: `dev`
-- Implementation worktree branch: `codex/s1-b3-p6-entrypoint-tests`
+- Source worktree branch: `codex/s1-b3-p6-entrypoint-tests` (removed after integration)
 - The Batch 3 Part 6 entrypoint coverage, smoke update, test wiring changes, and doc updates are integrated onto `dev` after fresh verification.
 
 ## Follow-On
