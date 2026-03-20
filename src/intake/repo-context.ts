@@ -667,11 +667,11 @@ async function collectRepoFiles(
   collected: string[],
 ): Promise<void> {
   const entries = await readdir(currentPath, { withFileTypes: true });
+  const outputRootRelative = path.relative(repoRoot, outputRoot).split(path.sep).join("/");
 
   for (const entry of entries) {
     const fullPath = path.join(currentPath, entry.name);
     const relativePath = normalizeRelativePath(repoRoot, fullPath);
-    const outputRootRelative = path.relative(repoRoot, outputRoot).split(path.sep).join("/");
 
     if (entry.isDirectory()) {
       if (
