@@ -31,6 +31,7 @@ function createEmptyOptionalReasoningResolution(): OptionalReasoningResolution {
     confidenceNotes: [],
     suggestedTargetPaths: [],
     ignoredTargetPaths: [],
+    taskWording: null,
   };
 }
 
@@ -388,6 +389,30 @@ function addFocusHandling(params: {
   );
 }
 
+function mergeParserStructuredDiagnostics(params: {
+  taskParserResult: TaskParserResult;
+  ambiguityItems: NonNullable<AmbiguityAnalysisResult["ambiguityItems"]>;
+  ambiguities: string[];
+  warningItems: NonNullable<AmbiguityAnalysisResult["warningItems"]>;
+  warnings: string[];
+}): void {
+  for (const item of params.taskParserResult.ambiguityItems ?? []) {
+    if (item.type !== "input") {
+      continue;
+    }
+
+    pushAmbiguityItem(params.ambiguityItems, params.ambiguities, item);
+  }
+
+  for (const item of params.taskParserResult.warningItems ?? []) {
+    if (item.code !== "CONSTRAINT_CONFLICT") {
+      continue;
+    }
+
+    pushWarningItem(params.warningItems, params.warnings, item);
+  }
+}
+
 export function buildAmbiguityAnalysisResult(params: {
   taskInput: NormalizedTaskInput | null;
   taskParserResult: TaskParserResult;
@@ -434,6 +459,13 @@ export function buildAmbiguityAnalysisResult(params: {
     warningItems,
     warnings,
     recommendedUserActions,
+  });
+  mergeParserStructuredDiagnostics({
+    taskParserResult: params.taskParserResult,
+    ambiguityItems,
+    ambiguities,
+    warningItems,
+    warnings,
   });
 
   if (!params.taskParserResult.signals.hasAcceptanceCriteria) {

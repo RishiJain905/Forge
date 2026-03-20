@@ -114,6 +114,47 @@ await runScenario(
           target.path === "src/app.ts" && target.category === "retry_logic"
         ),
       );
+      const specParsePath = join(repoRoot, ".forge", "debug", "spec-parse.json");
+      const repoScanPath = join(repoRoot, ".forge", "debug", "repo-scan.json");
+      const candidateFilesPath = join(repoRoot, ".forge", "debug", "candidate-files.json");
+      const warningsPath = join(repoRoot, ".forge", "debug", "warnings.json");
+
+      assert.equal(await fileExists(specParsePath), true);
+      assert.equal(await fileExists(repoScanPath), true);
+      assert.equal(await fileExists(candidateFilesPath), true);
+      assert.equal(await fileExists(warningsPath), true);
+
+      const specParse = await readJsonFile<{
+        taskInput?: { inputMode?: string };
+        taskParserResult?: { taskSpec?: { goal?: string } };
+      }>(specParsePath);
+      const repoScan = await readJsonFile<{
+        repoContext?: { grounded?: boolean };
+        warnings?: string[];
+      }>(repoScanPath);
+      const candidateFiles = await readJsonFile<{
+        candidateTargets?: Array<{ path?: string }>;
+        verificationTargets?: Array<{ path?: string; category?: string }>;
+      }>(candidateFilesPath);
+      const warningsDebug = await readJsonFile<{
+        warnings?: string[];
+        confidence?: { level?: string };
+        nextStepReadiness?: { ready?: boolean };
+      }>(warningsPath);
+
+      assert.equal(specParse.taskInput?.inputMode, "prompt");
+      assert.match(specParse.taskParserResult?.taskSpec?.goal ?? "", /src\/app\.ts/i);
+      assert.equal(repoScan.repoContext?.grounded, true);
+      assert.ok(Array.isArray(repoScan.warnings));
+      assert.ok(candidateFiles.candidateTargets?.some((target) => target.path === "src/app.ts"));
+      assert.ok(
+        candidateFiles.verificationTargets?.some((target) =>
+          target.path === "src/app.ts" && target.category === "retry_logic"
+        ),
+      );
+      assert.ok(Array.isArray(warningsDebug.warnings));
+      assert.ok(warningsDebug.confidence?.level);
+      assert.equal(typeof warningsDebug.nextStepReadiness?.ready, "boolean");
     } finally {
       if (originalDebugEnv === undefined) {
         delete process.env.FORGE_INTAKE_DEBUG;

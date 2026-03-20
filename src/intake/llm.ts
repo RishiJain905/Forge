@@ -3,6 +3,7 @@ import type {
   NormalizedTaskInput,
   OptionalReasoningHook,
   OptionalReasoningResolution,
+  OptionalReasoningTaskWording,
   RepoScanResult,
   ResolvedRuntimeOptions,
   TaskParserResult,
@@ -18,6 +19,54 @@ function normalizePathForComparison(value: string): string {
   return value.replace(/\\/g, "/").toLowerCase();
 }
 
+function normalizeOptionalTaskWording(
+  wording: OptionalReasoningTaskWording | undefined,
+): OptionalReasoningTaskWording | null {
+  if (!wording) {
+    return null;
+  }
+
+  const normalized: OptionalReasoningTaskWording = {};
+
+  if (wording.title?.trim()) {
+    normalized.title = wording.title.trim();
+  }
+
+  if (wording.summary?.trim()) {
+    normalized.summary = wording.summary.trim();
+  }
+
+  if (wording.goal?.trim()) {
+    normalized.goal = wording.goal.trim();
+  }
+
+  const implementationNecessities = wording.implementationNecessities ?? [];
+  if (implementationNecessities.length > 0) {
+    normalized.implementationNecessities = implementationNecessities
+      .map((value) => value.trim())
+      .filter(Boolean);
+  }
+
+  const explicitRequirements = wording.explicitRequirements ?? [];
+  if (explicitRequirements.length > 0) {
+    normalized.explicitRequirements = explicitRequirements
+      .map((value) => value.trim())
+      .filter(Boolean);
+  }
+
+  const openQuestions = wording.openQuestions ?? [];
+  if (openQuestions.length > 0) {
+    normalized.openQuestions = openQuestions
+      .filter((question) => question.text.trim().length > 0)
+      .map((question) => ({
+        category: question.category,
+        text: question.text.trim(),
+      }));
+  }
+
+  return Object.keys(normalized).length > 0 ? normalized : null;
+}
+
 function createEmptyResolution(requested: boolean): OptionalReasoningResolution {
   return {
     requested,
@@ -31,6 +80,7 @@ function createEmptyResolution(requested: boolean): OptionalReasoningResolution 
     confidenceNotes: [],
     suggestedTargetPaths: [],
     ignoredTargetPaths: [],
+    taskWording: null,
   };
 }
 
@@ -90,6 +140,7 @@ export async function resolveOptionalReasoning(params: {
     resolution.recommendedUserActions = [...(suggestion.recommendedUserActions ?? [])];
     resolution.confidenceNotes = [...(suggestion.confidenceNotes ?? [])];
     resolution.suggestedTargetPaths = [...(suggestion.suggestedTargetPaths ?? [])];
+    resolution.taskWording = normalizeOptionalTaskWording(suggestion.taskWording);
 
     const repoFiles = new Set(
       params.repoScanResult.repoContext.allFiles.map(normalizePathForComparison),
@@ -113,7 +164,8 @@ export async function resolveOptionalReasoning(params: {
       resolution.ambiguities.length > 0 ||
       resolution.warnings.length > 0 ||
       resolution.recommendedUserActions.length > 0 ||
-      resolution.confidenceNotes.length > 0;
+      resolution.confidenceNotes.length > 0 ||
+      resolution.taskWording !== null;
 
     return resolution;
   } catch (error) {
@@ -123,6 +175,7 @@ export async function resolveOptionalReasoning(params: {
     resolution.confidenceNotes = [
       "optional LLM assist failed, so deterministic analysis remained authoritative",
     ];
+    resolution.taskWording = null;
     return resolution;
   }
 }

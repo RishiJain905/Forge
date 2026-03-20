@@ -171,10 +171,16 @@
   - Reworked `scripts/smoke.mjs` so the runnable milestone now exercises `dist/src/index.js` in spec mode and asserts artifact/report output directly.
   - Added `tests/intake.cli-entrypoint.test.ts` to the default `npm.cmd test` wiring while keeping the existing helper-based CLI harness intact.
   - Confirmed that no `src/*` wiring change was necessary because the packaged CLI entrypoint already satisfied the new contract.
+- Batch 4.01: `part-1-batch4-goal-finish-line-and-do-not-touch.md`
+  - Treated Batch 4 Part 1 as the umbrella finish-and-freeze pass for Step 1 and kept the work inside the existing intake architecture instead of reopening major design seams.
+  - Added deterministic prompt-versus-constraint conflict detection so direct instruction conflicts now fail cleanly instead of remaining warning-ready.
+  - Expanded narrow V1 `--llm-assist` so optional reasoning can add bounded task-wording refinements and conservative implementation necessities without changing deterministic candidate targeting.
+  - Reworked debug persistence so `FORGE_INTAKE_DEBUG=1` now emits the aggregate intake debug artifact plus stable split debug files for parse, repo scan, candidate files, and warnings.
+  - Added `tests/intake.batch4-freeze-criteria.test.ts`, updated `scripts/smoke.mjs` to cover prompt mode, and wired the new freeze suite into the default `npm.cmd test` command.
 
 ## Current Branch State
-- `dev` includes the completed Batch 1.16, Batch 1.17, Batch 1.18, Batch 1.19, Batch 1.20, Batch 2.01, Batch 2.02, Batch 2.03, Batch 2.04, Batch 3.01, Batch 3.02, Batch 3.03, Batch 3.04, Batch 3.05, and Batch 3.06 implementations.
-- Batch 3 is complete on `dev`, including the Part 6 packaged-entrypoint coverage, smoke milestone update, and default test wiring for the new process-level CLI suite.
+- `dev` includes the completed Batch 1.16, Batch 1.17, Batch 1.18, Batch 1.19, Batch 1.20, Batch 2.01, Batch 2.02, Batch 2.03, Batch 2.04, Batch 3.01, Batch 3.02, Batch 3.03, Batch 3.04, Batch 3.05, Batch 3.06, and Batch 4.01 implementations.
+- Batch 4 Part 1 is complete on `dev`, including prompt/constraint conflict hardening, bounded assist wording enrichment, split debug artifacts, the Batch 4 freeze suite, and prompt-mode smoke coverage.
 - `execution.md` now explicitly requires integration onto the target branch and fresh verification there before completion is claimed.
 
 ## Verification
@@ -184,4 +190,4 @@
 - `npm.cmd run smoke`
 
 ## Next
-- Batch 3 is complete on `dev`. The next batch has not been defined yet.
+- Next Batch 4 target: `forge_step1_batch4/part-2-prompt-mode-parity-and-input-hardening.md`

@@ -14,7 +14,10 @@ interface IntakeArtifact {
     llm_mode?: "deterministic" | "assist";
   };
   task_spec?: {
+    title?: string;
     goal?: string;
+    summary?: string;
+    implementation_necessities?: string[];
   };
   candidate_targets?: Array<{
     path?: string;
@@ -151,6 +154,44 @@ await runScenario("forge intake ignores conflicting optional reasoning repo sugg
     assert.ok(
       artifact.confidence?.reasons?.some((reason) => /deterministic|overrode/i.test(reason)),
     );
+  } finally {
+    await disposeTempRepo(repoRoot);
+  }
+});
+
+await runScenario("forge intake applies additive optional reasoning task wording without changing deterministic targets", async () => {
+  const repoRoot = await createTempRepo();
+
+  try {
+    const result = await runIntakeCommand({
+      repo: repoRoot,
+      prompt: "clean up retry wording in src/app.ts and keep tests aligned",
+      llmAssist: true,
+    }, repoRoot, {
+      optionalReasoningHook: async () => ({
+        provider: "test-hook",
+        taskWording: {
+          title: "Refine retry wording in src/app.ts",
+          summary: "Clarify the retry behavior wording in src/app.ts while keeping existing tests aligned.",
+          implementationNecessities: [
+            "Confirm the retry wording still matches the existing test intent.",
+          ],
+        },
+      }),
+    });
+
+    assert.equal(result.status, "warning");
+
+    const artifact = await readJsonFile<IntakeArtifact>(join(repoRoot, ".forge", "intake.json"));
+    assert.equal(artifact.runtime_options?.llm_mode, "assist");
+    assert.equal(artifact.task_spec?.title, "Refine retry wording in src/app.ts");
+    assert.match(artifact.task_spec?.summary ?? "", /retry behavior wording/i);
+    assert.ok(
+      artifact.task_spec?.implementation_necessities?.some((value) =>
+        /retry wording still matches the existing test intent/i.test(value)
+      ),
+    );
+    assert.ok(artifact.candidate_targets?.some((target) => target.path === "src/app.ts"));
   } finally {
     await disposeTempRepo(repoRoot);
   }

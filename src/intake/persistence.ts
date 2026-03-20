@@ -38,7 +38,7 @@ function normalizePersistenceError(error: unknown): PersistenceError {
 
 export async function persistIntakeOutputs(params: {
   criticalWrites: PlannedWrite[];
-  debugWrite?: PlannedWrite | null;
+  debugWrites?: PlannedWrite[] | null;
 }): Promise<void> {
   const writtenCriticalPaths: string[] = [];
 
@@ -55,14 +55,16 @@ export async function persistIntakeOutputs(params: {
     throw normalizePersistenceError(error);
   }
 
-  if (!params.debugWrite) {
+  if (!params.debugWrites || params.debugWrites.length === 0) {
     return;
   }
 
-  try {
-    await ensureParentDirectory(params.debugWrite.filePath);
-    await writeFile(params.debugWrite.filePath, params.debugWrite.contents, "utf8");
-  } catch {
-    // Internal debug output is best-effort and must not change the run result.
+  for (const debugWrite of params.debugWrites) {
+    try {
+      await ensureParentDirectory(debugWrite.filePath);
+      await writeFile(debugWrite.filePath, debugWrite.contents, "utf8");
+    } catch {
+      // Internal debug output is best-effort and must not change the run result.
+    }
   }
 }

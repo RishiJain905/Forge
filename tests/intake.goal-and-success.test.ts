@@ -435,6 +435,60 @@ await runScenario(
 );
 
 await runScenario(
+  "forge intake fails when prompt instructions directly conflict with explicit constraints",
+  async () => {
+    const repoRoot = await createTempRepo();
+    const constraintsPath = join(repoRoot, "constraints.md");
+
+    try {
+      await writeRepoFile(
+        repoRoot,
+        "constraints.md",
+        [
+          "## Constraints",
+          "",
+          "- Do not modify `src/app.ts`.",
+          "- Keep the task read-only outside tests.",
+        ].join("\n"),
+      );
+
+      const result = await runForgeCli(
+        [
+          "intake",
+          "--repo",
+          repoRoot,
+          "--prompt",
+          "Update src/app.ts and keep tests aligned.",
+          "--constraints",
+          constraintsPath,
+        ],
+        repoRoot,
+      );
+
+      assert.notEqual(result.code, 0, "prompt/constraint conflicts should fail");
+
+      const artifactPath = join(repoRoot, ".forge", "intake.json");
+      const artifact = await readJsonFile<IntakeArtifact>(artifactPath);
+
+      assert.equal(artifact.status, "failed");
+      assert.equal(artifact.next_step_readiness?.ready, false);
+      assert.ok(
+        artifact.next_step_readiness?.blocking_issues?.some((issue) =>
+          /constraint|src\/app\.ts/i.test(issue.message ?? "")
+        ),
+        "expected blocking issue for the prompt/constraint conflict",
+      );
+      assert.ok(
+        artifact.ambiguities?.some((value) => /constraint|src\/app\.ts/i.test(value)),
+        "expected persisted ambiguity for the prompt/constraint conflict",
+      );
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
   "forge intake can resolve a structured prompt to success",
   async () => {
     const repoRoot = await createTempRepo();

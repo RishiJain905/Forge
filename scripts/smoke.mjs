@@ -85,6 +85,39 @@ async function main() {
     assert.match(report, /Risk Analysis/);
     assert.match(report, /Confidence/);
     assert.match(report, /Next Step Readiness/);
+
+    const promptResult = spawnSync(process.execPath, [
+      entryPointPath,
+      "intake",
+      "--repo",
+      tempRepo,
+      "--prompt",
+      "Update src/app.ts and keep tests aligned, but the exact acceptance criteria are still open.",
+    ], {
+      cwd: tempRepo,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+      },
+    });
+
+    if (promptResult.error) {
+      throw promptResult.error;
+    }
+
+    assert.equal(promptResult.status, 0);
+    assert.match(promptResult.stdout, /Status: warning/);
+
+    const promptArtifact = JSON.parse(await readFile(artifactPath, "utf8"));
+    const promptReport = await readFile(reportPath, "utf8");
+
+    assert.equal(promptArtifact.status, "warning");
+    assert.equal(promptArtifact.input_mode, "prompt");
+    assert.equal(promptArtifact.next_step_readiness.ready, true);
+    assert.ok(Array.isArray(promptArtifact.ambiguities));
+    assert.ok(promptArtifact.ambiguities.length > 0);
+    assert.match(promptReport, /## Ambiguities/);
+    assert.match(promptReport, /## Next Step Readiness/);
   } finally {
     await rm(tempRepo, { recursive: true, force: true });
   }

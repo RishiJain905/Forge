@@ -43,6 +43,8 @@ const backgroundLinePattern =
 const genericTitlePattern = /^(?:task|spec|request)$/i;
 const proseModuleMentionPattern =
   /\b(?:(?:the|this|that|these|those|our|their|its|a|an)\s+)?([a-z0-9][a-z0-9_-]*)\s+(module|component|service)\b/gi;
+const constraintConflictPattern =
+  /\b(?:do not|don't|must not|should not|avoid|leave)\s+(?:modify|change|touch|edit|rewrite|update|refactor|remove|delete|rename|replace|move|keep)\b/i;
 const genericModuleCandidateWords = new Set([
   "a",
   "an",
@@ -437,6 +439,54 @@ function buildImplementationNecessities(taskSpec: IntakeTaskSpec): string[] {
   return necessities;
 }
 
+function detectConstraintConflictItems(taskSpec: IntakeTaskSpec): {
+  ambiguityItems: Ambiguity[];
+  warningItems: WarningItem[];
+  ambiguities: string[];
+  recommendedUserActions: string[];
+} {
+  const ambiguityItems: Ambiguity[] = [];
+  const warningItems: WarningItem[] = [];
+  const ambiguities: string[] = [];
+  const recommendedUserActions: string[] = [];
+  const mentionedPaths = new Set(taskSpec.mentionedPaths ?? []);
+
+  for (const constraint of taskSpec.constraints ?? []) {
+    if (!constraintConflictPattern.test(constraint)) {
+      continue;
+    }
+
+    const referencedConstraintPaths = extractReferencedPaths(constraint);
+    const conflictingPaths = referencedConstraintPaths.filter((path) => mentionedPaths.has(path));
+
+    if (conflictingPaths.length === 0) {
+      continue;
+    }
+
+    const message = `Task instructions conflict with explicit constraints for ${conflictingPaths.join(", ")}.`;
+    ambiguityItems.push({
+      type: "input",
+      severity: "high",
+      message,
+    });
+    warningItems.push({
+      code: "CONSTRAINT_CONFLICT",
+      message,
+    });
+    ambiguities.push(message);
+    recommendedUserActions.push(
+      `Resolve the conflict between the requested change and the stated constraints for ${conflictingPaths.join(", ")} before planning.`,
+    );
+  }
+
+  return {
+    ambiguityItems,
+    warningItems,
+    ambiguities,
+    recommendedUserActions,
+  };
+}
+
 function isPromptTooShortToBeActionable(taskInput: NormalizedTaskInput): boolean {
   if (taskInput.inputMode !== "prompt") {
     return false;
@@ -662,6 +712,11 @@ export function buildTaskParserResult(
   const warningItems = toWarningItems(openQuestions);
   const parserWarnings: string[] = [];
   const recommendedUserActions = [...taskInput.recommendedUserActions];
+  const constraintConflictItems = detectConstraintConflictItems(taskSpec);
+  const parserAmbiguities = dedupeStable([
+    ...taskInput.ambiguities,
+    ...constraintConflictItems.ambiguities,
+  ]);
 
   if (promptIsThin) {
     addIfMissing(
@@ -669,9 +724,21 @@ export function buildTaskParserResult(
       "Prompt mode input is too short to be actionable without follow-up. Clarify the goal, relevant files, or acceptance criteria.",
     );
     addIfMissing(
-      recommendedUserActions,
+    recommendedUserActions,
       "Expand the prompt with the intended files, behavior changes, or acceptance criteria before planning.",
     );
+  }
+
+  for (const item of constraintConflictItems.ambiguityItems) {
+    ambiguityItems.push(item);
+  }
+
+  for (const item of constraintConflictItems.warningItems) {
+    warningItems.push(item);
+  }
+
+  for (const action of constraintConflictItems.recommendedUserActions) {
+    addIfMissing(recommendedUserActions, action);
   }
 
   return {
@@ -689,7 +756,7 @@ export function buildTaskParserResult(
     },
     ambiguityItems,
     warningItems,
-    ambiguities: dedupeStable([...taskInput.ambiguities]),
+    ambiguities: parserAmbiguities,
     warnings: dedupeStable([...parserWarnings]),
     recommendedUserActions,
   };
