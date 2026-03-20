@@ -2,6 +2,7 @@ import path from "node:path";
 import { readFile, stat } from "node:fs/promises";
 
 import { validateLoadedIntakeInput } from "./validation.js";
+import { acceptanceCriteriaHeadingPattern, explicitPathTokenPatternNoG } from "./patterns.js";
 import type {
   ArtifactSourceInputs,
   BlockingIssue,
@@ -14,9 +15,7 @@ import type {
   ValidatedIntakeInputs,
 } from "./types.js";
 
-const acceptanceCriteriaHeading = /^(?:#{1,6}\s*)?acceptance criteria\b:?/im;
 const markdownHeading = /^#{1,6}\s+/;
-const explicitPathToken = /\b(?:[\w.-]+\/)+[\w.-]+\b/;
 
 function createBlockingIssue(code: string, message: string): BlockingIssue {
   return { code, message };
@@ -29,11 +28,11 @@ function pushUnique(values: string[], value: string): void {
 }
 
 function hasAcceptanceCriteriaSection(value: string): boolean {
-  return acceptanceCriteriaHeading.test(value);
+  return acceptanceCriteriaHeadingPattern.test(value);
 }
 
 function hasExplicitPathToken(value: string): boolean {
-  return explicitPathToken.test(value);
+  return explicitPathTokenPatternNoG.test(value);
 }
 
 function isPromptTooShortToBeActionable(prompt: string): boolean {
@@ -155,7 +154,7 @@ function extractPromptAcceptanceCriteria(prompt: string): string[] {
     const trimmed = line.trim();
 
     if (!insideAcceptanceCriteria) {
-      if (acceptanceCriteriaHeading.test(trimmed)) {
+      if (acceptanceCriteriaHeadingPattern.test(trimmed)) {
         insideAcceptanceCriteria = true;
       }
 
@@ -190,7 +189,7 @@ function extractPromptGoal(prompt: string): string {
     if (
       !trimmed ||
       markdownHeading.test(trimmed) ||
-      acceptanceCriteriaHeading.test(trimmed) ||
+      acceptanceCriteriaHeadingPattern.test(trimmed) ||
       /^[-*]\s+/.test(trimmed)
     ) {
       continue;
@@ -228,10 +227,9 @@ function buildPromptRequirementCandidates(prompt: string): PromptRequirementCand
   }];
 }
 
-function buildPromptDetails(prompt: string): PromptDetails {
+function buildPromptDetails(prompt: string, promptIsThin: boolean): PromptDetails {
   const goal = extractPromptGoal(prompt);
   const requirementCandidates = buildPromptRequirementCandidates(prompt);
-  const promptIsThin = isPromptTooShortToBeActionable(prompt);
   const hasExplicitPath = hasExplicitPathToken(prompt);
   const hasAcceptanceCriteria = requirementCandidates.some((candidate) => candidate.source === "acceptance-criteria");
   const summary = normalizeInlineWhitespace(prompt);
@@ -337,11 +335,12 @@ function createNormalizedTaskInput(params: {
 function resolvePromptInput(input: ValidatedIntakeInputs): NormalizedTaskInput {
   const ambiguities: string[] = [];
   const recommendedUserActions = [...input.recommendedUserActions];
-  const promptDetails = buildPromptDetails(input.primaryInput.rawText);
+  const promptIsThin = isPromptTooShortToBeActionable(input.primaryInput.rawText);
+  const promptDetails = buildPromptDetails(input.primaryInput.rawText, promptIsThin);
   let normalizedTaskText = input.primaryInput.rawText;
   let parserInputText = createSyntheticPromptSpec(promptDetails);
 
-  if (isPromptTooShortToBeActionable(input.primaryInput.rawText)) {
+  if (promptIsThin) {
     ambiguities.push(
       "Prompt mode input is too short to be actionable without follow-up. Clarify the goal, relevant files, or acceptance criteria.",
     );
