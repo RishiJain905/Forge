@@ -318,7 +318,7 @@ await runScenario(
       assert.equal(artifact.input_mode, "prompt");
       assert.ok(artifact.task_spec?.goal, "artifact must have task_spec.goal");
       assert.equal(artifact.repo_context?.grounded, true);
-      assert.ok(artifact.candidate_targets?.length ?? 0 > 0, "expected candidate targets");
+      assert.ok((artifact.candidate_targets?.length ?? 0) > 0, "expected candidate targets");
       assert.ok(artifact.confidence?.level, "artifact must have confidence.level");
       assert.equal(artifact.next_step_readiness?.ready, true);
 
