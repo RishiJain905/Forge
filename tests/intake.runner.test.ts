@@ -3,7 +3,6 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { runIntakeCommand } from "../src/intake/runner.js";
-import type { IntakeCommandResult } from "../src/intake/types.js";
 import {
   createTempRepo,
   disposeTempRepo,
