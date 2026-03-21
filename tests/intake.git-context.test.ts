@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
+import { resolveGitContext } from "../src/intake/git-context.js";
 import { resolveRepoRoot } from "../src/intake/path-policy.js";
 import { runIntakeCommand } from "../src/intake/runner.js";
 import type { GitCommandRunner } from "../src/intake/types.js";
@@ -81,6 +82,27 @@ function createBrokenGitRunner(repoRoot: string): GitCommandRunner {
 
     const error = new Error("simulated git failure") as Error & { code?: number };
     error.code = 1;
+    throw error;
+  };
+}
+
+function createBufferedNotRepoGitRunner(): GitCommandRunner {
+  return async (args) => {
+    if (
+      args[0] !== "rev-parse" ||
+      args[1] !== "--show-toplevel"
+    ) {
+      throw new Error(`Unexpected git command: ${args.join(" ")}`);
+    }
+
+    const error = new Error("Command failed") as Error & {
+      code?: number;
+      stdout?: Buffer;
+      stderr?: Buffer;
+    };
+    error.code = 128;
+    error.stdout = Buffer.from("");
+    error.stderr = Buffer.from("fatal: not a git repository (or any of the parent directories): .git\n");
     throw error;
   };
 }
@@ -181,6 +203,22 @@ await runScenario(
       );
     } finally {
       await disposeTempRepo(fixture.repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "git-context preserves buffered stderr when identifying not_repo failures",
+  async () => {
+    const repoRoot = await createTempRepo();
+
+    try {
+      const result = await resolveGitContext(repoRoot, createBufferedNotRepoGitRunner());
+
+      assert.equal(result.gitContext.status, "not_repo");
+      assert.equal(result.warning, null);
+    } finally {
+      await disposeTempRepo(repoRoot);
     }
   },
 );

@@ -57,8 +57,12 @@ function getErrorMessage(error: unknown): string {
 }
 
 function normalizeErrorOutput(value: unknown, fallback: string): string {
-  if (typeof value === "string" && value.trim().length > 0) {
+  if (typeof value === "string") {
     return value;
+  }
+
+  if (value instanceof Uint8Array) {
+    return Buffer.from(value).toString("utf8");
   }
 
   return fallback;
