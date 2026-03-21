@@ -167,6 +167,15 @@ export async function resolveOptionalReasoning(params: {
       resolution.confidenceNotes.length > 0 ||
       resolution.taskWording !== null;
 
+    if (resolution.used) {
+      pushUnique(
+        resolution.confidenceNotes,
+        resolution.provider
+          ? `Optional reasoning provider ${resolution.provider} enriched assist output.`
+          : "Optional reasoning enriched assist output.",
+      );
+    }
+
     return resolution;
   } catch (error) {
     resolution.warnings = [

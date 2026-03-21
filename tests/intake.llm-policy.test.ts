@@ -192,6 +192,12 @@ await runScenario("forge intake applies additive optional reasoning task wording
       ),
     );
     assert.ok(artifact.candidate_targets?.some((target) => target.path === "src/app.ts"));
+    assert.ok(
+      artifact.confidence?.reasons?.some((reason) =>
+        /optional reasoning|assist|test-hook/i.test(reason)
+      ) || artifact.warnings?.some((warning) => /optional reasoning|assist|test-hook/i.test(warning)),
+      "expected optional reasoning provenance to be visible in confidence reasons or warnings",
+    );
   } finally {
     await disposeTempRepo(repoRoot);
   }
