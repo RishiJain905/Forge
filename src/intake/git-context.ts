@@ -13,7 +13,7 @@ import { hasErrorCode, extractErrorCode } from "./errors.js";
 const execFileAsync = promisify(execFile);
 const RECENT_COMMIT_COUNT = 3;
 const RECENT_FILE_LIMIT = 5;
-const GIT_FILESYSTEM_WARNING =
+export const GIT_FILESYSTEM_WARNING =
   "Git enrichment failed, so filesystem grounding was used instead.";
 
 interface GitCommandOutcome {
@@ -56,6 +56,14 @@ function getErrorMessage(error: unknown): string {
       : "";
 }
 
+function normalizeErrorOutput(value: unknown, fallback: string): string {
+  if (typeof value === "string" && value.trim().length > 0) {
+    return value;
+  }
+
+  return fallback;
+}
+
 function toGitCommandResult(error: unknown): GitCommandResult {
   const code = extractErrorCode(error) ?? null;
   const stdout = typeof error === "object" && error !== null && "stdout" in error
@@ -72,7 +80,7 @@ function toGitCommandResult(error: unknown): GitCommandResult {
         ? Number(code)
         : 1,
     stdout: typeof stdout === "string" ? stdout : String(stdout ?? ""),
-    stderr: typeof stderr === "string" ? stderr : String(stderr ?? getErrorMessage(error)),
+    stderr: normalizeErrorOutput(stderr, getErrorMessage(error)),
   };
 }
 

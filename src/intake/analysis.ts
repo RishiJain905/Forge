@@ -3,6 +3,7 @@ import {
   NON_STRICT_FOCUS_WARNING,
   STRICT_FOCUS_WARNING,
 } from "./candidate-targets.js";
+import { GIT_FILESYSTEM_WARNING } from "./git-context.js";
 import type {
   AnalysisRiskZone,
   AmbiguityAnalysisResult,
@@ -389,6 +390,25 @@ function addFocusHandling(params: {
   );
 }
 
+function addGitContextFailureHandling(params: {
+  repoScanResult: RepoScanResult;
+  warningItems: NonNullable<AmbiguityAnalysisResult["warningItems"]>;
+  warnings: string[];
+}): void {
+  if (params.repoScanResult.repoContext.gitContext.status !== "error") {
+    return;
+  }
+
+  pushWarningItem(
+    params.warningItems,
+    params.warnings,
+    {
+      code: "GIT_CONTEXT_FAILED",
+      message: GIT_FILESYSTEM_WARNING,
+    },
+  );
+}
+
 function mergeParserStructuredDiagnostics(params: {
   taskParserResult: TaskParserResult;
   ambiguityItems: NonNullable<AmbiguityAnalysisResult["ambiguityItems"]>;
@@ -459,6 +479,11 @@ export function buildAmbiguityAnalysisResult(params: {
     warningItems,
     warnings,
     recommendedUserActions,
+  });
+  addGitContextFailureHandling({
+    repoScanResult: params.repoScanResult,
+    warningItems,
+    warnings,
   });
   mergeParserStructuredDiagnostics({
     taskParserResult: params.taskParserResult,
@@ -587,9 +612,13 @@ export function buildAmbiguityAnalysisResult(params: {
   }
 
   if (confidence.level === "low" || confidence.level === "medium") {
-    pushUnique(
+    pushWarningItem(
+      warningItems,
       warnings,
-      `Overall intake confidence is ${confidence.level} because ${confidence.reasons.join(", ")}.`,
+      {
+        code: "CONFIDENCE_DEGRADED",
+        message: `Overall intake confidence is ${confidence.level} because ${confidence.reasons.join(", ")}.`,
+      },
     );
   }
 

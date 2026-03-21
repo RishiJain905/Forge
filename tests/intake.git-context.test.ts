@@ -193,15 +193,13 @@ await runScenario(
     try {
       const result = await runIntakeWithPrompt(repoRoot);
 
-      assert.notEqual(result.status, "failed");
+      assert.equal(result.status, "success");
       assert.ok(result.artifact);
       assert.equal(result.artifact?.repo_context.git_context.status, "not_repo");
       assert.equal(result.artifact?.repo_context.git_context.repo_root, null);
       assert.equal(result.artifact?.repo_context.git_context.branch, null);
-      assert.equal(
-        (result.artifact?.warnings ?? []).filter((value) => /filesystem grounding/i.test(value)).length,
-        0,
-      );
+      assert.deepEqual(result.artifact?.warnings ?? [], []);
+      assert.deepEqual(result.artifact?.risk_analysis.supporting_analysis.warning_items ?? [], []);
     } finally {
       await disposeTempRepo(repoRoot);
     }
@@ -245,7 +243,7 @@ await runScenario(
         createBrokenGitRunner(fixture.repoRoot),
       );
 
-      assert.notEqual(result.status, "failed");
+      assert.equal(result.status, "warning");
       assert.ok(result.artifact);
       assert.equal(result.artifact?.repoRoot, fixture.repoRoot);
       assert.equal(result.artifact?.repo_context.git_context.status, "error");
@@ -255,6 +253,12 @@ await runScenario(
           /filesystem grounding/i.test(value),
         ),
         "expected a warning that filesystem grounding was used instead",
+      );
+      assert.ok(
+        result.artifact?.risk_analysis.supporting_analysis.warning_items.some((item) =>
+          item.code === "GIT_CONTEXT_FAILED",
+        ),
+        "expected a structured git-context failure warning item",
       );
     } finally {
       await disposeTempRepo(fixture.repoRoot);
