@@ -182,10 +182,16 @@
   - Tightened prompt normalization so prompt mode no longer turns a vague synthesized goal into `explicit_requirements`, keeping prompt output more conservative than spec mode when acceptance criteria are sparse.
   - Expanded end-to-end parity coverage for spec and prompt runs with notes, constraints, focus, strict-focus, packaged CLI entrypoints, prompt-specific ambiguity cases, artifact/report rendering, freeze checks, and smoke verification.
   - Kept the existing Step 1 artifact/report/debug contract stable while proving the hardened behavior through fresh full-suite verification on `dev`.
+- Batch 4.03: `part-3-edge-cases-warnings-failures-and-debug-outputs.md`
+  - Hardened git-context classification so plain non-git folders keep their clean `success` path while unexpected git-command failures now emit structured warning items instead of only free-text warnings.
+  - Added structured `GIT_CONTEXT_FAILED` and `CONFIDENCE_DEGRADED` warning items so warning-causing edge cases stay visible in the artifact, report, and debug outputs.
+  - Surfaced visible optional-reasoning provenance through confidence reasons when `--llm-assist` materially enriches task wording, without changing deterministic candidate targeting.
+  - Expanded `warnings.json` with compact optional-reasoning usage metadata while preserving structured warning items, readiness data, and failure details.
+  - Expanded focused regression coverage and re-verified the full Step 1 gate on `dev`.
 
 ## Current Branch State
-- `dev` includes the completed Batch 1.16, Batch 1.17, Batch 1.18, Batch 1.19, Batch 1.20, Batch 2.01, Batch 2.02, Batch 2.03, Batch 2.04, Batch 3.01, Batch 3.02, Batch 3.03, Batch 3.04, Batch 3.05, Batch 3.06, Batch 4.01, and Batch 4.02 implementations.
-- Batch 4 Part 2 is complete on `dev`, including prompt explicit-requirement hardening, blank/mixed-input resolver coverage, prompt/spec shared-input parity coverage, packaged prompt entrypoint coverage, and stronger prompt-mode artifact/report/smoke assertions.
+- `dev` includes the completed Batch 1.16, Batch 1.17, Batch 1.18, Batch 1.19, Batch 1.20, Batch 2.01, Batch 2.02, Batch 2.03, Batch 2.04, Batch 3.01, Batch 3.02, Batch 3.03, Batch 3.04, Batch 3.05, Batch 3.06, Batch 4.01, Batch 4.02, and Batch 4.03 implementations.
+- Batch 4 Part 3 is complete on `dev`, including structured git/context and confidence warning items, visible assist provenance in confidence reasons, and richer debug warning payloads with optional-reasoning usage metadata.
 - `execution.md` now explicitly requires integration onto the target branch and fresh verification there before completion is claimed.
 
 ## Verification
@@ -195,4 +201,4 @@
 - `npm.cmd run smoke`
 
 ## Next
-- Next Batch 4 target: `forge_step1_batch4/part-3-edge-cases-warnings-failures-and-debug-outputs.md`
+- Next Batch 4 target: `forge_step1_batch4/part-4-step1-polish-test-hardening-and-freeze-criteria.md`
