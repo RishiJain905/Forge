@@ -16,7 +16,14 @@ import type {
   PlanResolvedOutputPaths,
 } from "./types.js";
 
-function buildPlanSummary(status: PlanCommandStatus): string {
+function buildPlanSummary(
+  status: PlanCommandStatus,
+  failure: PlanCommandFailure | null,
+): string {
+  if (failure?.code === "OUTPUT_ROOT_FALLBACK") {
+    return "Forge plan wrote its outputs to the default .forge root because the requested output root was unsafe.";
+  }
+
   if (status === "ready") {
     return "Forge plan produced a ready planning artifact from the persisted Step 1 handoff.";
   }
@@ -35,9 +42,21 @@ export function createPlanArtifact(params: {
   startedAt: string;
   finishedAt: string;
 }): PlanArtifact {
-  const status: PlanCommandStatus = params.foundation.sourceIntake.readyForPlanning
-    ? "ready"
+  const planningReady = params.foundation.sourceIntake.readyForPlanning;
+  const usedFallbackRoot = params.paths.usedFallbackRoot;
+  const status: PlanCommandStatus = planningReady
+    ? usedFallbackRoot
+      ? "failed"
+      : "ready"
     : "blocked";
+  const failure: PlanCommandFailure | null = usedFallbackRoot
+    ? buildPlanCommandFailure(
+        "OUTPUT_ROOT_FALLBACK",
+        params.paths.fallbackReason ??
+          "Forge plan fell back to the default .forge output root because the requested output root was unsafe.",
+        params.paths.fallbackReason ?? undefined,
+      )
+    : null;
 
   return validatePlanArtifact({
     schemaVersion: FORGE_SCHEMA_VERSION,
@@ -62,7 +81,7 @@ export function createPlanArtifact(params: {
     },
     startedAt: params.startedAt,
     finishedAt: params.finishedAt,
-    summary: buildPlanSummary(status),
+    summary: buildPlanSummary(status, failure),
     boundaryNotes: [...PLAN_BOUNDARY_NOTES],
     source_intake: {
       artifactPath: params.foundation.sourceIntake.artifactPath,
@@ -89,7 +108,7 @@ export function createPlanArtifact(params: {
       next_step_readiness: params.foundation.carryForward.nextStepReadiness,
     },
     planning_readiness: params.foundation.carryForward.nextStepReadiness,
-    failure: null,
+    failure,
   });
 }
 

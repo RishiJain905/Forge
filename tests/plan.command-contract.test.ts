@@ -175,7 +175,6 @@ await runScenario(
 
       assert.notEqual(planResult.code, 0);
       assert.match(planResult.stderr, /Status:\s+blocked/);
-      assert.match(planResult.stderr, /Failure:/);
 
       const artifactPath = planArtifactPath(repoRoot);
       const reportPath = planReportPath(repoRoot);
@@ -338,21 +337,12 @@ await runScenario(
       );
 
       const intakeResult = runForgeBinary(
-        ["intake", "--repo", repoRoot, "--output-dir", blockedOutputDir, "--spec", specPath],
+        ["intake", "--repo", repoRoot, "--spec", specPath],
         repoRoot,
       );
 
-      assert.notEqual(intakeResult.code, 0);
-      assert.match(intakeResult.stderr, /OUTPUT_ROOT_FALLBACK/);
-      const intakeArtifact = await readJsonFile<{
-        requestedOutputRoot?: string | null;
-        outputRoot?: string;
-        failure?: { code?: string; message?: string; fallbackReason?: string } | null;
-      }>(join(repoRoot, ".forge", "intake.json"));
+      assert.equal(intakeResult.code, 0, intakeResult.stderr);
 
-      assert.equal(intakeArtifact.requestedOutputRoot, join(repoRoot, blockedOutputDir));
-      assert.equal(intakeArtifact.outputRoot, join(repoRoot, ".forge"));
-      assert.equal(intakeArtifact.failure?.code, "OUTPUT_ROOT_FALLBACK");
       await removeSpecInputs(repoRoot);
 
       const planResult = runForgePlanBinary(
@@ -361,10 +351,26 @@ await runScenario(
       );
 
       assert.notEqual(planResult.code, 0);
+      assert.match(planResult.stderr, /OUTPUT_ROOT_FALLBACK/);
       assert.equal(await fileExists(planArtifactPath(repoRoot)), true);
       assert.equal(await fileExists(planReportPath(repoRoot)), true);
       assert.equal(await fileExists(planArtifactPath(repoRoot, blockedOutputDir)), false);
       assert.equal(await fileExists(planReportPath(repoRoot, blockedOutputDir)), false);
+
+      const planArtifact = await readJsonFile<{
+        status: "ready" | "blocked" | "failed";
+        requestedOutputRoot?: string | null;
+        outputRoot?: string;
+        failure?: { code?: string; message?: string; fallbackReason?: string } | null;
+        source_intake?: { readyForPlanning?: boolean };
+      }>(planArtifactPath(repoRoot));
+
+      assert.equal(planArtifact.status, "failed");
+      assert.equal(planArtifact.requestedOutputRoot, join(repoRoot, blockedOutputDir));
+      assert.equal(planArtifact.outputRoot, join(repoRoot, ".forge"));
+      assert.equal(planArtifact.failure?.code, "OUTPUT_ROOT_FALLBACK");
+      assert.ok(planArtifact.failure?.fallbackReason);
+      assert.equal(planArtifact.source_intake?.readyForPlanning, true);
     } finally {
       await disposeTempRepo(repoRoot);
     }

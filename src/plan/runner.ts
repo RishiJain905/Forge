@@ -114,17 +114,6 @@ export async function runPlanFoundation(
   }
 }
 
-function buildBlockedPlanFailure(status: PlanCommandResult["status"]) {
-  if (status === "blocked") {
-    return buildPlanCommandFailure(
-      "PLANNING_NOT_READY",
-      "Forge plan preserved the persisted Step 1 handoff, but planning remains blocked.",
-    );
-  }
-
-  return null;
-}
-
 async function persistPlanCommandOutputs(params: {
   artifactPath: string;
   reportPath: string;
@@ -188,8 +177,6 @@ export async function runPlanCommand(
       };
     }
 
-    const failure = buildBlockedPlanFailure(artifact.status);
-
     return {
       status: artifact.status,
       artifact,
@@ -197,7 +184,7 @@ export async function runPlanCommand(
       reportPath: input.paths.reportPath,
       outputRoot: input.paths.outputRoot,
       summary: artifact.summary,
-      failure,
+      failure: artifact.failure,
     };
   } catch (error) {
     if (error instanceof PlanInputResolutionError) {

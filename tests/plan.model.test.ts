@@ -177,6 +177,85 @@ await runScenario(
 );
 
 await runScenario(
+  "forge plan keeps shared-risk source files in implementation items while limiting interface work to the targeted shared entrypoint",
+  async () => {
+    const repoRoot = await createTempRepo("forge-plan-model-shared-entrypoint-");
+
+    try {
+      await writeRepoFile(
+        repoRoot,
+        "package.json",
+        JSON.stringify(
+          {
+            name: "forge-plan-model-shared-entrypoint",
+            private: true,
+            type: "module",
+            scripts: {
+              test: "node --test",
+            },
+          },
+          null,
+          2,
+        ),
+      );
+      await writeRepoFile(repoRoot, "src/app.ts", "export const app = true;\n");
+      await writeRepoFile(repoRoot, "src/helper.ts", "export const helper = true;\n");
+      await writeRepoFile(repoRoot, "src/cli.ts", "export const cli = true;\n");
+      await writeRepoFile(
+        repoRoot,
+        "tests/app.test.ts",
+        "import assert from 'node:assert/strict';\n\nassert.equal(1, 1);\n",
+      );
+      await writeRepoFile(
+        repoRoot,
+        "tests/helper.test.ts",
+        "import assert from 'node:assert/strict';\n\nassert.equal(1, 1);\n",
+      );
+
+      await writeSpecAndRunIntake(repoRoot, [
+        "# Update app and helper behavior",
+        "",
+        "Revise `src/app.ts` and `src/helper.ts` and keep `tests/app.test.ts` and `tests/helper.test.ts` aligned.",
+        "",
+        "## Acceptance Criteria",
+        "",
+        "- `src/app.ts` is updated",
+        "- `src/helper.ts` is updated",
+        "- `tests/app.test.ts` stays aligned",
+        "- `tests/helper.test.ts` stays aligned",
+      ]);
+
+      const planResult = runForgePlanBinary(["--repo", repoRoot], repoRoot);
+      assert.equal(planResult.code, 0, planResult.stderr);
+
+      const artifact = await loadPlanArtifact(repoRoot);
+      const implementationItem = artifact.plan_items.find((item) => item.category === "implementation");
+      const interfaceItem = artifact.plan_items.find((item) => item.category === "interface");
+
+      assert.ok(implementationItem, "expected an implementation plan item");
+      assert.ok(interfaceItem, "expected a shared interface plan item");
+      assert.ok(
+        implementationItem.likelyAffectedPaths.includes("src/app.ts"),
+        "expected the shared-risk source file to remain in implementation planning",
+      );
+      assert.ok(
+        implementationItem.likelyAffectedPaths.includes("src/helper.ts"),
+        "expected the ordinary source file to remain in implementation planning",
+      );
+      assert.ok(
+        implementationItem.dependencies.some((dependency) => dependency.planItemId === interfaceItem.id),
+        "expected implementation work to depend on the shared interface item",
+      );
+      assert.deepEqual(interfaceItem.likelyAffectedPaths, ["src/app.ts"]);
+      assert.ok(!interfaceItem.likelyAffectedPaths.includes("src/helper.ts"));
+      assert.ok(!interfaceItem.likelyAffectedPaths.includes("src/cli.ts"));
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
   "forge plan can attach one requirement to multiple plan items when source and test work need separate handling",
   async () => {
     const repoRoot = await createTempRepo("forge-plan-model-shared-requirement-");

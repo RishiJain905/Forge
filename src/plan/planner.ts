@@ -285,23 +285,14 @@ function buildPlannerContext(foundation: PlanFoundationResult): PlannerContext {
   const riskyPhrases = new Set(carryForward.taskSpec.risky_phrases ?? []);
   const interfaceSeedPaths = dedupeStable([
     ...sharedSourcePaths,
-    ...(carryForward.repoContext.entry_points ?? []),
     ...interfaceVerificationPaths,
   ]);
   const interfacePaths = interfaceSeedPaths.length > 0
     ? interfaceSeedPaths
     : INTERFACE_RISKY_PHRASES.some((phrase) => riskyPhrases.has(phrase))
-      ? dedupeStable([
-          ...(carryForward.repoContext.entry_points ?? []),
-          ...sourcePaths,
-        ])
+      ? dedupeStable([...sourcePaths])
       : [];
-  const nonSharedImplementationPaths = sourcePaths.filter(
-    (pathValue) => !interfacePaths.some((interfacePath) => normalizePath(interfacePath) === normalizePath(pathValue)),
-  );
-  const implementationPaths = nonSharedImplementationPaths.length > 0
-    ? dedupeStable(nonSharedImplementationPaths)
-    : dedupeStable(sourcePaths);
+  const implementationPaths = dedupeStable(sourcePaths);
   const siblingTests = buildSiblingTestPaths(sourcePaths, carryForward.repoContext.test_files);
 
   return {
