@@ -139,6 +139,52 @@ await runScenario(
 );
 
 await runScenario(
+  "runIntakeCommand preserves TASK_GOAL_MISSING over low-confidence escalation for a goal-less spec",
+  async () => {
+    const repoRoot = await createTempRepo();
+    const specPath = join(repoRoot, "task.md");
+
+    try {
+      await writeRepoFile(
+        repoRoot,
+        "task.md",
+        [
+          "## Acceptance Criteria",
+          "",
+          "- `src/app.ts` is updated",
+          "- `tests/app.test.ts` stays aligned",
+        ].join("\n"),
+      );
+
+      const result = await runIntakeCommand(
+        {
+          repo: repoRoot,
+          spec: specPath,
+          failOnLowConfidence: true,
+        },
+        repoRoot,
+      );
+
+      assert.equal(result.status, "failed");
+      assert.equal(result.failure?.code, "TASK_GOAL_MISSING");
+      assert.ok(
+        result.artifact?.next_step_readiness.blocking_issues.some((issue) =>
+          issue.code === "TASK_GOAL_MISSING",
+        ),
+      );
+      assert.ok(
+        result.artifact?.next_step_readiness.blocking_issues.some((issue) =>
+          issue.code === "LOW_CONFIDENCE_ESCALATED",
+        ),
+      );
+      assert.notEqual(result.failure?.code, "LOW_CONFIDENCE_ESCALATED");
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
   "runIntakeCommand returns null paths when both configured-root and fallback persistence fail",
   async () => {
     const repoRoot = await createTempRepo();
