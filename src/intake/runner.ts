@@ -327,14 +327,17 @@ export async function runIntakeCommand(
       inputRecommendedUserActions: assembledResult.recommendedUserActions,
     });
     if (!failure) {
-      const lowConfidenceEscalation = successEvaluation.nextStepReadiness.blockingIssues.find(
-        (issue) => issue.code === "LOW_CONFIDENCE_ESCALATED",
-      );
+      const prioritizedBlocker =
+        successEvaluation.nextStepReadiness.blockingIssues.find(
+          (issue) => issue.code !== "LOW_CONFIDENCE_ESCALATED",
+        ) ?? successEvaluation.nextStepReadiness.blockingIssues.find(
+          (issue) => issue.code === "LOW_CONFIDENCE_ESCALATED",
+        );
 
-      if (lowConfidenceEscalation) {
+      if (prioritizedBlocker) {
         failure = createFailureDetails(
-          lowConfidenceEscalation.code,
-          lowConfidenceEscalation.message,
+          prioritizedBlocker.code,
+          prioritizedBlocker.message,
         );
       }
     }
