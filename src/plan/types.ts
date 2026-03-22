@@ -19,15 +19,34 @@ export type PlanVerificationCategory = typeof PLAN_VERIFICATION_TARGET_CATEGORIE
 export type PlanParallelizationSignal = typeof PLAN_PARALLELIZATION_SIGNALS[number];
 export type PlanItemRequiredField = typeof PLAN_ITEM_REQUIRED_FIELDS[number];
 export type PlanFoundationStatus = "ready" | "blocked" | "failed";
+export type PlanCommandStatus = PlanFoundationStatus;
 
 export interface PlanFoundationOptions {
   repo?: string;
+  outputDir?: string;
   intakePath?: string;
+}
+
+export interface PlanCommandOptions {
+  repo?: string;
+  outputDir?: string;
+}
+
+export interface PlanResolvedOutputPaths {
+  requestedOutputRoot: string | null;
+  outputRoot: string;
+  usedFallbackRoot: boolean;
+  fallbackReason: string | null;
+  intakeArtifactPath: string;
+  artifactPath: string;
+  reportPath: string;
+  debugArtifactPath: string;
 }
 
 export interface LoadedPlanFoundationInput {
   repoRoot: string;
-  artifactPath: string;
+  paths: PlanResolvedOutputPaths;
+  intakeArtifactPath: string;
   artifact: IntakeArtifact;
 }
 
@@ -52,6 +71,18 @@ export interface PlanCarryForwardContext {
   nextStepReadiness: IntakeArtifact["next_step_readiness"];
 }
 
+export interface PlanArtifactCarryForward {
+  task_spec: IntakeArtifact["task_spec"];
+  repo_context: IntakeArtifact["repo_context"];
+  candidate_targets: IntakeArtifact["candidate_targets"];
+  risk_analysis: IntakeArtifact["risk_analysis"];
+  initial_verification_targets: IntakeArtifact["initial_verification_targets"];
+  ambiguities: IntakeArtifact["ambiguities"];
+  warnings: IntakeArtifact["warnings"];
+  confidence: IntakeArtifact["confidence"];
+  next_step_readiness: IntakeArtifact["next_step_readiness"];
+}
+
 export interface PlanItemDependency {
   planItemId: string;
   type: PlanDependencyType;
@@ -70,6 +101,12 @@ export interface PlanVerificationRelevance {
 }
 
 export interface PlanParallelization {
+  signal: PlanParallelizationSignal;
+  reason: string;
+}
+
+export interface PlanParallelizationSignalEntry {
+  planItemId: string;
   signal: PlanParallelizationSignal;
   reason: string;
 }
@@ -98,6 +135,79 @@ export interface PlanItemContract {
   parallelizationSignals: readonly PlanParallelizationSignal[];
 }
 
+export interface PlanSourceIntake {
+  artifactPath: string;
+  command: IntakeArtifact["command"];
+  status: IntakeArtifact["status"];
+  summary: IntakeArtifact["summary"];
+  readyForPlanning: IntakeArtifact["next_step_readiness"]["ready"];
+}
+
+export interface PlanWritePolicy {
+  mode: "output-root-only";
+  repoReadOnlyOutsideOutputRoot: boolean;
+  allowedRoot: string;
+  allowedSideEffects: readonly string[];
+  deferredCapabilities: readonly string[];
+  disallowedCapabilities: readonly string[];
+}
+
+export interface PlanArtifactFiles {
+  artifactPath: string | null;
+  reportPath: string | null;
+}
+
+export interface PlanDependencyGraphEntry {
+  planItemId: string;
+  dependsOnPlanItemId: string;
+  type: PlanDependencyType;
+  reason: string;
+}
+
+export interface PlanConflictZone {
+  id: string;
+  title: string;
+  reason: string;
+  paths: string[];
+  planItemIds: string[];
+  riskLevel: PlanRiskLevel;
+}
+
+export type PlanPlanningReadiness = IntakeArtifact["next_step_readiness"];
+
+export interface PlanArtifact {
+  schemaVersion: string;
+  command: string;
+  stage: string;
+  status: PlanCommandStatus;
+  purpose: string;
+  repoRoot: string;
+  requestedOutputRoot: string | null;
+  outputRoot: string;
+  writePolicy: PlanWritePolicy;
+  files: PlanArtifactFiles;
+  startedAt: string;
+  finishedAt: string;
+  summary: string;
+  boundaryNotes: string[];
+  source_intake: PlanSourceIntake;
+  plan_item_contract: PlanItemContract;
+  plan_items: PlanItem[];
+  dependency_graph: PlanDependencyGraphEntry[];
+  conflict_zones: PlanConflictZone[];
+  test_obligations: PlanTestObligation[];
+  parallelization_signals: PlanParallelizationSignalEntry[];
+  carry_forward: PlanArtifactCarryForward;
+  planning_readiness: PlanPlanningReadiness;
+  failure: PlanCommandFailure | null;
+}
+
+export interface PlanCommandFailure {
+  code: string;
+  message: string;
+  fallbackReason?: string;
+}
+
 export interface PlanFoundationResult {
   command: string;
   stage: string;
@@ -122,4 +232,14 @@ export interface PlanFoundationCommandResult {
   status: PlanFoundationStatus;
   foundation: PlanFoundationResult | null;
   failure: PlanFoundationFailure | null;
+}
+
+export interface PlanCommandResult {
+  status: PlanCommandStatus;
+  artifact: PlanArtifact | null;
+  artifactPath: string | null;
+  reportPath: string | null;
+  outputRoot: string | null;
+  summary: string;
+  failure: PlanCommandFailure | null;
 }

@@ -2,12 +2,27 @@ import { Command } from "commander";
 
 import { runIntakeCommand } from "./intake/runner.js";
 import type { IntakeCommandResult } from "./intake/types.js";
+import { runPlanCommand } from "./plan/runner.js";
+import type { PlanCommandResult } from "./plan/types.js";
 
 function hasFlag(argv: string[], flag: string): boolean {
   return argv.includes(flag);
 }
 
 export function formatIntakeCommandOutput(result: IntakeCommandResult): string {
+  const lines = [
+    `Status: ${result.status}`,
+    `Summary: ${result.summary}`,
+    result.outputRoot ? `Output root: ${result.outputRoot}` : null,
+    result.artifactPath ? `Artifact: ${result.artifactPath}` : null,
+    result.reportPath ? `Report: ${result.reportPath}` : null,
+    result.failure ? `Failure: [${result.failure.code}] ${result.failure.message}` : null,
+  ].filter((line): line is string => Boolean(line));
+
+  return `${lines.join("\n")}\n`;
+}
+
+export function formatPlanCommandOutput(result: PlanCommandResult): string {
   const lines = [
     `Status: ${result.status}`,
     `Summary: ${result.summary}`,
@@ -95,6 +110,30 @@ export async function runCli(argv: string[]): Promise<number> {
       const output = formatIntakeCommandOutput(result);
 
       if (result.status === "failed") {
+        process.stderr.write(output);
+        exitCode = 1;
+        return;
+      }
+
+      process.stdout.write(output);
+    });
+
+  program
+    .command("plan")
+    .description("Run the Step 2 planning stage from the persisted Step 1 intake artifact.")
+    .option("--repo <path>", "Target repo root. Defaults to the current directory.")
+    .option(
+      "--output-dir <path>",
+      "Custom repo-internal output directory. Defaults to .forge.",
+    )
+    .action(async (options: {
+      repo?: string;
+      outputDir?: string;
+    }) => {
+      const result = await runPlanCommand(options);
+      const output = formatPlanCommandOutput(result);
+
+      if (result.status !== "ready") {
         process.stderr.write(output);
         exitCode = 1;
         return;

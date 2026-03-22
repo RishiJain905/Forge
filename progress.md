@@ -206,11 +206,17 @@
   - Locked a runtime-validated `PlanItem` contract with required fields for source requirements, affected paths, dependencies, risk level, test obligations, verification relevance, and parallelization signals.
   - Added dedicated Step 2 Part 1 coverage for ready, warning, blocked, missing-input, invalid-input, plan-item validation, and boundary-policy drift scenarios, and wired the suite into `npm.cmd test`.
   - Updated the top-level README plus `S2-B1-Done/p1-done-summary.md` so Step 2 Batch 1 Part 1 is documented and traceable.
+- Batch 1.02: `part-2-plan-command-contract-and-output-artifacts.md` (Step 2)
+  - Added the first public `forge plan` CLI command with deterministic Step 1 intake consumption, repo/output-root handling, and persisted `plan.json` / `plan-report.md` outputs in the resolved output root.
+  - Added a frozen Step 2 plan artifact contract with stable top-level metadata, source-intake references, carried-forward Step 1 context, planning readiness, and placeholder-empty Part 3/4 sections for plan items, dependencies, conflict zones, test obligations, and parallelization signals.
+  - Added an artifact-driven Step 2 plan report with the required heading order and explicit rendering of source intake, carry-forward uncertainty, planning readiness, boundary notes, and output-file metadata.
+  - Added dedicated Step 2 Part 2 regression coverage for command behavior, artifact-schema shape, report parity, custom output-root handling, unsafe output-root fallback, blocked-output persistence, and packaged smoke execution of `forge intake` followed by `forge plan`.
+  - Updated `package.json` test wiring, `scripts/smoke.mjs`, `progress.md`, and `S2-B1-Done/P2-done-summary.md` so Step 2 Batch 1 Part 2 is documented and fully traceable.
 
 ## Current Branch State
 - `dev` includes the completed Step 1 work through Batch 4.05, including the frozen Step 2 handoff contract from Intake.
-- `codex/s2-b1-p1-goal-boundaries` adds Step 2 Batch 1 Part 1 on top of `dev`, including the new internal `src/plan` foundation, the deterministic intake-consumption seam, the minimum plan-item contract, and the dedicated Step 2 Part 1 regression suite.
-- Step 2 CLI wiring and persisted `plan.json` / `plan-report.md` outputs are still deferred to the later Step 2 Batch 1 parts.
+- `codex/s2-b1-p2-contract-artifacts` adds Step 2 Batch 1 Part 2 on top of `dev`, including the public `forge plan` CLI command, the persisted Step 2 plan artifact/report contract, the new Step 2 Part 2 regression suites, and the smoke/test wiring updates.
+- Later Step 2 Batch 1 work is still deferred for substantive plan-item construction, dependency/conflict modeling, and test-obligation / parallelization population.
 
 ## Verification
 - `npm.cmd test`
@@ -219,5 +225,5 @@
 - `npm.cmd run smoke`
 
 ## Next
-- Step 2 Batch 1 Part 1 is complete.
-- Next implementation work should continue Step 2 Batch 1 with `forge_step2_batch1/part-2-plan-command-contract-and-output-artifacts.md`.
+- Step 2 Batch 1 Part 2 is complete.
+- Next implementation work should continue Step 2 Batch 1 with `forge_step2_batch1/part-3-plan-item-model-dependencies-conflict-zones.md`.

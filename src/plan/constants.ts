@@ -1,5 +1,14 @@
 export const FORGE_PLAN_COMMAND = "plan" as const;
 export const FORGE_PLAN_STAGE = "step2" as const;
+export const FORGE_PLAN_FULL_COMMAND = `forge ${FORGE_PLAN_COMMAND}` as const;
+
+export const PLAN_ARTIFACT_NAME = "plan.json" as const;
+export const PLAN_REPORT_NAME = "plan-report.md" as const;
+export const PLAN_DEBUG_ARTIFACT_NAME = "plan-debug.json" as const;
+export const PLAN_DEBUG_PLAN_ITEMS_NAME = "plan-items.json" as const;
+export const PLAN_DEBUG_DEPENDENCIES_NAME = "dependencies.json" as const;
+export const PLAN_DEBUG_CONFLICT_ZONES_NAME = "conflict-zones.json" as const;
+export const PLAN_DEBUG_TEST_OBLIGATIONS_NAME = "test-obligations.json" as const;
 
 export const STEP2_PLAN_PURPOSE =
   "Transform Step 1 Intake output into a structured implementation plan that later steps can trust." as const;
@@ -34,6 +43,18 @@ export const STEP2_DISALLOWED_CAPABILITIES = [
   "edit source files directly",
   "hide unresolved Step 1 problems",
   "act like a freeform brainstorming agent",
+] as const;
+
+export const PLAN_ALLOWED_SIDE_EFFECTS = [
+  "read the Step 1 intake artifact",
+  "write `plan.json`",
+  "write `plan-report.md`",
+] as const;
+
+export const PLAN_BOUNDARY_NOTES = [
+  "Plan consumes the persisted Step 1 intake artifact instead of re-running intake parsing.",
+  "Plan carries forward Step 1 ambiguity, warning, confidence, and readiness state without hiding it.",
+  "Real plan-item, dependency, conflict-zone, test-obligation, and parallelization modeling is deferred to later Step 2 batches.",
 ] as const;
 
 export const PLAN_ITEM_REQUIRED_FIELDS = [

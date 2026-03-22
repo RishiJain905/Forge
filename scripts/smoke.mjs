@@ -86,6 +86,54 @@ async function main() {
     assert.match(report, /Confidence/);
     assert.match(report, /Next Step Readiness/);
 
+    await rm(join(tempRepo, "task.md"), { force: true });
+    await rm(join(tempRepo, "src", "app.ts"), { force: true });
+    await rm(join(tempRepo, "tests", "app.test.ts"), { force: true });
+
+    const planResult = spawnSync(process.execPath, [
+      entryPointPath,
+      "plan",
+      "--repo",
+      tempRepo,
+    ], {
+      cwd: tempRepo,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+      },
+    });
+
+    if (planResult.error) {
+      throw planResult.error;
+    }
+
+    assert.equal(planResult.status, 0);
+    assert.match(planResult.stdout, /Status: ready/);
+    assert.match(planResult.stdout, /Artifact:/);
+    assert.match(planResult.stdout, /Report:/);
+
+    const planArtifactPath = join(tempRepo, ".forge", "plan.json");
+    const planReportPath = join(tempRepo, ".forge", "reports", "plan-report.md");
+    const planArtifact = JSON.parse(await readFile(planArtifactPath, "utf8"));
+    const planReport = await readFile(planReportPath, "utf8");
+
+    assert.equal(planArtifact.status, "ready");
+    assert.equal(planArtifact.command, "forge plan");
+    assert.equal(planArtifact.outputRoot, resolve(tempRepo, ".forge"));
+    assert.equal(planArtifact.source_intake.artifactPath, join(tempRepo, ".forge", "intake.json"));
+    assert.equal(planArtifact.planning_readiness.ready, true);
+    assert.ok(Array.isArray(planArtifact.plan_items));
+    assert.match(planReport, /Forge Plan Report/);
+    assert.match(planReport, /## Source Intake/);
+    assert.match(planReport, /## Planning Readiness/);
+
+    await writeFile(join(tempRepo, "src", "app.ts"), "export const smoke = true;\n", "utf8");
+    await writeFile(
+      join(tempRepo, "tests", "app.test.ts"),
+      "import assert from 'node:assert/strict';\n\nassert.equal(1, 1);\n",
+      "utf8",
+    );
+
     // Test prompt mode with supplemental inputs (notes, constraints, focus)
     await writeFile(
       join(tempRepo, "notes.md"),
