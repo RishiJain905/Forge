@@ -244,15 +244,21 @@ This step is the handoff surface for Step 2 planning.
 
 ## 2. Plan
 Purpose:
-Turn intake results into an execution-grade implementation plan.
+Consume the persisted Step 1 intake artifact and turn it into a structured, deterministic-first implementation plan that later steps can trust.
+
+Step 2 should treat `.forge/intake.json` as its primary input surface rather than re-running broad intake logic from raw task text or re-grounding the repo from scratch. It should carry forward task structure, repo context, candidate targets, risk analysis, ambiguities, warnings, initial verification targets, confidence, and readiness context so later steps do not have to guess what Intake already learned.
 
 Outputs include:
-- work items
+- a machine-readable planning artifact
+- a human-readable planning report
+- structured plan items
 - dependency map
 - conflict zones
 - parallelization candidates
 - test obligations
-- verification targets
+- carried-forward ambiguity and warning context
+
+Step 2 does not verify correctness directly, split work into execution streams, generate execution packets, or modify code.
 
 ## 3. Verify
 Purpose:
@@ -503,7 +509,9 @@ It now serves as the durable handoff into Step 2 planning. The current intake co
 - confidence
 - next-step readiness
 
-The next active implementation target is Step 2: Plan.
+Step 2: Plan has started.
+
+Batch 1 Part 1 now defines the Step 2 mission, boundaries, deterministic-first intake-consumption seam, and the minimum internal plan-item contract. CLI wiring plus persisted Step 2 plan/report outputs remain for the later Step 2 Batch 1 parts.
 
 ---
 

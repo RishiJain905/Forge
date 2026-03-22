@@ -200,11 +200,17 @@
   - Added a dedicated `intake.step2-handoff-contract` end-to-end suite covering grounded spec success, prompt warning handoffs, failed-but-persisted blocked runs, fallback-targeting low-confidence warnings, and `LOW_CONFIDENCE_ESCALATED` planning blockers.
   - Extended schema, report, and status regression coverage and wired the new handoff-contract suite into the default `npm.cmd test` gate.
   - Documented completion evidence in `S1-B4-done/p5-done-summary.md` after the full verification gate stayed green on `dev`.
+- Batch 1.01: `part-1-step2-goal-and-boundaries.md` (Step 2)
+  - Added a new internal `src/plan` foundation that defines the Step 2 mission, deterministic-first policy, explicit guardrails, and the minimum plan-item contract without introducing user-facing `forge plan` CLI wiring yet.
+  - Added a deterministic Step 2 input seam that reads `.forge/intake.json`, validates it through the frozen Step 1 artifact schema, and preserves the full planning handoff context instead of re-running intake logic.
+  - Locked a runtime-validated `PlanItem` contract with required fields for source requirements, affected paths, dependencies, risk level, test obligations, verification relevance, and parallelization signals.
+  - Added dedicated Step 2 Part 1 coverage for ready, warning, blocked, missing-input, invalid-input, plan-item validation, and boundary-policy drift scenarios, and wired the suite into `npm.cmd test`.
+  - Updated the top-level README plus `S2-B1-Done/p1-done-summary.md` so Step 2 Batch 1 Part 1 is documented and traceable.
 
 ## Current Branch State
-- `dev` includes the completed Batch 1.16, Batch 1.17, Batch 1.18, Batch 1.19, Batch 1.20, Batch 2.01, Batch 2.02, Batch 2.03, Batch 2.04, Batch 3.01, Batch 3.02, Batch 3.03, Batch 3.04, Batch 3.05, Batch 3.06, Batch 4.01, Batch 4.02, Batch 4.03, Batch 4.04, and Batch 4.05 implementations.
-- Batch 4 is complete on `dev`, including Step 1 freeze hardening and the explicit Step 2 handoff contract for future `forge plan` work.
-- `execution.md` now explicitly requires integration onto the target branch and fresh verification there before completion is claimed.
+- `dev` includes the completed Step 1 work through Batch 4.05, including the frozen Step 2 handoff contract from Intake.
+- `codex/s2-b1-p1-goal-boundaries` adds Step 2 Batch 1 Part 1 on top of `dev`, including the new internal `src/plan` foundation, the deterministic intake-consumption seam, the minimum plan-item contract, and the dedicated Step 2 Part 1 regression suite.
+- Step 2 CLI wiring and persisted `plan.json` / `plan-report.md` outputs are still deferred to the later Step 2 Batch 1 parts.
 
 ## Verification
 - `npm.cmd test`
@@ -213,5 +219,5 @@
 - `npm.cmd run smoke`
 
 ## Next
-- Batch 4 is complete.
-- Next implementation work should begin Step 2 `forge plan` using the frozen Step 1 intake artifact/report contract as its input surface.
+- Step 2 Batch 1 Part 1 is complete.
+- Next implementation work should continue Step 2 Batch 1 with `forge_step2_batch1/part-2-plan-command-contract-and-output-artifacts.md`.
