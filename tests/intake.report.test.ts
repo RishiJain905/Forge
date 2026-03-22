@@ -303,6 +303,79 @@ await runScenario("intake report includes the full stable heading contract in or
   assert.match(report, /## Failure[\s\S]*?- none/);
 });
 
+await runScenario("intake report overview surfaces confidence and signal counts", () => {
+  const report = createIntakeReport(createArtifact({
+    mutateAssembledResult: (result) => {
+      result.confidence = {
+        level: "low",
+        signals: {
+          taskParsing: "weak",
+          repoInspection: "partial",
+          targeting: "weak",
+        },
+        reasons: [
+          "The prompt leaves multiple open questions unresolved.",
+        ],
+      };
+      result.responsibilities.analysis.confidence = result.confidence;
+    },
+    mutateBoundarySafeResult: (result) => {
+      result.warnings = [
+        "Acceptance criteria are missing, so Step 2 planning may need user follow-up.",
+        "No tests were detected during repo grounding.",
+      ];
+      result.ambiguities = [
+        "Acceptance criteria are missing from the task input.",
+        "The prompt is too short to identify concrete files confidently.",
+        "The task references multiple surfaces.",
+      ];
+    },
+    nextStepReadiness: {
+      ready: false,
+      blockingIssues: [
+        {
+          code: "MISSING_ACCEPTANCE_CRITERIA",
+          message: "Acceptance criteria are missing from the task input.",
+        },
+      ],
+      recommendedUserActions: [],
+    },
+  }));
+
+  assert.match(
+    report,
+    /## Overview[\s\S]*Signal summary:\s+confidence\s+`low`,\s+2 warnings,\s+3 ambiguities,\s+1 blocking issue\./i,
+  );
+});
+
+await runScenario("intake report explains readiness-blocked failures without bare none", () => {
+  const report = createIntakeReport(createArtifact({
+    nextStepReadiness: {
+      ready: false,
+      blockingIssues: [
+        {
+          code: "MISSING_ACCEPTANCE_CRITERIA",
+          message: "Acceptance criteria are missing from the task input.",
+        },
+        {
+          code: "CANDIDATE_TARGETS_MISSING",
+          message: "Forge intake could not produce any plausible candidate targets for the next step.",
+        },
+      ],
+      recommendedUserActions: [
+        "Add concrete files or directories to the task input.",
+      ],
+    },
+    failure: null,
+  }));
+
+  assert.match(report, /## Failure/);
+  assert.match(report, /No runtime or persistence failure details were captured\./i);
+  assert.match(report, /driven by readiness blockers/i);
+  assert.match(report, /## Next Step Readiness[\s\S]*MISSING_ACCEPTANCE_CRITERIA/);
+  assert.doesNotMatch(report, /## Failure[\s\S]*?- none/);
+});
+
 await runScenario("intake report renders available git context details when present", () => {
   const report = createIntakeReport(createArtifact({
     mutateBoundarySafeResult: (result) => {
