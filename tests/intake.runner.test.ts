@@ -139,6 +139,41 @@ await runScenario(
 );
 
 await runScenario(
+  "runIntakeCommand preserves blocker failure details when configured-root persistence falls back successfully",
+  async () => {
+    const repoRoot = await createTempRepo();
+
+    try {
+      await writeRepoFile(repoRoot, "broken-output/reports", "not-a-directory\n");
+
+      const result = await runIntakeCommand(
+        {
+          repo: repoRoot,
+          outputDir: "broken-output",
+          prompt: "fix",
+          failOnLowConfidence: true,
+        },
+        repoRoot,
+      );
+
+      assert.equal(result.status, "failed");
+      assert.equal(result.failure?.code, "LOW_CONFIDENCE_ESCALATED");
+      assert.ok(result.failure?.fallbackReason?.includes("default .forge output root"));
+      assert.equal(result.artifact?.failure?.code, "LOW_CONFIDENCE_ESCALATED");
+      assert.ok(result.artifact?.failure?.fallbackReason?.includes("default .forge output root"));
+      assert.equal(result.artifact?.next_step_readiness.ready, false);
+      assert.ok(
+        result.artifact?.next_step_readiness.blocking_issues.some((issue) =>
+          issue.code === "LOW_CONFIDENCE_ESCALATED",
+        ),
+      );
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
   "runIntakeCommand preserves TASK_GOAL_MISSING over low-confidence escalation for a goal-less spec",
   async () => {
     const repoRoot = await createTempRepo();

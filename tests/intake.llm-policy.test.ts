@@ -193,6 +193,16 @@ await runScenario("forge intake applies additive optional reasoning task wording
     );
     assert.ok(artifact.candidate_targets?.some((target) => target.path === "src/app.ts"));
     assert.ok(
+      artifact.warnings?.some((warning) =>
+        /Optional reasoning provider test-hook enriched assist output/i.test(warning),
+      ),
+    );
+    assert.ok(
+      !artifact.confidence?.reasons?.some((reason) =>
+        /Optional reasoning provider test-hook enriched assist output/i.test(reason),
+      ),
+    );
+    assert.ok(
       artifact.confidence?.reasons?.some((reason) =>
         /optional reasoning|assist|test-hook/i.test(reason)
       ) || artifact.warnings?.some((warning) => /optional reasoning|assist|test-hook/i.test(warning)),

@@ -169,7 +169,7 @@ export async function resolveOptionalReasoning(params: {
 
     if (resolution.used) {
       pushUnique(
-        resolution.confidenceNotes,
+        resolution.warnings,
         resolution.provider
           ? `Optional reasoning provider ${resolution.provider} enriched assist output.`
           : "Optional reasoning enriched assist output.",

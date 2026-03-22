@@ -402,8 +402,8 @@ export async function runIntakeCommand(
       };
 
       const fallbackFailure = createFailureDetails(
-        persistenceFailure.code,
-        persistenceFailure.message,
+        (failure ?? persistenceFailure).code,
+        (failure ?? persistenceFailure).message,
         fallbackContext.paths.fallbackReason ?? undefined,
       );
 
@@ -433,7 +433,7 @@ export async function runIntakeCommand(
           summary:
             "Forge intake failed while persisting both the configured output root and the default .forge fallback.",
           nextStepReadiness: successEvaluation.nextStepReadiness,
-          failure: fallbackFailure,
+          failure: persistenceFailure,
         };
       }
     }
