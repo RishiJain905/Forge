@@ -12,6 +12,7 @@ import type {
   PlanCommandFailure,
   PlanCommandStatus,
   PlanFoundationResult,
+  PlanModel,
   PlanResolvedOutputPaths,
 } from "./types.js";
 
@@ -29,6 +30,7 @@ function buildPlanSummary(status: PlanCommandStatus): string {
 
 export function createPlanArtifact(params: {
   foundation: PlanFoundationResult;
+  model: PlanModel;
   paths: PlanResolvedOutputPaths;
   startedAt: string;
   finishedAt: string;
@@ -70,9 +72,9 @@ export function createPlanArtifact(params: {
       readyForPlanning: params.foundation.sourceIntake.readyForPlanning,
     },
     plan_item_contract: params.foundation.planItemContract,
-    plan_items: [],
-    dependency_graph: [],
-    conflict_zones: [],
+    plan_items: params.model.planItems,
+    dependency_graph: params.model.dependencyGraph,
+    conflict_zones: params.model.conflictZones,
     test_obligations: [],
     parallelization_signals: [],
     carry_forward: {

@@ -14,6 +14,22 @@ async function main() {
 
   try {
     await writeFile(join(tempRepo, "README.md"), "# smoke repo\n", "utf8");
+    await writeFile(
+      join(tempRepo, "package.json"),
+      JSON.stringify(
+        {
+          name: "forge-smoke-repo",
+          private: true,
+          type: "module",
+          scripts: {
+            test: "node --test",
+          },
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
     await mkdir(join(tempRepo, "src"), { recursive: true });
     await mkdir(join(tempRepo, "tests"), { recursive: true });
     await writeFile(join(tempRepo, "src", "app.ts"), "export const smoke = true;\n", "utf8");
@@ -123,6 +139,15 @@ async function main() {
     assert.equal(planArtifact.source_intake.artifactPath, join(tempRepo, ".forge", "intake.json"));
     assert.equal(planArtifact.planning_readiness.ready, true);
     assert.ok(Array.isArray(planArtifact.plan_items));
+    assert.ok(planArtifact.plan_items.length > 0);
+    assert.ok(planArtifact.dependency_graph.length > 0);
+    assert.ok(planArtifact.conflict_zones.length > 0);
+    assert.ok(planArtifact.plan_items.some((item) => item.category === "implementation"));
+    assert.ok(planArtifact.plan_items.some((item) => item.category === "test"));
+    assert.ok(
+      planArtifact.plan_items.some((item) => item.dependencies.length > 0),
+      "expected aligned source/test items to carry dependencies",
+    );
     assert.match(planReport, /Forge Plan Report/);
     assert.match(planReport, /## Source Intake/);
     assert.match(planReport, /## Planning Readiness/);

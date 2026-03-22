@@ -509,9 +509,9 @@ It now serves as the durable handoff into Step 2 planning. The current intake co
 - confidence
 - next-step readiness
 
-Step 2: Plan has started.
+Step 2: Plan is implemented through Batch 1 Part 3.
 
-Batch 1 Part 1 now defines the Step 2 mission, boundaries, deterministic-first intake-consumption seam, and the minimum internal plan-item contract. CLI wiring plus persisted Step 2 plan/report outputs remain for the later Step 2 Batch 1 parts.
+`forge plan` now consumes the persisted Step 1 handoff, writes durable `plan.json` and `plan-report.md` outputs, and emits deterministic plan items, dependency relationships, and conflict zones while keeping the public Step 2 artifact contract stable. Part 4 remains next for top-level test-obligation and parallelization aggregation plus additional carry-forward rules.
 
 ---
 

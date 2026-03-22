@@ -152,6 +152,35 @@ const planFilesSchema = z.object({
 
 const planPlanningReadinessSchema = intakeArtifactSchema.shape.next_step_readiness;
 
+function extractRequirementSeedsFromArtifact(
+  artifact: Pick<PlanArtifact, "carry_forward">,
+): string[] {
+  const taskSpec = artifact.carry_forward.task_spec;
+  const candidates = [
+    taskSpec.explicit_requirements,
+    taskSpec.acceptance_criteria,
+    taskSpec.implementation_necessities,
+    taskSpec.goal ? [taskSpec.goal] : [],
+  ];
+
+  for (const values of candidates) {
+    if (values.length > 0) {
+      return values;
+    }
+  }
+
+  return [];
+}
+
+function buildDependencyKey(params: {
+  planItemId: string;
+  dependsOnPlanItemId: string;
+  type: string;
+  reason: string;
+}): string {
+  return `${params.planItemId}:${params.dependsOnPlanItemId}:${params.type}:${params.reason}`;
+}
+
 export const PLAN_ARTIFACT_TOP_LEVEL_KEYS = [
   "schemaVersion",
   "command",
@@ -272,6 +301,88 @@ export const planArtifactSchema = z.object({
       code: z.ZodIssueCode.custom,
       message: "Plan artifact stage drifted from the Step 2 contract.",
       path: ["stage"],
+    });
+  }
+  const planItemIds = new Set(value.plan_items.map((item) => item.id));
+  if (planItemIds.size !== value.plan_items.length) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Plan artifact contains duplicate plan item ids.",
+      path: ["plan_items"],
+    });
+  }
+  for (const [index, item] of value.plan_items.entries()) {
+    for (const [dependencyIndex, dependency] of item.dependencies.entries()) {
+      if (!planItemIds.has(dependency.planItemId)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Plan item dependencies must reference real plan item ids.",
+          path: ["plan_items", index, "dependencies", dependencyIndex, "planItemId"],
+        });
+      }
+    }
+  }
+  for (const [index, dependency] of value.dependency_graph.entries()) {
+    if (!planItemIds.has(dependency.planItemId) || !planItemIds.has(dependency.dependsOnPlanItemId)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Dependency graph entries must reference real plan item ids.",
+        path: ["dependency_graph", index],
+      });
+    }
+  }
+  for (const [index, zone] of value.conflict_zones.entries()) {
+    for (const [planItemIndex, planItemId] of zone.planItemIds.entries()) {
+      if (!planItemIds.has(planItemId)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Conflict zones must reference real plan item ids.",
+          path: ["conflict_zones", index, "planItemIds", planItemIndex],
+        });
+      }
+    }
+  }
+  const flattenedDependencies = value.plan_items.flatMap((item) =>
+    item.dependencies.map((dependency) => ({
+      planItemId: item.id,
+      dependsOnPlanItemId: dependency.planItemId,
+      type: dependency.type,
+      reason: dependency.reason,
+    })),
+  );
+  const flattenedKeys = new Set(flattenedDependencies.map((dependency) => buildDependencyKey(dependency)));
+  const graphKeys = new Set(value.dependency_graph.map((dependency) => buildDependencyKey(dependency)));
+  if (flattenedKeys.size !== graphKeys.size) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Flattened dependency graph must match the per-item dependency lists.",
+      path: ["dependency_graph"],
+    });
+  } else {
+    for (const dependencyKey of flattenedKeys) {
+      if (!graphKeys.has(dependencyKey)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Flattened dependency graph must match the per-item dependency lists.",
+          path: ["dependency_graph"],
+        });
+        break;
+      }
+    }
+  }
+  const hasUsablePlanningSignal =
+    extractRequirementSeedsFromArtifact(value).length > 0 ||
+    value.carry_forward.candidate_targets.length > 0 ||
+    value.carry_forward.initial_verification_targets.length > 0;
+  if (
+    hasUsablePlanningSignal &&
+    (value.status === "ready" || value.status === "blocked") &&
+    value.plan_items.length === 0
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Planning-ready or blocked artifacts must emit plan items when Step 1 provided usable planning signals.",
+      path: ["plan_items"],
     });
   }
 });

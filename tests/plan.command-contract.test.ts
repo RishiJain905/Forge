@@ -88,6 +88,9 @@ await runScenario(
         files?: { artifactPath?: string | null; reportPath?: string | null };
         source_intake?: { artifactPath?: string; summary?: string; readyForPlanning?: boolean };
         carry_forward?: { confidence?: { level?: string } };
+        plan_items?: Array<{ dependencies: Array<{ planItemId: string; type: string; reason: string }> }>;
+        dependency_graph?: unknown[];
+        conflict_zones?: unknown[];
       }>(artifactPath);
 
       assert.equal(planArtifact.status, "ready");
@@ -97,6 +100,9 @@ await runScenario(
       assert.equal(planArtifact.source_intake?.artifactPath, join(repoRoot, ".forge", "intake.json"));
       assert.equal(planArtifact.source_intake?.readyForPlanning, true);
       assert.equal(planArtifact.carry_forward?.confidence?.level, intakeArtifact.confidence.level);
+      assert.ok((planArtifact.plan_items?.length ?? 0) > 0, "expected populated plan items");
+      assert.ok((planArtifact.dependency_graph?.length ?? 0) > 0, "expected explicit dependency graph");
+      assert.ok((planArtifact.conflict_zones?.length ?? 0) > 0, "expected visible conflict zones");
     } finally {
       await disposeTempRepo(repoRoot);
     }
@@ -131,6 +137,9 @@ await runScenario(
           warnings?: string[];
           confidence?: { level?: string };
         };
+        plan_items?: Array<{ dependencies: Array<{ planItemId: string; type: string; reason: string }> }>;
+        dependency_graph?: unknown[];
+        conflict_zones?: unknown[];
       }>(artifactPath);
 
       assert.equal(planArtifact.status, "ready");
@@ -138,6 +147,9 @@ await runScenario(
       assert.equal(planArtifact.carry_forward?.confidence?.level, "low");
       assert.ok((planArtifact.carry_forward?.ambiguities?.length ?? 0) > 0);
       assert.ok((planArtifact.carry_forward?.warnings?.length ?? 0) > 0);
+      assert.ok((planArtifact.plan_items?.length ?? 0) > 0, "expected populated plan items");
+      assert.ok((planArtifact.dependency_graph?.length ?? 0) > 0, "expected explicit dependency graph");
+      assert.ok((planArtifact.conflict_zones?.length ?? 0) > 0, "expected visible conflict zones");
     } finally {
       await disposeTempRepo(repoRoot);
     }
@@ -171,6 +183,9 @@ await runScenario(
         status: "ready" | "blocked" | "failed";
         planning_readiness?: { ready?: boolean };
         failure?: { code?: string; message?: string } | null;
+        plan_items?: Array<{ dependencies: Array<{ planItemId: string; type: string; reason: string }> }>;
+        dependency_graph?: unknown[];
+        conflict_zones?: unknown[];
       }>(artifactPath);
 
       assert.equal(await fileExists(artifactPath), true);
@@ -178,6 +193,9 @@ await runScenario(
       assert.equal(planArtifact.status, "blocked");
       assert.equal(planArtifact.planning_readiness?.ready, false);
       assert.equal(planArtifact.failure, null);
+      assert.ok((planArtifact.plan_items?.length ?? 0) > 0, "expected diagnostic plan items");
+      assert.ok((planArtifact.dependency_graph?.length ?? 0) > 0, "expected diagnostic dependency graph");
+      assert.ok((planArtifact.conflict_zones?.length ?? 0) > 0, "expected diagnostic conflict zones");
     } finally {
       await disposeTempRepo(repoRoot);
     }

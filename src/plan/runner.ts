@@ -15,6 +15,7 @@ import {
   resolvePlanFoundationInput,
 } from "./input.js";
 import { createPlanArtifact, buildPlanCommandFailure } from "./artifact.js";
+import { buildPlanModel } from "./planner.js";
 import { createPlanReport } from "./report.js";
 import { validatePlanFoundationResult } from "./schema.js";
 import { persistIntakeOutputs } from "../intake/persistence.js";
@@ -151,10 +152,12 @@ export async function runPlanCommand(
   try {
     const input = await resolvePlanFoundationInput(options, currentWorkingDirectory);
     const foundation = buildPlanFoundation(input);
+    const model = buildPlanModel(foundation);
     const startedAt = new Date().toISOString();
     const finishedAt = new Date().toISOString();
     const artifact = createPlanArtifact({
       foundation,
+      model,
       paths: input.paths,
       startedAt,
       finishedAt,

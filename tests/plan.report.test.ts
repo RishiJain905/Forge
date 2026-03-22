@@ -80,7 +80,7 @@ const REQUIRED_HEADINGS = [
 ] as const;
 
 await runScenario(
-  "forge plan report stays aligned with the artifact and renders empty planning sections honestly",
+  "forge plan report stays aligned with the artifact and renders populated planning sections honestly",
   async () => {
     const repoRoot = await createTempRepo("forge-plan-report-");
 
@@ -103,6 +103,14 @@ await runScenario(
         summary: string;
         files: { artifactPath: string | null; reportPath: string | null };
         planning_readiness: { ready: boolean };
+        plan_items: Array<{ id: string; dependencies: Array<{ planItemId: string; type: string; reason: string }> }>;
+        dependency_graph: Array<{
+          planItemId: string;
+          dependsOnPlanItemId: string;
+          type: string;
+          reason: string;
+        }>;
+        conflict_zones: Array<{ id: string; planItemIds: string[] }>;
         source_intake: {
           artifactPath: string;
           command: string;
@@ -120,6 +128,11 @@ await runScenario(
       const report = await readTextFile(reportPath);
       const readinessBody = sectionBody(report, "Planning Readiness").join("\n");
       const carryForwardBody = sectionBody(report, "Carry-Forward Context").join("\n");
+      const planItemsBody = sectionBody(report, "Plan Items");
+      const dependenciesBody = sectionBody(report, "Dependencies");
+      const conflictZonesBody = sectionBody(report, "Conflict Zones");
+      const testObligationsBody = sectionBody(report, "Test Obligations");
+      const parallelizationBody = sectionBody(report, "Parallelization");
 
       assert.deepEqual(extractLevelTwoHeadings(report), [...REQUIRED_HEADINGS]);
       assert.equal(artifact.files.artifactPath, artifactPath);
@@ -138,11 +151,25 @@ await runScenario(
 
       assert.ok(carriedForwardEvidence);
       assert.ok(carryForwardBody.includes(carriedForwardEvidence));
-      assert.deepEqual(sectionBody(report, "Plan Items"), ["- none"]);
-      assert.deepEqual(sectionBody(report, "Dependencies"), ["- none"]);
-      assert.deepEqual(sectionBody(report, "Conflict Zones"), ["- none"]);
-      assert.deepEqual(sectionBody(report, "Test Obligations"), ["- none"]);
-      assert.deepEqual(sectionBody(report, "Parallelization"), ["- none"]);
+      assert.ok(artifact.plan_items.length > 0, "expected populated plan items");
+      assert.ok(artifact.dependency_graph.length > 0, "expected explicit dependency graph");
+      assert.ok(artifact.conflict_zones.length > 0, "expected visible conflict zones");
+      assert.ok(planItemsBody.length > 0);
+      assert.ok(dependenciesBody.length > 0);
+      assert.ok(conflictZonesBody.length > 0);
+      assert.notDeepEqual(planItemsBody, ["- none"]);
+      assert.notDeepEqual(dependenciesBody, ["- none"]);
+      assert.notDeepEqual(conflictZonesBody, ["- none"]);
+      assert.ok(testObligationsBody.some((line) => /deferred.*Part 4/i.test(line)));
+      assert.ok(testObligationsBody.some((line) => /Plan Items/i.test(line)));
+      assert.ok(parallelizationBody.some((line) => /deferred.*Part 4/i.test(line)));
+      assert.ok(parallelizationBody.some((line) => /Plan Items/i.test(line)));
+      for (const item of artifact.plan_items) {
+        assert.ok(report.includes(item.id), `expected report to reference plan item ${item.id}`);
+      }
+      for (const zone of artifact.conflict_zones) {
+        assert.ok(report.includes(zone.id), `expected report to reference conflict zone ${zone.id}`);
+      }
     } finally {
       await disposeTempRepo(repoRoot);
     }

@@ -173,6 +173,12 @@ export interface PlanConflictZone {
   riskLevel: PlanRiskLevel;
 }
 
+export interface PlanModel {
+  planItems: PlanItem[];
+  dependencyGraph: PlanDependencyGraphEntry[];
+  conflictZones: PlanConflictZone[];
+}
+
 export type PlanPlanningReadiness = IntakeArtifact["next_step_readiness"];
 
 export interface PlanArtifact {

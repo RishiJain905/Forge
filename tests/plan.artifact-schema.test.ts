@@ -108,8 +108,20 @@ type PlanArtifact = {
     parallelizationSignals: string[];
   };
   plan_items: unknown[];
-  dependency_graph: unknown[];
-  conflict_zones: unknown[];
+  dependency_graph: Array<{
+    planItemId: string;
+    dependsOnPlanItemId: string;
+    type: string;
+    reason: string;
+  }>;
+  conflict_zones: Array<{
+    id: string;
+    title: string;
+    reason: string;
+    paths: string[];
+    planItemIds: string[];
+    riskLevel: string;
+  }>;
   test_obligations: unknown[];
   parallelization_signals: unknown[];
   carry_forward: {
@@ -191,9 +203,56 @@ await runScenario(
         artifact.plan_item_contract.parallelizationSignals,
         [...PLAN_PARALLELIZATION_SIGNALS],
       );
-      assert.equal(artifact.plan_items.length, 0);
-      assert.equal(artifact.dependency_graph.length, 0);
-      assert.equal(artifact.conflict_zones.length, 0);
+      assert.ok(artifact.plan_items.length > 0, "expected populated plan items");
+      assert.ok(artifact.dependency_graph.length > 0, "expected explicit dependency graph");
+      assert.ok(artifact.conflict_zones.length > 0, "expected visible conflict zones");
+      assert.ok(
+        artifact.plan_items.every((item) => {
+          const planItem = item as {
+            id: string;
+            title: string;
+            description: string;
+            category: string;
+            sourceRequirements: string[];
+            likelyAffectedPaths: string[];
+            dependencies: Array<{ planItemId: string; type: string; reason: string }>;
+            riskLevel: string;
+            testObligations: Array<{ category: string; reason: string }>;
+            verificationRelevance: { relevant: boolean; categories: string[]; notes: string[] };
+            parallelization: { signal: string; reason: string };
+          };
+
+          return (
+            planItem.id.length > 0 &&
+            planItem.title.length > 0 &&
+            planItem.description.length > 0 &&
+            planItem.category.length > 0 &&
+            planItem.sourceRequirements.length > 0 &&
+            planItem.likelyAffectedPaths.length > 0 &&
+            Array.isArray(planItem.dependencies) &&
+            Array.isArray(planItem.testObligations) &&
+            typeof planItem.verificationRelevance.relevant === "boolean" &&
+            Array.isArray(planItem.verificationRelevance.categories) &&
+            Array.isArray(planItem.verificationRelevance.notes) &&
+            planItem.parallelization.signal.length > 0 &&
+            planItem.parallelization.reason.length > 0
+          );
+        }),
+      );
+      assert.ok(
+        artifact.dependency_graph.every(
+          (edge) =>
+            artifact.plan_items.some((item) => (item as { id: string }).id === edge.planItemId) &&
+            artifact.plan_items.some((item) => (item as { id: string }).id === edge.dependsOnPlanItemId),
+        ),
+      );
+      assert.ok(
+        artifact.conflict_zones.every((zone) =>
+          zone.planItemIds.every((planItemId) =>
+            artifact.plan_items.some((item) => (item as { id: string }).id === planItemId),
+          ),
+        ),
+      );
       assert.equal(artifact.test_obligations.length, 0);
       assert.equal(artifact.parallelization_signals.length, 0);
       assert.deepEqual(artifact.carry_forward.task_spec, intakeArtifact.task_spec);
