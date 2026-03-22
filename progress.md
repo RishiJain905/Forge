@@ -188,10 +188,16 @@
   - Surfaced visible optional-reasoning provenance through confidence reasons when `--llm-assist` materially enriches task wording, without changing deterministic candidate targeting.
   - Expanded `warnings.json` with compact optional-reasoning usage metadata while preserving structured warning items, readiness data, and failure details.
   - Expanded focused regression coverage and re-verified the full Step 1 gate on `dev`.
+- Batch 4.04: `part-4-step1-polish-test-hardening-and-freeze-criteria.md`
+  - Polished the Step 1 report so warning-heavy and readiness-blocked failed runs now tell a clearer story through overview signal summaries and better failure narration without changing the report contract.
+  - Hardened the freeze gate with repeated-run low-confidence coverage, assist-off versus assist-on authoritative-targeting coverage, failed-but-persisted debug coverage, and stronger packaged smoke coverage for spec mode, prompt mode, and bounded assist fallback.
+  - Fixed low-confidence failure persistence so escalated low-confidence runs now carry explicit failure details while preserving more specific blocker precedence for CLI and artifact consumers.
+  - Confirmed that no blocking Step 1 TODO/FIXME/XXX markers remain in the Step 1 code and test surfaces, and documented Step 1 as frozen for V1 except for future bug fixes in `S1-B4-done/p4-done.md`.
+  - Re-verified the full Step 1 gate on `dev` with fresh `npm.cmd test`, `npm.cmd run typecheck`, `npm.cmd run build`, and `npm.cmd run smoke`.
 
 ## Current Branch State
-- `dev` includes the completed Batch 1.16, Batch 1.17, Batch 1.18, Batch 1.19, Batch 1.20, Batch 2.01, Batch 2.02, Batch 2.03, Batch 2.04, Batch 3.01, Batch 3.02, Batch 3.03, Batch 3.04, Batch 3.05, Batch 3.06, Batch 4.01, Batch 4.02, and Batch 4.03 implementations.
-- Batch 4 Part 3 is complete on `dev`, including structured git/context and confidence warning items, visible assist provenance in confidence reasons, and richer debug warning payloads with optional-reasoning usage metadata.
+- `dev` includes the completed Batch 1.16, Batch 1.17, Batch 1.18, Batch 1.19, Batch 1.20, Batch 2.01, Batch 2.02, Batch 2.03, Batch 2.04, Batch 3.01, Batch 3.02, Batch 3.03, Batch 3.04, Batch 3.05, Batch 3.06, Batch 4.01, Batch 4.02, Batch 4.03, and Batch 4.04 implementations.
+- Batch 4 Part 4 is complete on `dev`, including final report polish, stronger freeze/e2e coverage, explicit low-confidence failure detail persistence with preserved blocker precedence, and Step 1 freeze documentation.
 - `execution.md` now explicitly requires integration onto the target branch and fresh verification there before completion is claimed.
 
 ## Verification
@@ -201,4 +207,4 @@
 - `npm.cmd run smoke`
 
 ## Next
-- Next Batch 4 target: `forge_step1_batch4/part-4-step1-polish-test-hardening-and-freeze-criteria.md`
+- Next Batch 4 target: `forge_step1_batch4/part-5-step2-handoff-contract-for-plan.md`
