@@ -32,6 +32,10 @@ function renderList(items: string[]): string {
   return items.map((item) => `- ${item}`).join("\n");
 }
 
+function formatCount(count: number, singular: string, plural: string): string {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
 function renderSection(title: string, lines: string[]): string {
   return [
     `## ${title}`,
@@ -176,6 +180,16 @@ function renderOverviewSection(artifact: IntakeArtifact): string {
   const readinessText = artifact.next_step_readiness.ready
     ? "ready for `forge plan`"
     : "not ready for `forge plan`";
+  const signalSummary = [
+    `- Signal summary: confidence \`${artifact.confidence.level}\``,
+    formatCount(artifact.warnings.length, "warning", "warnings"),
+    formatCount(artifact.ambiguities.length, "ambiguity", "ambiguities"),
+    formatCount(
+      artifact.next_step_readiness.blocking_issues.length,
+      "blocking issue",
+      "blocking issues",
+    ),
+  ].join(", ") + ".";
 
   return renderSection("Overview", [
     `Forge intake completed with status \`${artifact.status}\` and is ${readinessText}.`,
@@ -183,6 +197,7 @@ function renderOverviewSection(artifact: IntakeArtifact): string {
     `- Stage: \`${artifact.stage}\``,
     `- Repo root: \`${artifact.repoRoot}\``,
     `- Output root: \`${artifact.outputRoot}\``,
+    signalSummary,
   ]);
 }
 
@@ -426,6 +441,17 @@ function renderOutputFilesSection(artifact: IntakeArtifact): string {
 
 function renderFailureSection(artifact: IntakeArtifact): string {
   if (!artifact.failure) {
+    const hasReadinessBlockers =
+      !artifact.next_step_readiness.ready &&
+      artifact.next_step_readiness.blocking_issues.length > 0;
+
+    if (hasReadinessBlockers) {
+      return renderSection("Failure", [
+        "No runtime or persistence failure details were captured.",
+        "This failed state is driven by readiness blockers in `Next Step Readiness`.",
+      ]);
+    }
+
     return renderSection("Failure", ["- none"]);
   }
 
