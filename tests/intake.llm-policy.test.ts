@@ -203,6 +203,67 @@ await runScenario("forge intake applies additive optional reasoning task wording
   }
 });
 
+await runScenario("forge intake keeps deterministic candidate targets stable between assist-off and assist-on for the same prompt", async () => {
+  const repoRoot = await createTempRepo();
+
+  try {
+    const prompt = "Refine retry wording in src/app.ts and keep tests aligned.";
+
+    const deterministicRun = await runIntakeCommand(
+      {
+        repo: repoRoot,
+        prompt,
+      },
+      repoRoot,
+    );
+    const assistedRun = await runIntakeCommand(
+      {
+        repo: repoRoot,
+        prompt,
+        llmAssist: true,
+      },
+      repoRoot,
+      {
+        optionalReasoningHook: async () => ({
+          provider: "test-hook",
+          warnings: ["Assist suggested wording cleanup."],
+          recommendedUserActions: ["Review the wording enrichment before planning."],
+          confidenceNotes: ["Assist provenance"],
+          taskWording: {
+            summary: "Clarify retry wording in src/app.ts while keeping tests aligned.",
+          },
+        }),
+      },
+    );
+
+    assert.equal(deterministicRun.status, "warning");
+    assert.equal(assistedRun.status, "warning");
+    assert.equal(deterministicRun.artifact?.runtime_options.llm_mode, "deterministic");
+    assert.equal(assistedRun.artifact?.runtime_options.llm_mode, "assist");
+    assert.deepEqual(assistedRun.artifact?.candidate_targets, deterministicRun.artifact?.candidate_targets);
+    assert.notEqual(
+      assistedRun.artifact?.task_spec.summary,
+      deterministicRun.artifact?.task_spec.summary,
+    );
+    assert.equal(
+      assistedRun.artifact?.task_spec.summary,
+      "Clarify retry wording in src/app.ts while keeping tests aligned.",
+    );
+    assert.ok(
+      assistedRun.artifact?.warnings.some((warning) =>
+        /assist suggested wording cleanup/i.test(warning),
+      ),
+    );
+    assert.ok(
+      assistedRun.artifact?.confidence.reasons.some((reason) =>
+        /assist provenance|test-hook/i.test(reason),
+      ),
+    );
+  } finally {
+    await disposeTempRepo(repoRoot);
+  }
+});
+
 if (process.exitCode && process.exitCode !== 0) {
   process.exit(process.exitCode);
 }

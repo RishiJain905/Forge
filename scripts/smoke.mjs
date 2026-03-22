@@ -153,6 +153,85 @@ async function main() {
     // Constraint content renders in the report; note content does not (only count is shown)
     assert.match(promptReport, /Do not change public API/);
 
+    const lowConfidencePromptResult = spawnSync(process.execPath, [
+      entryPointPath,
+      "intake",
+      "--repo",
+      tempRepo,
+      "--prompt",
+      "fix",
+    ], {
+      cwd: tempRepo,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+      },
+    });
+
+    if (lowConfidencePromptResult.error) {
+      throw lowConfidencePromptResult.error;
+    }
+
+    assert.equal(lowConfidencePromptResult.status, 0);
+    assert.match(lowConfidencePromptResult.stdout, /Status: warning/);
+
+    const lowConfidenceArtifact = JSON.parse(await readFile(artifactPath, "utf8"));
+    const lowConfidenceReport = await readFile(reportPath, "utf8");
+
+    assert.equal(lowConfidenceArtifact.input_mode, "prompt");
+    assert.equal(lowConfidenceArtifact.status, "warning");
+    assert.equal(lowConfidenceArtifact.runtime_options.llm_mode, "deterministic");
+    assert.equal(lowConfidenceArtifact.confidence.level, "low");
+    assert.equal(lowConfidenceArtifact.next_step_readiness.ready, true);
+    assert.ok(Array.isArray(lowConfidenceArtifact.candidate_targets));
+    assert.ok(lowConfidenceArtifact.candidate_targets.length > 0);
+    assert.match(lowConfidenceReport, /## Task Spec/);
+    assert.match(lowConfidenceReport, /## Confidence/);
+    assert.match(lowConfidenceReport, /## Next Step Readiness/);
+
+    const assistFallbackResult = spawnSync(process.execPath, [
+      entryPointPath,
+      "intake",
+      "--repo",
+      tempRepo,
+      "--prompt",
+      "fix",
+      "--llm-assist",
+    ], {
+      cwd: tempRepo,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+      },
+    });
+
+    if (assistFallbackResult.error) {
+      throw assistFallbackResult.error;
+    }
+
+    assert.equal(assistFallbackResult.status, 0);
+    assert.match(assistFallbackResult.stdout, /Status: warning/);
+
+    const assistFallbackArtifact = JSON.parse(await readFile(artifactPath, "utf8"));
+    const assistFallbackReport = await readFile(reportPath, "utf8");
+
+    assert.equal(assistFallbackArtifact.input_mode, "prompt");
+    assert.equal(assistFallbackArtifact.status, "warning");
+    assert.equal(assistFallbackArtifact.runtime_options.llm_mode, "assist");
+    assert.equal(assistFallbackArtifact.confidence.level, "low");
+    assert.equal(assistFallbackArtifact.next_step_readiness.ready, true);
+    assert.deepEqual(
+      assistFallbackArtifact.candidate_targets,
+      lowConfidenceArtifact.candidate_targets,
+    );
+    assert.ok(
+      assistFallbackArtifact.warnings.some((warning) =>
+        /no optional reasoning backend|continued in deterministic mode/i.test(warning),
+      ),
+    );
+    assert.match(assistFallbackReport, /## Confidence/);
+    assert.match(assistFallbackReport, /## Next Step Readiness/);
+
     // Test mode-conflict (--spec and --prompt together)
     const conflictResult = spawnSync(process.execPath, [
       entryPointPath,
