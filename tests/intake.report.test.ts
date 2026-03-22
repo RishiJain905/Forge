@@ -376,6 +376,107 @@ await runScenario("intake report explains readiness-blocked failures without bar
   assert.doesNotMatch(report, /## Failure[\s\S]*?- none/);
 });
 
+await runScenario("intake report makes warning-ready planning handoffs explicit", () => {
+  const report = createIntakeReport(createArtifact({
+    mutateAssembledResult: (result) => {
+      result.ambiguities = [
+        "Acceptance criteria are missing from the task input.",
+      ];
+      result.warnings = [
+        "Acceptance criteria are missing, so Step 2 planning may need user follow-up.",
+      ];
+      result.confidence = {
+        level: "medium",
+        signals: {
+          taskParsing: "partial",
+          repoInspection: "strong",
+          targeting: "strong",
+        },
+        reasons: [
+          "Acceptance criteria are missing from the task input.",
+        ],
+      };
+      result.responsibilities.analysis.ambiguities = [...result.ambiguities];
+      result.responsibilities.analysis.warnings = [...result.warnings];
+      result.responsibilities.analysis.confidence = result.confidence;
+    },
+    mutateBoundarySafeResult: (result) => {
+      result.ambiguities = [
+        "Acceptance criteria are missing from the task input.",
+      ];
+      result.warnings = [
+        "Acceptance criteria are missing, so Step 2 planning may need user follow-up.",
+      ];
+    },
+    nextStepReadiness: {
+      ready: true,
+      blockingIssues: [],
+      recommendedUserActions: [
+        "Add explicit acceptance criteria to the task input before planning.",
+      ],
+    },
+  }));
+
+  assert.match(
+    report,
+    /## Next Step Readiness[\s\S]*ready for `forge plan`, but warnings and ambiguities should remain visible during planning\./i,
+  );
+});
+
+await runScenario("intake report explains persisted failure handoffs remain useful for diagnosis", () => {
+  const report = createIntakeReport(createArtifact({
+    mutateAssembledResult: (result) => {
+      result.confidence = {
+        level: "low",
+        signals: {
+          taskParsing: "weak",
+          repoInspection: "strong",
+          targeting: "partial",
+        },
+        reasons: [
+          "Candidate targeting relies on fallback repo structure.",
+        ],
+      };
+      result.responsibilities.analysis.confidence = result.confidence;
+    },
+    mutateBoundarySafeResult: (result) => {
+      result.candidateTargets = [
+        {
+          path: "src/app.ts",
+          kind: "source",
+          matchType: "fallback",
+          reason: "Fallback repo mapping.",
+        },
+      ];
+    },
+    nextStepReadiness: {
+      ready: false,
+      blockingIssues: [
+        {
+          code: "LOW_CONFIDENCE_ESCALATED",
+          message: "Forge intake was configured to fail on low confidence, and the final confidence level is low.",
+        },
+      ],
+      recommendedUserActions: [
+        "Expand the prompt before planning.",
+      ],
+    },
+    failure: {
+      code: "LOW_CONFIDENCE_ESCALATED",
+      message: "Forge intake was configured to fail on low confidence, and the final confidence level is low.",
+    },
+  }));
+
+  assert.match(
+    report,
+    /## Next Step Readiness[\s\S]*artifact sections below still capture the last normalized task, repo context, candidate targets, risks, and recommended actions for diagnosis\./i,
+  );
+  assert.match(
+    report,
+    /## Failure[\s\S]*Persisted task, repo, targeting, risk, and readiness sections remain the best available handoff for diagnosing why planning is blocked\./i,
+  );
+});
+
 await runScenario("intake report renders available git context details when present", () => {
   const report = createIntakeReport(createArtifact({
     mutateBoundarySafeResult: (result) => {

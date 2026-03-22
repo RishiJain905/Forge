@@ -307,6 +307,43 @@ await runScenario("artifact schema preserves strict_focus inside runtime_options
   );
 });
 
+await runScenario("artifact schema preserves the Step 2 handoff contract on failed persisted artifacts", () => {
+  const artifact = createValidArtifact() as IntakeArtifact;
+
+  artifact.status = "failed";
+  artifact.summary = "Forge intake is not ready for forge plan because blocking issues remain.";
+  artifact.warnings = [
+    "Candidate targeting depends on fallback repo structure.",
+  ];
+  artifact.ambiguities = [
+    "Acceptance criteria are missing from the task input.",
+  ];
+  artifact.failure = {
+    code: "LOW_CONFIDENCE_ESCALATED",
+    message: "Forge intake was configured to fail on low confidence, and the final confidence level is low.",
+  };
+  artifact.next_step_readiness = {
+    ready: false,
+    blocking_issues: [
+      {
+        code: "LOW_CONFIDENCE_ESCALATED",
+        message: "Forge intake was configured to fail on low confidence, and the final confidence level is low.",
+      },
+    ],
+    recommended_user_actions: [
+      "Expand the prompt before planning.",
+    ],
+  };
+
+  const parsed = validateIntakeArtifact(artifact);
+
+  assert.equal(parsed.status, "failed");
+  assert.equal(parsed.next_step_readiness.ready, false);
+  assert.ok(parsed.candidate_targets.length > 0);
+  assert.ok(parsed.initial_verification_targets.length > 0);
+  assert.equal(parsed.failure?.code, "LOW_CONFIDENCE_ESCALATED");
+});
+
 await runScenario("artifact schema accepts richer Batch 3 task and repo context fields", () => {
   const artifact = createValidArtifact() as unknown as Record<string, unknown> & {
     task_spec: Record<string, unknown>;

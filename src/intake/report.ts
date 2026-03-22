@@ -403,11 +403,25 @@ function renderConfidenceSection(artifact: IntakeArtifact): string {
   ]);
 }
 
+function buildReadinessLead(artifact: IntakeArtifact): string {
+  if (!artifact.next_step_readiness.ready) {
+    return "Intake is not ready for `forge plan` because blocking issues remain. The artifact sections below still capture the last normalized task, repo context, candidate targets, risks, and recommended actions for diagnosis.";
+  }
+
+  if (artifact.confidence.level === "low") {
+    return "Intake is ready for `forge plan`, but the handoff should be treated as provisional because confidence is low.";
+  }
+
+  if (artifact.warnings.length > 0 || artifact.ambiguities.length > 0) {
+    return "Intake is ready for `forge plan`, but warnings and ambiguities should remain visible during planning.";
+  }
+
+  return "Intake is ready for `forge plan` on the current artifact state.";
+}
+
 function renderNextStepReadinessSection(artifact: IntakeArtifact): string {
   return renderSection("Next Step Readiness", [
-    artifact.next_step_readiness.ready
-      ? "Intake is ready for `forge plan` on the current artifact state."
-      : "Intake is not ready for `forge plan` because blocking issues remain.",
+    buildReadinessLead(artifact),
     `- Ready for \`forge plan\`: \`${artifact.next_step_readiness.ready}\``,
     "",
     "### Blocking Issues",
@@ -457,6 +471,7 @@ function renderFailureSection(artifact: IntakeArtifact): string {
 
   return renderSection("Failure", [
     "Failure details are reported directly from the final artifact state.",
+    "Persisted task, repo, targeting, risk, and readiness sections remain the best available handoff for diagnosing why planning is blocked.",
     `- Code: \`${artifact.failure.code}\``,
     `- Message: ${artifact.failure.message}`,
     artifact.failure.fallbackReason
