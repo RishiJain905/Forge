@@ -326,6 +326,18 @@ export async function runIntakeCommand(
       inputAmbiguityItems: assembledResult.responsibilities.analysis.ambiguityItems,
       inputRecommendedUserActions: assembledResult.recommendedUserActions,
     });
+    if (!failure) {
+      const lowConfidenceEscalation = successEvaluation.nextStepReadiness.blockingIssues.find(
+        (issue) => issue.code === "LOW_CONFIDENCE_ESCALATED",
+      );
+
+      if (lowConfidenceEscalation) {
+        failure = createFailureDetails(
+          lowConfidenceEscalation.code,
+          lowConfidenceEscalation.message,
+        );
+      }
+    }
     const finalAssembledResult = {
       ...assembledResult,
       taskSpec: enrichedTaskSpec,
