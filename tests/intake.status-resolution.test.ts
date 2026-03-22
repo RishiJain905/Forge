@@ -243,6 +243,50 @@ await runScenario("status resolver keeps fallback-only targeting and strict-focu
   assert.deepEqual(evaluation.nextStepReadiness.blockingIssues, []);
 });
 
+await runScenario("status resolver keeps warning-only planning handoffs ready when ambiguities are non-blocking", () => {
+  const evaluation = evaluateSuccessModel({
+    taskSpec: createTaskSpec({
+      acceptanceCriteria: [],
+      hasAcceptanceCriteria: false,
+    }),
+    repoContext: createRepoContext(),
+    candidateTargets: createCandidateTargets(),
+    failure: null,
+    confidenceLevel: "medium",
+    failOnLowConfidence: false,
+    validationBlockingIssues: [],
+    inputWarnings: [
+      "Acceptance criteria are missing, so Step 2 planning may need user follow-up.",
+    ],
+    inputAmbiguities: [
+      "Acceptance criteria are missing from the task input.",
+    ],
+    inputAmbiguityItems: [
+      {
+        type: "acceptance_criteria",
+        severity: "high",
+        message: "Acceptance criteria are missing from the task input.",
+      },
+    ],
+    inputRecommendedUserActions: [
+      "Add explicit acceptance criteria to the task input before planning.",
+    ],
+  });
+
+  const status = resolveIntakeStatus({
+    failure: null,
+    nextStepReadiness: evaluation.nextStepReadiness,
+    warnings: evaluation.warnings,
+    ambiguities: evaluation.ambiguities,
+    confidenceLevel: "medium",
+  });
+
+  assert.equal(evaluation.nextStepReadiness.ready, true);
+  assert.deepEqual(evaluation.nextStepReadiness.blockingIssues, []);
+  assert.equal(status, "warning");
+  assert.equal(buildSummary(status, evaluation.nextStepReadiness), "Forge intake is ready for forge plan with warnings.");
+});
+
 await runScenario("status resolver escalates low confidence to failed when requested", () => {
   const evaluation = evaluateSuccessModel({
     taskSpec: createTaskSpec(),

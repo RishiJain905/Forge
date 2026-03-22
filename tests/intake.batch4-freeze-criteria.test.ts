@@ -45,6 +45,77 @@ function assertBatch4HandoffShape(artifact: IntakeArtifact, report: string): voi
 }
 
 await runScenario(
+  "forge intake keeps low-confidence prompt runs stable across repeated executions",
+  async () => {
+    const repoRoot = await createTempRepo();
+
+    try {
+      const runPrompt = async (): Promise<{
+        result: Awaited<ReturnType<typeof runForgeCli>>;
+        artifact: IntakeArtifact;
+        report: string;
+      }> => {
+        const result = await runForgeCli(
+          [
+            "intake",
+            "--repo",
+            repoRoot,
+            "--prompt",
+            "fix",
+          ],
+          repoRoot,
+        );
+
+        assert.equal(result.code, 0, result.stderr);
+
+        const artifactPath = join(repoRoot, ".forge", "intake.json");
+        const reportPath = join(repoRoot, ".forge", "reports", "intake-report.md");
+
+        return {
+          result,
+          artifact: await readJsonFile<IntakeArtifact>(artifactPath),
+          report: await readTextFile(reportPath),
+        };
+      };
+
+      const firstRun = await runPrompt();
+      const secondRun = await runPrompt();
+
+      assert.equal(firstRun.artifact.status, "warning");
+      assert.equal(firstRun.artifact.confidence.level, "low");
+      assert.equal(firstRun.artifact.next_step_readiness.ready, true);
+      assert.ok(firstRun.artifact.candidate_targets.length > 0);
+      assert.notEqual(firstRun.artifact.startedAt, secondRun.artifact.startedAt);
+      assert.notEqual(firstRun.artifact.finishedAt, secondRun.artifact.finishedAt);
+
+      const {
+        startedAt: firstStartedAt,
+        finishedAt: firstFinishedAt,
+        ...firstStableArtifact
+      } = firstRun.artifact;
+      const {
+        startedAt: secondStartedAt,
+        finishedAt: secondFinishedAt,
+        ...secondStableArtifact
+      } = secondRun.artifact;
+
+      void firstStartedAt;
+      void firstFinishedAt;
+      void secondStartedAt;
+      void secondFinishedAt;
+
+      assert.deepEqual(firstStableArtifact, secondStableArtifact);
+      assert.equal(firstRun.report, secondRun.report);
+      assert.match(firstRun.result.stdout, /Status: warning/);
+      assert.match(firstRun.report, /## Confidence/);
+      assert.match(firstRun.report, /## Next Step Readiness/);
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
   "forge intake satisfies the Batch 4 freeze line for a grounded spec run",
   async () => {
     const repoRoot = await createTempRepo();

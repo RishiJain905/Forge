@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
+import { resolveGitContext } from "../src/intake/git-context.js";
 import { resolveRepoRoot } from "../src/intake/path-policy.js";
 import { runIntakeCommand } from "../src/intake/runner.js";
 import type { GitCommandRunner } from "../src/intake/types.js";
@@ -81,6 +82,27 @@ function createBrokenGitRunner(repoRoot: string): GitCommandRunner {
 
     const error = new Error("simulated git failure") as Error & { code?: number };
     error.code = 1;
+    throw error;
+  };
+}
+
+function createBufferedNotRepoGitRunner(): GitCommandRunner {
+  return async (args) => {
+    if (
+      args[0] !== "rev-parse" ||
+      args[1] !== "--show-toplevel"
+    ) {
+      throw new Error(`Unexpected git command: ${args.join(" ")}`);
+    }
+
+    const error = new Error("Command failed") as Error & {
+      code?: number;
+      stdout?: Buffer;
+      stderr?: Buffer;
+    };
+    error.code = 128;
+    error.stdout = Buffer.from("");
+    error.stderr = Buffer.from("fatal: not a git repository (or any of the parent directories): .git\n");
     throw error;
   };
 }
@@ -186,6 +208,22 @@ await runScenario(
 );
 
 await runScenario(
+  "git-context preserves buffered stderr when identifying not_repo failures",
+  async () => {
+    const repoRoot = await createTempRepo();
+
+    try {
+      const result = await resolveGitContext(repoRoot, createBufferedNotRepoGitRunner());
+
+      assert.equal(result.gitContext.status, "not_repo");
+      assert.equal(result.warning, null);
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
   "plain folders keep filesystem grounding and report git status not_repo",
   async () => {
     const repoRoot = await createTempRepo();
@@ -193,15 +231,13 @@ await runScenario(
     try {
       const result = await runIntakeWithPrompt(repoRoot);
 
-      assert.notEqual(result.status, "failed");
+      assert.equal(result.status, "success");
       assert.ok(result.artifact);
       assert.equal(result.artifact?.repo_context.git_context.status, "not_repo");
       assert.equal(result.artifact?.repo_context.git_context.repo_root, null);
       assert.equal(result.artifact?.repo_context.git_context.branch, null);
-      assert.equal(
-        (result.artifact?.warnings ?? []).filter((value) => /filesystem grounding/i.test(value)).length,
-        0,
-      );
+      assert.deepEqual(result.artifact?.warnings ?? [], []);
+      assert.deepEqual(result.artifact?.risk_analysis.supporting_analysis.warning_items ?? [], []);
     } finally {
       await disposeTempRepo(repoRoot);
     }
@@ -245,7 +281,7 @@ await runScenario(
         createBrokenGitRunner(fixture.repoRoot),
       );
 
-      assert.notEqual(result.status, "failed");
+      assert.equal(result.status, "warning");
       assert.ok(result.artifact);
       assert.equal(result.artifact?.repoRoot, fixture.repoRoot);
       assert.equal(result.artifact?.repo_context.git_context.status, "error");
@@ -255,6 +291,12 @@ await runScenario(
           /filesystem grounding/i.test(value),
         ),
         "expected a warning that filesystem grounding was used instead",
+      );
+      assert.ok(
+        result.artifact?.risk_analysis.supporting_analysis.warning_items.some((item) =>
+          item.code === "GIT_CONTEXT_FAILED",
+        ),
+        "expected a structured git-context failure warning item",
       );
     } finally {
       await disposeTempRepo(fixture.repoRoot);

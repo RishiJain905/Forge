@@ -493,6 +493,47 @@ await runScenario(
 );
 
 await runScenario(
+  "buildAmbiguityAnalysisResult keeps git-context failure messaging stable regardless of repo warning order",
+  async () => {
+    const { taskInput, taskParserResult } = createTaskParserResult(
+      "Update src/app.ts for intake readiness.",
+    );
+    const repoScanResult = createRepoScanResult({
+      repoContext: createRepoContext({
+        gitContext: createGitContext({
+          status: "error",
+        }),
+      }),
+      warnings: [
+        "Some unrelated repo scan warning.",
+        "Git enrichment failed, so filesystem grounding was used instead.",
+      ],
+    });
+    const inferenceResult = createInferenceResult();
+
+    const result = buildAmbiguityAnalysisResult({
+      taskInput,
+      taskParserResult,
+      repoScanResult,
+      inferenceResult,
+      runtimeOptions: resolveRuntimeOptions({}) as ResolvedRuntimeOptions,
+      failure: null,
+      validationBlockingIssues: [],
+      validationWarnings: [],
+      validationRecommendedUserActions: [],
+    });
+
+    assert.ok(
+      result.warningItems?.some((item) =>
+        item.code === "GIT_CONTEXT_FAILED" &&
+        item.message === "Git enrichment failed, so filesystem grounding was used instead."
+      ),
+      "expected git-context failure warning to use the stable canonical message",
+    );
+  },
+);
+
+await runScenario(
   "buildAmbiguityAnalysisResult emits strict-focus and fallback-targeting warnings with spec-aware repo-alignment wording",
   async () => {
     const { taskInput, taskParserResult } = createSpecTaskParserResult(
@@ -686,6 +727,10 @@ await runScenario(
       result.recommendedUserActions.some((action) =>
         /identify or add the test files/i.test(action),
       ),
+    );
+    assert.ok(
+      result.warningItems?.some((item) => item.code === "CONFIDENCE_DEGRADED"),
+      "expected a structured confidence-degradation warning item",
     );
   },
 );

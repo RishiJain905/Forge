@@ -132,6 +132,12 @@ export function createIntakeDebugWrites(params: {
         confidence: params.assembledResult.confidence,
         nextStepReadiness: params.nextStepReadiness,
         failure: params.failure,
+        optionalReasoning: {
+          requested: params.optionalReasoningResult.requested,
+          attempted: params.optionalReasoningResult.attempted,
+          used: params.optionalReasoningResult.used,
+          provider: params.optionalReasoningResult.provider,
+        },
       },
     },
   ];

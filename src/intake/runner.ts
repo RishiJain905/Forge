@@ -326,6 +326,21 @@ export async function runIntakeCommand(
       inputAmbiguityItems: assembledResult.responsibilities.analysis.ambiguityItems,
       inputRecommendedUserActions: assembledResult.recommendedUserActions,
     });
+    if (!failure) {
+      const prioritizedBlocker =
+        successEvaluation.nextStepReadiness.blockingIssues.find(
+          (issue) => issue.code !== "LOW_CONFIDENCE_ESCALATED",
+        ) ?? successEvaluation.nextStepReadiness.blockingIssues.find(
+          (issue) => issue.code === "LOW_CONFIDENCE_ESCALATED",
+        );
+
+      if (prioritizedBlocker) {
+        failure = createFailureDetails(
+          prioritizedBlocker.code,
+          prioritizedBlocker.message,
+        );
+      }
+    }
     const finalAssembledResult = {
       ...assembledResult,
       taskSpec: enrichedTaskSpec,
@@ -387,8 +402,8 @@ export async function runIntakeCommand(
       };
 
       const fallbackFailure = createFailureDetails(
-        persistenceFailure.code,
-        persistenceFailure.message,
+        (failure ?? persistenceFailure).code,
+        (failure ?? persistenceFailure).message,
         fallbackContext.paths.fallbackReason ?? undefined,
       );
 
@@ -418,7 +433,7 @@ export async function runIntakeCommand(
           summary:
             "Forge intake failed while persisting both the configured output root and the default .forge fallback.",
           nextStepReadiness: successEvaluation.nextStepReadiness,
-          failure: fallbackFailure,
+          failure: persistenceFailure,
         };
       }
     }

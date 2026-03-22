@@ -32,6 +32,10 @@ function renderList(items: string[]): string {
   return items.map((item) => `- ${item}`).join("\n");
 }
 
+function formatCount(count: number, singular: string, plural: string): string {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
 function renderSection(title: string, lines: string[]): string {
   return [
     `## ${title}`,
@@ -176,6 +180,16 @@ function renderOverviewSection(artifact: IntakeArtifact): string {
   const readinessText = artifact.next_step_readiness.ready
     ? "ready for `forge plan`"
     : "not ready for `forge plan`";
+  const signalSummary = [
+    `- Signal summary: confidence \`${artifact.confidence.level}\``,
+    formatCount(artifact.warnings.length, "warning", "warnings"),
+    formatCount(artifact.ambiguities.length, "ambiguity", "ambiguities"),
+    formatCount(
+      artifact.next_step_readiness.blocking_issues.length,
+      "blocking issue",
+      "blocking issues",
+    ),
+  ].join(", ") + ".";
 
   return renderSection("Overview", [
     `Forge intake completed with status \`${artifact.status}\` and is ${readinessText}.`,
@@ -183,6 +197,7 @@ function renderOverviewSection(artifact: IntakeArtifact): string {
     `- Stage: \`${artifact.stage}\``,
     `- Repo root: \`${artifact.repoRoot}\``,
     `- Output root: \`${artifact.outputRoot}\``,
+    signalSummary,
   ]);
 }
 
@@ -388,11 +403,25 @@ function renderConfidenceSection(artifact: IntakeArtifact): string {
   ]);
 }
 
+function buildReadinessLead(artifact: IntakeArtifact): string {
+  if (!artifact.next_step_readiness.ready) {
+    return "Intake is not ready for `forge plan` because blocking issues remain. The artifact sections below still capture the last normalized task, repo context, candidate targets, risks, and recommended actions for diagnosis.";
+  }
+
+  if (artifact.confidence.level === "low") {
+    return "Intake is ready for `forge plan`, but the handoff should be treated as provisional because confidence is low.";
+  }
+
+  if (artifact.warnings.length > 0 || artifact.ambiguities.length > 0) {
+    return "Intake is ready for `forge plan`, but warnings and ambiguities should remain visible during planning.";
+  }
+
+  return "Intake is ready for `forge plan` on the current artifact state.";
+}
+
 function renderNextStepReadinessSection(artifact: IntakeArtifact): string {
   return renderSection("Next Step Readiness", [
-    artifact.next_step_readiness.ready
-      ? "Intake is ready for `forge plan` on the current artifact state."
-      : "Intake is not ready for `forge plan` because blocking issues remain.",
+    buildReadinessLead(artifact),
     `- Ready for \`forge plan\`: \`${artifact.next_step_readiness.ready}\``,
     "",
     "### Blocking Issues",
@@ -426,11 +455,23 @@ function renderOutputFilesSection(artifact: IntakeArtifact): string {
 
 function renderFailureSection(artifact: IntakeArtifact): string {
   if (!artifact.failure) {
+    const hasReadinessBlockers =
+      !artifact.next_step_readiness.ready &&
+      artifact.next_step_readiness.blocking_issues.length > 0;
+
+    if (hasReadinessBlockers) {
+      return renderSection("Failure", [
+        "No runtime or persistence failure details were captured.",
+        "This failed state is driven by readiness blockers in `Next Step Readiness`.",
+      ]);
+    }
+
     return renderSection("Failure", ["- none"]);
   }
 
   return renderSection("Failure", [
     "Failure details are reported directly from the final artifact state.",
+    "Persisted task, repo, targeting, risk, and readiness sections remain the best available handoff for diagnosing why planning is blocked.",
     `- Code: \`${artifact.failure.code}\``,
     `- Message: ${artifact.failure.message}`,
     artifact.failure.fallbackReason

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
+import { runIntakeCommand } from "../src/intake/runner.js";
 import type { IntakeArtifact } from "../src/intake/types.js";
 import {
   createTempRepo,
@@ -10,6 +11,7 @@ import {
   readJsonFile,
   readTextFile,
   runForgeCli,
+  runForgeBinary,
   writeRepoFile,
 } from "./support/forge-cli.js";
 
@@ -160,6 +162,154 @@ await runScenario(
         delete process.env.FORGE_INTAKE_DEBUG;
       } else {
         process.env.FORGE_INTAKE_DEBUG = originalDebugEnv;
+      }
+
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "forge intake includes optional reasoning summary and structured warning items in debug warnings output",
+  async () => {
+    const repoRoot = await createTempRepo();
+    const originalDebugEnv = process.env.FORGE_INTAKE_DEBUG;
+
+    try {
+      process.env.FORGE_INTAKE_DEBUG = "1";
+
+      const result = await runIntakeCommand(
+        {
+          repo: repoRoot,
+          prompt: "Inspect src/app.ts for the retry ownership pattern.",
+          llmAssist: true,
+        },
+        repoRoot,
+        {
+          optionalReasoningHook: async () => ({
+            provider: "test-hook",
+            taskWording: {
+              summary: "Clarify retry wording in src/app.ts while keeping tests aligned.",
+            },
+          }),
+        },
+      );
+
+      assert.equal(result.status, "warning");
+
+      const warningsPath = join(repoRoot, ".forge", "debug", "warnings.json");
+      const warningsDebug = await readJsonFile<{
+        warningItems?: Array<{ code?: string; message?: string }>;
+        nextStepReadiness?: { ready?: boolean; blockingIssues?: Array<{ code?: string }> };
+        failure?: { code?: string | null; message?: string | null } | null;
+        optionalReasoning?: {
+          requested?: boolean;
+          attempted?: boolean;
+          used?: boolean;
+          provider?: string | null;
+        };
+      }>(warningsPath);
+
+      assert.ok(
+        warningsDebug.warningItems?.some((item) => item.code === "ACCEPTANCE_CRITERIA_MISSING"),
+        "expected structured warning items in debug output",
+      );
+      assert.equal(typeof warningsDebug.nextStepReadiness?.ready, "boolean");
+      assert.equal(warningsDebug.failure, null);
+      assert.deepEqual(
+        warningsDebug.optionalReasoning,
+        {
+          requested: true,
+          attempted: true,
+          used: true,
+          provider: "test-hook",
+        },
+        "expected optional reasoning usage summary in debug warnings output",
+      );
+    } finally {
+      process.env.FORGE_INTAKE_DEBUG = originalDebugEnv ?? "";
+      if (originalDebugEnv === undefined) {
+        delete process.env.FORGE_INTAKE_DEBUG;
+      }
+
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "forge intake keeps failure details visible on a failed-but-persisted low-confidence run with debug enabled",
+  async () => {
+    const repoRoot = await createTempRepo();
+    const originalDebugEnv = process.env.FORGE_INTAKE_DEBUG;
+
+    try {
+      process.env.FORGE_INTAKE_DEBUG = "1";
+
+      const result = runForgeBinary(
+        [
+          "intake",
+          "--repo",
+          repoRoot,
+          "--prompt",
+          "fix",
+          "--fail-on-low-confidence",
+        ],
+        repoRoot,
+      );
+
+      assert.equal(result.code, 1);
+      assert.match(result.stderr, /Status: failed/);
+      assert.match(result.stderr, /LOW_CONFIDENCE_ESCALATED/);
+
+      const artifactPath = join(repoRoot, ".forge", "intake.json");
+      const reportPath = join(repoRoot, ".forge", "reports", "intake-report.md");
+      const debugArtifactPath = join(repoRoot, ".forge", "debug", "intake-debug.json");
+      const warningsPath = join(repoRoot, ".forge", "debug", "warnings.json");
+
+      assert.equal(await fileExists(artifactPath), true);
+      assert.equal(await fileExists(reportPath), true);
+      assert.equal(await fileExists(debugArtifactPath), true);
+      assert.equal(await fileExists(warningsPath), true);
+
+      const artifact = await readJsonFile<IntakeArtifact>(artifactPath);
+      const report = await readTextFile(reportPath);
+      const debugArtifact = await readJsonFile<{
+        failure?: { code?: string | null; message?: string | null } | null;
+        nextStepReadiness?: {
+          ready?: boolean;
+          blockingIssues?: Array<{ code?: string; message?: string }>;
+        };
+      }>(debugArtifactPath);
+      const warningsDebug = await readJsonFile<{
+        failure?: { code?: string | null; message?: string | null } | null;
+        nextStepReadiness?: {
+          ready?: boolean;
+          blockingIssues?: Array<{ code?: string; message?: string }>;
+        };
+      }>(warningsPath);
+
+      assert.equal(artifact.status, "failed");
+      assert.equal(artifact.failure?.code, "LOW_CONFIDENCE_ESCALATED");
+      assert.equal(artifact.next_step_readiness.ready, false);
+      assert.match(report, /## Failure/);
+      assert.match(report, /LOW_CONFIDENCE_ESCALATED/);
+      assert.equal(debugArtifact.failure?.code, "LOW_CONFIDENCE_ESCALATED");
+      assert.equal(warningsDebug.failure?.code, "LOW_CONFIDENCE_ESCALATED");
+      assert.ok(
+        debugArtifact.nextStepReadiness?.blockingIssues?.some((issue) =>
+          issue.code === "LOW_CONFIDENCE_ESCALATED",
+        ),
+      );
+      assert.ok(
+        warningsDebug.nextStepReadiness?.blockingIssues?.some((issue) =>
+          issue.code === "LOW_CONFIDENCE_ESCALATED",
+        ),
+      );
+    } finally {
+      process.env.FORGE_INTAKE_DEBUG = originalDebugEnv ?? "";
+      if (originalDebugEnv === undefined) {
+        delete process.env.FORGE_INTAKE_DEBUG;
       }
 
       await disposeTempRepo(repoRoot);
