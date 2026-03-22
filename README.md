@@ -215,7 +215,7 @@ These commands are intended to work in order, but each should also write durable
 
 ## 1. Intake
 Purpose:
-Convert a markdown spec or direct prompt into a normalized task grounded in the real repository.
+Convert a markdown spec or direct prompt into a normalized task grounded in the real repository, then produce the durable handoff for `forge plan`.
 
 Outputs include:
 - normalized task spec
@@ -225,6 +225,7 @@ Outputs include:
 - initial risk zones
 - initial verification targets
 - confidence signals
+- next-step readiness and failure state
 
 Example CLI usage:
 
@@ -236,8 +237,10 @@ forge intake --repo /path/to/repo --prompt "Update src/app.ts" --report-only
 
 Step 1 defaults to writing both `.forge/intake.json` and `.forge/reports/intake-report.md`.
 `--json-only` and `--report-only` are mutually exclusive.
-`--llm-assist` and `--fail-on-low-confidence` are accepted as explicit runtime intent, but their deeper behavior is deferred until later Step 1 batches.
+`--llm-assist` enriches intake without making optional reasoning authoritative.
+`--fail-on-low-confidence` can escalate weak-but-usable runs when requested.
 Any intake verification output is pointer-only; Step 1 does not run verification work, create workstreams, or emit execution packets.
+This step is the handoff surface for Step 2 planning.
 
 ## 2. Plan
 Purpose:
@@ -486,24 +489,21 @@ Reason:
 
 ---
 
-# Current Step 1 Focus
+# Current Implementation Status
 
-At the moment, the project is focused on:
+Step 1: Intake is implemented and complete.
 
-## Step 1: Intake
+It now serves as the durable handoff into Step 2 planning. The current intake contract includes:
+- normalized task spec
+- repo context
+- candidate targets
+- risk analysis
+- ambiguities and warnings
+- initial verification targets
+- confidence
+- next-step readiness
 
-This step is considered the foundation of the whole system.
-
-The current planning work for Intake includes:
-- command contract
-- input modes
-- artifact schemas
-- confidence model
-- warning/failure model
-- implementation-directive markdown files
-- codex handoff documents
-
-This is the correct place to start because weak intake poisons every later step.
+The next active implementation target is Step 2: Plan.
 
 ---
 
