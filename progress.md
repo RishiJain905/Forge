@@ -200,11 +200,29 @@
   - Added a dedicated `intake.step2-handoff-contract` end-to-end suite covering grounded spec success, prompt warning handoffs, failed-but-persisted blocked runs, fallback-targeting low-confidence warnings, and `LOW_CONFIDENCE_ESCALATED` planning blockers.
   - Extended schema, report, and status regression coverage and wired the new handoff-contract suite into the default `npm.cmd test` gate.
   - Documented completion evidence in `S1-B4-done/p5-done-summary.md` after the full verification gate stayed green on `dev`.
+- Batch 1.01: `part-1-step2-goal-and-boundaries.md` (Step 2)
+  - Added a new internal `src/plan` foundation that defines the Step 2 mission, deterministic-first policy, explicit guardrails, and the minimum plan-item contract without introducing user-facing `forge plan` CLI wiring yet.
+  - Added a deterministic Step 2 input seam that reads `.forge/intake.json`, validates it through the frozen Step 1 artifact schema, and preserves the full planning handoff context instead of re-running intake logic.
+  - Locked a runtime-validated `PlanItem` contract with required fields for source requirements, affected paths, dependencies, risk level, test obligations, verification relevance, and parallelization signals.
+  - Added dedicated Step 2 Part 1 coverage for ready, warning, blocked, missing-input, invalid-input, plan-item validation, and boundary-policy drift scenarios, and wired the suite into `npm.cmd test`.
+  - Updated the top-level README plus `S2-B1-Done/p1-done-summary.md` so Step 2 Batch 1 Part 1 is documented and traceable.
+- Batch 1.02: `part-2-plan-command-contract-and-output-artifacts.md` (Step 2)
+  - Added the first public `forge plan` CLI command with deterministic Step 1 intake consumption, repo/output-root handling, and persisted `plan.json` / `plan-report.md` outputs in the resolved output root.
+  - Added a frozen Step 2 plan artifact contract with stable top-level metadata, source-intake references, carried-forward Step 1 context, planning readiness, and placeholder-empty Part 3/4 sections for plan items, dependencies, conflict zones, test obligations, and parallelization signals.
+  - Added an artifact-driven Step 2 plan report with the required heading order and explicit rendering of source intake, carry-forward uncertainty, planning readiness, boundary notes, and output-file metadata.
+  - Added dedicated Step 2 Part 2 regression coverage for command behavior, artifact-schema shape, report parity, custom output-root handling, unsafe output-root fallback, blocked-output persistence, and packaged smoke execution of `forge intake` followed by `forge plan`.
+  - Updated `package.json` test wiring, `scripts/smoke.mjs`, `progress.md`, and `S2-B1-Done/P2-done-summary.md` so Step 2 Batch 1 Part 2 is documented and fully traceable.
+- Batch 1.03: `part-3-plan-item-model-dependencies-conflict-zones.md` (Step 2)
+  - Added a deterministic Step 2 planner model in `src/plan/planner.ts` that consumes the persisted Step 1 handoff and emits populated `plan_items`, `dependency_graph`, and `conflict_zones` without changing the public Part 2 artifact shape.
+  - Implemented stable plan-item construction for `config`, `interface`, `implementation`, and `test` work, including explicit source requirements, affected paths, dependencies, risk levels, verification relevance, per-item test obligations, and per-item parallelization signals.
+  - Wired the planner output through the Step 2 runner, artifact builder, schema validation, and report renderer so `forge plan` now persists inspectable dependency and conflict modeling instead of placeholder-empty Part 3 sections.
+  - Added schema cross-checks for dependency-graph parity and referenced item ids, plus focused planner-model coverage, updated command/schema/report assertions, expanded smoke expectations, and default test-suite wiring for the new planner test.
+  - Updated `README.md`, `progress.md`, and `S2-B1-Done/p3-done-summary.md` so Step 2 Batch 1 Part 3 is documented and traceable.
 
 ## Current Branch State
-- `dev` includes the completed Batch 1.16, Batch 1.17, Batch 1.18, Batch 1.19, Batch 1.20, Batch 2.01, Batch 2.02, Batch 2.03, Batch 2.04, Batch 3.01, Batch 3.02, Batch 3.03, Batch 3.04, Batch 3.05, Batch 3.06, Batch 4.01, Batch 4.02, Batch 4.03, Batch 4.04, and Batch 4.05 implementations.
-- Batch 4 is complete on `dev`, including Step 1 freeze hardening and the explicit Step 2 handoff contract for future `forge plan` work.
-- `execution.md` now explicitly requires integration onto the target branch and fresh verification there before completion is claimed.
+- `dev` includes the completed Step 1 work through Batch 4.05, including the frozen Step 2 handoff contract from Intake.
+- `codex/s2-b1-p3-model-dependencies-conflict-zones` adds Step 2 Batch 1 Part 3 on top of the current Step 2 foundation, including deterministic plan-item generation, explicit dependency modeling, visible conflict zones, schema cross-checks, and populated Part 3 report rendering for `forge plan`.
+- Later Step 2 Batch 1 work is still deferred for top-level test-obligation aggregation, top-level parallelization aggregation, and additional carry-forward rules in Part 4.
 
 ## Verification
 - `npm.cmd test`
@@ -213,5 +231,5 @@
 - `npm.cmd run smoke`
 
 ## Next
-- Batch 4 is complete.
-- Next implementation work should begin Step 2 `forge plan` using the frozen Step 1 intake artifact/report contract as its input surface.
+- Step 2 Batch 1 Part 3 is complete.
+- Next implementation work should continue Step 2 Batch 1 with `forge_step2_batch1/part-4-test-obligations-parallelization-and-carry-forward-rules.md`.

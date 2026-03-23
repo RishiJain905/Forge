@@ -97,6 +97,10 @@ export function runForgeBinary(args: string[], cwd: string): ForgeRunResult {
   };
 }
 
+export function runForgePlanBinary(args: string[], cwd: string): ForgeRunResult {
+  return runForgeBinary(["plan", ...args], cwd);
+}
+
 export async function writeRepoFile(
   repoRoot: string,
   relativePath: string,
