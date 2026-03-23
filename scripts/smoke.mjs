@@ -142,6 +142,8 @@ async function main() {
     assert.ok(planArtifact.plan_items.length > 0);
     assert.ok(planArtifact.dependency_graph.length > 0);
     assert.ok(planArtifact.conflict_zones.length > 0);
+    assert.ok(planArtifact.test_obligations.length > 0);
+    assert.ok(planArtifact.parallelization_signals.length > 0);
     assert.ok(planArtifact.plan_items.some((item) => item.category === "implementation"));
     assert.ok(planArtifact.plan_items.some((item) => item.category === "test"));
     assert.ok(
@@ -150,6 +152,8 @@ async function main() {
     );
     assert.match(planReport, /Forge Plan Report/);
     assert.match(planReport, /## Source Intake/);
+    assert.match(planReport, /## Test Obligations/);
+    assert.match(planReport, /## Parallelization/);
     assert.match(planReport, /## Planning Readiness/);
 
     await writeFile(join(tempRepo, "src", "app.ts"), "export const smoke = true;\n", "utf8");

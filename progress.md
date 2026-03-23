@@ -218,11 +218,17 @@
   - Wired the planner output through the Step 2 runner, artifact builder, schema validation, and report renderer so `forge plan` now persists inspectable dependency and conflict modeling instead of placeholder-empty Part 3 sections.
   - Added schema cross-checks for dependency-graph parity and referenced item ids, plus focused planner-model coverage, updated command/schema/report assertions, expanded smoke expectations, and default test-suite wiring for the new planner test.
   - Updated `README.md`, `progress.md`, and `S2-B1-Done/p3-done-summary.md` so Step 2 Batch 1 Part 3 is documented and traceable.
+- Batch 1.04: `part-4-test-obligations-parallelization-and-carry-forward-rules.md` (Step 2)
+  - Reworked the Step 2 planner so Part 4 output is explicit instead of deferred, including top-level `test_obligations`, top-level `parallelization_signals`, and derived `carry_forward.concerns`.
+  - Expanded test-obligation assignment so plan items can carry multiple validation categories and runtime-facing work now picks up `smoke`, `integration`, `contract_validation`, and migration-sensitive obligations when appropriate.
+  - Strengthened planning-time parallelization modeling so Step 2 can emit `serial_only`, `safe_parallel`, `parallel_after_dependency`, `risky_shared`, and `protected_merge_order` from actual plan-item and carry-forward context.
+  - Preserved unresolved Step 1 uncertainty in the plan artifact and report by mapping ambiguities, warnings, low-confidence targeting, fallback-target surfaces, and readiness blockers to explicit carried-forward concern entries tied to affected plan items.
+  - Updated schema/report parity checks, focused Part 4 coverage, smoke expectations, and `S2-B1-Done/p4-done-summary.md` so the completed behavior is documented and enforced.
 
 ## Current Branch State
 - `dev` includes the completed Step 1 work through Batch 4.05, including the frozen Step 2 handoff contract from Intake.
-- `codex/s2-b1-p3-model-dependencies-conflict-zones` adds Step 2 Batch 1 Part 3 on top of the current Step 2 foundation, including deterministic plan-item generation, explicit dependency modeling, visible conflict zones, schema cross-checks, and populated Part 3 report rendering for `forge plan`.
-- Later Step 2 Batch 1 work is still deferred for top-level test-obligation aggregation, top-level parallelization aggregation, and additional carry-forward rules in Part 4.
+- `codex/s2-b1-p4-obligations-carry-forward` adds Step 2 Batch 1 Part 4 on top of the current Step 2 foundation, including explicit top-level test-obligation aggregation, explicit top-level parallelization signals, item-scoped carry-forward concern mapping, stronger planner risk/verification signals, and populated Part 4 report rendering for `forge plan`.
+- Step 2 Batch 1 Part 4 is complete in the implementation worktree. Part 5 is the next Step 2 target for first build order and acceptance gates.
 
 ## Verification
 - `npm.cmd test`
@@ -231,5 +237,5 @@
 - `npm.cmd run smoke`
 
 ## Next
-- Step 2 Batch 1 Part 3 is complete.
-- Next implementation work should continue Step 2 Batch 1 with `forge_step2_batch1/part-4-test-obligations-parallelization-and-carry-forward-rules.md`.
+- Step 2 Batch 1 Part 4 is complete.
+- Next implementation work should continue Step 2 Batch 1 with `forge_step2_batch1/part-5-first-build-order-and-acceptance-gates.md`.

@@ -2,6 +2,8 @@ import type { IntakeArtifact } from "../intake/types.js";
 
 import type {
   PLAN_DEPENDENCY_TYPES,
+  PLAN_CARRY_FORWARD_CONCERN_EFFECTS,
+  PLAN_CARRY_FORWARD_CONCERN_SOURCES,
   PLAN_ITEM_CATEGORIES,
   PLAN_ITEM_REQUIRED_FIELDS,
   PLAN_PARALLELIZATION_SIGNALS,
@@ -17,6 +19,8 @@ export type PlanRiskLevel = typeof PLAN_RISK_LEVELS[number];
 export type PlanTestObligationCategory = typeof PLAN_TEST_OBLIGATION_CATEGORIES[number];
 export type PlanVerificationCategory = typeof PLAN_VERIFICATION_TARGET_CATEGORIES[number];
 export type PlanParallelizationSignal = typeof PLAN_PARALLELIZATION_SIGNALS[number];
+export type PlanCarryForwardConcernSource = typeof PLAN_CARRY_FORWARD_CONCERN_SOURCES[number];
+export type PlanCarryForwardConcernEffect = typeof PLAN_CARRY_FORWARD_CONCERN_EFFECTS[number];
 export type PlanItemRequiredField = typeof PLAN_ITEM_REQUIRED_FIELDS[number];
 export type PlanFoundationStatus = "ready" | "blocked" | "failed";
 export type PlanCommandStatus = PlanFoundationStatus;
@@ -81,6 +85,7 @@ export interface PlanArtifactCarryForward {
   warnings: IntakeArtifact["warnings"];
   confidence: IntakeArtifact["confidence"];
   next_step_readiness: IntakeArtifact["next_step_readiness"];
+  concerns: PlanCarryForwardConcern[];
 }
 
 export interface PlanItemDependency {
@@ -109,6 +114,22 @@ export interface PlanParallelizationSignalEntry {
   planItemId: string;
   signal: PlanParallelizationSignal;
   reason: string;
+}
+
+export interface PlanTestObligationEntry {
+  planItemId: string;
+  category: PlanTestObligationCategory;
+  reason: string;
+}
+
+export interface PlanCarryForwardConcern {
+  id: string;
+  source: PlanCarryForwardConcernSource;
+  code: string | null;
+  message: string;
+  planItemIds: string[];
+  effects: PlanCarryForwardConcernEffect[];
+  status: "carried_forward";
 }
 
 export interface PlanItem {
@@ -177,6 +198,9 @@ export interface PlanModel {
   planItems: PlanItem[];
   dependencyGraph: PlanDependencyGraphEntry[];
   conflictZones: PlanConflictZone[];
+  testObligations: PlanTestObligationEntry[];
+  parallelizationSignals: PlanParallelizationSignalEntry[];
+  carryForwardConcerns: PlanCarryForwardConcern[];
 }
 
 export type PlanPlanningReadiness = IntakeArtifact["next_step_readiness"];
@@ -201,7 +225,7 @@ export interface PlanArtifact {
   plan_items: PlanItem[];
   dependency_graph: PlanDependencyGraphEntry[];
   conflict_zones: PlanConflictZone[];
-  test_obligations: PlanTestObligation[];
+  test_obligations: PlanTestObligationEntry[];
   parallelization_signals: PlanParallelizationSignalEntry[];
   carry_forward: PlanArtifactCarryForward;
   planning_readiness: PlanPlanningReadiness;
