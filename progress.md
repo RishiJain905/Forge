@@ -224,11 +224,17 @@
   - Strengthened planning-time parallelization modeling so Step 2 can emit `serial_only`, `safe_parallel`, `parallel_after_dependency`, `risky_shared`, and `protected_merge_order` from actual plan-item and carry-forward context.
   - Preserved unresolved Step 1 uncertainty in the plan artifact and report by mapping ambiguities, warnings, low-confidence targeting, fallback-target surfaces, and readiness blockers to explicit carried-forward concern entries tied to affected plan items.
   - Updated schema/report parity checks, focused Part 4 coverage, smoke expectations, and `S2-B1-Done/p4-done-summary.md` so the completed behavior is documented and enforced.
+- Batch 1.05: `part-5-first-build-order-and-acceptance-gates.md` (Step 2)
+  - Added a dedicated Step 2 acceptance-gates suite that freezes Gate 1 through Gate 5 against the existing Part 1-4 `forge plan` surface instead of adding new runtime artifact or report fields.
+  - Added repeated-run determinism coverage so the same persisted Step 1 handoff now produces stable `plan.json` and `plan-report.md` content apart from timestamps.
+  - Kept the implementation narrow by leaving the existing Step 2 planner, artifact, report, and smoke behavior intact while wiring the new Part 5 suite into the default `npm.cmd test` gate.
+  - Reused the existing packaged `forge intake` -> `forge plan` runnable path as the Gate 5 proof and confirmed no smoke-script change was necessary.
+  - Updated `README.md`, `progress.md`, and `S2-B1-Done/p5-done-summary.md` so Step 2 Batch 1 Part 5 is documented and traceable.
 
 ## Current Branch State
 - `dev` includes the completed Step 1 work through Batch 4.05, including the frozen Step 2 handoff contract from Intake.
-- `codex/s2-b1-p4-obligations-carry-forward` adds Step 2 Batch 1 Part 4 on top of the current Step 2 foundation, including explicit top-level test-obligation aggregation, explicit top-level parallelization signals, item-scoped carry-forward concern mapping, stronger planner risk/verification signals, and populated Part 4 report rendering for `forge plan`.
-- Step 2 Batch 1 Part 4 is complete in the implementation worktree. Part 5 is the next Step 2 target for first build order and acceptance gates.
+- `codex/s2-b1-p5-acceptance-gates` adds Step 2 Batch 1 Part 5 on top of the current Step 2 foundation, including explicit Gate 1-5 acceptance coverage, repeated-run determinism checks, and default test-suite wiring for the Part 5 freeze gate.
+- Step 2 Batch 1 Part 5 is complete in the implementation worktree. Batch 1 is ready for review or integration onto `dev`.
 
 ## Verification
 - `npm.cmd test`
@@ -237,5 +243,5 @@
 - `npm.cmd run smoke`
 
 ## Next
-- Step 2 Batch 1 Part 4 is complete.
-- Next implementation work should continue Step 2 Batch 1 with `forge_step2_batch1/part-5-first-build-order-and-acceptance-gates.md`.
+- Step 2 Batch 1 is complete.
+- Next implementation work should begin the first spec for the next Step 2 batch once it is defined.
