@@ -43,6 +43,7 @@ interface PlannerContext {
 
 interface ItemDraft {
   id: string;
+  clusterKey: string;
   category: ClusterCategory;
   title: string;
   description: string;
@@ -424,6 +425,42 @@ function buildItemDescription(
   }
 }
 
+function buildCategoryPathGroups(category: ClusterCategory, context: PlannerContext): string[][] {
+  switch (category) {
+    case "config":
+      return context.configPaths.length > 0 ? [context.configPaths] : [];
+    case "interface":
+      return context.interfacePaths.map((pathValue) => [pathValue]);
+    case "implementation":
+      return context.implementationPaths.map((pathValue) => [pathValue]);
+    case "test":
+      return context.testPaths.map((pathValue) => [pathValue]);
+    default:
+      return [];
+  }
+}
+
+function buildDraftClusterKey(category: ClusterCategory, paths: string[]): string {
+  if (category === "config") {
+    return "config";
+  }
+
+  const firstPath = paths[0];
+  if (!firstPath) {
+    return `${category}-unknown`;
+  }
+
+  return `${category}:${normalizeFileStem(firstPath)}`;
+}
+
+function requirementMatchesPaths(requirement: string, paths: string[]): boolean {
+  const normalizedRequirement = normalizeWhitespace(requirement).toLowerCase();
+
+  return paths.some((pathValue) =>
+    textMentionsPath(normalizedRequirement, pathValue) ||
+    normalizedRequirement.includes(normalizeFileStem(pathValue).toLowerCase()));
+}
+
 function buildDrafts(foundation: PlanFoundationResult, context: PlannerContext): ItemDraft[] {
   const requirementCategories = new Map<string, ClusterCategory[]>();
 
@@ -434,42 +471,45 @@ function buildDrafts(foundation: PlanFoundationResult, context: PlannerContext):
   const drafts: ItemDraft[] = [];
 
   for (const category of CATEGORY_ORDER) {
-    const paths =
-      category === "config"
-        ? context.configPaths
-        : category === "interface"
-          ? context.interfacePaths
-          : category === "implementation"
-            ? context.implementationPaths
-            : context.testPaths;
+    const pathGroups = buildCategoryPathGroups(category, context);
 
-    if (paths.length === 0) {
+    if (pathGroups.length === 0) {
       continue;
     }
 
-    const sourceRequirements = context.requirementSeeds.filter(
-      (requirement) => requirementCategories.get(requirement)?.includes(category),
-    );
-    const resolvedRequirements =
-      sourceRequirements.length > 0
-        ? sourceRequirements
-        : context.requirementSeeds.length > 0
-          ? [context.requirementSeeds[0]]
-          : [`Planning surface inferred from Step 1 targeting for ${summarizePaths(paths)}.`];
+    let categoryIndex = 1;
+    for (const paths of pathGroups) {
+      const categoryRequirements = context.requirementSeeds.filter(
+        (requirement) => requirementCategories.get(requirement)?.includes(category),
+      );
+      const matchedRequirements = categoryRequirements.filter((requirement) =>
+        requirementMatchesPaths(requirement, paths));
+      const resolvedRequirements =
+        matchedRequirements.length > 0
+          ? matchedRequirements
+          : categoryRequirements.length > 0
+            ? categoryRequirements
+            : context.requirementSeeds.length > 0
+              ? [context.requirementSeeds[0]]
+              : [`Planning surface inferred from Step 1 targeting for ${summarizePaths(paths)}.`];
 
-    drafts.push({
-      id: `plan-${category}-1`,
-      category,
-      title: buildItemTitle(category, paths),
-      description: buildItemDescription(category, paths, resolvedRequirements),
-      sourceRequirements: dedupeStable(resolvedRequirements),
-      likelyAffectedPaths: dedupeStable(paths),
-    });
+      drafts.push({
+        id: `plan-${category}-${categoryIndex}`,
+        clusterKey: buildDraftClusterKey(category, paths),
+        category,
+        title: buildItemTitle(category, paths),
+        description: buildItemDescription(category, paths, resolvedRequirements),
+        sourceRequirements: dedupeStable(resolvedRequirements),
+        likelyAffectedPaths: dedupeStable(paths),
+      });
+      categoryIndex += 1;
+    }
   }
 
   if (drafts.length === 0 && context.requirementSeeds.length > 0) {
     drafts.push({
       id: "plan-implementation-1",
+      clusterKey: "implementation:inferred",
       category: "implementation",
       title: "Plan implementation updates for inferred targets",
       description: `Implement the requested behavior for: ${context.requirementSeeds.join("; ")}.`,
@@ -484,20 +524,32 @@ function buildDrafts(foundation: PlanFoundationResult, context: PlannerContext):
   return drafts;
 }
 
+function draftsShareSurface(left: ItemDraft, right: ItemDraft): boolean {
+  if (left.clusterKey === right.clusterKey) {
+    return true;
+  }
+
+  return left.likelyAffectedPaths.some((leftPath) =>
+    right.likelyAffectedPaths.some((rightPath) => normalizeFileStem(leftPath) === normalizeFileStem(rightPath)));
+}
+
 function buildDependencies(drafts: ItemDraft[]): Map<string, PlanDependencyGraphEntry[]> {
-  const itemByCategory = new Map<ClusterCategory, ItemDraft>();
+  const draftsByCategory = new Map<ClusterCategory, ItemDraft[]>();
   for (const draft of drafts) {
-    itemByCategory.set(draft.category, draft);
+    const existing = draftsByCategory.get(draft.category) ?? [];
+    draftsByCategory.set(draft.category, [...existing, draft]);
   }
 
   const dependencies = new Map<string, PlanDependencyGraphEntry[]>();
 
   for (const draft of drafts) {
     const itemDependencies: PlanDependencyGraphEntry[] = [];
+    const configDrafts = draftsByCategory.get("config") ?? [];
+    const interfaceDrafts = draftsByCategory.get("interface") ?? [];
+    const implementationDrafts = draftsByCategory.get("implementation") ?? [];
 
     if (draft.category === "interface") {
-      const configDraft = itemByCategory.get("config");
-      if (configDraft) {
+      for (const configDraft of configDrafts) {
         itemDependencies.push({
           planItemId: draft.id,
           dependsOnPlanItemId: configDraft.id,
@@ -508,34 +560,56 @@ function buildDependencies(drafts: ItemDraft[]): Map<string, PlanDependencyGraph
     }
 
     if (draft.category === "implementation") {
-      const interfaceDraft = itemByCategory.get("interface");
-      const configDraft = itemByCategory.get("config");
+      const matchingInterfaceDrafts = interfaceDrafts.filter((interfaceDraft) =>
+        draftsShareSurface(draft, interfaceDraft));
 
-      if (interfaceDraft) {
-        itemDependencies.push({
-          planItemId: draft.id,
-          dependsOnPlanItemId: interfaceDraft.id,
-          type: "interface_first",
-          reason: "Shared interface decisions should settle before implementation work proceeds.",
-        });
-      } else if (configDraft) {
-        itemDependencies.push({
-          planItemId: draft.id,
-          dependsOnPlanItemId: configDraft.id,
-          type: "sequencing",
-          reason: "Config changes should land before implementation depends on them.",
-        });
+      if (matchingInterfaceDrafts.length > 0) {
+        for (const interfaceDraft of matchingInterfaceDrafts) {
+          itemDependencies.push({
+            planItemId: draft.id,
+            dependsOnPlanItemId: interfaceDraft.id,
+            type: "interface_first",
+            reason: "Shared interface decisions should settle before implementation work proceeds.",
+          });
+        }
+      } else {
+        for (const configDraft of configDrafts) {
+          itemDependencies.push({
+            planItemId: draft.id,
+            dependsOnPlanItemId: configDraft.id,
+            type: "sequencing",
+            reason: "Config changes should land before implementation depends on them.",
+          });
+        }
       }
     }
 
     if (draft.category === "test") {
-      for (const dependencyDraft of drafts.filter((item) => item.category !== "test")) {
-        itemDependencies.push({
-          planItemId: draft.id,
-          dependsOnPlanItemId: dependencyDraft.id,
-          type: "hard",
-          reason: "Test work should validate the finalized non-test plan items.",
-        });
+      const matchingImplementationDrafts = implementationDrafts.filter((implementationDraft) =>
+        draftsShareSurface(draft, implementationDraft));
+      const matchedDependencies =
+        matchingImplementationDrafts.length > 0
+          ? matchingImplementationDrafts
+          : drafts.filter((item) => item.category !== "test" && draftsShareSurface(draft, item));
+
+      if (matchedDependencies.length > 0) {
+        for (const dependencyDraft of matchedDependencies) {
+          itemDependencies.push({
+            planItemId: draft.id,
+            dependsOnPlanItemId: dependencyDraft.id,
+            type: "hard",
+            reason: "Test work should validate the finalized related plan item before broader regression work completes.",
+          });
+        }
+      } else {
+        for (const dependencyDraft of drafts.filter((item) => item.category !== "test")) {
+          itemDependencies.push({
+            planItemId: draft.id,
+            dependsOnPlanItemId: dependencyDraft.id,
+            type: "hard",
+            reason: "Test work should validate the finalized non-test plan items.",
+          });
+        }
       }
     }
 
@@ -581,29 +655,33 @@ function buildConflictZones(
   dependencyGraph: PlanDependencyGraphEntry[],
   context: PlannerContext,
 ): PlanConflictZone[] {
-  const draftByCategory = new Map<ClusterCategory, ItemDraft>();
-  for (const draft of drafts) {
-    draftByCategory.set(draft.category, draft);
-  }
-
   const zones: PlanConflictZone[] = [];
+  const configDrafts = drafts.filter((draft) => draft.category === "config");
+  const interfaceDrafts = drafts.filter((draft) => draft.category === "interface");
 
-  const configDraft = draftByCategory.get("config");
-  if (configDraft && configDraft.likelyAffectedPaths.length > 0) {
+  if (configDrafts.length > 0) {
+    const configPaths = dedupeStable(configDrafts.flatMap((draft) => draft.likelyAffectedPaths));
+    const configPlanItemIds = dedupeStable(
+      configDrafts.flatMap((draft) => [draft.id, ...collectDependents(draft.id, dependencyGraph)]),
+    );
+
     zones.push({
       id: "conflict-zone-config-1",
       title: "Manifest and configuration overlap",
       reason: "Config and manifest surfaces are shared-risk files that can force protected merge order.",
-      paths: configDraft.likelyAffectedPaths,
-      planItemIds: dedupeStable([configDraft.id, ...collectDependents(configDraft.id, dependencyGraph)]),
+      paths: configPaths,
+      planItemIds: configPlanItemIds,
       riskLevel: context.fallbackOnlyTargeting || context.lowConfidence ? "high" : "medium",
     });
   }
 
-  const interfaceDraft = draftByCategory.get("interface");
-  if (interfaceDraft && interfaceDraft.likelyAffectedPaths.length > 0) {
+  for (const [index, interfaceDraft] of interfaceDrafts.entries()) {
+    if (interfaceDraft.likelyAffectedPaths.length === 0) {
+      continue;
+    }
+
     zones.push({
-      id: "conflict-zone-interface-1",
+      id: `conflict-zone-interface-${index + 1}`,
       title: "Shared interfaces and entrypoints",
       reason: "Shared-risk interfaces and entrypoints need visible coordination across dependent plan items.",
       paths: interfaceDraft.likelyAffectedPaths,
@@ -1226,8 +1304,12 @@ function deriveRiskLevel(
 }
 
 function hasUsablePlanningSignal(foundation: PlanFoundationResult, context: PlannerContext): boolean {
+  const taskSpec = foundation.carryForward.taskSpec;
+
   return (
-    context.requirementSeeds.length > 0 ||
+    taskSpec.explicit_requirements.length > 0 ||
+    taskSpec.acceptance_criteria.length > 0 ||
+    taskSpec.implementation_necessities.length > 0 ||
     foundation.carryForward.candidateTargets.length > 0 ||
     foundation.carryForward.initialVerificationTargets.length > 0
   );

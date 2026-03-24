@@ -114,6 +114,75 @@ async function writeSpecAndRunIntake(repoRoot: string, specLines: string[], spec
 }
 
 await runScenario(
+  "forge plan splits unrelated source and test surfaces into separate implementation and test plan items",
+  async () => {
+    const repoRoot = await createTempRepo("forge-plan-model-granular-items-");
+
+    try {
+      await writeRepoFile(repoRoot, "src/helper.ts", "export const helper = true;\n");
+      await writeRepoFile(
+        repoRoot,
+        "tests/helper.test.ts",
+        "import assert from 'node:assert/strict';\n\nassert.equal(1, 1);\n",
+      );
+
+      await writeSpecAndRunIntake(repoRoot, [
+        "# Update app and helper behavior",
+        "",
+        "Revise `src/app.ts` and `src/helper.ts`, and keep `tests/app.test.ts` and `tests/helper.test.ts` aligned.",
+        "",
+        "## Acceptance Criteria",
+        "",
+        "- `src/app.ts` is updated",
+        "- `src/helper.ts` is updated",
+        "- `tests/app.test.ts` stays aligned",
+        "- `tests/helper.test.ts` stays aligned",
+      ]);
+
+      const planResult = runForgePlanBinary(["--repo", repoRoot], repoRoot);
+      assert.equal(planResult.code, 0, planResult.stderr);
+
+      const artifact = await loadPlanArtifact(repoRoot);
+      const implementationItems = artifact.plan_items.filter((item) => item.category === "implementation");
+      const testItems = artifact.plan_items.filter((item) => item.category === "test");
+      const appImplementationItem = implementationItems.find((item) =>
+        item.likelyAffectedPaths.length === 1 && item.likelyAffectedPaths[0] === "src/app.ts");
+      const helperImplementationItem = implementationItems.find((item) =>
+        item.likelyAffectedPaths.length === 1 && item.likelyAffectedPaths[0] === "src/helper.ts");
+      const appTestItem = testItems.find((item) =>
+        item.likelyAffectedPaths.length === 1 && item.likelyAffectedPaths[0] === "tests/app.test.ts");
+      const helperTestItem = testItems.find((item) =>
+        item.likelyAffectedPaths.length === 1 && item.likelyAffectedPaths[0] === "tests/helper.test.ts");
+
+      assert.ok(implementationItems.length >= 2, "expected one implementation item per source surface");
+      assert.ok(testItems.length >= 2, "expected one test item per test surface");
+      assert.ok(appImplementationItem, "expected a dedicated app implementation item");
+      assert.ok(helperImplementationItem, "expected a dedicated helper implementation item");
+      assert.ok(appTestItem, "expected a dedicated app test item");
+      assert.ok(helperTestItem, "expected a dedicated helper test item");
+      assert.ok(
+        appTestItem.dependencies.some((dependency) => dependency.planItemId === appImplementationItem.id),
+        "expected app test work to depend on the app implementation item",
+      );
+      assert.ok(
+        helperTestItem.dependencies.some((dependency) => dependency.planItemId === helperImplementationItem.id),
+        "expected helper test work to depend on the helper implementation item",
+      );
+      assert.ok(
+        !appTestItem.dependencies.some((dependency) => dependency.planItemId === helperImplementationItem.id),
+        "expected app test work to avoid unrelated helper implementation dependencies",
+      );
+      assert.ok(
+        !helperTestItem.dependencies.some((dependency) => dependency.planItemId === appImplementationItem.id),
+        "expected helper test work to avoid unrelated app implementation dependencies",
+      );
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
   "forge plan builds populated plan items, explicit dependencies, and conflict zones for a grounded spec",
   async () => {
     const repoRoot = await createTempRepo("forge-plan-model-grounded-");
@@ -213,22 +282,34 @@ await runScenario(
       assert.equal(planResult.code, 0, planResult.stderr);
 
       const artifact = await loadPlanArtifact(repoRoot);
-      const implementationItem = artifact.plan_items.find((item) => item.category === "implementation");
+      const appImplementationItem = artifact.plan_items.find((item) =>
+        item.category === "implementation" &&
+        item.likelyAffectedPaths.length === 1 &&
+        item.likelyAffectedPaths[0] === "src/app.ts");
+      const helperImplementationItem = artifact.plan_items.find((item) =>
+        item.category === "implementation" &&
+        item.likelyAffectedPaths.length === 1 &&
+        item.likelyAffectedPaths[0] === "src/helper.ts");
       const interfaceItem = artifact.plan_items.find((item) => item.category === "interface");
 
-      assert.ok(implementationItem, "expected an implementation plan item");
+      assert.ok(appImplementationItem, "expected a dedicated app implementation plan item");
+      assert.ok(helperImplementationItem, "expected a dedicated helper implementation plan item");
       assert.ok(interfaceItem, "expected a shared interface plan item");
       assert.ok(
-        implementationItem.likelyAffectedPaths.includes("src/app.ts"),
-        "expected the shared-risk source file to remain in implementation planning",
+        appImplementationItem.likelyAffectedPaths.includes("src/app.ts"),
+        "expected the shared-risk source file to remain in implementation planning as its own item",
       );
       assert.ok(
-        implementationItem.likelyAffectedPaths.includes("src/helper.ts"),
-        "expected the ordinary source file to remain in implementation planning",
+        helperImplementationItem.likelyAffectedPaths.includes("src/helper.ts"),
+        "expected the ordinary source file to remain in implementation planning as its own item",
       );
       assert.ok(
-        implementationItem.dependencies.some((dependency) => dependency.planItemId === interfaceItem.id),
-        "expected implementation work to depend on the shared interface item",
+        appImplementationItem.dependencies.some((dependency) => dependency.planItemId === interfaceItem.id),
+        "expected the app implementation work to depend on the shared interface item",
+      );
+      assert.ok(
+        !helperImplementationItem.dependencies.some((dependency) => dependency.planItemId === interfaceItem.id),
+        "expected unrelated helper implementation work to avoid the shared interface dependency",
       );
       assert.deepEqual(interfaceItem.likelyAffectedPaths, ["src/app.ts"]);
       assert.ok(!interfaceItem.likelyAffectedPaths.includes("src/helper.ts"));

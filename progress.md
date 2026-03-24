@@ -230,11 +230,17 @@
   - Kept the implementation narrow by leaving the existing Step 2 planner, artifact, report, and smoke behavior intact while wiring the new Part 5 suite into the default `npm.cmd test` gate.
   - Reused the existing packaged `forge intake` -> `forge plan` runnable path as the Gate 5 proof and confirmed no smoke-script change was necessary.
   - Updated `README.md`, `progress.md`, and `S2-B1-Done/p5-done-summary.md` so Step 2 Batch 1 Part 5 is documented and traceable.
+- Batch 2.01: `part-1-batch2-goal-and-do-not-touch.md` (Step 2)
+  - Hardened the Step 2 planner so unrelated source and test surfaces now become separate implementation and test plan items instead of one coarse category bucket, while keeping the existing `forge plan` contract stable.
+  - Tightened per-item dependency modeling so test work now depends on the related implementation surface first, and shared interface work stays scoped to the actual shared-risk path instead of leaking across unrelated items.
+  - Hardened `runPlanCommand()` so a structurally valid but non-actionable Step 1 handoff is persisted as `blocked` with an explicit `PLAN_INPUT_TOO_WEAK` readiness blocker instead of being reported as ready.
+  - Added direct runner and packaged-entrypoint coverage for the new Step 2 behavior and wired `tests/plan.runner.test.ts` and `tests/plan.cli-entrypoint.test.ts` into the default `npm.cmd test` gate.
+  - Updated `README.md`, `progress.md`, and `S2-B2-Done/p1-done-summary.md` so Step 2 Batch 2 Part 1 is documented and traceable.
 
 ## Current Branch State
 - `dev` includes the completed Step 1 work through Batch 4.05, including the frozen Step 2 handoff contract from Intake.
-- `codex/s2-b1-p5-acceptance-gates` adds Step 2 Batch 1 Part 5 on top of the current Step 2 foundation, including explicit Gate 1-5 acceptance coverage, repeated-run determinism checks, and default test-suite wiring for the Part 5 freeze gate.
-- Step 2 Batch 1 Part 5 is complete in the implementation worktree. Batch 1 is ready for review or integration onto `dev`.
+- `dev` now also contains the in-progress Step 2 Batch 2 Part 1 implementation work, focused on more granular plan-item construction, honest blocked handling for non-actionable handoffs, and direct runner/entrypoint coverage for the real `forge plan` path.
+- Step 2 Batch 2 Part 1 is implemented locally and ready for verification on `dev`.
 
 ## Verification
 - `npm.cmd test`
@@ -243,5 +249,5 @@
 - `npm.cmd run smoke`
 
 ## Next
-- Step 2 Batch 1 is complete.
-- Next implementation work should begin the first spec for the next Step 2 batch once it is defined.
+- Step 2 Batch 2 Part 1 is complete.
+- Next implementation work should begin `forge_step2_batch2/part-2-stage-1-and-2-intake-consumption-plan-item-foundation.md`.

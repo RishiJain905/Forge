@@ -134,6 +134,42 @@ async function persistPlanCommandOutputs(params: {
   });
 }
 
+function resolvePlanningReadiness(
+  foundation: PlanFoundationResult,
+  model: ReturnType<typeof buildPlanModel>,
+): {
+  planningReadiness: PlanFoundationResult["carryForward"]["nextStepReadiness"];
+  summaryOverride?: string;
+} {
+  if (!foundation.sourceIntake.readyForPlanning) {
+    return {
+      planningReadiness: foundation.carryForward.nextStepReadiness,
+    };
+  }
+
+  if (model.planItems.length > 0) {
+    return {
+      planningReadiness: foundation.carryForward.nextStepReadiness,
+    };
+  }
+
+  return {
+    planningReadiness: {
+      ...foundation.carryForward.nextStepReadiness,
+      ready: false,
+      blocking_issues: [
+        ...foundation.carryForward.nextStepReadiness.blocking_issues,
+        {
+          code: "PLAN_INPUT_TOO_WEAK",
+          message: "Step 1 output is structurally valid but does not provide enough actionable planning signal for Step 2 to build real plan items.",
+        },
+      ],
+    },
+    summaryOverride:
+      "Forge plan preserved the persisted Step 1 handoff, but planning is blocked because the handoff is non-actionable for real Step 2 planning.",
+  };
+}
+
 export async function runPlanCommand(
   options: PlanCommandOptions = {},
   currentWorkingDirectory = process.cwd(),
@@ -142,6 +178,7 @@ export async function runPlanCommand(
     const input = await resolvePlanFoundationInput(options, currentWorkingDirectory);
     const foundation = buildPlanFoundation(input);
     const model = buildPlanModel(foundation);
+    const { planningReadiness, summaryOverride } = resolvePlanningReadiness(foundation, model);
     const startedAt = new Date().toISOString();
     const finishedAt = new Date().toISOString();
     const artifact = createPlanArtifact({
@@ -150,6 +187,8 @@ export async function runPlanCommand(
       paths: input.paths,
       startedAt,
       finishedAt,
+      planningReadiness,
+      summaryOverride,
     });
     const report = createPlanReport(artifact);
 

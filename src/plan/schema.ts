@@ -179,7 +179,6 @@ function extractRequirementSeedsFromArtifact(
     taskSpec.explicit_requirements,
     taskSpec.acceptance_criteria,
     taskSpec.implementation_necessities,
-    taskSpec.goal ? [taskSpec.goal] : [],
   ];
 
   for (const values of candidates) {
