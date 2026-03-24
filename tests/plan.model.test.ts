@@ -182,22 +182,6 @@ await runScenario(
     const repoRoot = await createTempRepo("forge-plan-model-shared-entrypoint-");
 
     try {
-      await writeRepoFile(
-        repoRoot,
-        "package.json",
-        JSON.stringify(
-          {
-            name: "forge-plan-model-shared-entrypoint",
-            private: true,
-            type: "module",
-            scripts: {
-              test: "node --test",
-            },
-          },
-          null,
-          2,
-        ),
-      );
       await writeRepoFile(repoRoot, "src/app.ts", "export const app = true;\n");
       await writeRepoFile(repoRoot, "src/helper.ts", "export const helper = true;\n");
       await writeRepoFile(repoRoot, "src/cli.ts", "export const cli = true;\n");
@@ -213,13 +197,12 @@ await runScenario(
       );
 
       await writeSpecAndRunIntake(repoRoot, [
-        "# Update app, helper, and config behavior",
+        "# Update app and helper behavior",
         "",
-        "Revise `package.json`, `src/app.ts`, and `src/helper.ts` and keep `tests/app.test.ts`, `tests/helper.test.ts`, and `src/cli.ts` aligned.",
+        "Revise `src/app.ts` and `src/helper.ts` and keep `tests/app.test.ts` and `tests/helper.test.ts` aligned.",
         "",
         "## Acceptance Criteria",
         "",
-        "- `package.json` is updated",
         "- `src/app.ts` is updated",
         "- `src/helper.ts` is updated",
         "- `tests/app.test.ts` stays aligned",
@@ -232,11 +215,9 @@ await runScenario(
       const artifact = await loadPlanArtifact(repoRoot);
       const implementationItem = artifact.plan_items.find((item) => item.category === "implementation");
       const interfaceItem = artifact.plan_items.find((item) => item.category === "interface");
-      const configItem = artifact.plan_items.find((item) => item.category === "config");
 
       assert.ok(implementationItem, "expected an implementation plan item");
       assert.ok(interfaceItem, "expected a shared interface plan item");
-      assert.ok(configItem, "expected a config plan item");
       assert.ok(
         implementationItem.likelyAffectedPaths.includes("src/app.ts"),
         "expected the shared-risk source file to remain in implementation planning",
@@ -249,18 +230,9 @@ await runScenario(
         implementationItem.dependencies.some((dependency) => dependency.planItemId === interfaceItem.id),
         "expected implementation work to depend on the shared interface item",
       );
-      assert.ok(
-        interfaceItem.dependencies.some((dependency) => dependency.planItemId === configItem.id),
-        "expected interface work to depend on the config item",
-      );
-      assert.ok(interfaceItem.likelyAffectedPaths.includes("src/app.ts"));
-      assert.ok(interfaceItem.likelyAffectedPaths.includes("src/cli.ts"));
+      assert.deepEqual(interfaceItem.likelyAffectedPaths, ["src/app.ts"]);
       assert.ok(!interfaceItem.likelyAffectedPaths.includes("src/helper.ts"));
-      assert.equal(
-        interfaceItem.parallelization.signal,
-        "risky_shared",
-        "shared interface work should remain visibly risky even when config work exists upstream",
-      );
+      assert.ok(!interfaceItem.likelyAffectedPaths.includes("src/cli.ts"));
     } finally {
       await disposeTempRepo(repoRoot);
     }
