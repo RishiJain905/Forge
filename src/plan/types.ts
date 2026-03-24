@@ -50,6 +50,10 @@ export interface PlanResolvedOutputPaths {
   artifactPath: string;
   reportPath: string;
   debugArtifactPath: string;
+  debugPlanItemsPath?: string;
+  debugDependenciesPath?: string;
+  debugConflictZonesPath?: string;
+  debugTestObligationsPath?: string;
 }
 
 export interface LoadedPlanFoundationInput {

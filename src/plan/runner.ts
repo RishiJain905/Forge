@@ -15,6 +15,7 @@ import {
   resolvePlanFoundationInput,
 } from "./input.js";
 import { createPlanArtifact, buildPlanCommandFailure } from "./artifact.js";
+import { createPlanDebugWrites, isPlanDebugEnabled } from "./debug.js";
 import { buildPlanModel } from "./planner.js";
 import { createPlanReport } from "./report.js";
 import { validatePlanFoundationResult } from "./schema.js";
@@ -120,6 +121,7 @@ async function persistPlanCommandOutputs(params: {
   reportPath: string;
   artifact: string;
   report: string;
+  debugWrites?: Array<{ filePath: string; contents: string }> | null;
 }): Promise<void> {
   await persistIntakeOutputs({
     criticalWrites: [
@@ -132,6 +134,7 @@ async function persistPlanCommandOutputs(params: {
         contents: params.report,
       },
     ],
+    debugWrites: params.debugWrites ?? undefined,
   });
 }
 
@@ -207,6 +210,9 @@ export async function runPlanCommand(
       summaryOverride,
     });
     const report = createPlanReport(artifact);
+    const debugWrites = isPlanDebugEnabled()
+      ? createPlanDebugWrites({ artifact, paths: input.paths })
+      : null;
 
     try {
       await persistPlanCommandOutputs({
@@ -214,6 +220,7 @@ export async function runPlanCommand(
         reportPath: input.paths.reportPath,
         artifact: `${JSON.stringify(artifact, null, 2)}\n`,
         report,
+        debugWrites,
       });
     } catch (error) {
       return {

@@ -248,11 +248,17 @@
   - Expanded conflict-zone detection so shared schema and registry-style surfaces can produce visible multi-item overlap zones alongside the existing config and interface zones.
   - Kept the existing Step 2 top-level artifact/report contract stable while preserving explicit per-item and top-level test obligations through the richer Part 3 planning path.
   - Added a dedicated `tests/plan.part3-dependencies-conflict-obligations.test.ts` suite, wired it into `npm.cmd test`, and documented completion in `S2-B2-Done/P3-done-summary.md`.
+- Batch 2.04: `part-4-stage-5-and-6-parallelization-carry-forward-artifacts-and-report.md` (Step 2)
+  - Added a Step 2-specific `FORGE_PLAN_DEBUG=1` gate so `forge plan` can optionally persist internal planning debug artifacts without changing the public `plan.json` or `plan-report.md` contract.
+  - Extended the resolved Step 2 output paths and runner persistence flow so debug-enabled runs now write `plan-debug.json`, `plan-items.json`, `dependencies.json`, `conflict-zones.json`, and `test-obligations.json` under `.forge/debug/` on a best-effort basis.
+  - Kept stronger parallelization signals and carried-forward concern mapping visible and honest for ready, warning-heavy, and blocked planning runs while preserving the existing artifact/report top-level shape.
+  - Added dedicated Part 4 regression coverage for debug-disabled, debug-enabled, blocked-run, custom-output-root, and debug-write-failure scenarios, and wired the new suite into `npm.cmd test`.
+  - Updated `README.md`, `progress.md`, and `S2-B2-Done/p4-done-summary.md` so Step 2 Batch 2 Part 4 is documented and traceable.
 
 ## Current Branch State
 - `dev` includes the completed Step 1 work through Batch 4.05, including the frozen Step 2 handoff contract from Intake.
-- `dev` includes the completed Step 2 Batch 2 Part 1 and Part 2 work for the real `forge plan` path.
-- Step 2 Batch 2 Part 3 is implemented locally in the isolated `step2-b2-p3-deps-obligations` worktree, has fresh passing verification, and is ready for integration back into `dev`.
+- `dev` includes the completed Step 2 Batch 2 Part 1 through Part 4 work for the real `forge plan` path.
+- `dev` now includes optional Step 2 planning debug outputs behind `FORGE_PLAN_DEBUG=1` while keeping the public plan artifact and report contract stable.
 
 ## Verification
 - `npm.cmd test`
@@ -263,4 +269,5 @@
 ## Next
 - Step 2 Batch 2 Part 2 is complete.
 - Step 2 Batch 2 Part 3 is complete.
-- Next implementation work should begin `forge_step2_batch2/part-4-stage-5-and-6-parallelization-carry-forward-artifacts-and-report.md`.
+- Step 2 Batch 2 Part 4 is complete.
+- Next implementation work should begin `forge_step2_batch2/part-5-stage-7-cli-wiring-tests-and-runnable-milestone.md`.

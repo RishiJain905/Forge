@@ -15,6 +15,10 @@ import {
 import {
   PLAN_ARTIFACT_NAME,
   PLAN_DEBUG_ARTIFACT_NAME,
+  PLAN_DEBUG_CONFLICT_ZONES_NAME,
+  PLAN_DEBUG_DEPENDENCIES_NAME,
+  PLAN_DEBUG_PLAN_ITEMS_NAME,
+  PLAN_DEBUG_TEST_OBLIGATIONS_NAME,
   PLAN_REPORT_NAME,
 } from "./constants.js";
 import type {
@@ -179,6 +183,26 @@ export async function resolvePlanOutputPaths(
       outputRoot.outputRoot,
       DEBUG_DIRECTORY,
       PLAN_DEBUG_ARTIFACT_NAME,
+    ),
+    debugPlanItemsPath: resolveOutputFilePath(
+      outputRoot.outputRoot,
+      DEBUG_DIRECTORY,
+      PLAN_DEBUG_PLAN_ITEMS_NAME,
+    ),
+    debugDependenciesPath: resolveOutputFilePath(
+      outputRoot.outputRoot,
+      DEBUG_DIRECTORY,
+      PLAN_DEBUG_DEPENDENCIES_NAME,
+    ),
+    debugConflictZonesPath: resolveOutputFilePath(
+      outputRoot.outputRoot,
+      DEBUG_DIRECTORY,
+      PLAN_DEBUG_CONFLICT_ZONES_NAME,
+    ),
+    debugTestObligationsPath: resolveOutputFilePath(
+      outputRoot.outputRoot,
+      DEBUG_DIRECTORY,
+      PLAN_DEBUG_TEST_OBLIGATIONS_NAME,
     ),
   };
 }
