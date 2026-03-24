@@ -5,12 +5,16 @@ import type {
   PlanDependencyGraphEntry,
   PlanDependencyType,
   PlanFoundationResult,
+  PlanItemFoundation,
+  PlanItemSourceTrace,
   PlanItem,
   PlanItemCategory,
   PlanModel,
   PlanParallelization,
   PlanParallelizationSignalEntry,
   PlanRiskLevel,
+  PlanRequirementSignal,
+  PlanRequirementSource,
   PlanTestObligation,
   PlanTestObligationEntry,
   PlanVerificationCategory,
@@ -27,7 +31,7 @@ interface RiskZoneEntry {
 }
 
 interface PlannerContext {
-  requirementSeeds: string[];
+  requirementSignals: PlanRequirementSignal[];
   configPaths: string[];
   interfacePaths: string[];
   implementationPaths: string[];
@@ -39,16 +43,6 @@ interface PlannerContext {
   fallbackOnlyTargeting: boolean;
   lowConfidence: boolean;
   sharedRiskPaths: Set<string>;
-}
-
-interface ItemDraft {
-  id: string;
-  clusterKey: string;
-  category: ClusterCategory;
-  title: string;
-  description: string;
-  sourceRequirements: string[];
-  likelyAffectedPaths: string[];
 }
 
 const CATEGORY_ORDER: readonly ClusterCategory[] = [
@@ -190,27 +184,34 @@ function maxRisk(...levels: PlanRiskLevel[]): PlanRiskLevel {
     riskRank(current) > riskRank(highest) ? current : highest, "low");
 }
 
-function getRequirementSeeds(foundation: PlanFoundationResult): string[] {
-  const taskSpec = foundation.carryForward.taskSpec;
-  const candidates = [
-    taskSpec.explicit_requirements,
-    taskSpec.acceptance_criteria,
-    taskSpec.implementation_necessities,
-    taskSpec.goal ? [taskSpec.goal] : [],
-  ];
+function buildRequirementSignals(foundation: PlanFoundationResult): PlanRequirementSignal[] {
+  const taskSpec = foundation.planningInput.context.taskSpec;
+  const signals = new Map<string, Set<PlanRequirementSource>>();
 
-  for (const values of candidates) {
-    const normalized = dedupeStable(values ?? []);
-    if (normalized.length > 0) {
-      return normalized;
+  const addSignals = (values: string[], source: PlanRequirementSource): void => {
+    for (const value of dedupeStable(values ?? [])) {
+      const sources = signals.get(value) ?? new Set<PlanRequirementSource>();
+      sources.add(source);
+      signals.set(value, sources);
     }
+  };
+
+  addSignals(taskSpec.explicit_requirements, "explicit_requirement");
+  addSignals(taskSpec.acceptance_criteria, "acceptance_criteria");
+  addSignals(taskSpec.implementation_necessities, "implementation_necessity");
+
+  if (signals.size === 0 && taskSpec.goal) {
+    addSignals([taskSpec.goal], "goal");
   }
 
-  return [];
+  return [...signals.entries()].map(([text, sources]) => ({
+    text,
+    sources: [...sources],
+  }));
 }
 
 function buildRiskZones(foundation: PlanFoundationResult): RiskZoneEntry[] {
-  const riskAnalysis = foundation.carryForward.riskAnalysis;
+  const riskAnalysis = foundation.planningInput.context.riskAnalysis;
 
   return uniqueOrdered(
     [
@@ -247,8 +248,9 @@ function buildSiblingTestPaths(sourcePaths: string[], repoTestFiles: string[]): 
 }
 
 function buildPlannerContext(foundation: PlanFoundationResult): PlannerContext {
-  const carryForward = foundation.carryForward;
-  const candidateTargets = carryForward.candidateTargets;
+  const planningContext = foundation.planningInput.context;
+  const planningUncertainty = foundation.planningInput.uncertainty;
+  const candidateTargets = planningContext.candidateTargets;
   const sharedRiskPaths = new Set<string>(
     candidateTargets
       .filter((target) => target.shared_risk)
@@ -277,7 +279,7 @@ function buildPlannerContext(foundation: PlanFoundationResult): PlannerContext {
       .filter(isManifestLikePath),
   );
   const interfaceVerificationPaths = dedupeStable(
-    carryForward.initialVerificationTargets
+    planningContext.initialVerificationTargets
       .filter((target) =>
         Boolean(target.category) &&
         INTERFACE_VERIFICATION_CATEGORIES.has(target.category as PlanVerificationCategory),
@@ -289,7 +291,7 @@ function buildPlannerContext(foundation: PlanFoundationResult): PlannerContext {
       .filter((target) => target.kind === "source" && target.shared_risk)
       .map((target) => target.path),
   );
-  const riskyPhrases = new Set(carryForward.taskSpec.risky_phrases ?? []);
+  const riskyPhrases = new Set(planningContext.taskSpec.risky_phrases ?? []);
   const interfaceSeedPaths = dedupeStable([
     ...sharedSourcePaths,
     ...interfaceVerificationPaths,
@@ -300,16 +302,16 @@ function buildPlannerContext(foundation: PlanFoundationResult): PlannerContext {
       ? dedupeStable([...sourcePaths])
       : [];
   const implementationPaths = dedupeStable(sourcePaths);
-  const siblingTests = buildSiblingTestPaths(sourcePaths, carryForward.repoContext.test_files);
+  const siblingTests = buildSiblingTestPaths(sourcePaths, planningContext.repoContext.test_files);
 
   return {
-    requirementSeeds: getRequirementSeeds(foundation),
+    requirementSignals: buildRequirementSignals(foundation),
     configPaths: dedupeStable([...manifestPaths, ...manifestRiskPaths]),
     interfacePaths,
     implementationPaths,
     testPaths: dedupeStable([...testPaths, ...siblingTests]),
     sourcePaths,
-    entryPointPaths: new Set(carryForward.repoContext.entry_points.map(normalizePath)),
+    entryPointPaths: new Set(planningContext.repoContext.entry_points.map(normalizePath)),
     fallbackTargetPaths: new Set(
       candidateTargets
         .filter((target) => target.match_type === "fallback")
@@ -318,16 +320,16 @@ function buildPlannerContext(foundation: PlanFoundationResult): PlannerContext {
     riskZones,
     fallbackOnlyTargeting:
       candidateTargets.length > 0 && candidateTargets.every((target) => target.match_type === "fallback"),
-    lowConfidence: carryForward.confidence.level === "low",
+    lowConfidence: planningUncertainty.confidence.level === "low",
     sharedRiskPaths,
   };
 }
 
 function determineRequirementCategories(
-  requirement: string,
+  requirement: PlanRequirementSignal,
   context: PlannerContext,
 ): ClusterCategory[] {
-  const normalizedText = normalizeWhitespace(requirement).toLowerCase();
+  const normalizedText = normalizeWhitespace(requirement.text).toLowerCase();
   const categories = new Set<ClusterCategory>();
   const testSignal =
     TEST_HINT_PATTERN.test(normalizedText) ||
@@ -461,14 +463,67 @@ function requirementMatchesPaths(requirement: string, paths: string[]): boolean 
     normalizedRequirement.includes(normalizeFileStem(pathValue).toLowerCase()));
 }
 
-function buildDrafts(foundation: PlanFoundationResult, context: PlannerContext): ItemDraft[] {
+function buildInferredRequirementSignal(paths: string[]): PlanRequirementSignal {
+  return {
+    text: `Planning surface inferred from Step 1 targeting for ${summarizePaths(paths)}.`,
+    sources: ["goal"],
+  };
+}
+
+function buildSourceTrace(params: {
+  foundation: PlanFoundationResult;
+  paths: string[];
+  requirement: PlanRequirementSignal;
+  context: PlannerContext;
+}): PlanItemSourceTrace {
+  const normalizedPathSet = new Set(params.paths.map(normalizePath));
+  const normalizedRequirement = normalizeWhitespace(params.requirement.text).toLowerCase();
+  const candidateTargetMatches = params.foundation.planningInput.context.candidateTargets
+    .filter((target) =>
+      normalizedPathSet.has(normalizePath(target.path)) ||
+      textMentionsPath(normalizedRequirement, target.path))
+    .map((target) => target.path);
+  const verificationTargetMatches = params.foundation.planningInput.context.initialVerificationTargets
+    .filter((target) =>
+      normalizedPathSet.has(normalizePath(target.path)) ||
+      textMentionsPath(normalizedRequirement, target.path))
+    .map((target) => target.path);
+  const verificationCategories = params.foundation.planningInput.context.initialVerificationTargets
+    .filter((target) =>
+      target.category &&
+      (normalizedPathSet.has(normalizePath(target.path)) || textMentionsPath(normalizedRequirement, target.path)))
+    .map((target) => target.category as PlanVerificationCategory);
+  const riskCodes = params.context.riskZones
+    .filter((zone) =>
+      zone.evidencePaths.length === 0 ||
+      zone.evidencePaths.some((pathValue) => normalizedPathSet.has(normalizePath(pathValue))))
+    .map((zone) => zone.code);
+
+  return {
+    requirement: params.requirement.text,
+    requirementSources: params.requirement.sources,
+    matchedCandidateTargetPaths: dedupeStable(candidateTargetMatches),
+    matchedVerificationTargetPaths: dedupeStable(verificationTargetMatches),
+    matchedVerificationCategories: uniqueOrdered(verificationCategories, (category) => category),
+    matchedRiskCodes: dedupeStable(riskCodes),
+    carriesLowConfidence: params.context.lowConfidence,
+    carriesFallbackTargeting:
+      params.context.fallbackOnlyTargeting ||
+      params.paths.some((pathValue) => params.context.fallbackTargetPaths.has(normalizePath(pathValue))),
+  };
+}
+
+export function buildPlanItemFoundations(
+  foundation: PlanFoundationResult,
+): PlanItemFoundation[] {
+  const context = buildPlannerContext(foundation);
   const requirementCategories = new Map<string, ClusterCategory[]>();
 
-  for (const requirement of context.requirementSeeds) {
-    requirementCategories.set(requirement, determineRequirementCategories(requirement, context));
+  for (const requirement of context.requirementSignals) {
+    requirementCategories.set(requirement.text, determineRequirementCategories(requirement, context));
   }
 
-  const drafts: ItemDraft[] = [];
+  const foundations: PlanItemFoundation[] = [];
 
   for (const category of CATEGORY_ORDER) {
     const pathGroups = buildCategoryPathGroups(category, context);
@@ -479,52 +534,68 @@ function buildDrafts(foundation: PlanFoundationResult, context: PlannerContext):
 
     let categoryIndex = 1;
     for (const paths of pathGroups) {
-      const categoryRequirements = context.requirementSeeds.filter(
-        (requirement) => requirementCategories.get(requirement)?.includes(category),
+      const categoryRequirements = context.requirementSignals.filter(
+        (requirement) => requirementCategories.get(requirement.text)?.includes(category),
       );
       const matchedRequirements = categoryRequirements.filter((requirement) =>
-        requirementMatchesPaths(requirement, paths));
+        requirementMatchesPaths(requirement.text, paths));
       const resolvedRequirements =
         matchedRequirements.length > 0
           ? matchedRequirements
           : categoryRequirements.length > 0
             ? categoryRequirements
-            : context.requirementSeeds.length > 0
-              ? [context.requirementSeeds[0]]
-              : [`Planning surface inferred from Step 1 targeting for ${summarizePaths(paths)}.`];
+            : [buildInferredRequirementSignal(paths)];
+      const sourceRequirements = dedupeStable(resolvedRequirements.map((requirement) => requirement.text));
 
-      drafts.push({
+      foundations.push({
         id: `plan-${category}-${categoryIndex}`,
         clusterKey: buildDraftClusterKey(category, paths),
         category,
         title: buildItemTitle(category, paths),
-        description: buildItemDescription(category, paths, resolvedRequirements),
-        sourceRequirements: dedupeStable(resolvedRequirements),
+        description: buildItemDescription(category, paths, sourceRequirements),
+        sourceRequirements,
         likelyAffectedPaths: dedupeStable(paths),
+        sourceTraces: resolvedRequirements.map((requirement) =>
+          buildSourceTrace({
+            foundation,
+            paths,
+            requirement,
+            context,
+          })),
       });
       categoryIndex += 1;
     }
   }
 
-  if (drafts.length === 0 && context.requirementSeeds.length > 0) {
-    drafts.push({
+  if (foundations.length === 0 && context.requirementSignals.length > 0) {
+    const fallbackPaths = dedupeStable([
+      ...foundation.planningInput.context.candidateTargets.map((target) => target.path),
+      ...foundation.planningInput.context.repoContext.entry_points,
+    ]).slice(0, 5);
+    const sourceRequirements = dedupeStable(context.requirementSignals.map((requirement) => requirement.text));
+
+    foundations.push({
       id: "plan-implementation-1",
       clusterKey: "implementation:inferred",
       category: "implementation",
       title: "Plan implementation updates for inferred targets",
-      description: `Implement the requested behavior for: ${context.requirementSeeds.join("; ")}.`,
-      sourceRequirements: dedupeStable(context.requirementSeeds),
-      likelyAffectedPaths: dedupeStable([
-        ...foundation.carryForward.candidateTargets.map((target) => target.path),
-        ...(foundation.carryForward.repoContext.entry_points ?? []),
-      ]).slice(0, 5),
+      description: `Implement the requested behavior for: ${sourceRequirements.join("; ")}.`,
+      sourceRequirements,
+      likelyAffectedPaths: fallbackPaths,
+      sourceTraces: context.requirementSignals.map((requirement) =>
+        buildSourceTrace({
+          foundation,
+          paths: fallbackPaths,
+          requirement,
+          context,
+        })),
     });
   }
 
-  return drafts;
+  return foundations;
 }
 
-function draftsShareSurface(left: ItemDraft, right: ItemDraft): boolean {
+function draftsShareSurface(left: PlanItemFoundation, right: PlanItemFoundation): boolean {
   if (left.clusterKey === right.clusterKey) {
     return true;
   }
@@ -533,8 +604,8 @@ function draftsShareSurface(left: ItemDraft, right: ItemDraft): boolean {
     right.likelyAffectedPaths.some((rightPath) => normalizeFileStem(leftPath) === normalizeFileStem(rightPath)));
 }
 
-function buildDependencies(drafts: ItemDraft[]): Map<string, PlanDependencyGraphEntry[]> {
-  const draftsByCategory = new Map<ClusterCategory, ItemDraft[]>();
+function buildDependencies(drafts: PlanItemFoundation[]): Map<string, PlanDependencyGraphEntry[]> {
+  const draftsByCategory = new Map<ClusterCategory, PlanItemFoundation[]>();
   for (const draft of drafts) {
     const existing = draftsByCategory.get(draft.category) ?? [];
     draftsByCategory.set(draft.category, [...existing, draft]);
@@ -651,7 +722,7 @@ function collectDependents(
 }
 
 function buildConflictZones(
-  drafts: ItemDraft[],
+  drafts: PlanItemFoundation[],
   dependencyGraph: PlanDependencyGraphEntry[],
   context: PlannerContext,
 ): PlanConflictZone[] {
@@ -802,7 +873,7 @@ function mapConcernPlanItemIds(params: {
   source: PlanCarryForwardConcern["source"];
   code: string | null;
   message: string;
-  drafts: ItemDraft[];
+  drafts: PlanItemFoundation[];
   context: PlannerContext;
 }): string[] {
   const normalizedMessage = normalizeWhitespace(params.message).toLowerCase();
@@ -884,7 +955,7 @@ function createConcern(params: {
 
 function buildCarryForwardConcerns(
   foundation: PlanFoundationResult,
-  drafts: ItemDraft[],
+  drafts: PlanItemFoundation[],
   context: PlannerContext,
 ): PlanCarryForwardConcern[] {
   if (drafts.length === 0) {
@@ -1002,7 +1073,7 @@ function itemHasSharedRisk(paths: string[], context: PlannerContext): boolean {
 }
 
 function deriveVerificationRelevance(
-  draft: ItemDraft,
+  draft: PlanItemFoundation,
   foundation: PlanFoundationResult,
   context: PlannerContext,
   concerns: PlanCarryForwardConcern[],
@@ -1010,6 +1081,7 @@ function deriveVerificationRelevance(
   const itemPathSet = new Set(draft.likelyAffectedPaths.map(normalizePath));
   const categories = new Set<PlanVerificationCategory>();
   const riskyPhrases = new Set(foundation.carryForward.taskSpec.risky_phrases ?? []);
+  const traceVerificationCategories = draft.sourceTraces.flatMap((trace) => trace.matchedVerificationCategories);
 
   for (const target of foundation.carryForward.initialVerificationTargets) {
     if (!target.category || !itemPathSet.has(normalizePath(target.path))) {
@@ -1017,6 +1089,10 @@ function deriveVerificationRelevance(
     }
 
     categories.add(target.category as PlanVerificationCategory);
+  }
+
+  for (const category of traceVerificationCategories) {
+    categories.add(category);
   }
 
   if (draft.category === "implementation") {
@@ -1071,6 +1147,8 @@ function deriveVerificationRelevance(
   }
   if (context.fallbackOnlyTargeting) {
     notes.push("This item is derived from fallback candidate targeting rather than explicit task-to-file mapping.");
+  } else if (draft.sourceTraces.some((trace) => trace.carriesFallbackTargeting)) {
+    notes.push("At least one traced requirement reached this item through fallback candidate targeting.");
   }
   if (concerns.length > 0) {
     const concernSummary = concerns
@@ -1094,7 +1172,7 @@ function addObligation(obligations: PlanTestObligation[], obligation: PlanTestOb
 }
 
 function deriveTestObligations(
-  draft: ItemDraft,
+  draft: PlanItemFoundation,
   verification: PlanVerificationRelevance,
   foundation: PlanFoundationResult,
   context: PlannerContext,
@@ -1194,7 +1272,7 @@ function deriveTestObligations(
     });
   }
 
-  if (obligations.length === 0 && context.requirementSeeds.length > 0) {
+  if (obligations.length === 0 && context.requirementSignals.length > 0) {
     addObligation(obligations, {
       category: "regression",
       reason: "The planned work should keep at least regression coverage visible.",
@@ -1205,7 +1283,7 @@ function deriveTestObligations(
 }
 
 function deriveParallelization(
-  draft: ItemDraft,
+  draft: PlanItemFoundation,
   dependencyGraph: PlanDependencyGraphEntry[],
   verification: PlanVerificationRelevance,
   concerns: PlanCarryForwardConcern[],
@@ -1255,7 +1333,7 @@ function deriveParallelization(
 }
 
 function deriveRiskLevel(
-  draft: ItemDraft,
+  draft: PlanItemFoundation,
   conflictZones: PlanConflictZone[],
   context: PlannerContext,
   concerns: PlanCarryForwardConcern[],
@@ -1303,22 +1381,22 @@ function deriveRiskLevel(
   return riskLevel;
 }
 
-function hasUsablePlanningSignal(foundation: PlanFoundationResult, context: PlannerContext): boolean {
-  const taskSpec = foundation.carryForward.taskSpec;
+function hasUsablePlanningSignal(foundation: PlanFoundationResult): boolean {
+  const taskSpec = foundation.planningInput.context.taskSpec;
 
   return (
     taskSpec.explicit_requirements.length > 0 ||
     taskSpec.acceptance_criteria.length > 0 ||
     taskSpec.implementation_necessities.length > 0 ||
-    foundation.carryForward.candidateTargets.length > 0 ||
-    foundation.carryForward.initialVerificationTargets.length > 0
+    foundation.planningInput.context.candidateTargets.length > 0 ||
+    foundation.planningInput.context.initialVerificationTargets.length > 0
   );
 }
 
 export function buildPlanModel(foundation: PlanFoundationResult): PlanModel {
   const context = buildPlannerContext(foundation);
 
-  if (!hasUsablePlanningSignal(foundation, context)) {
+  if (!hasUsablePlanningSignal(foundation)) {
     return {
       planItems: [],
       dependencyGraph: [],
@@ -1329,7 +1407,8 @@ export function buildPlanModel(foundation: PlanFoundationResult): PlanModel {
     };
   }
 
-  const drafts = buildDrafts(foundation, context).filter((draft) => draft.likelyAffectedPaths.length > 0);
+  const drafts = buildPlanItemFoundations(foundation)
+    .filter((draft) => draft.likelyAffectedPaths.length > 0);
   const dependencyMap = buildDependencies(drafts);
   const dependencyGraph = buildDependencyGraphEntries(dependencyMap);
   const conflictZones = buildConflictZones(drafts, dependencyGraph, context);

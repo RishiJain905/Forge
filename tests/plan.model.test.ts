@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
 
+import { resolvePlanFoundationInput } from "../src/plan/input.js";
+import { buildPlanItemFoundations, buildPlanModel } from "../src/plan/planner.js";
+import { buildPlanFoundation } from "../src/plan/runner.js";
 import type { IntakeArtifact } from "../src/intake/types.js";
 import {
   createTempRepo,
@@ -112,6 +115,218 @@ async function writeSpecAndRunIntake(repoRoot: string, specLines: string[], spec
 
   await removeSpecInputs(repoRoot);
 }
+
+await runScenario(
+  "buildPlanItemFoundations preserves multi-source requirement traces for a targeted surface",
+  async () => {
+    const repoRoot = await createTempRepo("forge-plan-model-foundation-traces-");
+
+    try {
+      await writeSpecAndRunIntake(repoRoot, [
+        "# Update app behavior",
+        "",
+        "Revise `src/app.ts` and keep `tests/app.test.ts` aligned.",
+        "",
+        "## Acceptance Criteria",
+        "",
+        "- `src/app.ts` is updated",
+        "- `tests/app.test.ts` stays aligned",
+      ]);
+
+      const resolvedInput = await resolvePlanFoundationInput({ repo: repoRoot }, repoRoot);
+      const foundation = buildPlanFoundation({
+        ...resolvedInput,
+        planningInput: {
+          ...resolvedInput.planningInput,
+          context: {
+            ...resolvedInput.planningInput.context,
+            taskSpec: {
+              ...resolvedInput.planningInput.context.taskSpec,
+              explicit_requirements: ["Update src/app.ts"],
+              acceptance_criteria: ["Update src/app.ts", "Keep tests aligned"],
+              implementation_necessities: ["Update src/app.ts"],
+            },
+          },
+        },
+      });
+      const foundations = buildPlanItemFoundations(foundation);
+      const implementationFoundation = foundations.find((item) =>
+        item.category === "implementation" &&
+        item.likelyAffectedPaths.length === 1 &&
+        item.likelyAffectedPaths[0] === "src/app.ts");
+
+      assert.ok(implementationFoundation, "expected a dedicated app implementation foundation item");
+      const appTrace = implementationFoundation.sourceTraces.find((trace) => trace.requirement === "Update src/app.ts");
+      assert.ok(appTrace, "expected a source trace for the repeated app requirement");
+      assert.deepEqual(
+        appTrace.requirementSources.sort(),
+        ["acceptance_criteria", "explicit_requirement", "implementation_necessity"].sort(),
+      );
+      assert.ok(
+        appTrace.matchedCandidateTargetPaths.includes("src/app.ts"),
+        "expected the source trace to retain candidate-target path linkage",
+      );
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "buildPlanItemFoundations uses inferred source requirements for unmatched config surfaces",
+  async () => {
+    const repoRoot = await createTempRepo("forge-plan-model-unmatched-config-");
+
+    try {
+      await writeRepoFile(
+        repoRoot,
+        "package.json",
+        JSON.stringify({
+          name: "forge-plan-model-unmatched-config",
+          private: true,
+          type: "module",
+        }, null, 2),
+      );
+
+      await writeSpecAndRunIntake(repoRoot, [
+        "# Update app behavior",
+        "",
+        "Revise `src/app.ts`.",
+        "",
+        "## Acceptance Criteria",
+        "",
+        "- `src/app.ts` is updated",
+      ]);
+
+      const resolvedInput = await resolvePlanFoundationInput({ repo: repoRoot }, repoRoot);
+      const foundation = buildPlanFoundation({
+        ...resolvedInput,
+        planningInput: {
+          ...resolvedInput.planningInput,
+          context: {
+            ...resolvedInput.planningInput.context,
+            taskSpec: {
+              ...resolvedInput.planningInput.context.taskSpec,
+              explicit_requirements: ["Update src/app.ts"],
+              acceptance_criteria: [],
+              implementation_necessities: [],
+            },
+            candidateTargets: [
+              {
+                path: "src/app.ts",
+                kind: "source",
+                match_type: "explicit",
+                reason: "explicit source target",
+                notes: [],
+                shared_risk: false,
+              },
+              {
+                path: "package.json",
+                kind: "manifest",
+                match_type: "explicit",
+                reason: "config surface remains relevant",
+                notes: [],
+                shared_risk: true,
+              },
+            ],
+            initialVerificationTargets: [],
+          },
+        },
+      });
+      const foundations = buildPlanItemFoundations(foundation);
+      const configFoundation = foundations.find((item) =>
+        item.category === "config" &&
+        item.likelyAffectedPaths.length === 1 &&
+        item.likelyAffectedPaths[0] === "package.json");
+
+      assert.ok(configFoundation, "expected a config foundation item for package.json");
+      assert.deepEqual(
+        configFoundation.sourceRequirements,
+        ["Planning surface inferred from Step 1 targeting for `package.json`."],
+      );
+      assert.deepEqual(
+        configFoundation.sourceTraces[0]?.requirementSources,
+        ["goal"],
+      );
+      assert.ok(
+        configFoundation.sourceTraces[0]?.matchedCandidateTargetPaths.includes("package.json"),
+        "expected the inferred trace to retain package.json targeting evidence",
+      );
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "forge plan uses source traces to carry verification categories onto implementation items",
+  async () => {
+    const repoRoot = await createTempRepo("forge-plan-model-trace-verification-");
+
+    try {
+      await writeRepoFile(repoRoot, "src/retry.ts", "export const retryPolicy = true;\n");
+
+      await writeSpecAndRunIntake(repoRoot, [
+        "# Update app behavior",
+        "",
+        "Revise `src/app.ts` while keeping retry handling aligned.",
+        "",
+        "## Acceptance Criteria",
+        "",
+        "- `src/app.ts` is updated",
+      ]);
+
+      const resolvedInput = await resolvePlanFoundationInput({ repo: repoRoot }, repoRoot);
+      const foundation = buildPlanFoundation({
+        ...resolvedInput,
+        planningInput: {
+          ...resolvedInput.planningInput,
+          context: {
+            ...resolvedInput.planningInput.context,
+            taskSpec: {
+              ...resolvedInput.planningInput.context.taskSpec,
+              explicit_requirements: ["Keep src/app.ts aligned with src/retry.ts handling"],
+              acceptance_criteria: [],
+              implementation_necessities: [],
+              risky_phrases: [],
+            },
+            candidateTargets: [
+              {
+                path: "src/app.ts",
+                kind: "source",
+                match_type: "explicit",
+                reason: "explicit source target",
+                notes: [],
+                shared_risk: false,
+              },
+            ],
+            initialVerificationTargets: [
+              {
+                path: "src/retry.ts",
+                kind: "source",
+                category: "retry_logic",
+                reason: "retry behavior needs focused verification",
+              },
+            ],
+          },
+        },
+      });
+      const model = buildPlanModel(foundation);
+      const implementationItem = model.planItems.find((item) =>
+        item.category === "implementation" &&
+        item.likelyAffectedPaths.length === 1 &&
+        item.likelyAffectedPaths[0] === "src/app.ts");
+
+      assert.ok(implementationItem, "expected an implementation item for src/app.ts");
+      assert.ok(
+        implementationItem.verificationRelevance.categories.includes("retry_logic"),
+        "expected trace-linked retry verification to flow into the implementation item",
+      );
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
 
 await runScenario(
   "forge plan splits unrelated source and test surfaces into separate implementation and test plan items",

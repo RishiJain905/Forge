@@ -236,11 +236,17 @@
   - Hardened `runPlanCommand()` so a structurally valid but non-actionable Step 1 handoff is persisted as `blocked` with an explicit `PLAN_INPUT_TOO_WEAK` readiness blocker instead of being reported as ready.
   - Added direct runner and packaged-entrypoint coverage for the new Step 2 behavior and wired `tests/plan.runner.test.ts` and `tests/plan.cli-entrypoint.test.ts` into the default `npm.cmd test` gate.
   - Updated `README.md`, `progress.md`, and `S2-B2-Done/p1-done-summary.md` so Step 2 Batch 2 Part 1 is documented and traceable.
+- Batch 2.02: `part-2-stage-1-and-2-intake-consumption-plan-item-foundation.md` (Step 2)
+  - Added a Step 2-native normalized planning-input boundary so `forge plan` preserves Step 1 provenance, planning payload, and uncertainty separately instead of treating the raw intake artifact as the planner's working model.
+  - Hardened foundation usability evaluation so warning-grade handoffs stay usable, blocked upstream handoffs stay blocked, and schema-valid but non-actionable handoffs surface `PLAN_INPUT_TOO_WEAK` at the foundation layer.
+  - Finished extracting a real plan-item foundation layer in `src/plan/planner.ts` so requirement signals can retain multiple sources together and emit structured source traces before the existing public plan items are derived.
+  - Kept the public Step 2 artifact/report top-level contract stable while preserving the current dependency, conflict-zone, test-obligation, parallelization, and carry-forward behavior.
+  - Added focused foundation and planner-model regression coverage plus direct traceability assertions, and documented completion in `S2-B2-Done/p2-done-summary.md`.
 
 ## Current Branch State
 - `dev` includes the completed Step 1 work through Batch 4.05, including the frozen Step 2 handoff contract from Intake.
-- `dev` now also contains the in-progress Step 2 Batch 2 Part 1 implementation work, focused on more granular plan-item construction, honest blocked handling for non-actionable handoffs, and direct runner/entrypoint coverage for the real `forge plan` path.
-- Step 2 Batch 2 Part 1 is implemented locally and ready for verification on `dev`.
+- `dev` now also contains the completed Step 2 Batch 2 Part 1 and Part 2 implementation work in an isolated worktree, covering normalized plan-input consumption plus plan-item foundation extraction for the real `forge plan` path.
+- Step 2 Batch 2 Part 2 is implemented locally in the isolated `step2-b2-p2-foundation` worktree and is ready for verification/integration back into `dev`.
 
 ## Verification
 - `npm.cmd test`
@@ -249,5 +255,5 @@
 - `npm.cmd run smoke`
 
 ## Next
-- Step 2 Batch 2 Part 1 is complete.
-- Next implementation work should begin `forge_step2_batch2/part-2-stage-1-and-2-intake-consumption-plan-item-foundation.md`.
+- Step 2 Batch 2 Part 2 is complete.
+- Next implementation work should begin `forge_step2_batch2/part-3-stage-3-and-4-dependencies-conflict-zones-test-obligations.md`.

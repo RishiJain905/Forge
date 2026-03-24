@@ -21,6 +21,7 @@ import { validatePlanFoundationResult } from "./schema.js";
 import { persistIntakeOutputs } from "../intake/persistence.js";
 import { extractErrorCode } from "../intake/errors.js";
 import type {
+  PlanCarryForwardContext,
   LoadedPlanFoundationInput,
   PlanFoundationCommandResult,
   PlanFoundationOptions,
@@ -29,10 +30,26 @@ import type {
   PlanCommandResult,
 } from "./types.js";
 
+function buildCarryForwardFromPlanningInput(
+  input: LoadedPlanFoundationInput,
+): PlanCarryForwardContext {
+  return {
+    taskSpec: input.planningInput.context.taskSpec,
+    repoContext: input.planningInput.context.repoContext,
+    candidateTargets: input.planningInput.context.candidateTargets,
+    riskAnalysis: input.planningInput.context.riskAnalysis,
+    initialVerificationTargets: input.planningInput.context.initialVerificationTargets,
+    ambiguities: input.planningInput.uncertainty.ambiguities,
+    warnings: input.planningInput.uncertainty.warnings,
+    confidence: input.planningInput.uncertainty.confidence,
+    nextStepReadiness: input.planningInput.uncertainty.nextStepReadiness,
+  };
+}
+
 export function buildPlanFoundation(
   input: LoadedPlanFoundationInput,
 ): PlanFoundationResult {
-  const artifact = input.artifact;
+  const carryForward = buildCarryForwardFromPlanningInput(input);
 
   return validatePlanFoundationResult({
     command: STEP2_BOUNDARY_POLICY.command,
@@ -43,25 +60,9 @@ export function buildPlanFoundation(
       authoritativeInputs: [...STEP2_BOUNDARY_POLICY.authoritativeInputs],
       notes: [...STEP2_DETERMINISTIC_FIRST_NOTES],
     },
-    sourceIntake: {
-      artifactPath: input.intakeArtifactPath,
-      command: artifact.command,
-      repoRoot: artifact.repoRoot,
-      status: artifact.status,
-      summary: artifact.summary,
-      readyForPlanning: artifact.next_step_readiness.ready,
-    },
-    carryForward: {
-      taskSpec: artifact.task_spec,
-      repoContext: artifact.repo_context,
-      candidateTargets: artifact.candidate_targets,
-      riskAnalysis: artifact.risk_analysis,
-      initialVerificationTargets: artifact.initial_verification_targets,
-      ambiguities: artifact.ambiguities,
-      warnings: artifact.warnings,
-      confidence: artifact.confidence,
-      nextStepReadiness: artifact.next_step_readiness,
-    },
+    sourceIntake: input.sourceIntake,
+    planningInput: input.planningInput,
+    carryForward,
     boundaryPolicy: STEP2_BOUNDARY_POLICY,
     planItemContract: {
       requiredFields: PLAN_ITEM_REQUIRED_FIELDS,
@@ -88,7 +89,7 @@ export async function runPlanFoundation(
     const foundation = buildPlanFoundation(input);
 
     return {
-      status: foundation.sourceIntake.readyForPlanning ? "ready" : "blocked",
+      status: foundation.planningInput.usability.status === "actionable" ? "ready" : "blocked",
       foundation,
       failure: null,
     };
@@ -141,9 +142,24 @@ function resolvePlanningReadiness(
   planningReadiness: PlanFoundationResult["carryForward"]["nextStepReadiness"];
   summaryOverride?: string;
 } {
-  if (!foundation.sourceIntake.readyForPlanning) {
+  if (foundation.planningInput.usability.status === "upstream_blocked") {
     return {
       planningReadiness: foundation.carryForward.nextStepReadiness,
+    };
+  }
+
+  if (foundation.planningInput.usability.status === "non_actionable") {
+    return {
+      planningReadiness: {
+        ...foundation.carryForward.nextStepReadiness,
+        ready: false,
+        blocking_issues: foundation.planningInput.usability.blockingItems.map((item) => ({
+          code: item.code,
+          message: item.message,
+        })),
+      },
+      summaryOverride:
+        "Forge plan preserved the persisted Step 1 handoff, but planning is blocked because the handoff is non-actionable for real Step 2 planning.",
     };
   }
 

@@ -134,6 +134,32 @@ const planCarryForwardContextSchema = z.object({
   nextStepReadiness: intakeArtifactSchema.shape.next_step_readiness,
 }).strict();
 
+const planInputIssueSchema = z.object({
+  code: z.string().min(1),
+  message: z.string().min(1),
+}).strict();
+
+const planPlanningInputSchema = z.object({
+  context: z.object({
+    taskSpec: intakeArtifactSchema.shape.task_spec,
+    repoContext: intakeArtifactSchema.shape.repo_context,
+    candidateTargets: intakeArtifactSchema.shape.candidate_targets,
+    riskAnalysis: intakeArtifactSchema.shape.risk_analysis,
+    initialVerificationTargets: intakeArtifactSchema.shape.initial_verification_targets,
+  }).strict(),
+  uncertainty: z.object({
+    ambiguities: intakeArtifactSchema.shape.ambiguities,
+    warnings: intakeArtifactSchema.shape.warnings,
+    confidence: intakeArtifactSchema.shape.confidence,
+    nextStepReadiness: intakeArtifactSchema.shape.next_step_readiness,
+  }).strict(),
+  usability: z.object({
+    status: z.enum(["actionable", "non_actionable", "upstream_blocked"]),
+    warningItems: z.array(planInputIssueSchema),
+    blockingItems: z.array(planInputIssueSchema),
+  }).strict(),
+}).strict();
+
 const planArtifactCarryForwardSchema = z.object({
   task_spec: intakeArtifactSchema.shape.task_spec,
   repo_context: intakeArtifactSchema.shape.repo_context,
@@ -258,7 +284,12 @@ export const planFoundationSchema = z.object({
     status: intakeArtifactSchema.shape.status,
     summary: intakeArtifactSchema.shape.summary,
     readyForPlanning: intakeArtifactSchema.shape.next_step_readiness.shape.ready,
+    inputMode: intakeArtifactSchema.shape.input_mode,
+    sourceInputs: intakeArtifactSchema.shape.source_inputs,
+    runtimeOptions: intakeArtifactSchema.shape.runtime_options,
+    failure: intakeArtifactSchema.shape.failure,
   }).strict(),
+  planningInput: planPlanningInputSchema,
   carryForward: planCarryForwardContextSchema,
   boundaryPolicy: planBoundaryPolicySchema,
   planItemContract: planItemContractSchema,
@@ -268,6 +299,30 @@ export const planFoundationSchema = z.object({
       code: z.ZodIssueCode.custom,
       message: "Boundary policy command drifted from the Step 2 contract.",
       path: ["boundaryPolicy", "command"],
+    });
+  }
+  if (value.sourceIntake.readyForPlanning && value.planningInput.usability.status === "upstream_blocked") {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Planning input cannot be upstream_blocked when Step 1 marked the handoff ready for planning.",
+      path: ["planningInput", "usability", "status"],
+    });
+  }
+  if (!value.sourceIntake.readyForPlanning && value.planningInput.usability.status === "actionable") {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Blocked Step 1 handoffs must stay blocked in the normalized planning-input usability state.",
+      path: ["planningInput", "usability", "status"],
+    });
+  }
+  if (
+    value.planningInput.usability.status === "non_actionable" &&
+    value.planningInput.usability.blockingItems.every((item) => item.code !== "PLAN_INPUT_TOO_WEAK")
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Non-actionable planning input must expose PLAN_INPUT_TOO_WEAK.",
+      path: ["planningInput", "usability", "blockingItems"],
     });
   }
 });
