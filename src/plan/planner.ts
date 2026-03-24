@@ -1024,7 +1024,7 @@ function deriveTestObligations(
 ): PlanTestObligation[] {
   const obligations: PlanTestObligation[] = [];
   const touchesEntrypoint = draft.likelyAffectedPaths.some((pathValue) =>
-    context.entryPointPaths.has(normalizePath(pathValue)) || isSharedRiskPath(pathValue),
+    context.entryPointPaths.has(normalizePath(pathValue)),
   );
 
   if (draft.category === "implementation") {
@@ -1155,16 +1155,11 @@ function deriveParallelization(
   }
 
   if (draft.category === "interface") {
-    if (itemDependencies.length > 0) {
-      return {
-        signal: "parallel_after_dependency",
-        reason: "Shared interface work can proceed after its upstream dependencies settle first.",
-      };
-    }
-
     return {
       signal: "risky_shared",
-      reason: "Shared interfaces and entrypoints are risky to parallelize without extra coordination.",
+      reason: itemDependencies.length > 0
+        ? "Shared interface work stays risky even after upstream config dependencies settle."
+        : "Shared interfaces and entrypoints are risky to parallelize without extra coordination.",
     };
   }
 

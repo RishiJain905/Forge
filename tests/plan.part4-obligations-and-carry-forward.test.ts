@@ -155,6 +155,131 @@ await runScenario(
 );
 
 await runScenario(
+  "forge plan does not assign smoke obligations to config-only package.json work",
+  async () => {
+    const repoRoot = await createTempRepo("forge-plan-part4-config-only-");
+
+    try {
+      await writeRepoFile(
+        repoRoot,
+        "package.json",
+        JSON.stringify(
+          {
+            name: "forge-plan-part4-config-only",
+            private: true,
+            type: "module",
+            scripts: {
+              test: "node --test",
+            },
+          },
+          null,
+          2,
+        ),
+      );
+      await writeRepoFile(
+        repoRoot,
+        "task.md",
+        [
+          "# Update package config",
+          "",
+          "Adjust `package.json` only.",
+          "",
+          "## Acceptance Criteria",
+          "",
+          "- `package.json` is updated",
+        ].join("\n"),
+      );
+
+      const intakeResult = runForgeBinary(["intake", "--repo", repoRoot, "--spec", join(repoRoot, "task.md")], repoRoot);
+      assert.equal(intakeResult.code, 0, intakeResult.stderr);
+      await removeSpecInputs(repoRoot);
+
+      const planResult = runForgePlanBinary(["--repo", repoRoot], repoRoot);
+      assert.equal(planResult.code, 0, planResult.stderr);
+
+      const artifact = await readJsonFile<PlanArtifact>(join(repoRoot, ".forge", "plan.json"));
+      const configItem = artifact.plan_items.find((item) => item.category === "config");
+
+      assert.ok(configItem, "expected a config plan item");
+      assert.ok(
+        configItem.testObligations.some((obligation) => obligation.category === "contract_validation"),
+        "expected config work to keep contract validation visible",
+      );
+      assert.ok(
+        !configItem.testObligations.some((obligation) => obligation.category === "smoke"),
+        "expected config-only work to avoid an automatic smoke obligation",
+      );
+      assert.ok(
+        !artifact.test_obligations.some((entry) => entry.category === "smoke"),
+        "expected smoke to stay absent from the aggregated artifact for config-only work",
+      );
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "forge plan does not add smoke obligations to config-only manifest work just because the files are shared-risk",
+  async () => {
+    const repoRoot = await createTempRepo("forge-plan-part4-config-only-");
+
+    try {
+      await writeRepoFile(
+        repoRoot,
+        "package.json",
+        JSON.stringify(
+          {
+            name: "forge-plan-part4-config-only",
+            private: true,
+            type: "module",
+            scripts: {
+              test: "node --test",
+            },
+          },
+          null,
+          2,
+        ),
+      );
+      await writeRepoFile(
+        repoRoot,
+        "task.md",
+        [
+          "# Update package metadata",
+          "",
+          "Adjust `package.json` scripts and metadata without touching runtime source files.",
+          "",
+          "## Acceptance Criteria",
+          "",
+          "- `package.json` is updated",
+        ].join("\n"),
+      );
+
+      await rm(join(repoRoot, "src", "app.ts"), { force: true });
+      await rm(join(repoRoot, "tests", "app.test.ts"), { force: true });
+
+      const intakeResult = runForgeBinary(["intake", "--repo", repoRoot, "--spec", join(repoRoot, "task.md")], repoRoot);
+      assert.equal(intakeResult.code, 0, intakeResult.stderr);
+      await removeSpecInputs(repoRoot);
+
+      const planResult = runForgePlanBinary(["--repo", repoRoot], repoRoot);
+      assert.equal(planResult.code, 0, planResult.stderr);
+
+      const artifact = await readJsonFile<PlanArtifact>(join(repoRoot, ".forge", "plan.json"));
+      const configItem = artifact.plan_items.find((item) => item.category === "config");
+
+      assert.ok(configItem, "expected a config plan item");
+      assert.ok(
+        !configItem.testObligations.some((obligation) => obligation.category === "smoke"),
+        "expected config-only manifest work to avoid smoke obligations",
+      );
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
   "forge plan preserves low-confidence and readiness blockers as explicit carried-forward concerns",
   async () => {
     const repoRoot = await createTempRepo("forge-plan-part4-concerns-");
@@ -200,6 +325,69 @@ await runScenario(
       assert.ok(
         artifact.plan_items.some((item) => item.parallelization.signal === "serial_only"),
         "expected blocked work to surface at least one serial_only signal",
+      );
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "forge plan does not assign smoke obligations to config-only planning work without a real entrypoint",
+  async () => {
+    const repoRoot = await createTempRepo("forge-plan-part4-config-only-");
+
+    try {
+      await rm(join(repoRoot, "src"), { force: true, recursive: true });
+      await rm(join(repoRoot, "tests"), { force: true, recursive: true });
+      await writeRepoFile(
+        repoRoot,
+        "package.json",
+        JSON.stringify(
+          {
+            name: "forge-plan-part4-config-only",
+            private: true,
+            type: "module",
+            scripts: {
+              build: "tsc -p tsconfig.build.json",
+            },
+          },
+          null,
+          2,
+        ),
+      );
+      await writeRepoFile(
+        repoRoot,
+        "task.md",
+        [
+          "# Adjust build scripts",
+          "",
+          "Update `package.json` so the build script matches the new release process.",
+          "",
+          "## Acceptance Criteria",
+          "",
+          "- `package.json` is updated",
+        ].join("\n"),
+      );
+
+      const intakeResult = runForgeBinary(["intake", "--repo", repoRoot, "--spec", join(repoRoot, "task.md")], repoRoot);
+      assert.equal(intakeResult.code, 0, intakeResult.stderr);
+      await rm(join(repoRoot, "task.md"), { force: true });
+
+      const planResult = runForgePlanBinary(["--repo", repoRoot], repoRoot);
+      assert.equal(planResult.code, 0, planResult.stderr);
+
+      const artifact = await readJsonFile<PlanArtifact>(join(repoRoot, ".forge", "plan.json"));
+      const configItem = artifact.plan_items.find((item) => item.category === "config");
+
+      assert.ok(configItem, "expected a config plan item");
+      assert.ok(
+        !configItem.testObligations.some((obligation) => obligation.category === "smoke"),
+        "config-only work should not require smoke validation without a real entrypoint",
+      );
+      assert.ok(
+        !artifact.test_obligations.some((entry) => entry.category === "smoke"),
+        "top-level test obligations should not invent smoke validation for config-only work",
       );
     } finally {
       await disposeTempRepo(repoRoot);
