@@ -60,6 +60,21 @@ const INTERFACE_VERIFICATION_CATEGORIES = new Set<PlanVerificationCategory>([
 ]);
 
 const INTERFACE_RISKY_PHRASES = ["api contract", "migration", "ownership", "parallel"] as const;
+const INTERFACE_LINK_HINT_PATTERN =
+  /\b(api|contract|entrypoint|entry point|public|runtime|support|compatible|preserve|stable)\b/i;
+const SHARED_SURFACE_SEGMENTS = new Set([
+  "schema",
+  "schemas",
+  "registry",
+  "registries",
+  "types",
+  "shared",
+  "common",
+  "util",
+  "utils",
+  "contract",
+  "contracts",
+]);
 const CONFIG_KEYWORD_PATTERN =
   /\b(config|configuration|manifest|package\.json|tsconfig|pyproject|setup\.cfg|requirements|pytest\.ini)\b/i;
 const IMPLEMENTATION_HINT_PATTERN =
@@ -161,10 +176,108 @@ function isSharedRiskPath(filePath: string): boolean {
   return /(^|\/)(app|index|main|server|cli)\.[^.]+$/i.test(filePath.replace(/\\/g, "/"));
 }
 
+function isSharedSurfacePath(filePath: string): boolean {
+  return normalizePath(filePath)
+    .split("/")
+    .some((segment) => SHARED_SURFACE_SEGMENTS.has(segment.replace(/\.[^.]+$/, "")));
+}
+
 function textMentionsPath(text: string, filePath: string): boolean {
   const normalizedPath = normalizePath(filePath);
   const baseName = pathBasename(normalizedPath);
   return text.includes(normalizedPath) || text.includes(baseName.toLowerCase());
+}
+
+function draftHasSharedInterfaceRole(draft: PlanItemFoundation, context: PlannerContext): boolean {
+  if (draft.category !== "interface") {
+    return false;
+  }
+
+  return draft.likelyAffectedPaths.some((pathValue) =>
+    context.entryPointPaths.has(normalizePath(pathValue)) ||
+    context.sharedRiskPaths.has(normalizePath(pathValue)) ||
+    isSharedRiskPath(pathValue) ||
+    isSharedSurfacePath(pathValue),
+  );
+}
+
+function foundationTaskText(foundation: PlanFoundationResult): string {
+  const taskSpec = foundation.carryForward.taskSpec;
+  return normalizeWhitespace([
+    taskSpec.title ?? "",
+    taskSpec.summary ?? "",
+    taskSpec.goal ?? "",
+    ...(taskSpec.explicit_requirements ?? []),
+    ...(taskSpec.acceptance_criteria ?? []),
+    ...(taskSpec.implementation_necessities ?? []),
+    ...(taskSpec.scope ?? []),
+  ].filter((value) => value.length > 0).join(" ")).toLowerCase();
+}
+
+function sharedRequirementTexts(left: PlanItemFoundation, right: PlanItemFoundation): string[] {
+  const leftTexts = new Set(
+    [...left.sourceRequirements, ...left.sourceTraces.map((trace) => trace.requirement)]
+      .map((text) => normalizeWhitespace(text))
+      .filter((text) => text.length > 0),
+  );
+
+  return dedupeStable(
+    [...right.sourceRequirements, ...right.sourceTraces.map((trace) => trace.requirement)]
+      .map((text) => normalizeWhitespace(text))
+      .filter((text) => text.length > 0 && leftTexts.has(text)),
+  );
+}
+
+function foundationMentionsPathPair(
+  foundation: PlanFoundationResult,
+  leftPaths: string[],
+  rightPaths: string[],
+): boolean {
+  const taskText = foundationTaskText(foundation);
+  return leftPaths.some((leftPath) => textMentionsPath(taskText, leftPath)) &&
+    rightPaths.some((rightPath) => textMentionsPath(taskText, rightPath));
+}
+
+function hasInterfaceLinkSignal(
+  foundation: PlanFoundationResult,
+  interfaceDraft: PlanItemFoundation,
+  implementationDraft: PlanItemFoundation,
+): boolean {
+  const sharedTexts = sharedRequirementTexts(interfaceDraft, implementationDraft);
+  if (sharedTexts.some((text) => INTERFACE_LINK_HINT_PATTERN.test(text))) {
+    return true;
+  }
+
+  return foundationMentionsPathPair(foundation, interfaceDraft.likelyAffectedPaths, implementationDraft.likelyAffectedPaths) &&
+    INTERFACE_LINK_HINT_PATTERN.test(foundationTaskText(foundation));
+}
+
+function dependencyTypeForEdge(baseType: PlanDependencyType, shouldBeSoft: boolean): PlanDependencyType {
+  return shouldBeSoft ? "soft" : baseType;
+}
+
+function dependencyReasonWithUncertainty(
+  baseReason: string,
+  hasTaskPairSignal: boolean,
+  context: PlannerContext,
+): string {
+  const uncertaintyNotes: string[] = [];
+
+  if (hasTaskPairSignal) {
+    uncertaintyNotes.push(
+      "The task pairs the shared surface work with downstream implementation work, but the files do not share a stem, so this stays a cautious ordering suggestion.",
+    );
+  } else {
+    uncertaintyNotes.push(
+      "The relationship is inferred from shared task signals rather than a direct file-stem match, so this stays a cautious ordering suggestion.",
+    );
+  }
+
+  if (context.lowConfidence || context.fallbackOnlyTargeting) {
+    uncertaintyNotes.push("At least one traced requirement reached this edge through low-confidence or fallback planning.");
+  }
+
+  return `${baseReason} ${uncertaintyNotes.join(" ")}`;
 }
 
 function riskRank(level: PlanRiskLevel): number {
@@ -604,7 +717,11 @@ function draftsShareSurface(left: PlanItemFoundation, right: PlanItemFoundation)
     right.likelyAffectedPaths.some((rightPath) => normalizeFileStem(leftPath) === normalizeFileStem(rightPath)));
 }
 
-function buildDependencies(drafts: PlanItemFoundation[]): Map<string, PlanDependencyGraphEntry[]> {
+function buildDependencies(
+  foundation: PlanFoundationResult,
+  drafts: PlanItemFoundation[],
+  context: PlannerContext,
+): Map<string, PlanDependencyGraphEntry[]> {
   const draftsByCategory = new Map<ClusterCategory, PlanItemFoundation[]>();
   for (const draft of drafts) {
     const existing = draftsByCategory.get(draft.category) ?? [];
@@ -612,6 +729,7 @@ function buildDependencies(drafts: PlanItemFoundation[]): Map<string, PlanDepend
   }
 
   const dependencies = new Map<string, PlanDependencyGraphEntry[]>();
+  const sharedSurfaceDrafts = drafts.filter((draft) => draft.likelyAffectedPaths.some(isSharedSurfacePath));
 
   for (const draft of drafts) {
     const itemDependencies: PlanDependencyGraphEntry[] = [];
@@ -633,14 +751,47 @@ function buildDependencies(drafts: PlanItemFoundation[]): Map<string, PlanDepend
     if (draft.category === "implementation") {
       const matchingInterfaceDrafts = interfaceDrafts.filter((interfaceDraft) =>
         draftsShareSurface(draft, interfaceDraft));
+      const sequencingInterfaceDrafts = interfaceDrafts.filter((interfaceDraft) =>
+        !draftsShareSurface(draft, interfaceDraft) &&
+        draftHasSharedInterfaceRole(interfaceDraft, context) &&
+        hasInterfaceLinkSignal(foundation, interfaceDraft, draft));
+      const sharedSurfaceDependencies = sharedSurfaceDrafts.filter((sharedSurfaceDraft) =>
+        sharedSurfaceDraft.id !== draft.id &&
+        !draftsShareSurface(draft, sharedSurfaceDraft) &&
+        foundationMentionsPathPair(foundation, sharedSurfaceDraft.likelyAffectedPaths, draft.likelyAffectedPaths));
+      const dependencyTargets = uniqueOrdered(
+        [
+          ...matchingInterfaceDrafts,
+          ...sequencingInterfaceDrafts,
+          ...sharedSurfaceDependencies,
+        ],
+        (candidate) => candidate.id,
+      );
 
-      if (matchingInterfaceDrafts.length > 0) {
-        for (const interfaceDraft of matchingInterfaceDrafts) {
+      if (dependencyTargets.length > 0) {
+        for (const prerequisiteDraft of dependencyTargets) {
+          const isInterfacePrerequisite = prerequisiteDraft.category === "interface";
+          const sharedStem = draftsShareSurface(draft, prerequisiteDraft);
+          const hasTaskPairSignal = isInterfacePrerequisite
+            ? hasInterfaceLinkSignal(foundation, prerequisiteDraft, draft)
+            : foundationMentionsPathPair(foundation, prerequisiteDraft.likelyAffectedPaths, draft.likelyAffectedPaths);
+          const shouldBeSoft =
+            !sharedStem &&
+            ((isInterfacePrerequisite && hasTaskPairSignal && (context.lowConfidence || context.fallbackOnlyTargeting)) ||
+              (!isInterfacePrerequisite && (context.lowConfidence || context.fallbackOnlyTargeting)) ||
+              (!isInterfacePrerequisite && prerequisiteDraft.likelyAffectedPaths.some((pathValue) => isSharedSurfacePath(pathValue))));
+          const baseType: PlanDependencyType = isInterfacePrerequisite ? "interface_first" : "sequencing";
+          const baseReason = isInterfacePrerequisite
+            ? "Shared interface decisions should settle before implementation work proceeds."
+            : "Shared schema or registry surfaces should settle before downstream implementation work proceeds.";
+          const reason = shouldBeSoft
+            ? dependencyReasonWithUncertainty(baseReason, hasTaskPairSignal, context)
+            : baseReason;
           itemDependencies.push({
             planItemId: draft.id,
-            dependsOnPlanItemId: interfaceDraft.id,
-            type: "interface_first",
-            reason: "Shared interface decisions should settle before implementation work proceeds.",
+            dependsOnPlanItemId: prerequisiteDraft.id,
+            type: dependencyTypeForEdge(baseType, shouldBeSoft),
+            reason,
           });
         }
       } else {
@@ -665,20 +816,30 @@ function buildDependencies(drafts: PlanItemFoundation[]): Map<string, PlanDepend
 
       if (matchedDependencies.length > 0) {
         for (const dependencyDraft of matchedDependencies) {
+          const edgeHasFallbackUncertainty =
+            draft.sourceTraces.some((trace) => trace.carriesLowConfidence || trace.carriesFallbackTargeting) &&
+            dependencyDraft.sourceTraces.some((trace) => trace.carriesLowConfidence || trace.carriesFallbackTargeting);
           itemDependencies.push({
             planItemId: draft.id,
             dependsOnPlanItemId: dependencyDraft.id,
-            type: "hard",
-            reason: "Test work should validate the finalized related plan item before broader regression work completes.",
+            type: edgeHasFallbackUncertainty ? "soft" : "hard",
+            reason: edgeHasFallbackUncertainty
+              ? "Fallback-derived test work should conservatively validate the related plan item before broader regression work completes."
+              : "Test work should validate the finalized related plan item before broader regression work completes.",
           });
         }
       } else {
         for (const dependencyDraft of drafts.filter((item) => item.category !== "test")) {
+          const edgeHasFallbackUncertainty =
+            draft.sourceTraces.some((trace) => trace.carriesLowConfidence || trace.carriesFallbackTargeting) &&
+            dependencyDraft.sourceTraces.some((trace) => trace.carriesLowConfidence || trace.carriesFallbackTargeting);
           itemDependencies.push({
             planItemId: draft.id,
             dependsOnPlanItemId: dependencyDraft.id,
-            type: "hard",
-            reason: "Test work should validate the finalized non-test plan items.",
+            type: edgeHasFallbackUncertainty ? "soft" : "hard",
+            reason: edgeHasFallbackUncertainty
+              ? "Fallback-derived test work should conservatively validate the related non-test plan items before broader regression work completes."
+              : "Test work should validate the finalized non-test plan items.",
           });
         }
       }
@@ -722,6 +883,7 @@ function collectDependents(
 }
 
 function buildConflictZones(
+  foundation: PlanFoundationResult,
   drafts: PlanItemFoundation[],
   dependencyGraph: PlanDependencyGraphEntry[],
   context: PlannerContext,
@@ -759,6 +921,38 @@ function buildConflictZones(
       planItemIds: dedupeStable([interfaceDraft.id, ...collectDependents(interfaceDraft.id, dependencyGraph)]),
       riskLevel: context.fallbackOnlyTargeting || context.lowConfidence ? "high" : "medium",
     });
+  }
+
+  const sharedSurfaceDrafts = drafts.filter((draft) => draft.likelyAffectedPaths.some(isSharedSurfacePath));
+  const sharedSurfacePaths = dedupeStable(sharedSurfaceDrafts.flatMap((draft) => draft.likelyAffectedPaths.filter(isSharedSurfacePath)));
+
+  if (sharedSurfacePaths.length > 0) {
+    const sharedSurfacePlanItemIds = dedupeStable(
+      drafts.flatMap((draft) => {
+        const touchesSharedSurface =
+          draft.likelyAffectedPaths.some((pathValue) =>
+            sharedSurfacePaths.some((sharedSurfacePath) =>
+              textMentionsPath(pathValue, sharedSurfacePath) ||
+              textMentionsPath(sharedSurfacePath, pathValue))) ||
+          draft.sourceRequirements.some((requirement) =>
+            sharedSurfacePaths.some((sharedSurfacePath) => textMentionsPath(requirement, sharedSurfacePath))) ||
+          sharedSurfacePaths.some((sharedSurfacePath) =>
+            foundationMentionsPathPair(foundation, [sharedSurfacePath], draft.likelyAffectedPaths));
+
+        return touchesSharedSurface ? [draft.id, ...collectDependents(draft.id, dependencyGraph)] : [];
+      }),
+    );
+
+    if (sharedSurfacePlanItemIds.length >= 2) {
+      zones.push({
+        id: "conflict-zone-shared-surface-1",
+        title: "Shared schema and registry surfaces",
+        reason: "Shared schema, registry, and utility surfaces need visible coordination across multiple plan items.",
+        paths: sharedSurfacePaths,
+        planItemIds: sharedSurfacePlanItemIds,
+        riskLevel: context.fallbackOnlyTargeting || context.lowConfidence ? "high" : "medium",
+      });
+    }
   }
 
   if (zones.length === 0 && drafts.length > 0 && (context.fallbackOnlyTargeting || context.lowConfidence)) {
@@ -1409,9 +1603,9 @@ export function buildPlanModel(foundation: PlanFoundationResult): PlanModel {
 
   const drafts = buildPlanItemFoundations(foundation)
     .filter((draft) => draft.likelyAffectedPaths.length > 0);
-  const dependencyMap = buildDependencies(drafts);
+  const dependencyMap = buildDependencies(foundation, drafts, context);
   const dependencyGraph = buildDependencyGraphEntries(dependencyMap);
-  const conflictZones = buildConflictZones(drafts, dependencyGraph, context);
+  const conflictZones = buildConflictZones(foundation, drafts, dependencyGraph, context);
   const carryForwardConcerns = buildCarryForwardConcerns(foundation, drafts, context);
   const planItems: PlanItem[] = drafts.map((draft) => {
     const itemConcerns = carryForwardConcerns.filter((concern) => concern.planItemIds.includes(draft.id));
