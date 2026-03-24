@@ -536,6 +536,59 @@ await runScenario(
 );
 
 await runScenario(
+  "forge plan keeps shared-surface test items out of implementation dependencies",
+  async () => {
+    const repoRoot = await createTempRepo("forge-plan-model-shared-surface-cycle-");
+
+    try {
+      await writeRepoFile(repoRoot, "src/schema.ts", "export const schema = true;\n");
+      await writeRepoFile(
+        repoRoot,
+        "tests/schema.test.ts",
+        "import assert from 'node:assert/strict';\n\nassert.equal(1, 1);\n",
+      );
+
+      await writeSpecAndRunIntake(repoRoot, [
+        "# Update shared schema behavior",
+        "",
+        "Revise `src/schema.ts` and keep `tests/schema.test.ts` aligned.",
+        "",
+        "## Acceptance Criteria",
+        "",
+        "- `src/schema.ts` is updated",
+        "- `tests/schema.test.ts` stays aligned",
+      ]);
+
+      const planResult = runForgePlanBinary(["--repo", repoRoot], repoRoot);
+      assert.equal(planResult.code, 0, planResult.stderr);
+
+      const artifact = await loadPlanArtifact(repoRoot);
+      const implementationItem = artifact.plan_items.find((item) =>
+        item.category === "implementation" &&
+        item.likelyAffectedPaths.length === 1 &&
+        item.likelyAffectedPaths[0] === "src/schema.ts");
+      const testItem = artifact.plan_items.find((item) =>
+        item.category === "test" &&
+        item.likelyAffectedPaths.length === 1 &&
+        item.likelyAffectedPaths[0] === "tests/schema.test.ts");
+
+      assert.ok(implementationItem, "expected a dedicated schema implementation item");
+      assert.ok(testItem, "expected a dedicated schema test item");
+      assert.ok(
+        testItem.dependencies.some((dependency) => dependency.planItemId === implementationItem.id),
+        "expected schema test work to depend on schema implementation work",
+      );
+      assert.ok(
+        !implementationItem.dependencies.some((dependency) => dependency.planItemId === testItem.id),
+        "expected schema implementation work to avoid depending on the test item",
+      );
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
   "forge plan keeps shared interface work tied to config visibly risky instead of parallel after dependency",
   async () => {
     const repoRoot = await createTempRepo("forge-plan-model-interface-config-");

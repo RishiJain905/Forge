@@ -757,6 +757,7 @@ function buildDependencies(
         hasInterfaceLinkSignal(foundation, interfaceDraft, draft));
       const sharedSurfaceDependencies = sharedSurfaceDrafts.filter((sharedSurfaceDraft) =>
         sharedSurfaceDraft.id !== draft.id &&
+        sharedSurfaceDraft.category !== "test" &&
         !draftsShareSurface(draft, sharedSurfaceDraft) &&
         foundationMentionsPathPair(foundation, sharedSurfaceDraft.likelyAffectedPaths, draft.likelyAffectedPaths));
       const dependencyTargets = uniqueOrdered(
