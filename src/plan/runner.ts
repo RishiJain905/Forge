@@ -15,12 +15,14 @@ import {
   resolvePlanFoundationInput,
 } from "./input.js";
 import { createPlanArtifact, buildPlanCommandFailure } from "./artifact.js";
+import { createPlanDebugWrites, isPlanDebugEnabled } from "./debug.js";
 import { buildPlanModel } from "./planner.js";
 import { createPlanReport } from "./report.js";
 import { validatePlanFoundationResult } from "./schema.js";
 import { persistIntakeOutputs } from "../intake/persistence.js";
 import { extractErrorCode } from "../intake/errors.js";
 import type {
+  PlanCarryForwardContext,
   LoadedPlanFoundationInput,
   PlanFoundationCommandResult,
   PlanFoundationOptions,
@@ -29,10 +31,26 @@ import type {
   PlanCommandResult,
 } from "./types.js";
 
+function buildCarryForwardFromPlanningInput(
+  input: LoadedPlanFoundationInput,
+): PlanCarryForwardContext {
+  return {
+    taskSpec: input.planningInput.context.taskSpec,
+    repoContext: input.planningInput.context.repoContext,
+    candidateTargets: input.planningInput.context.candidateTargets,
+    riskAnalysis: input.planningInput.context.riskAnalysis,
+    initialVerificationTargets: input.planningInput.context.initialVerificationTargets,
+    ambiguities: input.planningInput.uncertainty.ambiguities,
+    warnings: input.planningInput.uncertainty.warnings,
+    confidence: input.planningInput.uncertainty.confidence,
+    nextStepReadiness: input.planningInput.uncertainty.nextStepReadiness,
+  };
+}
+
 export function buildPlanFoundation(
   input: LoadedPlanFoundationInput,
 ): PlanFoundationResult {
-  const artifact = input.artifact;
+  const carryForward = buildCarryForwardFromPlanningInput(input);
 
   return validatePlanFoundationResult({
     command: STEP2_BOUNDARY_POLICY.command,
@@ -43,25 +61,9 @@ export function buildPlanFoundation(
       authoritativeInputs: [...STEP2_BOUNDARY_POLICY.authoritativeInputs],
       notes: [...STEP2_DETERMINISTIC_FIRST_NOTES],
     },
-    sourceIntake: {
-      artifactPath: input.intakeArtifactPath,
-      command: artifact.command,
-      repoRoot: artifact.repoRoot,
-      status: artifact.status,
-      summary: artifact.summary,
-      readyForPlanning: artifact.next_step_readiness.ready,
-    },
-    carryForward: {
-      taskSpec: artifact.task_spec,
-      repoContext: artifact.repo_context,
-      candidateTargets: artifact.candidate_targets,
-      riskAnalysis: artifact.risk_analysis,
-      initialVerificationTargets: artifact.initial_verification_targets,
-      ambiguities: artifact.ambiguities,
-      warnings: artifact.warnings,
-      confidence: artifact.confidence,
-      nextStepReadiness: artifact.next_step_readiness,
-    },
+    sourceIntake: input.sourceIntake,
+    planningInput: input.planningInput,
+    carryForward,
     boundaryPolicy: STEP2_BOUNDARY_POLICY,
     planItemContract: {
       requiredFields: PLAN_ITEM_REQUIRED_FIELDS,
@@ -88,7 +90,7 @@ export async function runPlanFoundation(
     const foundation = buildPlanFoundation(input);
 
     return {
-      status: foundation.sourceIntake.readyForPlanning ? "ready" : "blocked",
+      status: foundation.planningInput.usability.status === "actionable" ? "ready" : "blocked",
       foundation,
       failure: null,
     };
@@ -119,6 +121,7 @@ async function persistPlanCommandOutputs(params: {
   reportPath: string;
   artifact: string;
   report: string;
+  debugWrites?: Array<{ filePath: string; contents: string }> | null;
 }): Promise<void> {
   await persistIntakeOutputs({
     criticalWrites: [
@@ -131,7 +134,59 @@ async function persistPlanCommandOutputs(params: {
         contents: params.report,
       },
     ],
+    debugWrites: params.debugWrites ?? undefined,
   });
+}
+
+function resolvePlanningReadiness(
+  foundation: PlanFoundationResult,
+  model: ReturnType<typeof buildPlanModel>,
+): {
+  planningReadiness: PlanFoundationResult["carryForward"]["nextStepReadiness"];
+  summaryOverride?: string;
+} {
+  if (foundation.planningInput.usability.status === "upstream_blocked") {
+    return {
+      planningReadiness: foundation.carryForward.nextStepReadiness,
+    };
+  }
+
+  if (foundation.planningInput.usability.status === "non_actionable") {
+    return {
+      planningReadiness: {
+        ...foundation.carryForward.nextStepReadiness,
+        ready: false,
+        blocking_issues: foundation.planningInput.usability.blockingItems.map((item) => ({
+          code: item.code,
+          message: item.message,
+        })),
+      },
+      summaryOverride:
+        "Forge plan preserved the persisted Step 1 handoff, but planning is blocked because the handoff is non-actionable for real Step 2 planning.",
+    };
+  }
+
+  if (model.planItems.length > 0) {
+    return {
+      planningReadiness: foundation.carryForward.nextStepReadiness,
+    };
+  }
+
+  return {
+    planningReadiness: {
+      ...foundation.carryForward.nextStepReadiness,
+      ready: false,
+      blocking_issues: [
+        ...foundation.carryForward.nextStepReadiness.blocking_issues,
+        {
+          code: "PLAN_INPUT_TOO_WEAK",
+          message: "Step 1 output is structurally valid but does not provide enough actionable planning signal for Step 2 to build real plan items.",
+        },
+      ],
+    },
+    summaryOverride:
+      "Forge plan preserved the persisted Step 1 handoff, but planning is blocked because the handoff is non-actionable for real Step 2 planning.",
+  };
 }
 
 export async function runPlanCommand(
@@ -142,6 +197,7 @@ export async function runPlanCommand(
     const input = await resolvePlanFoundationInput(options, currentWorkingDirectory);
     const foundation = buildPlanFoundation(input);
     const model = buildPlanModel(foundation);
+    const { planningReadiness, summaryOverride } = resolvePlanningReadiness(foundation, model);
     const startedAt = new Date().toISOString();
     const finishedAt = new Date().toISOString();
     const artifact = createPlanArtifact({
@@ -150,8 +206,13 @@ export async function runPlanCommand(
       paths: input.paths,
       startedAt,
       finishedAt,
+      planningReadiness,
+      summaryOverride,
     });
     const report = createPlanReport(artifact);
+    const debugWrites = isPlanDebugEnabled()
+      ? createPlanDebugWrites({ artifact, paths: input.paths })
+      : null;
 
     try {
       await persistPlanCommandOutputs({
@@ -159,6 +220,7 @@ export async function runPlanCommand(
         reportPath: input.paths.reportPath,
         artifact: `${JSON.stringify(artifact, null, 2)}\n`,
         report,
+        debugWrites,
       });
     } catch (error) {
       return {

@@ -15,11 +15,18 @@ import {
 import {
   PLAN_ARTIFACT_NAME,
   PLAN_DEBUG_ARTIFACT_NAME,
+  PLAN_DEBUG_CONFLICT_ZONES_NAME,
+  PLAN_DEBUG_DEPENDENCIES_NAME,
+  PLAN_DEBUG_PLAN_ITEMS_NAME,
+  PLAN_DEBUG_TEST_OBLIGATIONS_NAME,
   PLAN_REPORT_NAME,
 } from "./constants.js";
 import type {
   LoadedPlanFoundationInput,
   PlanFoundationOptions,
+  PlanInputIssue,
+  PlanInputReference,
+  PlanPlanningInput,
   PlanResolvedOutputPaths,
 } from "./types.js";
 
@@ -51,6 +58,113 @@ function resolveRequestedArtifactPath(
     : path.resolve(currentWorkingDirectory, requestedArtifactPath);
 }
 
+function buildPlanInputReference(
+  artifact: ReturnType<typeof validateIntakeArtifact>,
+  artifactPath: string,
+): PlanInputReference {
+  return {
+    artifactPath,
+    command: artifact.command,
+    repoRoot: artifact.repoRoot,
+    status: artifact.status,
+    summary: artifact.summary,
+    readyForPlanning: artifact.next_step_readiness.ready,
+    inputMode: artifact.input_mode,
+    sourceInputs: artifact.source_inputs,
+    runtimeOptions: artifact.runtime_options,
+    failure: artifact.failure,
+  };
+}
+
+function hasActionablePlanningSignal(
+  artifact: ReturnType<typeof validateIntakeArtifact>,
+): boolean {
+  return (
+    artifact.task_spec.explicit_requirements.length > 0 ||
+    artifact.task_spec.acceptance_criteria.length > 0 ||
+    artifact.task_spec.implementation_necessities.length > 0 ||
+    artifact.candidate_targets.length > 0 ||
+    artifact.initial_verification_targets.length > 0
+  );
+}
+
+function buildWarningItems(
+  artifact: ReturnType<typeof validateIntakeArtifact>,
+): PlanInputIssue[] {
+  const warningItems: PlanInputIssue[] = [];
+
+  if (artifact.confidence.level === "low") {
+    warningItems.push({
+      code: "LOW_CONFIDENCE_PLANNING_INPUT",
+      message: "Step 1 confidence is low, so Step 2 should keep planning conservative.",
+    });
+  }
+
+  if (artifact.candidate_targets.some((target) => target.match_type === "fallback")) {
+    warningItems.push({
+      code: "FALLBACK_TARGETING_PRESENT",
+      message: "Step 1 relied on fallback target mapping for at least part of the planning surface.",
+    });
+  }
+
+  return warningItems;
+}
+
+function buildBlockingItems(
+  artifact: ReturnType<typeof validateIntakeArtifact>,
+  actionablePlanningSignal: boolean,
+): PlanInputIssue[] {
+  if (!artifact.next_step_readiness.ready) {
+    return artifact.next_step_readiness.blocking_issues.map((issue) => ({
+      code: issue.code,
+      message: issue.message,
+    }));
+  }
+
+  if (!actionablePlanningSignal) {
+    return [
+      {
+        code: "PLAN_INPUT_TOO_WEAK",
+        message: "Step 1 output is structurally valid but does not provide enough actionable planning signal for Step 2 to build real plan items.",
+      },
+    ];
+  }
+
+  return [];
+}
+
+function buildPlanPlanningInput(
+  artifact: ReturnType<typeof validateIntakeArtifact>,
+): PlanPlanningInput {
+  const actionablePlanningSignal = hasActionablePlanningSignal(artifact);
+  const blockingItems = buildBlockingItems(artifact, actionablePlanningSignal);
+
+  return {
+    context: {
+      taskSpec: artifact.task_spec,
+      repoContext: artifact.repo_context,
+      candidateTargets: artifact.candidate_targets,
+      riskAnalysis: artifact.risk_analysis,
+      initialVerificationTargets: artifact.initial_verification_targets,
+    },
+    uncertainty: {
+      ambiguities: artifact.ambiguities,
+      warnings: artifact.warnings,
+      confidence: artifact.confidence,
+      nextStepReadiness: artifact.next_step_readiness,
+    },
+    usability: {
+      status: !artifact.next_step_readiness.ready
+        ? "upstream_blocked"
+        : actionablePlanningSignal
+          ? "actionable"
+          : "non_actionable",
+      warningItems: buildWarningItems(artifact),
+      blockingItems,
+    },
+  };
+}
+
 export async function resolvePlanOutputPaths(
   repoRoot: string,
   requestedOutputDirectory?: string,
@@ -69,6 +183,26 @@ export async function resolvePlanOutputPaths(
       outputRoot.outputRoot,
       DEBUG_DIRECTORY,
       PLAN_DEBUG_ARTIFACT_NAME,
+    ),
+    debugPlanItemsPath: resolveOutputFilePath(
+      outputRoot.outputRoot,
+      DEBUG_DIRECTORY,
+      PLAN_DEBUG_PLAN_ITEMS_NAME,
+    ),
+    debugDependenciesPath: resolveOutputFilePath(
+      outputRoot.outputRoot,
+      DEBUG_DIRECTORY,
+      PLAN_DEBUG_DEPENDENCIES_NAME,
+    ),
+    debugConflictZonesPath: resolveOutputFilePath(
+      outputRoot.outputRoot,
+      DEBUG_DIRECTORY,
+      PLAN_DEBUG_CONFLICT_ZONES_NAME,
+    ),
+    debugTestObligationsPath: resolveOutputFilePath(
+      outputRoot.outputRoot,
+      DEBUG_DIRECTORY,
+      PLAN_DEBUG_TEST_OBLIGATIONS_NAME,
     ),
   };
 }
@@ -110,8 +244,8 @@ export async function resolvePlanFoundationInput(
     return {
       repoRoot,
       paths,
-      intakeArtifactPath,
-      artifact,
+      sourceIntake: buildPlanInputReference(artifact, intakeArtifactPath),
+      planningInput: buildPlanPlanningInput(artifact),
     };
   } catch (error) {
     throw new PlanInputResolutionError(

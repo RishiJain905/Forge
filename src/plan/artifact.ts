@@ -19,9 +19,14 @@ import type {
 function buildPlanSummary(
   status: PlanCommandStatus,
   failure: PlanCommandFailure | null,
+  summaryOverride?: string,
 ): string {
   if (failure?.code === "OUTPUT_ROOT_FALLBACK") {
     return "Forge plan wrote its outputs to the default .forge root because the requested output root was unsafe.";
+  }
+
+  if (summaryOverride) {
+    return summaryOverride;
   }
 
   if (status === "ready") {
@@ -41,8 +46,11 @@ export function createPlanArtifact(params: {
   paths: PlanResolvedOutputPaths;
   startedAt: string;
   finishedAt: string;
+  planningReadiness?: PlanFoundationResult["carryForward"]["nextStepReadiness"];
+  summaryOverride?: string;
 }): PlanArtifact {
-  const planningReady = params.foundation.sourceIntake.readyForPlanning;
+  const planningReadiness = params.planningReadiness ?? params.foundation.carryForward.nextStepReadiness;
+  const planningReady = planningReadiness.ready;
   const usedFallbackRoot = params.paths.usedFallbackRoot;
   const status: PlanCommandStatus = planningReady
     ? usedFallbackRoot
@@ -81,7 +89,7 @@ export function createPlanArtifact(params: {
     },
     startedAt: params.startedAt,
     finishedAt: params.finishedAt,
-    summary: buildPlanSummary(status, failure),
+    summary: buildPlanSummary(status, failure, params.summaryOverride),
     boundaryNotes: [...PLAN_BOUNDARY_NOTES],
     source_intake: {
       artifactPath: params.foundation.sourceIntake.artifactPath,
@@ -108,7 +116,7 @@ export function createPlanArtifact(params: {
       next_step_readiness: params.foundation.carryForward.nextStepReadiness,
       concerns: params.model.carryForwardConcerns,
     },
-    planning_readiness: params.foundation.carryForward.nextStepReadiness,
+    planning_readiness: planningReadiness,
     failure,
   });
 }

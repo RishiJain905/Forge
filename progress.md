@@ -230,11 +230,41 @@
   - Kept the implementation narrow by leaving the existing Step 2 planner, artifact, report, and smoke behavior intact while wiring the new Part 5 suite into the default `npm.cmd test` gate.
   - Reused the existing packaged `forge intake` -> `forge plan` runnable path as the Gate 5 proof and confirmed no smoke-script change was necessary.
   - Updated `README.md`, `progress.md`, and `S2-B1-Done/p5-done-summary.md` so Step 2 Batch 1 Part 5 is documented and traceable.
+- Batch 2.01: `part-1-batch2-goal-and-do-not-touch.md` (Step 2)
+  - Hardened the Step 2 planner so unrelated source and test surfaces now become separate implementation and test plan items instead of one coarse category bucket, while keeping the existing `forge plan` contract stable.
+  - Tightened per-item dependency modeling so test work now depends on the related implementation surface first, and shared interface work stays scoped to the actual shared-risk path instead of leaking across unrelated items.
+  - Hardened `runPlanCommand()` so a structurally valid but non-actionable Step 1 handoff is persisted as `blocked` with an explicit `PLAN_INPUT_TOO_WEAK` readiness blocker instead of being reported as ready.
+  - Added direct runner and packaged-entrypoint coverage for the new Step 2 behavior and wired `tests/plan.runner.test.ts` and `tests/plan.cli-entrypoint.test.ts` into the default `npm.cmd test` gate.
+  - Updated `README.md`, `progress.md`, and `S2-B2-Done/p1-done-summary.md` so Step 2 Batch 2 Part 1 is documented and traceable.
+- Batch 2.02: `part-2-stage-1-and-2-intake-consumption-plan-item-foundation.md` (Step 2)
+  - Added a Step 2-native normalized planning-input boundary so `forge plan` preserves Step 1 provenance, planning payload, and uncertainty separately instead of treating the raw intake artifact as the planner's working model.
+  - Hardened foundation usability evaluation so warning-grade handoffs stay usable, blocked upstream handoffs stay blocked, and schema-valid but non-actionable handoffs surface `PLAN_INPUT_TOO_WEAK` at the foundation layer.
+  - Finished extracting a real plan-item foundation layer in `src/plan/planner.ts` so requirement signals can retain multiple sources together and emit structured source traces before the existing public plan items are derived.
+  - Kept the public Step 2 artifact/report top-level contract stable while preserving the current dependency, conflict-zone, test-obligation, parallelization, and carry-forward behavior.
+  - Added focused foundation and planner-model regression coverage plus direct traceability assertions, and documented completion in `S2-B2-Done/p2-done-summary.md`.
+- Batch 2.03: `part-3-stage-3-and-4-dependencies-conflict-zones-test-obligations.md` (Step 2)
+  - Reworked Step 2 dependency modeling so `forge plan` now emits interface-order dependencies without relying only on shared file stems when the task couples shared runtime-contract work with downstream implementation work.
+  - Added explicit `soft` dependency edges for genuinely uncertain fallback or low-confidence planning relationships without weakening deterministic dependency types globally.
+  - Expanded conflict-zone detection so shared schema and registry-style surfaces can produce visible multi-item overlap zones alongside the existing config and interface zones.
+  - Kept the existing Step 2 top-level artifact/report contract stable while preserving explicit per-item and top-level test obligations through the richer Part 3 planning path.
+  - Added a dedicated `tests/plan.part3-dependencies-conflict-obligations.test.ts` suite, wired it into `npm.cmd test`, and documented completion in `S2-B2-Done/P3-done-summary.md`.
+- Batch 2.04: `part-4-stage-5-and-6-parallelization-carry-forward-artifacts-and-report.md` (Step 2)
+  - Added a Step 2-specific `FORGE_PLAN_DEBUG=1` gate so `forge plan` can optionally persist internal planning debug artifacts without changing the public `plan.json` or `plan-report.md` contract.
+  - Extended the resolved Step 2 output paths and runner persistence flow so debug-enabled runs now write `plan-debug.json`, `plan-items.json`, `dependencies.json`, `conflict-zones.json`, and `test-obligations.json` under `.forge/debug/` on a best-effort basis.
+  - Kept stronger parallelization signals and carried-forward concern mapping visible and honest for ready, warning-heavy, and blocked planning runs while preserving the existing artifact/report top-level shape.
+  - Added dedicated Part 4 regression coverage for debug-disabled, debug-enabled, blocked-run, custom-output-root, and debug-write-failure scenarios, and wired the new suite into `npm.cmd test`.
+  - Updated `README.md`, `progress.md`, and `S2-B2-Done/p4-done-summary.md` so Step 2 Batch 2 Part 4 is documented and traceable.
+- Batch 2.05: `part-5-stage-7-cli-wiring-tests-and-runnable-milestone.md` (Step 2)
+  - Strengthened packaged `forge plan` coverage so the real CLI entrypoint now exercises ready, warning-heavy, blocked, and missing-input scenarios from an unusual working directory.
+  - Added explicit minimal-output assertions so packaged CLI runs stay status-and-path driven instead of dumping markdown report prose to the terminal.
+  - Tightened the ready-path smoke check so the runnable milestone still proves durable `.forge/plan.json` and `.forge/reports/plan-report.md` output.
+  - Kept production CLI code unchanged because the existing command wiring already satisfied the required contract.
+  - Updated `README.md`, `progress.md`, and `S2-B2-Done/p5-summary.md` so Step 2 Batch 2 Part 5 is documented and traceable.
 
 ## Current Branch State
 - `dev` includes the completed Step 1 work through Batch 4.05, including the frozen Step 2 handoff contract from Intake.
-- `codex/s2-b1-p5-acceptance-gates` adds Step 2 Batch 1 Part 5 on top of the current Step 2 foundation, including explicit Gate 1-5 acceptance coverage, repeated-run determinism checks, and default test-suite wiring for the Part 5 freeze gate.
-- Step 2 Batch 1 Part 5 is complete in the implementation worktree. Batch 1 is ready for review or integration onto `dev`.
+- `dev` includes the completed Step 2 Batch 2 Part 1 through Part 5 work for the real `forge plan` path.
+- `dev` now includes optional Step 2 planning debug outputs behind `FORGE_PLAN_DEBUG=1` while keeping the public plan artifact and report contract stable.
 
 ## Verification
 - `npm.cmd test`
@@ -243,5 +273,8 @@
 - `npm.cmd run smoke`
 
 ## Next
-- Step 2 Batch 1 is complete.
-- Next implementation work should begin the first spec for the next Step 2 batch once it is defined.
+- Step 2 Batch 2 Part 2 is complete.
+- Step 2 Batch 2 Part 3 is complete.
+- Step 2 Batch 2 Part 4 is complete.
+- Step 2 Batch 2 Part 5 is complete.
+- Next implementation work should begin the later Step 2 hardening/freeze follow-on.

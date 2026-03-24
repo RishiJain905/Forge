@@ -509,9 +509,11 @@ It now serves as the durable handoff into Step 2 planning. The current intake co
 - confidence
 - next-step readiness
 
-Step 2: Plan is implemented through Batch 1 Part 5.
+Step 2: Plan is implemented through Batch 2 Part 5.
 
-`forge plan` now consumes the persisted Step 1 handoff, writes durable `plan.json` and `plan-report.md` outputs, and emits deterministic plan items, dependency relationships, conflict zones, explicit top-level test-obligation entries, explicit top-level parallelization signals, and derived carry-forward concern mapping while keeping the public Step 2 artifact/report contract stable. Part 5 closes Batch 1 by freezing the first build-order and acceptance-gate rules through explicit regression coverage instead of expanding the runtime surface.
+`forge plan` now consumes the persisted Step 1 handoff through a Step 2-native normalized planning-input boundary instead of treating the raw intake artifact as the planner's working model. It preserves Step 1 provenance such as input mode, source inputs, runtime options, failure/status context, and planning uncertainty while keeping non-actionable but schema-valid handoffs blocked honestly. The packaged CLI path is now proven end to end through ready, warning-heavy, blocked, and missing-input coverage, and the planner still builds explicit plan-item foundations with structured source traces before deriving the existing public plan items, so requirement-source provenance, candidate-target linkage, and conservative low-confidence/fallback planning can carry forward without reopening the public `plan.json` top-level contract.
+
+Step 2 also now emits stronger dependency, conflict-zone, test-obligation, and parallelization modeling, keeps carried-forward concern mapping visible on ready and blocked runs, and can optionally write internal planning debug artifacts behind `FORGE_PLAN_DEBUG=1` without changing the public `plan.json` or `plan-report.md` contract. The runnable milestone is now backed by packaged-entrypoint tests plus smoke coverage that keeps terminal output minimal and artifact-driven.
 
 ---
 

@@ -22,6 +22,11 @@ export type PlanParallelizationSignal = typeof PLAN_PARALLELIZATION_SIGNALS[numb
 export type PlanCarryForwardConcernSource = typeof PLAN_CARRY_FORWARD_CONCERN_SOURCES[number];
 export type PlanCarryForwardConcernEffect = typeof PLAN_CARRY_FORWARD_CONCERN_EFFECTS[number];
 export type PlanItemRequiredField = typeof PLAN_ITEM_REQUIRED_FIELDS[number];
+export type PlanRequirementSource =
+  | "explicit_requirement"
+  | "acceptance_criteria"
+  | "implementation_necessity"
+  | "goal";
 export type PlanFoundationStatus = "ready" | "blocked" | "failed";
 export type PlanCommandStatus = PlanFoundationStatus;
 
@@ -45,13 +50,17 @@ export interface PlanResolvedOutputPaths {
   artifactPath: string;
   reportPath: string;
   debugArtifactPath: string;
+  debugPlanItemsPath?: string;
+  debugDependenciesPath?: string;
+  debugConflictZonesPath?: string;
+  debugTestObligationsPath?: string;
 }
 
 export interface LoadedPlanFoundationInput {
   repoRoot: string;
   paths: PlanResolvedOutputPaths;
-  intakeArtifactPath: string;
-  artifact: IntakeArtifact;
+  sourceIntake: PlanInputReference;
+  planningInput: PlanPlanningInput;
 }
 
 export interface PlanInputReference {
@@ -61,6 +70,10 @@ export interface PlanInputReference {
   status: IntakeArtifact["status"];
   summary: IntakeArtifact["summary"];
   readyForPlanning: IntakeArtifact["next_step_readiness"]["ready"];
+  inputMode: IntakeArtifact["input_mode"];
+  sourceInputs: IntakeArtifact["source_inputs"];
+  runtimeOptions: IntakeArtifact["runtime_options"];
+  failure: IntakeArtifact["failure"];
 }
 
 export interface PlanCarryForwardContext {
@@ -73,6 +86,38 @@ export interface PlanCarryForwardContext {
   warnings: IntakeArtifact["warnings"];
   confidence: IntakeArtifact["confidence"];
   nextStepReadiness: IntakeArtifact["next_step_readiness"];
+}
+
+export interface PlanPlanningContext {
+  taskSpec: IntakeArtifact["task_spec"];
+  repoContext: IntakeArtifact["repo_context"];
+  candidateTargets: IntakeArtifact["candidate_targets"];
+  riskAnalysis: IntakeArtifact["risk_analysis"];
+  initialVerificationTargets: IntakeArtifact["initial_verification_targets"];
+}
+
+export interface PlanPlanningUncertainty {
+  ambiguities: IntakeArtifact["ambiguities"];
+  warnings: IntakeArtifact["warnings"];
+  confidence: IntakeArtifact["confidence"];
+  nextStepReadiness: IntakeArtifact["next_step_readiness"];
+}
+
+export interface PlanInputIssue {
+  code: string;
+  message: string;
+}
+
+export interface PlanInputUsability {
+  status: "actionable" | "non_actionable" | "upstream_blocked";
+  warningItems: PlanInputIssue[];
+  blockingItems: PlanInputIssue[];
+}
+
+export interface PlanPlanningInput {
+  context: PlanPlanningContext;
+  uncertainty: PlanPlanningUncertainty;
+  usability: PlanInputUsability;
 }
 
 export interface PlanArtifactCarryForward {
@@ -144,6 +189,33 @@ export interface PlanItem {
   testObligations: PlanTestObligation[];
   verificationRelevance: PlanVerificationRelevance;
   parallelization: PlanParallelization;
+}
+
+export interface PlanRequirementSignal {
+  text: string;
+  sources: PlanRequirementSource[];
+}
+
+export interface PlanItemSourceTrace {
+  requirement: string;
+  requirementSources: PlanRequirementSource[];
+  matchedCandidateTargetPaths: string[];
+  matchedVerificationTargetPaths: string[];
+  matchedVerificationCategories: PlanVerificationCategory[];
+  matchedRiskCodes: string[];
+  carriesLowConfidence: boolean;
+  carriesFallbackTargeting: boolean;
+}
+
+export interface PlanItemFoundation {
+  id: string;
+  clusterKey: string;
+  title: string;
+  description: string;
+  category: Extract<PlanItemCategory, "config" | "interface" | "implementation" | "test">;
+  sourceRequirements: string[];
+  likelyAffectedPaths: string[];
+  sourceTraces: PlanItemSourceTrace[];
 }
 
 export interface PlanItemContract {
@@ -248,6 +320,7 @@ export interface PlanFoundationResult {
     notes: readonly string[];
   };
   sourceIntake: PlanInputReference;
+  planningInput: PlanPlanningInput;
   carryForward: PlanCarryForwardContext;
   boundaryPolicy: Step2BoundaryPolicy;
   planItemContract: PlanItemContract;

@@ -212,6 +212,20 @@ await runScenario(
         artifact.plan_item_contract.parallelizationSignals,
         [...PLAN_PARALLELIZATION_SIGNALS],
       );
+      assert.ok(
+        artifact.writePolicy.allowedSideEffects.some((entry) => entry.includes("plan.json")),
+      );
+      assert.ok(
+        artifact.writePolicy.allowedSideEffects.some((entry) => entry.includes("plan-report.md")),
+      );
+      assert.ok(
+        artifact.writePolicy.allowedSideEffects.some((entry) => entry.includes("plan-debug.json")),
+      );
+      assert.ok(
+        artifact.boundaryNotes.some(
+          (entry) => entry.includes("FORGE_PLAN_DEBUG=1") && entry.includes("debug artifacts"),
+        ),
+      );
       assert.ok(artifact.plan_items.length > 0, "expected populated plan items");
       assert.ok(artifact.dependency_graph.length > 0, "expected explicit dependency graph");
       assert.ok(artifact.conflict_zones.length > 0, "expected visible conflict zones");

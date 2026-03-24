@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { writeFile } from "node:fs/promises";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -371,6 +372,92 @@ await runScenario(
       assert.equal(planArtifact.failure?.code, "OUTPUT_ROOT_FALLBACK");
       assert.ok(planArtifact.failure?.fallbackReason);
       assert.equal(planArtifact.source_intake?.readyForPlanning, true);
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "forge plan keeps fallback-root failures visible in the summary even when planning is non-actionable",
+  async () => {
+    const repoRoot = await createTempRepo("forge-plan-fallback-summary-");
+    const specPath = join(repoRoot, "task.md");
+    const blockedOutputDir = join("..", "forge-plan-fallback-summary-output");
+
+    try {
+      await writeRepoFile(
+        repoRoot,
+        "task.md",
+        [
+          "# Update app behavior",
+          "",
+          "Revise `src/app.ts` and keep `tests/app.test.ts` aligned.",
+          "",
+          "## Acceptance Criteria",
+          "",
+          "- `src/app.ts` is updated",
+          "- `tests/app.test.ts` stays aligned",
+        ].join("\n"),
+      );
+
+      const intakeResult = runForgeBinary(
+        ["intake", "--repo", repoRoot, "--spec", specPath],
+        repoRoot,
+      );
+
+      assert.equal(intakeResult.code, 0, intakeResult.stderr);
+
+      const intakeArtifactPath = join(repoRoot, ".forge", "intake.json");
+      const intakeArtifact = await readJsonFile<Record<string, unknown>>(intakeArtifactPath);
+      const taskSpec = {
+        ...(intakeArtifact.task_spec as Record<string, unknown>),
+        explicit_requirements: [],
+        acceptance_criteria: [],
+        implementation_necessities: [],
+      };
+
+      await writeFile(
+        intakeArtifactPath,
+        `${JSON.stringify(
+          {
+            ...intakeArtifact,
+            task_spec: taskSpec,
+            candidate_targets: [],
+            initial_verification_targets: [],
+            next_step_readiness: {
+              ...(intakeArtifact.next_step_readiness as Record<string, unknown>),
+              ready: true,
+              blocking_issues: [],
+            },
+          },
+          null,
+          2,
+        )}\n`,
+        "utf8",
+      );
+
+      const planResult = runForgePlanBinary(
+        ["--repo", repoRoot, "--output-dir", blockedOutputDir],
+        repoRoot,
+      );
+
+      assert.notEqual(planResult.code, 0);
+      assert.match(planResult.stderr, /OUTPUT_ROOT_FALLBACK/);
+
+      const planArtifact = await readJsonFile<{
+        status: "ready" | "blocked" | "failed";
+        summary: string;
+        failure?: { code?: string; message?: string; fallbackReason?: string } | null;
+      }>(join(repoRoot, ".forge", "plan.json"));
+
+      assert.equal(planArtifact.status, "blocked");
+      assert.equal(planArtifact.failure?.code, "OUTPUT_ROOT_FALLBACK");
+      assert.match(
+        planArtifact.summary,
+        /default \.forge output root|unsafe/i,
+        "expected the fallback-root failure to stay visible in the top-level summary",
+      );
     } finally {
       await disposeTempRepo(repoRoot);
     }

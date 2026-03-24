@@ -1,6 +1,7 @@
 export const FORGE_PLAN_COMMAND = "plan" as const;
 export const FORGE_PLAN_STAGE = "step2" as const;
 export const FORGE_PLAN_FULL_COMMAND = `forge ${FORGE_PLAN_COMMAND}` as const;
+export const PLAN_DEBUG_ENV_VAR = "FORGE_PLAN_DEBUG" as const;
 
 export const PLAN_ARTIFACT_NAME = "plan.json" as const;
 export const PLAN_REPORT_NAME = "plan-report.md" as const;
@@ -23,7 +24,7 @@ export const STEP2_ALLOWED_SIDE_EFFECTS = [
   "read the Step 1 intake artifact",
   "validate the Step 1 handoff contract before planning continues",
   "in later Step 2 parts, write plan artifacts inside the resolved output root",
-  "in later Step 2 parts, optionally write internal planning debug artifacts inside the output root",
+  `in later Step 2 parts, optionally write internal planning debug artifacts inside the resolved output root when ${PLAN_DEBUG_ENV_VAR}=1 is set`,
 ] as const;
 
 export const STEP2_DEFERRED_CAPABILITIES = [
@@ -49,12 +50,14 @@ export const PLAN_ALLOWED_SIDE_EFFECTS = [
   "read the Step 1 intake artifact",
   "write `plan.json`",
   "write `plan-report.md`",
+  `optionally write \`plan-debug.json\`, \`plan-items.json\`, \`dependencies.json\`, \`conflict-zones.json\`, and \`test-obligations.json\` under \`.forge/debug/\` when ${PLAN_DEBUG_ENV_VAR}=1 is set`,
 ] as const;
 
 export const PLAN_BOUNDARY_NOTES = [
   "Plan consumes the persisted Step 1 intake artifact instead of re-running intake parsing.",
   "Plan carries forward Step 1 ambiguity, warning, confidence, and readiness state without hiding it.",
   "Plan emits explicit plan-item, dependency, conflict-zone, test-obligation, parallelization, and carry-forward concern modeling while still deferring later verify, split, execute, and integrate behavior.",
+  `Plan may optionally write debug artifacts under .forge/debug/ when ${PLAN_DEBUG_ENV_VAR}=1 is set, but those files stay secondary to plan.json and plan-report.md.`,
 ] as const;
 
 export const PLAN_ITEM_REQUIRED_FIELDS = [

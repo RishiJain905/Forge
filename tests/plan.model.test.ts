@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
 
+import { resolvePlanFoundationInput } from "../src/plan/input.js";
+import { buildPlanItemFoundations, buildPlanModel } from "../src/plan/planner.js";
+import { buildPlanFoundation } from "../src/plan/runner.js";
 import type { IntakeArtifact } from "../src/intake/types.js";
 import {
   createTempRepo,
@@ -114,6 +117,287 @@ async function writeSpecAndRunIntake(repoRoot: string, specLines: string[], spec
 }
 
 await runScenario(
+  "buildPlanItemFoundations preserves multi-source requirement traces for a targeted surface",
+  async () => {
+    const repoRoot = await createTempRepo("forge-plan-model-foundation-traces-");
+
+    try {
+      await writeSpecAndRunIntake(repoRoot, [
+        "# Update app behavior",
+        "",
+        "Revise `src/app.ts` and keep `tests/app.test.ts` aligned.",
+        "",
+        "## Acceptance Criteria",
+        "",
+        "- `src/app.ts` is updated",
+        "- `tests/app.test.ts` stays aligned",
+      ]);
+
+      const resolvedInput = await resolvePlanFoundationInput({ repo: repoRoot }, repoRoot);
+      const foundation = buildPlanFoundation({
+        ...resolvedInput,
+        planningInput: {
+          ...resolvedInput.planningInput,
+          context: {
+            ...resolvedInput.planningInput.context,
+            taskSpec: {
+              ...resolvedInput.planningInput.context.taskSpec,
+              explicit_requirements: ["Update src/app.ts"],
+              acceptance_criteria: ["Update src/app.ts", "Keep tests aligned"],
+              implementation_necessities: ["Update src/app.ts"],
+            },
+          },
+        },
+      });
+      const foundations = buildPlanItemFoundations(foundation);
+      const implementationFoundation = foundations.find((item) =>
+        item.category === "implementation" &&
+        item.likelyAffectedPaths.length === 1 &&
+        item.likelyAffectedPaths[0] === "src/app.ts");
+
+      assert.ok(implementationFoundation, "expected a dedicated app implementation foundation item");
+      const appTrace = implementationFoundation.sourceTraces.find((trace) => trace.requirement === "Update src/app.ts");
+      assert.ok(appTrace, "expected a source trace for the repeated app requirement");
+      assert.deepEqual(
+        appTrace.requirementSources.sort(),
+        ["acceptance_criteria", "explicit_requirement", "implementation_necessity"].sort(),
+      );
+      assert.ok(
+        appTrace.matchedCandidateTargetPaths.includes("src/app.ts"),
+        "expected the source trace to retain candidate-target path linkage",
+      );
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "buildPlanItemFoundations uses inferred source requirements for unmatched config surfaces",
+  async () => {
+    const repoRoot = await createTempRepo("forge-plan-model-unmatched-config-");
+
+    try {
+      await writeRepoFile(
+        repoRoot,
+        "package.json",
+        JSON.stringify({
+          name: "forge-plan-model-unmatched-config",
+          private: true,
+          type: "module",
+        }, null, 2),
+      );
+
+      await writeSpecAndRunIntake(repoRoot, [
+        "# Update app behavior",
+        "",
+        "Revise `src/app.ts`.",
+        "",
+        "## Acceptance Criteria",
+        "",
+        "- `src/app.ts` is updated",
+      ]);
+
+      const resolvedInput = await resolvePlanFoundationInput({ repo: repoRoot }, repoRoot);
+      const foundation = buildPlanFoundation({
+        ...resolvedInput,
+        planningInput: {
+          ...resolvedInput.planningInput,
+          context: {
+            ...resolvedInput.planningInput.context,
+            taskSpec: {
+              ...resolvedInput.planningInput.context.taskSpec,
+              explicit_requirements: ["Update src/app.ts"],
+              acceptance_criteria: [],
+              implementation_necessities: [],
+            },
+            candidateTargets: [
+              {
+                path: "src/app.ts",
+                kind: "source",
+                match_type: "explicit",
+                reason: "explicit source target",
+                notes: [],
+                shared_risk: false,
+              },
+              {
+                path: "package.json",
+                kind: "manifest",
+                match_type: "explicit",
+                reason: "config surface remains relevant",
+                notes: [],
+                shared_risk: true,
+              },
+            ],
+            initialVerificationTargets: [],
+          },
+        },
+      });
+      const foundations = buildPlanItemFoundations(foundation);
+      const configFoundation = foundations.find((item) =>
+        item.category === "config" &&
+        item.likelyAffectedPaths.length === 1 &&
+        item.likelyAffectedPaths[0] === "package.json");
+
+      assert.ok(configFoundation, "expected a config foundation item for package.json");
+      assert.deepEqual(
+        configFoundation.sourceRequirements,
+        ["Planning surface inferred from Step 1 targeting for `package.json`."],
+      );
+      assert.deepEqual(
+        configFoundation.sourceTraces[0]?.requirementSources,
+        ["goal"],
+      );
+      assert.ok(
+        configFoundation.sourceTraces[0]?.matchedCandidateTargetPaths.includes("package.json"),
+        "expected the inferred trace to retain package.json targeting evidence",
+      );
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "forge plan uses source traces to carry verification categories onto implementation items",
+  async () => {
+    const repoRoot = await createTempRepo("forge-plan-model-trace-verification-");
+
+    try {
+      await writeRepoFile(repoRoot, "src/retry.ts", "export const retryPolicy = true;\n");
+
+      await writeSpecAndRunIntake(repoRoot, [
+        "# Update app behavior",
+        "",
+        "Revise `src/app.ts` while keeping retry handling aligned.",
+        "",
+        "## Acceptance Criteria",
+        "",
+        "- `src/app.ts` is updated",
+      ]);
+
+      const resolvedInput = await resolvePlanFoundationInput({ repo: repoRoot }, repoRoot);
+      const foundation = buildPlanFoundation({
+        ...resolvedInput,
+        planningInput: {
+          ...resolvedInput.planningInput,
+          context: {
+            ...resolvedInput.planningInput.context,
+            taskSpec: {
+              ...resolvedInput.planningInput.context.taskSpec,
+              explicit_requirements: ["Keep src/app.ts aligned with src/retry.ts handling"],
+              acceptance_criteria: [],
+              implementation_necessities: [],
+              risky_phrases: [],
+            },
+            candidateTargets: [
+              {
+                path: "src/app.ts",
+                kind: "source",
+                match_type: "explicit",
+                reason: "explicit source target",
+                notes: [],
+                shared_risk: false,
+              },
+            ],
+            initialVerificationTargets: [
+              {
+                path: "src/retry.ts",
+                kind: "source",
+                category: "retry_logic",
+                reason: "retry behavior needs focused verification",
+              },
+            ],
+          },
+        },
+      });
+      const model = buildPlanModel(foundation);
+      const implementationItem = model.planItems.find((item) =>
+        item.category === "implementation" &&
+        item.likelyAffectedPaths.length === 1 &&
+        item.likelyAffectedPaths[0] === "src/app.ts");
+
+      assert.ok(implementationItem, "expected an implementation item for src/app.ts");
+      assert.ok(
+        implementationItem.verificationRelevance.categories.includes("retry_logic"),
+        "expected trace-linked retry verification to flow into the implementation item",
+      );
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "forge plan splits unrelated source and test surfaces into separate implementation and test plan items",
+  async () => {
+    const repoRoot = await createTempRepo("forge-plan-model-granular-items-");
+
+    try {
+      await writeRepoFile(repoRoot, "src/helper.ts", "export const helper = true;\n");
+      await writeRepoFile(
+        repoRoot,
+        "tests/helper.test.ts",
+        "import assert from 'node:assert/strict';\n\nassert.equal(1, 1);\n",
+      );
+
+      await writeSpecAndRunIntake(repoRoot, [
+        "# Update app and helper behavior",
+        "",
+        "Revise `src/app.ts` and `src/helper.ts`, and keep `tests/app.test.ts` and `tests/helper.test.ts` aligned.",
+        "",
+        "## Acceptance Criteria",
+        "",
+        "- `src/app.ts` is updated",
+        "- `src/helper.ts` is updated",
+        "- `tests/app.test.ts` stays aligned",
+        "- `tests/helper.test.ts` stays aligned",
+      ]);
+
+      const planResult = runForgePlanBinary(["--repo", repoRoot], repoRoot);
+      assert.equal(planResult.code, 0, planResult.stderr);
+
+      const artifact = await loadPlanArtifact(repoRoot);
+      const implementationItems = artifact.plan_items.filter((item) => item.category === "implementation");
+      const testItems = artifact.plan_items.filter((item) => item.category === "test");
+      const appImplementationItem = implementationItems.find((item) =>
+        item.likelyAffectedPaths.length === 1 && item.likelyAffectedPaths[0] === "src/app.ts");
+      const helperImplementationItem = implementationItems.find((item) =>
+        item.likelyAffectedPaths.length === 1 && item.likelyAffectedPaths[0] === "src/helper.ts");
+      const appTestItem = testItems.find((item) =>
+        item.likelyAffectedPaths.length === 1 && item.likelyAffectedPaths[0] === "tests/app.test.ts");
+      const helperTestItem = testItems.find((item) =>
+        item.likelyAffectedPaths.length === 1 && item.likelyAffectedPaths[0] === "tests/helper.test.ts");
+
+      assert.ok(implementationItems.length >= 2, "expected one implementation item per source surface");
+      assert.ok(testItems.length >= 2, "expected one test item per test surface");
+      assert.ok(appImplementationItem, "expected a dedicated app implementation item");
+      assert.ok(helperImplementationItem, "expected a dedicated helper implementation item");
+      assert.ok(appTestItem, "expected a dedicated app test item");
+      assert.ok(helperTestItem, "expected a dedicated helper test item");
+      assert.ok(
+        appTestItem.dependencies.some((dependency) => dependency.planItemId === appImplementationItem.id),
+        "expected app test work to depend on the app implementation item",
+      );
+      assert.ok(
+        helperTestItem.dependencies.some((dependency) => dependency.planItemId === helperImplementationItem.id),
+        "expected helper test work to depend on the helper implementation item",
+      );
+      assert.ok(
+        !appTestItem.dependencies.some((dependency) => dependency.planItemId === helperImplementationItem.id),
+        "expected app test work to avoid unrelated helper implementation dependencies",
+      );
+      assert.ok(
+        !helperTestItem.dependencies.some((dependency) => dependency.planItemId === appImplementationItem.id),
+        "expected helper test work to avoid unrelated app implementation dependencies",
+      );
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
   "forge plan builds populated plan items, explicit dependencies, and conflict zones for a grounded spec",
   async () => {
     const repoRoot = await createTempRepo("forge-plan-model-grounded-");
@@ -182,22 +466,6 @@ await runScenario(
     const repoRoot = await createTempRepo("forge-plan-model-shared-entrypoint-");
 
     try {
-      await writeRepoFile(
-        repoRoot,
-        "package.json",
-        JSON.stringify(
-          {
-            name: "forge-plan-model-shared-entrypoint",
-            private: true,
-            type: "module",
-            scripts: {
-              test: "node --test",
-            },
-          },
-          null,
-          2,
-        ),
-      );
       await writeRepoFile(repoRoot, "src/app.ts", "export const app = true;\n");
       await writeRepoFile(repoRoot, "src/helper.ts", "export const helper = true;\n");
       await writeRepoFile(repoRoot, "src/cli.ts", "export const cli = true;\n");
@@ -213,13 +481,12 @@ await runScenario(
       );
 
       await writeSpecAndRunIntake(repoRoot, [
-        "# Update app, helper, and config behavior",
+        "# Update app and helper behavior",
         "",
-        "Revise `package.json`, `src/app.ts`, and `src/helper.ts` and keep `tests/app.test.ts`, `tests/helper.test.ts`, and `src/cli.ts` aligned.",
+        "Revise `src/app.ts` and `src/helper.ts` and keep `tests/app.test.ts` and `tests/helper.test.ts` aligned.",
         "",
         "## Acceptance Criteria",
         "",
-        "- `package.json` is updated",
         "- `src/app.ts` is updated",
         "- `src/helper.ts` is updated",
         "- `tests/app.test.ts` stays aligned",
@@ -230,36 +497,90 @@ await runScenario(
       assert.equal(planResult.code, 0, planResult.stderr);
 
       const artifact = await loadPlanArtifact(repoRoot);
-      const implementationItem = artifact.plan_items.find((item) => item.category === "implementation");
+      const appImplementationItem = artifact.plan_items.find((item) =>
+        item.category === "implementation" &&
+        item.likelyAffectedPaths.length === 1 &&
+        item.likelyAffectedPaths[0] === "src/app.ts");
+      const helperImplementationItem = artifact.plan_items.find((item) =>
+        item.category === "implementation" &&
+        item.likelyAffectedPaths.length === 1 &&
+        item.likelyAffectedPaths[0] === "src/helper.ts");
       const interfaceItem = artifact.plan_items.find((item) => item.category === "interface");
-      const configItem = artifact.plan_items.find((item) => item.category === "config");
 
-      assert.ok(implementationItem, "expected an implementation plan item");
+      assert.ok(appImplementationItem, "expected a dedicated app implementation plan item");
+      assert.ok(helperImplementationItem, "expected a dedicated helper implementation plan item");
       assert.ok(interfaceItem, "expected a shared interface plan item");
-      assert.ok(configItem, "expected a config plan item");
       assert.ok(
-        implementationItem.likelyAffectedPaths.includes("src/app.ts"),
-        "expected the shared-risk source file to remain in implementation planning",
+        appImplementationItem.likelyAffectedPaths.includes("src/app.ts"),
+        "expected the shared-risk source file to remain in implementation planning as its own item",
       );
       assert.ok(
-        implementationItem.likelyAffectedPaths.includes("src/helper.ts"),
-        "expected the ordinary source file to remain in implementation planning",
+        helperImplementationItem.likelyAffectedPaths.includes("src/helper.ts"),
+        "expected the ordinary source file to remain in implementation planning as its own item",
       );
       assert.ok(
-        implementationItem.dependencies.some((dependency) => dependency.planItemId === interfaceItem.id),
-        "expected implementation work to depend on the shared interface item",
+        appImplementationItem.dependencies.some((dependency) => dependency.planItemId === interfaceItem.id),
+        "expected the app implementation work to depend on the shared interface item",
       );
       assert.ok(
-        interfaceItem.dependencies.some((dependency) => dependency.planItemId === configItem.id),
-        "expected interface work to depend on the config item",
+        !helperImplementationItem.dependencies.some((dependency) => dependency.planItemId === interfaceItem.id),
+        "expected unrelated helper implementation work to avoid the shared interface dependency",
       );
-      assert.ok(interfaceItem.likelyAffectedPaths.includes("src/app.ts"));
-      assert.ok(interfaceItem.likelyAffectedPaths.includes("src/cli.ts"));
+      assert.deepEqual(interfaceItem.likelyAffectedPaths, ["src/app.ts"]);
       assert.ok(!interfaceItem.likelyAffectedPaths.includes("src/helper.ts"));
-      assert.equal(
-        interfaceItem.parallelization.signal,
-        "risky_shared",
-        "shared interface work should remain visibly risky even when config work exists upstream",
+      assert.ok(!interfaceItem.likelyAffectedPaths.includes("src/cli.ts"));
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "forge plan keeps shared-surface test items out of implementation dependencies",
+  async () => {
+    const repoRoot = await createTempRepo("forge-plan-model-shared-surface-cycle-");
+
+    try {
+      await writeRepoFile(repoRoot, "src/schema.ts", "export const schema = true;\n");
+      await writeRepoFile(
+        repoRoot,
+        "tests/schema.test.ts",
+        "import assert from 'node:assert/strict';\n\nassert.equal(1, 1);\n",
+      );
+
+      await writeSpecAndRunIntake(repoRoot, [
+        "# Update shared schema behavior",
+        "",
+        "Revise `src/schema.ts` and keep `tests/schema.test.ts` aligned.",
+        "",
+        "## Acceptance Criteria",
+        "",
+        "- `src/schema.ts` is updated",
+        "- `tests/schema.test.ts` stays aligned",
+      ]);
+
+      const planResult = runForgePlanBinary(["--repo", repoRoot], repoRoot);
+      assert.equal(planResult.code, 0, planResult.stderr);
+
+      const artifact = await loadPlanArtifact(repoRoot);
+      const implementationItem = artifact.plan_items.find((item) =>
+        item.category === "implementation" &&
+        item.likelyAffectedPaths.length === 1 &&
+        item.likelyAffectedPaths[0] === "src/schema.ts");
+      const testItem = artifact.plan_items.find((item) =>
+        item.category === "test" &&
+        item.likelyAffectedPaths.length === 1 &&
+        item.likelyAffectedPaths[0] === "tests/schema.test.ts");
+
+      assert.ok(implementationItem, "expected a dedicated schema implementation item");
+      assert.ok(testItem, "expected a dedicated schema test item");
+      assert.ok(
+        testItem.dependencies.some((dependency) => dependency.planItemId === implementationItem.id),
+        "expected schema test work to depend on schema implementation work",
+      );
+      assert.ok(
+        !implementationItem.dependencies.some((dependency) => dependency.planItemId === testItem.id),
+        "expected schema implementation work to avoid depending on the test item",
       );
     } finally {
       await disposeTempRepo(repoRoot);

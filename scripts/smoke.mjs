@@ -127,6 +127,9 @@ async function main() {
     assert.match(planResult.stdout, /Status: ready/);
     assert.match(planResult.stdout, /Artifact:/);
     assert.match(planResult.stdout, /Report:/);
+    assert.equal(planResult.stdout.includes("# Forge Plan Report"), false);
+    assert.equal(planResult.stdout.includes("## Plan Items"), false);
+    assert.equal(planResult.stdout.includes("## Source Intake"), false);
 
     const planArtifactPath = join(tempRepo, ".forge", "plan.json");
     const planReportPath = join(tempRepo, ".forge", "reports", "plan-report.md");
