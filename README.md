@@ -509,9 +509,9 @@ It now serves as the durable handoff into Step 2 planning. The current intake co
 - confidence
 - next-step readiness
 
-Step 2: Plan is implemented through Batch 1 Part 3.
+Step 2: Plan is implemented through Batch 1 Part 5.
 
-`forge plan` now consumes the persisted Step 1 handoff, writes durable `plan.json` and `plan-report.md` outputs, and emits deterministic plan items, dependency relationships, and conflict zones while keeping the public Step 2 artifact contract stable. Part 4 remains next for top-level test-obligation and parallelization aggregation plus additional carry-forward rules.
+`forge plan` now consumes the persisted Step 1 handoff, writes durable `plan.json` and `plan-report.md` outputs, and emits deterministic plan items, dependency relationships, conflict zones, explicit top-level test-obligation entries, explicit top-level parallelization signals, and derived carry-forward concern mapping while keeping the public Step 2 artifact/report contract stable. Part 5 closes Batch 1 by freezing the first build-order and acceptance-gate rules through explicit regression coverage instead of expanding the runtime surface.
 
 ---
 

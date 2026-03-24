@@ -134,6 +134,15 @@ type PlanArtifact = {
     warnings: string[];
     confidence: IntakeArtifact["confidence"];
     next_step_readiness: IntakeArtifact["next_step_readiness"];
+    concerns: Array<{
+      id: string;
+      source: string;
+      code: string | null;
+      message: string;
+      planItemIds: string[];
+      effects: string[];
+      status: "carried_forward";
+    }>;
   };
   planning_readiness: IntakeArtifact["next_step_readiness"];
   failure: { code: string; message: string } | null;
@@ -253,8 +262,8 @@ await runScenario(
           ),
         ),
       );
-      assert.equal(artifact.test_obligations.length, 0);
-      assert.equal(artifact.parallelization_signals.length, 0);
+      assert.ok(artifact.test_obligations.length > 0, "expected top-level aggregated test obligations");
+      assert.ok(artifact.parallelization_signals.length > 0, "expected top-level aggregated parallelization signals");
       assert.deepEqual(artifact.carry_forward.task_spec, intakeArtifact.task_spec);
       assert.deepEqual(artifact.carry_forward.repo_context, intakeArtifact.repo_context);
       assert.deepEqual(artifact.carry_forward.candidate_targets, intakeArtifact.candidate_targets);
@@ -267,6 +276,17 @@ await runScenario(
       assert.deepEqual(artifact.carry_forward.warnings, intakeArtifact.warnings);
       assert.deepEqual(artifact.carry_forward.confidence, intakeArtifact.confidence);
       assert.deepEqual(artifact.carry_forward.next_step_readiness, intakeArtifact.next_step_readiness);
+      assert.ok(Array.isArray(artifact.carry_forward.concerns));
+      assert.ok(
+        artifact.test_obligations.every((entry) =>
+          artifact.plan_items.some((item) => (item as { id: string }).id === (entry as { planItemId: string }).planItemId),
+        ),
+      );
+      assert.ok(
+        artifact.parallelization_signals.every((entry) =>
+          artifact.plan_items.some((item) => (item as { id: string }).id === (entry as { planItemId: string }).planItemId),
+        ),
+      );
       assert.equal(artifact.failure, null);
     } finally {
       await disposeTempRepo(repoRoot);

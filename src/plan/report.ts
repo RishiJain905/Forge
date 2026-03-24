@@ -84,6 +84,10 @@ function renderPlanItemsSection(artifact: PlanArtifact): string {
   }
 
   const lines = artifact.plan_items.flatMap((item) => {
+    const carryForwardSummary = artifact.carry_forward.concerns
+      .filter((concern) => concern.planItemIds.includes(item.id))
+      .map((concern) => `\`${concern.id}\` (${concern.source})`)
+      .join(", ");
     const dependencySummary = item.dependencies.length > 0
       ? item.dependencies.map((dependency) => `\`${dependency.planItemId}\` (${dependency.type})`).join(", ")
       : "none";
@@ -100,6 +104,7 @@ function renderPlanItemsSection(artifact: PlanArtifact): string {
       `- Verification: relevant=${item.verificationRelevance.relevant}; categories=${verificationSummary}`,
       `- Test Obligations: ${testObligationSummary}`,
       `- Parallelization: ${item.parallelization.signal} - ${item.parallelization.reason}`,
+      `- Carry-Forward: ${carryForwardSummary || "none"}`,
     ];
   });
 
@@ -134,13 +139,28 @@ function renderConflictZonesSection(artifact: PlanArtifact): string {
   );
 }
 
-function renderDeferredAggregationSection(title: "Test Obligations" | "Parallelization"): string {
-  const subject = title === "Test Obligations" ? "test-obligation" : "parallelization";
+function renderTestObligationsSection(artifact: PlanArtifact): string {
+  if (artifact.test_obligations.length === 0) {
+    return renderSection("Test Obligations", ["- none"]);
+  }
 
-  return renderSection(title, [
-    `- Top-level ${subject} aggregation is deferred to Part 4.`,
-    "- See Plan Items for the current per-item detail captured by Part 3.",
-  ]);
+  return renderSection(
+    "Test Obligations",
+    artifact.test_obligations.map((entry) =>
+      `- \`${entry.planItemId}\` -> ${entry.category} - ${entry.reason}`),
+  );
+}
+
+function renderParallelizationSection(artifact: PlanArtifact): string {
+  if (artifact.parallelization_signals.length === 0) {
+    return renderSection("Parallelization", ["- none"]);
+  }
+
+  return renderSection(
+    "Parallelization",
+    artifact.parallelization_signals.map((entry) =>
+      `- \`${entry.planItemId}\` -> ${entry.signal} - ${entry.reason}`),
+  );
 }
 
 function renderCarryForwardRiskAnalysis(
@@ -218,6 +238,15 @@ function renderCarryForwardContextSection(artifact: PlanArtifact): string {
     "### Warnings",
     "",
     renderList(artifact.carry_forward.warnings),
+    "",
+    "### Derived Concerns",
+    "",
+    renderList(
+      artifact.carry_forward.concerns.map((concern) => {
+        const code = concern.code ? ` [code: ${concern.code}]` : "";
+        return `\`${concern.id}\` (${concern.source})${code} - ${concern.message} [plan items: ${concern.planItemIds.join(", ")}] [effects: ${concern.effects.join(", ")}]`;
+      }),
+    ),
     "",
     "### Confidence",
     "",
@@ -319,8 +348,8 @@ export function createPlanReport(artifact: PlanArtifact): string {
     renderPlanItemsSection(artifact),
     renderDependenciesSection(artifact),
     renderConflictZonesSection(artifact),
-    renderDeferredAggregationSection("Test Obligations"),
-    renderDeferredAggregationSection("Parallelization"),
+    renderTestObligationsSection(artifact),
+    renderParallelizationSection(artifact),
     renderCarryForwardContextSection(artifact),
     renderPlanningReadinessSection(artifact),
     renderSection("Boundary Notes", [renderList(artifact.boundaryNotes)]),

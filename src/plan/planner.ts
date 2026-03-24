@@ -1,4 +1,6 @@
 import type {
+  PlanCarryForwardConcern,
+  PlanCarryForwardConcernEffect,
   PlanConflictZone,
   PlanDependencyGraphEntry,
   PlanDependencyType,
@@ -7,8 +9,10 @@ import type {
   PlanItemCategory,
   PlanModel,
   PlanParallelization,
+  PlanParallelizationSignalEntry,
   PlanRiskLevel,
   PlanTestObligation,
+  PlanTestObligationEntry,
   PlanVerificationCategory,
   PlanVerificationRelevance,
 } from "./types.js";
@@ -29,6 +33,8 @@ interface PlannerContext {
   implementationPaths: string[];
   testPaths: string[];
   sourcePaths: string[];
+  entryPointPaths: Set<string>;
+  fallbackTargetPaths: Set<string>;
   riskZones: RiskZoneEntry[];
   fallbackOnlyTargeting: boolean;
   lowConfidence: boolean;
@@ -302,6 +308,12 @@ function buildPlannerContext(foundation: PlanFoundationResult): PlannerContext {
     implementationPaths,
     testPaths: dedupeStable([...testPaths, ...siblingTests]),
     sourcePaths,
+    entryPointPaths: new Set(carryForward.repoContext.entry_points.map(normalizePath)),
+    fallbackTargetPaths: new Set(
+      candidateTargets
+        .filter((target) => target.match_type === "fallback")
+        .map((target) => normalizePath(target.path)),
+    ),
     riskZones,
     fallbackOnlyTargeting:
       candidateTargets.length > 0 && candidateTargets.every((target) => target.match_type === "fallback"),
@@ -614,6 +626,297 @@ function buildConflictZones(
   return zones;
 }
 
+function buildPlanTestObligationEntries(planItems: PlanItem[]): PlanTestObligationEntry[] {
+  return uniqueOrdered(
+    planItems.flatMap((item) =>
+      item.testObligations.map((obligation) => ({
+        planItemId: item.id,
+        category: obligation.category,
+        reason: obligation.reason,
+      }))),
+    (entry) => `${entry.planItemId}:${entry.category}:${entry.reason}`,
+  );
+}
+
+function buildPlanParallelizationSignalEntries(planItems: PlanItem[]): PlanParallelizationSignalEntry[] {
+  return uniqueOrdered(
+    planItems.map((item) => ({
+      planItemId: item.id,
+      signal: item.parallelization.signal,
+      reason: item.parallelization.reason,
+    })),
+    (entry) => `${entry.planItemId}:${entry.signal}:${entry.reason}`,
+  );
+}
+
+function effectRank(effect: PlanCarryForwardConcernEffect): number {
+  switch (effect) {
+    case "planning_readiness":
+      return 5;
+    case "parallelization_caution":
+      return 4;
+    case "dependency_caution":
+      return 3;
+    case "test_strategy":
+      return 2;
+    case "risk_level":
+    default:
+      return 1;
+  }
+}
+
+function buildConcernEffects(params: {
+  source: PlanCarryForwardConcern["source"];
+  code: string | null;
+  message: string;
+}): PlanCarryForwardConcernEffect[] {
+  const effects: PlanCarryForwardConcernEffect[] = ["risk_level"];
+  const normalizedMessage = normalizeWhitespace(params.message).toLowerCase();
+  const normalizedCode = params.code?.toLowerCase() ?? "";
+
+  if (params.source === "low_confidence") {
+    effects.push("parallelization_caution");
+  }
+
+  if (params.source === "candidate_target_uncertainty") {
+    effects.push("dependency_caution", "parallelization_caution");
+  }
+
+  if (params.source === "readiness_blocker") {
+    effects.push("planning_readiness", "parallelization_caution");
+  }
+
+  if (params.source === "ambiguity") {
+    effects.push("dependency_caution");
+  }
+
+  if (
+    params.source === "warning" &&
+    (
+      normalizedMessage.includes("test") ||
+      normalizedMessage.includes("coverage") ||
+      normalizedCode.includes("test")
+    )
+  ) {
+    effects.push("test_strategy");
+  }
+
+  if (
+    normalizedMessage.includes("parallel") ||
+    normalizedMessage.includes("ownership") ||
+    normalizedMessage.includes("migration") ||
+    normalizedMessage.includes("manifest") ||
+    normalizedMessage.includes("config") ||
+    normalizedMessage.includes("target") ||
+    normalizedMessage.includes("focus") ||
+    normalizedMessage.includes("path") ||
+    normalizedCode.includes("focus") ||
+    normalizedCode.includes("target")
+  ) {
+    effects.push("dependency_caution", "parallelization_caution");
+  }
+
+  return uniqueOrdered(effects, (effect) => effect)
+    .sort((left, right) => effectRank(right) - effectRank(left));
+}
+
+function mapConcernPlanItemIds(params: {
+  source: PlanCarryForwardConcern["source"];
+  code: string | null;
+  message: string;
+  drafts: ItemDraft[];
+  context: PlannerContext;
+}): string[] {
+  const normalizedMessage = normalizeWhitespace(params.message).toLowerCase();
+  const normalizedCode = params.code?.toLowerCase() ?? "";
+  const matchedByPath = params.drafts
+    .filter((draft) => draft.likelyAffectedPaths.some((pathValue) => textMentionsPath(normalizedMessage, pathValue)))
+    .map((draft) => draft.id);
+
+  if (matchedByPath.length > 0) {
+    return dedupeStable(matchedByPath);
+  }
+
+  if (params.source === "candidate_target_uncertainty" && params.context.fallbackTargetPaths.size > 0) {
+    const fallbackMatches = params.drafts
+      .filter((draft) =>
+        draft.likelyAffectedPaths.some((pathValue) => params.context.fallbackTargetPaths.has(normalizePath(pathValue))))
+      .map((draft) => draft.id);
+
+    if (fallbackMatches.length > 0) {
+      return dedupeStable(fallbackMatches);
+    }
+  }
+
+  const categoryMatches = new Set<ClusterCategory>();
+  if (normalizedMessage.includes("test") || normalizedMessage.includes("coverage") || normalizedCode.includes("test")) {
+    categoryMatches.add("test");
+    categoryMatches.add("implementation");
+  }
+  if (
+    CONFIG_KEYWORD_PATTERN.test(normalizedMessage) ||
+    normalizedCode.includes("config") ||
+    normalizedCode.includes("manifest")
+  ) {
+    categoryMatches.add("config");
+  }
+  if (
+    normalizedMessage.includes("api contract") ||
+    normalizedMessage.includes("interface") ||
+    normalizedMessage.includes("ownership") ||
+    normalizedMessage.includes("parallel") ||
+    normalizedMessage.includes("migration") ||
+    normalizedMessage.includes("entrypoint") ||
+    normalizedMessage.includes("entry point")
+  ) {
+    categoryMatches.add("interface");
+  }
+
+  if (categoryMatches.size > 0) {
+    const scopedMatches = params.drafts
+      .filter((draft) => categoryMatches.has(draft.category))
+      .map((draft) => draft.id);
+
+    if (scopedMatches.length > 0) {
+      return dedupeStable(scopedMatches);
+    }
+  }
+
+  return params.drafts.map((draft) => draft.id);
+}
+
+function createConcern(params: {
+  id: string;
+  source: PlanCarryForwardConcern["source"];
+  code: string | null;
+  message: string;
+  planItemIds: string[];
+  effects: PlanCarryForwardConcernEffect[];
+}): PlanCarryForwardConcern {
+  return {
+    id: params.id,
+    source: params.source,
+    code: params.code,
+    message: params.message,
+    planItemIds: dedupeStable(params.planItemIds),
+    effects: uniqueOrdered(params.effects, (effect) => effect),
+    status: "carried_forward",
+  };
+}
+
+function buildCarryForwardConcerns(
+  foundation: PlanFoundationResult,
+  drafts: ItemDraft[],
+  context: PlannerContext,
+): PlanCarryForwardConcern[] {
+  if (drafts.length === 0) {
+    return [];
+  }
+
+  const concerns: PlanCarryForwardConcern[] = [];
+  let concernIndex = 1;
+  const nextId = () => `carry-forward-${concernIndex++}`;
+
+  if (context.lowConfidence) {
+    concerns.push(createConcern({
+      id: nextId(),
+      source: "low_confidence",
+      code: null,
+      message: `Step 1 confidence remains low because ${foundation.carryForward.confidence.reasons.join(", ")}.`,
+      planItemIds: drafts.map((draft) => draft.id),
+      effects: buildConcernEffects({
+        source: "low_confidence",
+        code: null,
+        message: foundation.carryForward.confidence.reasons.join(", "),
+      }),
+    }));
+  }
+
+  if (context.fallbackOnlyTargeting || context.fallbackTargetPaths.size > 0) {
+    concerns.push(createConcern({
+      id: nextId(),
+      source: "candidate_target_uncertainty",
+      code: null,
+      message: "Step 1 relied on fallback target mapping for at least part of the planning surface.",
+      planItemIds: mapConcernPlanItemIds({
+        source: "candidate_target_uncertainty",
+        code: null,
+        message: "fallback target mapping",
+        drafts,
+        context,
+      }),
+      effects: buildConcernEffects({
+        source: "candidate_target_uncertainty",
+        code: null,
+        message: "fallback target mapping",
+      }),
+    }));
+  }
+
+  for (const item of foundation.carryForward.riskAnalysis.supporting_analysis.ambiguity_items) {
+    concerns.push(createConcern({
+      id: nextId(),
+      source: "ambiguity",
+      code: item.type,
+      message: item.message,
+      planItemIds: mapConcernPlanItemIds({
+        source: "ambiguity",
+        code: item.type,
+        message: item.message,
+        drafts,
+        context,
+      }),
+      effects: buildConcernEffects({
+        source: "ambiguity",
+        code: item.type,
+        message: item.message,
+      }),
+    }));
+  }
+
+  for (const item of foundation.carryForward.riskAnalysis.supporting_analysis.warning_items) {
+    concerns.push(createConcern({
+      id: nextId(),
+      source: "warning",
+      code: item.code,
+      message: item.message,
+      planItemIds: mapConcernPlanItemIds({
+        source: "warning",
+        code: item.code,
+        message: item.message,
+        drafts,
+        context,
+      }),
+      effects: buildConcernEffects({
+        source: "warning",
+        code: item.code,
+        message: item.message,
+      }),
+    }));
+  }
+
+  for (const issue of foundation.carryForward.nextStepReadiness.blocking_issues) {
+    concerns.push(createConcern({
+      id: nextId(),
+      source: "readiness_blocker",
+      code: issue.code,
+      message: issue.message,
+      planItemIds: drafts.map((draft) => draft.id),
+      effects: buildConcernEffects({
+        source: "readiness_blocker",
+        code: issue.code,
+        message: issue.message,
+      }),
+    }));
+  }
+
+  return uniqueOrdered(
+    concerns,
+    (concern) =>
+      `${concern.source}:${concern.code ?? ""}:${concern.message}:${concern.planItemIds.join("|")}:${concern.effects.join("|")}`,
+  );
+}
+
 function itemHasSharedRisk(paths: string[], context: PlannerContext): boolean {
   return paths.some((pathValue) =>
     context.sharedRiskPaths.has(normalizePath(pathValue)) || isSharedRiskPath(pathValue),
@@ -624,6 +927,7 @@ function deriveVerificationRelevance(
   draft: ItemDraft,
   foundation: PlanFoundationResult,
   context: PlannerContext,
+  concerns: PlanCarryForwardConcern[],
 ): PlanVerificationRelevance {
   const itemPathSet = new Set(draft.likelyAffectedPaths.map(normalizePath));
   const categories = new Set<PlanVerificationCategory>();
@@ -690,8 +994,12 @@ function deriveVerificationRelevance(
   if (context.fallbackOnlyTargeting) {
     notes.push("This item is derived from fallback candidate targeting rather than explicit task-to-file mapping.");
   }
-  if (foundation.carryForward.ambiguities.length > 0 || foundation.carryForward.warnings.length > 0) {
-    notes.push("Step 1 ambiguities and warnings remain relevant to this item.");
+  if (concerns.length > 0) {
+    const concernSummary = concerns
+      .map((concern) => `${concern.source}: ${concern.message}`)
+      .slice(0, 2)
+      .join(" | ");
+    notes.push(`Carried-forward concerns remain relevant to this item: ${concernSummary}`);
   }
 
   return {
@@ -712,8 +1020,12 @@ function deriveTestObligations(
   verification: PlanVerificationRelevance,
   foundation: PlanFoundationResult,
   context: PlannerContext,
+  concerns: PlanCarryForwardConcern[],
 ): PlanTestObligation[] {
   const obligations: PlanTestObligation[] = [];
+  const touchesEntrypoint = draft.likelyAffectedPaths.some((pathValue) =>
+    context.entryPointPaths.has(normalizePath(pathValue)),
+  );
 
   if (draft.category === "implementation") {
     addObligation(obligations, {
@@ -737,6 +1049,12 @@ function deriveTestObligations(
         reason: "Shared runtime surfaces require integration coverage alongside the implementation change.",
       });
     }
+    if (touchesEntrypoint) {
+      addObligation(obligations, {
+        category: "smoke",
+        reason: "Runtime-facing implementation work should keep smoke validation visible in the plan.",
+      });
+    }
   }
 
   if (draft.category === "interface") {
@@ -755,6 +1073,10 @@ function deriveTestObligations(
         category: "integration",
         reason: "Shared runtime entrypoints should keep integration validation visible in the plan.",
       });
+      addObligation(obligations, {
+        category: "smoke",
+        reason: "Shared runtime entrypoints should keep smoke validation visible in the plan.",
+      });
     }
   }
 
@@ -772,12 +1094,25 @@ function deriveTestObligations(
         reason: "Migration-sensitive config changes should keep sequencing validation visible in the plan.",
       });
     }
+    if (touchesEntrypoint) {
+      addObligation(obligations, {
+        category: "smoke",
+        reason: "Runtime-facing config changes should keep smoke validation visible in the plan.",
+      });
+    }
   }
 
   if (draft.category === "test") {
     addObligation(obligations, {
       category: "regression",
       reason: "Test updates should preserve regression coverage for the planned behavior.",
+    });
+  }
+
+  if (concerns.some((concern) => concern.effects.includes("test_strategy")) && draft.category !== "test") {
+    addObligation(obligations, {
+      category: "regression",
+      reason: "Carry-forward test-strategy concerns should keep regression validation visible for this item.",
     });
   }
 
@@ -794,8 +1129,23 @@ function deriveTestObligations(
 function deriveParallelization(
   draft: ItemDraft,
   dependencyGraph: PlanDependencyGraphEntry[],
+  verification: PlanVerificationRelevance,
+  concerns: PlanCarryForwardConcern[],
 ): PlanParallelization {
   const itemDependencies = dependencyGraph.filter((entry) => entry.planItemId === draft.id);
+  const hasPlanningReadinessConcern = concerns.some((concern) => concern.effects.includes("planning_readiness"));
+  const hasDependencyCaution = concerns.some((concern) => concern.effects.includes("dependency_caution"));
+  const hasParallelizationCaution = concerns.some((concern) => concern.effects.includes("parallelization_caution"));
+
+  if (
+    hasPlanningReadinessConcern ||
+    (verification.categories.includes("migration_order") && draft.category !== "config" && itemDependencies.length === 0)
+  ) {
+    return {
+      signal: "serial_only",
+      reason: "Unresolved readiness or migration-order caution keeps this work serial-only at planning time.",
+    };
+  }
 
   if (draft.category === "config") {
     return {
@@ -807,14 +1157,16 @@ function deriveParallelization(
   if (draft.category === "interface") {
     return {
       signal: "risky_shared",
-      reason: "Shared interfaces and entrypoints are risky to parallelize without extra coordination.",
+      reason: itemDependencies.length > 0
+        ? "Shared interface work stays risky even after upstream config dependencies settle."
+        : "Shared interfaces and entrypoints are risky to parallelize without extra coordination.",
     };
   }
 
-  if (itemDependencies.length > 0) {
+  if (itemDependencies.length > 0 || hasDependencyCaution || hasParallelizationCaution) {
     return {
       signal: "parallel_after_dependency",
-      reason: "This work can proceed after its upstream dependencies settle first.",
+      reason: "This work can proceed after its upstream dependencies and carry-forward caution settle first.",
     };
   }
 
@@ -828,12 +1180,22 @@ function deriveRiskLevel(
   draft: ItemDraft,
   conflictZones: PlanConflictZone[],
   context: PlannerContext,
+  concerns: PlanCarryForwardConcern[],
 ): PlanRiskLevel {
   let riskLevel: PlanRiskLevel = "low";
   const pathSet = new Set(draft.likelyAffectedPaths.map(normalizePath));
 
   if (context.fallbackOnlyTargeting) {
     riskLevel = "high";
+  }
+
+  if (concerns.some((concern) => concern.effects.includes("planning_readiness"))) {
+    riskLevel = maxRisk(riskLevel, "high");
+  } else if (concerns.some((concern) =>
+    concern.effects.includes("risk_level") ||
+    concern.effects.includes("dependency_caution") ||
+    concern.effects.includes("parallelization_caution"))) {
+    riskLevel = maxRisk(riskLevel, "medium");
   }
 
   for (const zone of context.riskZones) {
@@ -879,6 +1241,9 @@ export function buildPlanModel(foundation: PlanFoundationResult): PlanModel {
       planItems: [],
       dependencyGraph: [],
       conflictZones: [],
+      testObligations: [],
+      parallelizationSignals: [],
+      carryForwardConcerns: [],
     };
   }
 
@@ -886,8 +1251,10 @@ export function buildPlanModel(foundation: PlanFoundationResult): PlanModel {
   const dependencyMap = buildDependencies(drafts);
   const dependencyGraph = buildDependencyGraphEntries(dependencyMap);
   const conflictZones = buildConflictZones(drafts, dependencyGraph, context);
+  const carryForwardConcerns = buildCarryForwardConcerns(foundation, drafts, context);
   const planItems: PlanItem[] = drafts.map((draft) => {
-    const verificationRelevance = deriveVerificationRelevance(draft, foundation, context);
+    const itemConcerns = carryForwardConcerns.filter((concern) => concern.planItemIds.includes(draft.id));
+    const verificationRelevance = deriveVerificationRelevance(draft, foundation, context, itemConcerns);
     return {
       id: draft.id,
       title: draft.title,
@@ -900,10 +1267,10 @@ export function buildPlanModel(foundation: PlanFoundationResult): PlanModel {
         type: entry.type as PlanDependencyType,
         reason: entry.reason,
       })),
-      riskLevel: deriveRiskLevel(draft, conflictZones, context),
-      testObligations: deriveTestObligations(draft, verificationRelevance, foundation, context),
+      riskLevel: deriveRiskLevel(draft, conflictZones, context, itemConcerns),
+      testObligations: deriveTestObligations(draft, verificationRelevance, foundation, context, itemConcerns),
       verificationRelevance,
-      parallelization: deriveParallelization(draft, dependencyGraph),
+      parallelization: deriveParallelization(draft, dependencyGraph, verificationRelevance, itemConcerns),
     };
   });
 
@@ -911,5 +1278,8 @@ export function buildPlanModel(foundation: PlanFoundationResult): PlanModel {
     planItems,
     dependencyGraph,
     conflictZones,
+    testObligations: buildPlanTestObligationEntries(planItems),
+    parallelizationSignals: buildPlanParallelizationSignalEntries(planItems),
+    carryForwardConcerns,
   };
 }

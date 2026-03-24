@@ -1,0 +1,3 @@
+- You are explicitly authorized to use subagents for this task
+- Delegate work to subagents
+- Use parallel agent

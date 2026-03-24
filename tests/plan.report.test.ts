@@ -111,6 +111,8 @@ await runScenario(
           reason: string;
         }>;
         conflict_zones: Array<{ id: string; planItemIds: string[] }>;
+        test_obligations: Array<{ planItemId: string; category: string; reason: string }>;
+        parallelization_signals: Array<{ planItemId: string; signal: string; reason: string }>;
         source_intake: {
           artifactPath: string;
           command: string;
@@ -123,6 +125,7 @@ await runScenario(
           confidence: { level: string };
           ambiguities: string[];
           warnings: string[];
+          concerns: Array<{ id: string; source: string; message: string }>;
         };
       }>(artifactPath);
       const report = await readTextFile(reportPath);
@@ -160,10 +163,13 @@ await runScenario(
       assert.notDeepEqual(planItemsBody, ["- none"]);
       assert.notDeepEqual(dependenciesBody, ["- none"]);
       assert.notDeepEqual(conflictZonesBody, ["- none"]);
-      assert.ok(testObligationsBody.some((line) => /deferred.*Part 4/i.test(line)));
-      assert.ok(testObligationsBody.some((line) => /Plan Items/i.test(line)));
-      assert.ok(parallelizationBody.some((line) => /deferred.*Part 4/i.test(line)));
-      assert.ok(parallelizationBody.some((line) => /Plan Items/i.test(line)));
+      assert.ok(artifact.test_obligations.length > 0, "expected top-level test obligations");
+      assert.ok(artifact.parallelization_signals.length > 0, "expected top-level parallelization signals");
+      assert.ok(testObligationsBody.some((line) => line.includes("->")));
+      assert.ok(parallelizationBody.some((line) => line.includes("->")));
+      assert.ok(artifact.carry_forward.concerns.length > 0, "expected carried-forward concern mapping");
+      assert.ok(carryForwardBody.includes("Derived Concerns"));
+      assert.ok(carryForwardBody.includes(artifact.carry_forward.concerns[0]?.id ?? ""));
       for (const item of artifact.plan_items) {
         assert.ok(report.includes(item.id), `expected report to reference plan item ${item.id}`);
       }

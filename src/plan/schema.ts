@@ -7,6 +7,8 @@ import {
   FORGE_PLAN_FULL_COMMAND,
   FORGE_PLAN_STAGE,
   FORGE_PLAN_COMMAND,
+  PLAN_CARRY_FORWARD_CONCERN_EFFECTS,
+  PLAN_CARRY_FORWARD_CONCERN_SOURCES,
   PLAN_DEPENDENCY_TYPES,
   PLAN_ITEM_CATEGORIES,
   PLAN_ITEM_REQUIRED_FIELDS,
@@ -69,6 +71,22 @@ const planParallelizationSignalEntrySchema = z.object({
   reason: z.string().min(1),
 }).strict();
 
+const planTestObligationEntrySchema = z.object({
+  planItemId: z.string().min(1),
+  category: z.enum(PLAN_TEST_OBLIGATION_CATEGORIES),
+  reason: z.string().min(1),
+}).strict();
+
+const planCarryForwardConcernSchema = z.object({
+  id: z.string().min(1),
+  source: z.enum(PLAN_CARRY_FORWARD_CONCERN_SOURCES),
+  code: z.string().min(1).nullable(),
+  message: z.string().min(1),
+  planItemIds: z.array(z.string().min(1)).min(1),
+  effects: z.array(z.enum(PLAN_CARRY_FORWARD_CONCERN_EFFECTS)).min(1),
+  status: z.literal("carried_forward"),
+}).strict();
+
 export const planItemSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
@@ -126,6 +144,7 @@ const planArtifactCarryForwardSchema = z.object({
   warnings: intakeArtifactSchema.shape.warnings,
   confidence: intakeArtifactSchema.shape.confidence,
   next_step_readiness: intakeArtifactSchema.shape.next_step_readiness,
+  concerns: z.array(planCarryForwardConcernSchema),
 }).strict();
 
 const planSourceIntakeSchema = z.object({
@@ -179,6 +198,22 @@ function buildDependencyKey(params: {
   reason: string;
 }): string {
   return `${params.planItemId}:${params.dependsOnPlanItemId}:${params.type}:${params.reason}`;
+}
+
+function buildTestObligationKey(params: {
+  planItemId: string;
+  category: string;
+  reason: string;
+}): string {
+  return `${params.planItemId}:${params.category}:${params.reason}`;
+}
+
+function buildParallelizationKey(params: {
+  planItemId: string;
+  signal: string;
+  reason: string;
+}): string {
+  return `${params.planItemId}:${params.signal}:${params.reason}`;
 }
 
 export const PLAN_ARTIFACT_TOP_LEVEL_KEYS = [
@@ -258,7 +293,7 @@ export const planArtifactSchema = z.object({
   plan_items: z.array(planItemSchema),
   dependency_graph: z.array(planDependencyGraphEntrySchema),
   conflict_zones: z.array(planConflictZoneSchema),
-  test_obligations: z.array(planTestObligationSchema),
+  test_obligations: z.array(planTestObligationEntrySchema),
   parallelization_signals: z.array(planParallelizationSignalEntrySchema),
   carry_forward: planArtifactCarryForwardSchema,
   planning_readiness: planPlanningReadinessSchema,
@@ -342,6 +377,35 @@ export const planArtifactSchema = z.object({
       }
     }
   }
+  for (const [index, entry] of value.test_obligations.entries()) {
+    if (!planItemIds.has(entry.planItemId)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Top-level test obligations must reference real plan item ids.",
+        path: ["test_obligations", index, "planItemId"],
+      });
+    }
+  }
+  for (const [index, entry] of value.parallelization_signals.entries()) {
+    if (!planItemIds.has(entry.planItemId)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Top-level parallelization signals must reference real plan item ids.",
+        path: ["parallelization_signals", index, "planItemId"],
+      });
+    }
+  }
+  for (const [index, concern] of value.carry_forward.concerns.entries()) {
+    for (const [planItemIndex, planItemId] of concern.planItemIds.entries()) {
+      if (!planItemIds.has(planItemId)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Carry-forward concerns must reference real plan item ids.",
+          path: ["carry_forward", "concerns", index, "planItemIds", planItemIndex],
+        });
+      }
+    }
+  }
   const flattenedDependencies = value.plan_items.flatMap((item) =>
     item.dependencies.map((dependency) => ({
       planItemId: item.id,
@@ -370,6 +434,66 @@ export const planArtifactSchema = z.object({
       }
     }
   }
+  const flattenedTestObligations = value.plan_items.flatMap((item) =>
+    item.testObligations.map((obligation) => ({
+      planItemId: item.id,
+      category: obligation.category,
+      reason: obligation.reason,
+    })),
+  );
+  const flattenedTestObligationKeys = new Set(
+    flattenedTestObligations.map((obligation) => buildTestObligationKey(obligation)),
+  );
+  const topLevelTestObligationKeys = new Set(
+    value.test_obligations.map((obligation) => buildTestObligationKey(obligation)),
+  );
+  if (flattenedTestObligationKeys.size !== topLevelTestObligationKeys.size) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Top-level test obligations must match the per-item test obligations.",
+      path: ["test_obligations"],
+    });
+  } else {
+    for (const obligationKey of flattenedTestObligationKeys) {
+      if (!topLevelTestObligationKeys.has(obligationKey)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Top-level test obligations must match the per-item test obligations.",
+          path: ["test_obligations"],
+        });
+        break;
+      }
+    }
+  }
+  const flattenedParallelizationKeys = new Set(
+    value.plan_items.map((item) =>
+      buildParallelizationKey({
+        planItemId: item.id,
+        signal: item.parallelization.signal,
+        reason: item.parallelization.reason,
+      })),
+  );
+  const topLevelParallelizationKeys = new Set(
+    value.parallelization_signals.map((entry) => buildParallelizationKey(entry)),
+  );
+  if (flattenedParallelizationKeys.size !== topLevelParallelizationKeys.size) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Top-level parallelization signals must match the per-item parallelization data.",
+      path: ["parallelization_signals"],
+    });
+  } else {
+    for (const parallelizationKey of flattenedParallelizationKeys) {
+      if (!topLevelParallelizationKeys.has(parallelizationKey)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Top-level parallelization signals must match the per-item parallelization data.",
+          path: ["parallelization_signals"],
+        });
+        break;
+      }
+    }
+  }
   const hasUsablePlanningSignal =
     extractRequirementSeedsFromArtifact(value).length > 0 ||
     value.carry_forward.candidate_targets.length > 0 ||
@@ -383,6 +507,19 @@ export const planArtifactSchema = z.object({
       code: z.ZodIssueCode.custom,
       message: "Planning-ready or blocked artifacts must emit plan items when Step 1 provided usable planning signals.",
       path: ["plan_items"],
+    });
+  }
+  const requiresCarryForwardConcerns =
+    value.carry_forward.ambiguities.length > 0 ||
+    value.carry_forward.warnings.length > 0 ||
+    value.carry_forward.confidence.level === "low" ||
+    !value.carry_forward.next_step_readiness.ready ||
+    value.carry_forward.candidate_targets.some((target) => target.match_type === "fallback");
+  if (requiresCarryForwardConcerns && value.plan_items.length > 0 && value.carry_forward.concerns.length === 0) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Artifacts with unresolved Step 1 uncertainty must expose carry-forward concerns.",
+      path: ["carry_forward", "concerns"],
     });
   }
 });

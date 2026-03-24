@@ -213,12 +213,13 @@ await runScenario(
       );
 
       await writeSpecAndRunIntake(repoRoot, [
-        "# Update app and helper behavior",
+        "# Update app, helper, and config behavior",
         "",
-        "Revise `src/app.ts` and `src/helper.ts` and keep `tests/app.test.ts` and `tests/helper.test.ts` aligned.",
+        "Revise `package.json`, `src/app.ts`, and `src/helper.ts` and keep `tests/app.test.ts`, `tests/helper.test.ts`, and `src/cli.ts` aligned.",
         "",
         "## Acceptance Criteria",
         "",
+        "- `package.json` is updated",
         "- `src/app.ts` is updated",
         "- `src/helper.ts` is updated",
         "- `tests/app.test.ts` stays aligned",
@@ -231,9 +232,11 @@ await runScenario(
       const artifact = await loadPlanArtifact(repoRoot);
       const implementationItem = artifact.plan_items.find((item) => item.category === "implementation");
       const interfaceItem = artifact.plan_items.find((item) => item.category === "interface");
+      const configItem = artifact.plan_items.find((item) => item.category === "config");
 
       assert.ok(implementationItem, "expected an implementation plan item");
       assert.ok(interfaceItem, "expected a shared interface plan item");
+      assert.ok(configItem, "expected a config plan item");
       assert.ok(
         implementationItem.likelyAffectedPaths.includes("src/app.ts"),
         "expected the shared-risk source file to remain in implementation planning",
@@ -246,9 +249,77 @@ await runScenario(
         implementationItem.dependencies.some((dependency) => dependency.planItemId === interfaceItem.id),
         "expected implementation work to depend on the shared interface item",
       );
-      assert.deepEqual(interfaceItem.likelyAffectedPaths, ["src/app.ts"]);
+      assert.ok(
+        interfaceItem.dependencies.some((dependency) => dependency.planItemId === configItem.id),
+        "expected interface work to depend on the config item",
+      );
+      assert.ok(interfaceItem.likelyAffectedPaths.includes("src/app.ts"));
+      assert.ok(interfaceItem.likelyAffectedPaths.includes("src/cli.ts"));
       assert.ok(!interfaceItem.likelyAffectedPaths.includes("src/helper.ts"));
-      assert.ok(!interfaceItem.likelyAffectedPaths.includes("src/cli.ts"));
+      assert.equal(
+        interfaceItem.parallelization.signal,
+        "risky_shared",
+        "shared interface work should remain visibly risky even when config work exists upstream",
+      );
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "forge plan keeps shared interface work tied to config visibly risky instead of parallel after dependency",
+  async () => {
+    const repoRoot = await createTempRepo("forge-plan-model-interface-config-");
+
+    try {
+      await writeRepoFile(
+        repoRoot,
+        "package.json",
+        JSON.stringify(
+          {
+            name: "forge-plan-model-interface-config",
+            private: true,
+            type: "module",
+            scripts: {
+              test: "node --test",
+            },
+          },
+          null,
+          2,
+        ),
+      );
+      await writeRepoFile(repoRoot, "src/cli.ts", "export const cli = true;\n");
+
+      await writeSpecAndRunIntake(repoRoot, [
+        "# Update CLI contract and package config",
+        "",
+        "Keep `package.json` and `src/cli.ts` aligned.",
+        "",
+        "## Acceptance Criteria",
+        "",
+        "- `package.json` is updated",
+        "- `src/cli.ts` is updated",
+      ]);
+
+      const planResult = runForgePlanBinary(["--repo", repoRoot], repoRoot);
+      assert.equal(planResult.code, 0, planResult.stderr);
+
+      const artifact = await loadPlanArtifact(repoRoot);
+      const configItem = artifact.plan_items.find((item) => item.category === "config");
+      const interfaceItem = artifact.plan_items.find((item) => item.category === "interface");
+
+      assert.ok(configItem, "expected a config plan item");
+      assert.ok(interfaceItem, "expected a shared interface plan item");
+      assert.ok(
+        interfaceItem.dependencies.some((dependency) => dependency.planItemId === configItem.id),
+        "expected the interface item to depend on config work",
+      );
+      assert.equal(
+        interfaceItem.parallelization.signal,
+        "risky_shared",
+        "expected config-tied interface work to remain visibly risky",
+      );
     } finally {
       await disposeTempRepo(repoRoot);
     }

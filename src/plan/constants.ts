@@ -54,7 +54,7 @@ export const PLAN_ALLOWED_SIDE_EFFECTS = [
 export const PLAN_BOUNDARY_NOTES = [
   "Plan consumes the persisted Step 1 intake artifact instead of re-running intake parsing.",
   "Plan carries forward Step 1 ambiguity, warning, confidence, and readiness state without hiding it.",
-  "Real plan-item, dependency, conflict-zone, test-obligation, and parallelization modeling is deferred to later Step 2 batches.",
+  "Plan emits explicit plan-item, dependency, conflict-zone, test-obligation, parallelization, and carry-forward concern modeling while still deferring later verify, split, execute, and integrate behavior.",
 ] as const;
 
 export const PLAN_ITEM_REQUIRED_FIELDS = [
@@ -120,6 +120,22 @@ export const PLAN_PARALLELIZATION_SIGNALS = [
   "parallel_after_dependency",
   "risky_shared",
   "protected_merge_order",
+] as const;
+
+export const PLAN_CARRY_FORWARD_CONCERN_SOURCES = [
+  "ambiguity",
+  "warning",
+  "low_confidence",
+  "candidate_target_uncertainty",
+  "readiness_blocker",
+] as const;
+
+export const PLAN_CARRY_FORWARD_CONCERN_EFFECTS = [
+  "risk_level",
+  "dependency_caution",
+  "parallelization_caution",
+  "test_strategy",
+  "planning_readiness",
 ] as const;
 
 export interface Step2BoundaryPolicy {

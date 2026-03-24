@@ -94,8 +94,8 @@ export function createPlanArtifact(params: {
     plan_items: params.model.planItems,
     dependency_graph: params.model.dependencyGraph,
     conflict_zones: params.model.conflictZones,
-    test_obligations: [],
-    parallelization_signals: [],
+    test_obligations: params.model.testObligations,
+    parallelization_signals: params.model.parallelizationSignals,
     carry_forward: {
       task_spec: params.foundation.carryForward.taskSpec,
       repo_context: params.foundation.carryForward.repoContext,
@@ -106,6 +106,7 @@ export function createPlanArtifact(params: {
       warnings: params.foundation.carryForward.warnings,
       confidence: params.foundation.carryForward.confidence,
       next_step_readiness: params.foundation.carryForward.nextStepReadiness,
+      concerns: params.model.carryForwardConcerns,
     },
     planning_readiness: params.foundation.carryForward.nextStepReadiness,
     failure,
