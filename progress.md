@@ -254,10 +254,16 @@
   - Kept stronger parallelization signals and carried-forward concern mapping visible and honest for ready, warning-heavy, and blocked planning runs while preserving the existing artifact/report top-level shape.
   - Added dedicated Part 4 regression coverage for debug-disabled, debug-enabled, blocked-run, custom-output-root, and debug-write-failure scenarios, and wired the new suite into `npm.cmd test`.
   - Updated `README.md`, `progress.md`, and `S2-B2-Done/p4-done-summary.md` so Step 2 Batch 2 Part 4 is documented and traceable.
+- Batch 2.05: `part-5-stage-7-cli-wiring-tests-and-runnable-milestone.md` (Step 2)
+  - Strengthened packaged `forge plan` coverage so the real CLI entrypoint now exercises ready, warning-heavy, blocked, and missing-input scenarios from an unusual working directory.
+  - Added explicit minimal-output assertions so packaged CLI runs stay status-and-path driven instead of dumping markdown report prose to the terminal.
+  - Tightened the ready-path smoke check so the runnable milestone still proves durable `.forge/plan.json` and `.forge/reports/plan-report.md` output.
+  - Kept production CLI code unchanged because the existing command wiring already satisfied the required contract.
+  - Updated `README.md`, `progress.md`, and `S2-B2-Done/p5-summary.md` so Step 2 Batch 2 Part 5 is documented and traceable.
 
 ## Current Branch State
 - `dev` includes the completed Step 1 work through Batch 4.05, including the frozen Step 2 handoff contract from Intake.
-- `dev` includes the completed Step 2 Batch 2 Part 1 through Part 4 work for the real `forge plan` path.
+- `dev` includes the completed Step 2 Batch 2 Part 1 through Part 5 work for the real `forge plan` path.
 - `dev` now includes optional Step 2 planning debug outputs behind `FORGE_PLAN_DEBUG=1` while keeping the public plan artifact and report contract stable.
 
 ## Verification
@@ -270,4 +276,5 @@
 - Step 2 Batch 2 Part 2 is complete.
 - Step 2 Batch 2 Part 3 is complete.
 - Step 2 Batch 2 Part 4 is complete.
-- Next implementation work should begin `forge_step2_batch2/part-5-stage-7-cli-wiring-tests-and-runnable-milestone.md`.
+- Step 2 Batch 2 Part 5 is complete.
+- Next implementation work should begin the later Step 2 hardening/freeze follow-on.
