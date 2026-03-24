@@ -526,6 +526,11 @@ await runScenario(
     assert.match(STEP2_BOUNDARY_POLICY.purpose, /structured implementation plan/i);
     assert.ok(STEP2_BOUNDARY_POLICY.authoritativeInputs.includes(".forge/intake.json"));
     assert.ok(
+      STEP2_BOUNDARY_POLICY.allowedSideEffects.some((entry) =>
+        entry.includes("FORGE_PLAN_DEBUG=1") && entry.includes("debug artifacts"),
+      ),
+    );
+    assert.ok(
       STEP2_BOUNDARY_POLICY.disallowedCapabilities.includes("verify correctness directly"),
     );
     assert.ok(STEP2_BOUNDARY_POLICY.disallowedCapabilities.includes("split into workstreams"));
