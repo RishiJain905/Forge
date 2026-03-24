@@ -242,11 +242,17 @@
   - Finished extracting a real plan-item foundation layer in `src/plan/planner.ts` so requirement signals can retain multiple sources together and emit structured source traces before the existing public plan items are derived.
   - Kept the public Step 2 artifact/report top-level contract stable while preserving the current dependency, conflict-zone, test-obligation, parallelization, and carry-forward behavior.
   - Added focused foundation and planner-model regression coverage plus direct traceability assertions, and documented completion in `S2-B2-Done/p2-done-summary.md`.
+- Batch 2.03: `part-3-stage-3-and-4-dependencies-conflict-zones-test-obligations.md` (Step 2)
+  - Reworked Step 2 dependency modeling so `forge plan` now emits interface-order dependencies without relying only on shared file stems when the task couples shared runtime-contract work with downstream implementation work.
+  - Added explicit `soft` dependency edges for genuinely uncertain fallback or low-confidence planning relationships without weakening deterministic dependency types globally.
+  - Expanded conflict-zone detection so shared schema and registry-style surfaces can produce visible multi-item overlap zones alongside the existing config and interface zones.
+  - Kept the existing Step 2 top-level artifact/report contract stable while preserving explicit per-item and top-level test obligations through the richer Part 3 planning path.
+  - Added a dedicated `tests/plan.part3-dependencies-conflict-obligations.test.ts` suite, wired it into `npm.cmd test`, and documented completion in `S2-B2-Done/P3-done-summary.md`.
 
 ## Current Branch State
 - `dev` includes the completed Step 1 work through Batch 4.05, including the frozen Step 2 handoff contract from Intake.
-- `dev` now also contains the completed Step 2 Batch 2 Part 1 and Part 2 implementation work in an isolated worktree, covering normalized plan-input consumption plus plan-item foundation extraction for the real `forge plan` path.
-- Step 2 Batch 2 Part 2 is implemented locally in the isolated `step2-b2-p2-foundation` worktree and is ready for verification/integration back into `dev`.
+- `dev` includes the completed Step 2 Batch 2 Part 1 and Part 2 work for the real `forge plan` path.
+- Step 2 Batch 2 Part 3 is implemented locally in the isolated `step2-b2-p3-deps-obligations` worktree, has fresh passing verification, and is ready for integration back into `dev`.
 
 ## Verification
 - `npm.cmd test`
@@ -256,4 +262,5 @@
 
 ## Next
 - Step 2 Batch 2 Part 2 is complete.
-- Next implementation work should begin `forge_step2_batch2/part-3-stage-3-and-4-dependencies-conflict-zones-test-obligations.md`.
+- Step 2 Batch 2 Part 3 is complete.
+- Next implementation work should begin `forge_step2_batch2/part-4-stage-5-and-6-parallelization-carry-forward-artifacts-and-report.md`.
