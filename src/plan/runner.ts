@@ -14,6 +14,7 @@ import {
   PlanInputResolutionError,
   resolvePlanFoundationInput,
 } from "./input.js";
+import { applyPlanningAssist } from "./assist.js";
 import { createPlanArtifact, buildPlanCommandFailure } from "./artifact.js";
 import { createPlanDebugWrites, isPlanDebugEnabled } from "./debug.js";
 import { buildPlanModel } from "./planner.js";
@@ -24,6 +25,7 @@ import { extractErrorCode } from "../intake/errors.js";
 import type {
   PlanCarryForwardContext,
   LoadedPlanFoundationInput,
+  PlanCommandDependencies,
   PlanFoundationCommandResult,
   PlanFoundationOptions,
   PlanFoundationResult,
@@ -192,11 +194,17 @@ function resolvePlanningReadiness(
 export async function runPlanCommand(
   options: PlanCommandOptions = {},
   currentWorkingDirectory = process.cwd(),
+  dependencies: PlanCommandDependencies = {},
 ): Promise<PlanCommandResult> {
   try {
     const input = await resolvePlanFoundationInput(options, currentWorkingDirectory);
     const foundation = buildPlanFoundation(input);
-    const model = buildPlanModel(foundation);
+    const assistedPlanning = await applyPlanningAssist({
+      foundation,
+      model: buildPlanModel(foundation),
+      planningAssistHook: dependencies.planningAssistHook,
+    });
+    const model = assistedPlanning.model;
     const { planningReadiness, summaryOverride } = resolvePlanningReadiness(foundation, model);
     const startedAt = new Date().toISOString();
     const finishedAt = new Date().toISOString();
@@ -209,9 +217,15 @@ export async function runPlanCommand(
       planningReadiness,
       summaryOverride,
     });
-    const report = createPlanReport(artifact);
+    const report = createPlanReport(artifact, {
+      planningAssist: assistedPlanning.resolution,
+    });
     const debugWrites = isPlanDebugEnabled()
-      ? createPlanDebugWrites({ artifact, paths: input.paths })
+      ? createPlanDebugWrites({
+        artifact,
+        paths: input.paths,
+        planningAssist: assistedPlanning.resolution,
+      })
       : null;
 
     try {

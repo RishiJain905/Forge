@@ -1,6 +1,7 @@
 import { PLAN_DEBUG_ENV_VAR } from "./constants.js";
 import type {
   PlanArtifact,
+  PlanAssistResolution,
   PlanConflictZone,
   PlanDependencyGraphEntry,
   PlanResolvedOutputPaths,
@@ -37,6 +38,7 @@ export interface PlanDebugArtifact {
   test_obligations: PlanTestObligationEntry[];
   parallelization_signals: PlanArtifact["parallelization_signals"];
   carry_forward: PlanArtifact["carry_forward"];
+  planning_assist: PlanAssistResolution;
   failure: PlanArtifact["failure"];
 }
 
@@ -59,6 +61,7 @@ export function isPlanDebugEnabled(env: NodeJS.ProcessEnv = process.env): boolea
 export function createPlanDebugArtifact(
   artifact: PlanArtifact,
   paths: PlanResolvedOutputPaths,
+  planningAssist: PlanAssistResolution,
 ): PlanDebugArtifact {
   return {
     command: artifact.command,
@@ -85,6 +88,7 @@ export function createPlanDebugArtifact(
     test_obligations: artifact.test_obligations,
     parallelization_signals: artifact.parallelization_signals,
     carry_forward: artifact.carry_forward,
+    planning_assist: planningAssist,
     failure: artifact.failure,
   };
 }
@@ -92,8 +96,9 @@ export function createPlanDebugArtifact(
 export function createPlanDebugWrites(params: {
   artifact: PlanArtifact;
   paths: PlanResolvedOutputPaths;
+  planningAssist: PlanAssistResolution;
 }): PlannedWrite[] {
-  const debugArtifact = createPlanDebugArtifact(params.artifact, params.paths);
+  const debugArtifact = createPlanDebugArtifact(params.artifact, params.paths, params.planningAssist);
 
   return [
     {

@@ -275,6 +275,48 @@ export interface PlanModel {
   carryForwardConcerns: PlanCarryForwardConcern[];
 }
 
+export interface PlanAssistPlanItemEdit {
+  id: string;
+  title?: string;
+  description?: string;
+}
+
+export interface PlanAssistDependencyEdit {
+  planItemId: string;
+  dependsOnPlanItemId: string;
+  reason: string;
+}
+
+export interface PlanAssistConflictZoneEdit {
+  id: string;
+  reason: string;
+}
+
+export interface PlanAssistSuggestion {
+  provider?: string;
+  planItemEdits?: PlanAssistPlanItemEdit[];
+  dependencyEdits?: PlanAssistDependencyEdit[];
+  conflictZoneEdits?: PlanAssistConflictZoneEdit[];
+  reportNotes?: string[];
+}
+
+export interface PlanAssistInput {
+  foundation: PlanFoundationResult;
+  model: PlanModel;
+}
+
+export type PlanningAssistHook =
+  (input: PlanAssistInput) => Promise<PlanAssistSuggestion | null>;
+
+export interface PlanAssistResolution {
+  attempted: boolean;
+  used: boolean;
+  provider: string | null;
+  warnings: string[];
+  ignoredEdits: string[];
+  reportNotes: string[];
+}
+
 export type PlanPlanningReadiness = IntakeArtifact["next_step_readiness"];
 
 export interface PlanArtifact {
@@ -329,6 +371,10 @@ export interface PlanFoundationResult {
 export interface PlanFoundationFailure {
   code: string;
   message: string;
+}
+
+export interface PlanCommandDependencies {
+  planningAssistHook?: PlanningAssistHook;
 }
 
 export interface PlanFoundationCommandResult {

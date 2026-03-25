@@ -269,6 +269,37 @@ async function main() {
     assert.match(lowConfidenceReport, /## Confidence/);
     assert.match(lowConfidenceReport, /## Next Step Readiness/);
 
+    const warningPlanResult = spawnSync(process.execPath, [
+      entryPointPath,
+      "plan",
+      "--repo",
+      tempRepo,
+    ], {
+      cwd: tempRepo,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+      },
+    });
+
+    if (warningPlanResult.error) {
+      throw warningPlanResult.error;
+    }
+
+    assert.equal(warningPlanResult.status, 0);
+    assert.match(warningPlanResult.stdout, /Status: ready/);
+
+    const warningPlanArtifact = JSON.parse(await readFile(planArtifactPath, "utf8"));
+    const warningPlanReport = await readFile(planReportPath, "utf8");
+
+    assert.equal(warningPlanArtifact.status, "ready");
+    assert.equal(warningPlanArtifact.source_intake.status, "warning");
+    assert.equal(warningPlanArtifact.carry_forward.confidence.level, "low");
+    assert.ok(Array.isArray(warningPlanArtifact.carry_forward.concerns));
+    assert.ok(warningPlanArtifact.carry_forward.concerns.length > 0);
+    assert.match(warningPlanReport, /## Carry-Forward Context/);
+    assert.match(warningPlanReport, /Planning Assist:\s+not used/);
+
     const assistFallbackResult = spawnSync(process.execPath, [
       entryPointPath,
       "intake",

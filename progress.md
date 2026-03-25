@@ -260,11 +260,18 @@
   - Tightened the ready-path smoke check so the runnable milestone still proves durable `.forge/plan.json` and `.forge/reports/plan-report.md` output.
   - Kept production CLI code unchanged because the existing command wiring already satisfied the required contract.
   - Updated `README.md`, `progress.md`, and `S2-B2-Done/p5-summary.md` so Step 2 Batch 2 Part 5 is documented and traceable.
+- Batch 3.01: `part-1-batch3-goal-finish-line-and-do-not-touch.md` (Step 2)
+  - Treated Batch 3 Part 1 as the umbrella finish-and-freeze pass for Step 2 and kept the work inside the existing planning architecture instead of reopening the orchestrator or widening the public CLI.
+  - Added a bounded internal planning-assist seam so Step 2 can tighten wording for plan items, dependency reasons, conflict-zone reasons, and report notes without changing deterministic plan structure or making assist authoritative.
+  - Removed stale “later Step 2” report and boundary language, and exposed bounded assist provenance through the report overview and optional `plan-debug.json` output.
+  - Added `tests/plan.assist-policy.test.ts`, `tests/plan.batch3-freeze-criteria.test.ts`, and stronger smoke coverage for warning-grade planning runs, then wired the new suites into `npm.cmd test`.
+  - Updated `README.md`, `progress.md`, and `S2-B3-Done/p1-done-summary.md` so Step 2 Batch 3 Part 1 is documented and traceable.
 
 ## Current Branch State
 - `dev` includes the completed Step 1 work through Batch 4.05, including the frozen Step 2 handoff contract from Intake.
 - `dev` includes the completed Step 2 Batch 2 Part 1 through Part 5 work for the real `forge plan` path.
-- `dev` now includes optional Step 2 planning debug outputs behind `FORGE_PLAN_DEBUG=1` while keeping the public plan artifact and report contract stable.
+- `dev` now includes Step 2 Batch 3 Part 1, including bounded internal planning-assist wording support, refreshed finish-line messaging, and dedicated Batch 3 freeze coverage.
+- `dev` keeps optional Step 2 planning debug outputs behind `FORGE_PLAN_DEBUG=1` while keeping the public plan artifact and report contract stable.
 
 ## Verification
 - `npm.cmd test`
@@ -277,4 +284,5 @@
 - Step 2 Batch 2 Part 3 is complete.
 - Step 2 Batch 2 Part 4 is complete.
 - Step 2 Batch 2 Part 5 is complete.
-- Next implementation work should begin the later Step 2 hardening/freeze follow-on.
+- Step 2 Batch 3 Part 1 is complete.
+- Next implementation work should begin `forge_step2_batch3/part-2-edge-cases-warnings-failures-and-planning-assist-hardening.md`.

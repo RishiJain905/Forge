@@ -1,6 +1,7 @@
 import type {
   PlanArtifact,
   PlanArtifactCarryForward,
+  PlanAssistResolution,
 } from "./types.js";
 
 const REQUIRED_REPORT_HEADINGS = [
@@ -44,9 +45,25 @@ function renderKeyValueList(entries: Array<[string, string | number | boolean | 
   return entries.map(([key, value]) => `- ${key}: ${value === null ? "none" : value}`);
 }
 
+function planningAssistLabel(planningAssist?: PlanAssistResolution): string {
+  if (!planningAssist) {
+    return "not used";
+  }
+
+  if (planningAssist.used) {
+    return "used";
+  }
+
+  if (planningAssist.attempted) {
+    return "deterministic fallback";
+  }
+
+  return "not used";
+}
+
 function renderPlanItemContractSection(artifact: PlanArtifact): string {
   return renderSection("Plan Item Contract", [
-    "This section freezes the plan-item contract that later Step 2 batches will populate.",
+    "This section freezes the stable Step 2 plan-item contract that later steps can consume directly.",
     "",
     "### Required Fields",
     "",
@@ -320,7 +337,13 @@ function renderFailureSection(artifact: PlanArtifact): string {
   ]);
 }
 
-export function createPlanReport(artifact: PlanArtifact): string {
+export function createPlanReport(
+  artifact: PlanArtifact,
+  options?: {
+    planningAssist?: PlanAssistResolution;
+  },
+): string {
+  const planningAssist = options?.planningAssist;
   const sections = [
     renderSection("Overview", [
       `Forge plan completed with status \`${artifact.status}\`.`,
@@ -331,7 +354,14 @@ export function createPlanReport(artifact: PlanArtifact): string {
         ["Output Root", artifact.outputRoot],
         ["Requested Output Root", artifact.requestedOutputRoot],
         ["Planning Readiness", artifact.planning_readiness.ready],
+        ["Planning Assist", planningAssistLabel(planningAssist)],
       ]),
+      ...(planningAssist?.reportNotes.length
+        ? ["", renderList(planningAssist.reportNotes)]
+        : []),
+      ...(planningAssist?.warnings.length
+        ? ["", renderList(planningAssist.warnings)]
+        : []),
     ]),
     renderSection("Purpose", [artifact.purpose]),
     renderSection("Source Intake", [

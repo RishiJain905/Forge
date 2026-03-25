@@ -17,14 +17,14 @@ export const STEP2_PLAN_PURPOSE =
 export const STEP2_DETERMINISTIC_FIRST_NOTES = [
   "Consume the persisted Step 1 intake artifact instead of re-parsing raw task text or re-running broad intake logic.",
   "Treat Step 1 task, repo, targeting, risk, ambiguity, warning, confidence, and readiness sections as authoritative planning inputs.",
-  "Keep the initial planning skeleton deterministic-first so later optional reasoning remains bounded and non-authoritative.",
+  "Keep the planning skeleton deterministic-first so optional assistive wording remains bounded and non-authoritative.",
 ] as const;
 
 export const STEP2_ALLOWED_SIDE_EFFECTS = [
   "read the Step 1 intake artifact",
   "validate the Step 1 handoff contract before planning continues",
-  "in later Step 2 parts, write plan artifacts inside the resolved output root",
-  `in later Step 2 parts, optionally write internal planning debug artifacts inside the resolved output root when ${PLAN_DEBUG_ENV_VAR}=1 is set`,
+  "write plan artifacts inside the resolved output root",
+  `optionally write internal planning debug artifacts inside the resolved output root when ${PLAN_DEBUG_ENV_VAR}=1 is set`,
 ] as const;
 
 export const STEP2_DEFERRED_CAPABILITIES = [
@@ -56,6 +56,7 @@ export const PLAN_ALLOWED_SIDE_EFFECTS = [
 export const PLAN_BOUNDARY_NOTES = [
   "Plan consumes the persisted Step 1 intake artifact instead of re-running intake parsing.",
   "Plan carries forward Step 1 ambiguity, warning, confidence, and readiness state without hiding it.",
+  "Plan may apply bounded internal planning-assist wording after deterministic planning, but deterministic structure remains authoritative.",
   "Plan emits explicit plan-item, dependency, conflict-zone, test-obligation, parallelization, and carry-forward concern modeling while still deferring later verify, split, execute, and integrate behavior.",
   `Plan may optionally write debug artifacts under .forge/debug/ when ${PLAN_DEBUG_ENV_VAR}=1 is set, but those files stay secondary to plan.json and plan-report.md.`,
 ] as const;
