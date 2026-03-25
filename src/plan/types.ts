@@ -8,6 +8,7 @@ import type {
   PLAN_ITEM_REQUIRED_FIELDS,
   PLAN_PARALLELIZATION_SIGNALS,
   PLAN_RISK_LEVELS,
+  PLAN_READINESS_STATUSES,
   PLAN_TEST_OBLIGATION_CATEGORIES,
   PLAN_VERIFICATION_TARGET_CATEGORIES,
   Step2BoundaryPolicy,
@@ -19,6 +20,7 @@ export type PlanRiskLevel = typeof PLAN_RISK_LEVELS[number];
 export type PlanTestObligationCategory = typeof PLAN_TEST_OBLIGATION_CATEGORIES[number];
 export type PlanVerificationCategory = typeof PLAN_VERIFICATION_TARGET_CATEGORIES[number];
 export type PlanParallelizationSignal = typeof PLAN_PARALLELIZATION_SIGNALS[number];
+export type PlanReadinessStatus = typeof PLAN_READINESS_STATUSES[number];
 export type PlanCarryForwardConcernSource = typeof PLAN_CARRY_FORWARD_CONCERN_SOURCES[number];
 export type PlanCarryForwardConcernEffect = typeof PLAN_CARRY_FORWARD_CONCERN_EFFECTS[number];
 export type PlanItemRequiredField = typeof PLAN_ITEM_REQUIRED_FIELDS[number];
@@ -54,6 +56,7 @@ export interface PlanResolvedOutputPaths {
   debugDependenciesPath?: string;
   debugConflictZonesPath?: string;
   debugTestObligationsPath?: string;
+  debugPlanningReadinessPath?: string;
 }
 
 export interface LoadedPlanFoundationInput {
@@ -113,6 +116,8 @@ export interface PlanInputUsability {
   warningItems: PlanInputIssue[];
   blockingItems: PlanInputIssue[];
 }
+
+export type PlanInputUsabilityStatus = PlanInputUsability["status"];
 
 export interface PlanPlanningInput {
   context: PlanPlanningContext;
@@ -275,7 +280,73 @@ export interface PlanModel {
   carryForwardConcerns: PlanCarryForwardConcern[];
 }
 
-export type PlanPlanningReadiness = IntakeArtifact["next_step_readiness"];
+export interface PlanAssistPlanItemEdit {
+  id: string;
+  title?: string;
+  description?: string;
+}
+
+export interface PlanAssistDependencyEdit {
+  planItemId: string;
+  dependsOnPlanItemId: string;
+  reason: string;
+}
+
+export interface PlanAssistConflictZoneEdit {
+  id: string;
+  reason: string;
+}
+
+export interface PlanAssistSuggestion {
+  provider?: string;
+  planItemEdits?: PlanAssistPlanItemEdit[];
+  dependencyEdits?: PlanAssistDependencyEdit[];
+  conflictZoneEdits?: PlanAssistConflictZoneEdit[];
+  reportNotes?: string[];
+}
+
+export interface PlanAssistInput {
+  foundation: PlanFoundationResult;
+  model: PlanModel;
+}
+
+export type PlanningAssistHook =
+  (input: PlanAssistInput) => Promise<PlanAssistSuggestion | null>;
+
+export interface PlanAssistResolution {
+  outcome: "not_attempted" | "no_suggestion" | "applied" | "ignored_only" | "failed";
+  attempted: boolean;
+  used: boolean;
+  provider: string | null;
+  warnings: string[];
+  ignoredEdits: string[];
+  reportNotes: string[];
+}
+
+export interface PlanPlanningReadiness {
+  ready: boolean;
+  status: PlanReadinessStatus;
+  summary: string;
+  warning_items: PlanInputIssue[];
+  blocking_issues: PlanInputIssue[];
+  partial_output: PlanPartialOutput | null;
+  constraining_concern_ids: string[];
+  recommended_user_actions: string[];
+}
+
+export interface PlanPartialOutput {
+  code: string;
+  message: string;
+  fallbackReason?: string;
+}
+
+export interface PlanPlanningDiagnostics {
+  usability_status: PlanInputUsabilityStatus;
+  warning_items: PlanInputIssue[];
+  blocking_items: PlanInputIssue[];
+  partial_output: PlanPartialOutput | null;
+  planning_assist: PlanAssistResolution;
+}
 
 export interface PlanArtifact {
   schemaVersion: string;
@@ -300,6 +371,7 @@ export interface PlanArtifact {
   test_obligations: PlanTestObligationEntry[];
   parallelization_signals: PlanParallelizationSignalEntry[];
   carry_forward: PlanArtifactCarryForward;
+  planning_diagnostics: PlanPlanningDiagnostics;
   planning_readiness: PlanPlanningReadiness;
   failure: PlanCommandFailure | null;
 }
@@ -329,6 +401,10 @@ export interface PlanFoundationResult {
 export interface PlanFoundationFailure {
   code: string;
   message: string;
+}
+
+export interface PlanCommandDependencies {
+  planningAssistHook?: PlanningAssistHook;
 }
 
 export interface PlanFoundationCommandResult {

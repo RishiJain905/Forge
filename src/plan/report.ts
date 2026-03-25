@@ -1,6 +1,7 @@
 import type {
   PlanArtifact,
   PlanArtifactCarryForward,
+  PlanAssistResolution,
 } from "./types.js";
 
 const REQUIRED_REPORT_HEADINGS = [
@@ -44,9 +45,17 @@ function renderKeyValueList(entries: Array<[string, string | number | boolean | 
   return entries.map(([key, value]) => `- ${key}: ${value === null ? "none" : value}`);
 }
 
+function planningAssistLabel(planningAssist?: PlanAssistResolution): string {
+  if (!planningAssist) {
+    return "not_attempted";
+  }
+
+  return planningAssist.outcome;
+}
+
 function renderPlanItemContractSection(artifact: PlanArtifact): string {
   return renderSection("Plan Item Contract", [
-    "This section freezes the plan-item contract that later Step 2 batches will populate.",
+    "This section freezes the stable Step 2 plan-item contract that `forge verify` and later steps can consume directly.",
     "",
     "### Required Fields",
     "",
@@ -184,7 +193,7 @@ function renderCarryForwardContextSection(artifact: PlanArtifact): string {
   const readiness = artifact.carry_forward.next_step_readiness;
 
   return renderSection("Carry-Forward Context", [
-    "This section preserves the Step 1 planning handoff exactly as Step 2 received it.",
+    "This section preserves the Step 1 planning handoff exactly as Step 2 received it so `forge verify` does not need to reconstruct intake context from prose.",
     "",
     "### Task Spec",
     "",
@@ -271,22 +280,56 @@ function renderCarryForwardContextSection(artifact: PlanArtifact): string {
 
 function renderPlanningReadinessSection(artifact: PlanArtifact): string {
   const readiness = artifact.planning_readiness;
+  const constrainingConcerns = artifact.carry_forward.concerns.filter((concern) =>
+    readiness.constraining_concern_ids.includes(concern.id),
+  );
 
   return renderSection("Planning Readiness", [
     readiness.ready
-      ? "Forge plan is ready for later workflow steps."
-      : "Forge plan is blocked until the remaining Step 1 issues are addressed.",
+      ? "`forge verify` gate: proceed."
+      : "`forge verify` gate: blocked.",
+    "",
+    readiness.summary,
     "",
     ...renderKeyValueList([
       ["Ready", readiness.ready],
+      ["Status", readiness.status],
+      ["Warning Items", readiness.warning_items.length],
       ["Blocking Issues", readiness.blocking_issues.length],
+      ["Constraining Concerns", readiness.constraining_concern_ids.length],
       ["Recommended Actions", readiness.recommended_user_actions.length],
     ]),
+    "",
+    "### Warning Items",
+    "",
+    renderList(
+      readiness.warning_items.map((item) => `\`${item.code}\`: ${item.message}`),
+    ),
     "",
     "### Blocking Issues",
     "",
     renderList(
       readiness.blocking_issues.map((issue) => `\`${issue.code}\`: ${issue.message}`),
+    ),
+    "",
+    "### Partial Output",
+    "",
+    readiness.partial_output
+      ? renderList([
+        `\`${readiness.partial_output.code}\`: ${readiness.partial_output.message}`,
+        readiness.partial_output.fallbackReason
+          ? `Fallback: ${readiness.partial_output.fallbackReason}`
+          : "Fallback: none",
+      ])
+      : "- none",
+    "",
+    "### Constraining Concerns",
+    "",
+    renderList(
+      constrainingConcerns.map((concern) => {
+        const code = concern.code ? ` [code: ${concern.code}]` : "";
+        return `\`${concern.id}\` (${concern.source})${code} - ${concern.message}`;
+      }),
     ),
     "",
     "### Recommended Actions",
@@ -320,7 +363,13 @@ function renderFailureSection(artifact: PlanArtifact): string {
   ]);
 }
 
-export function createPlanReport(artifact: PlanArtifact): string {
+export function createPlanReport(
+  artifact: PlanArtifact,
+  options?: {
+    planningAssist?: PlanAssistResolution;
+  },
+): string {
+  const planningAssist = options?.planningAssist ?? artifact.planning_diagnostics.planning_assist;
   const sections = [
     renderSection("Overview", [
       `Forge plan completed with status \`${artifact.status}\`.`,
@@ -331,11 +380,31 @@ export function createPlanReport(artifact: PlanArtifact): string {
         ["Output Root", artifact.outputRoot],
         ["Requested Output Root", artifact.requestedOutputRoot],
         ["Planning Readiness", artifact.planning_readiness.ready],
+        ["Planning Readiness Status", artifact.planning_readiness.status],
+        ["Planning Usability", artifact.planning_diagnostics.usability_status],
+        ["Planning Warning Items", artifact.planning_readiness.warning_items.length],
+        ["Planning Blocking Issues", artifact.planning_readiness.blocking_issues.length],
+        ["Planning Assist", planningAssistLabel(planningAssist)],
+        ...(planningAssist.provider
+          ? [["Planning Assist Provider", planningAssist.provider] as [string, string]]
+          : []),
+        ...(artifact.failure
+          ? [["Failure Code", artifact.failure.code] as [string, string]]
+          : []),
       ]),
+      ...(planningAssist?.reportNotes.length
+        ? ["", renderList(planningAssist.reportNotes)]
+        : []),
+      ...(planningAssist?.warnings.length
+        ? ["", renderList(planningAssist.warnings)]
+        : []),
+      ...(planningAssist?.ignoredEdits.length
+        ? ["", renderList(planningAssist.ignoredEdits)]
+        : []),
     ]),
     renderSection("Purpose", [artifact.purpose]),
     renderSection("Source Intake", [
-      "This section records the persisted Step 1 handoff consumed by `forge plan`.",
+      "This section records the persisted Step 1 handoff consumed by `forge plan` before it prepares the Step 3 `forge verify` contract.",
       ...renderKeyValueList([
         ["Artifact Path", artifact.source_intake.artifactPath],
         ["Command", artifact.source_intake.command],

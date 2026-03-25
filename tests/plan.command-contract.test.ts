@@ -85,6 +85,12 @@ await runScenario(
       const intakeArtifact = await readJsonFile<IntakeArtifact>(join(repoRoot, ".forge", "intake.json"));
       const planArtifact = await readJsonFile<{
         status: "ready" | "blocked" | "failed";
+        planning_diagnostics?: {
+          usability_status?: "actionable" | "non_actionable" | "upstream_blocked";
+          warning_items?: Array<{ code?: string; message?: string }>;
+          blocking_items?: Array<{ code?: string; message?: string }>;
+          partial_output?: { code?: string; message?: string; fallbackReason?: string } | null;
+        };
         planning_readiness?: { ready?: boolean };
         files?: { artifactPath?: string | null; reportPath?: string | null };
         source_intake?: { artifactPath?: string; summary?: string; readyForPlanning?: boolean };
@@ -95,6 +101,10 @@ await runScenario(
       }>(artifactPath);
 
       assert.equal(planArtifact.status, "ready");
+      assert.equal(planArtifact.planning_diagnostics?.usability_status, "actionable");
+      assert.deepEqual(planArtifact.planning_diagnostics?.warning_items, []);
+      assert.deepEqual(planArtifact.planning_diagnostics?.blocking_items, []);
+      assert.equal(planArtifact.planning_diagnostics?.partial_output ?? null, null);
       assert.equal(planArtifact.planning_readiness?.ready, true);
       assert.equal(planArtifact.files?.artifactPath, artifactPath);
       assert.equal(planArtifact.files?.reportPath, reportPath);
@@ -132,6 +142,12 @@ await runScenario(
       const artifactPath = planArtifactPath(repoRoot);
       const planArtifact = await readJsonFile<{
         status: "ready" | "blocked" | "failed";
+        planning_diagnostics?: {
+          usability_status?: "actionable" | "non_actionable" | "upstream_blocked";
+          warning_items?: Array<{ code?: string; message?: string }>;
+          blocking_items?: Array<{ code?: string; message?: string }>;
+          partial_output?: { code?: string; message?: string; fallbackReason?: string } | null;
+        };
         planning_readiness?: { ready?: boolean };
         carry_forward?: {
           ambiguities?: string[];
@@ -144,6 +160,15 @@ await runScenario(
       }>(artifactPath);
 
       assert.equal(planArtifact.status, "ready");
+      assert.equal(planArtifact.planning_diagnostics?.usability_status, "actionable");
+      assert.ok(
+        planArtifact.planning_diagnostics?.warning_items?.some((item) => item.code === "LOW_CONFIDENCE_PLANNING_INPUT"),
+      );
+      assert.ok(
+        planArtifact.planning_diagnostics?.warning_items?.some((item) => item.code === "FALLBACK_TARGETING_PRESENT"),
+      );
+      assert.deepEqual(planArtifact.planning_diagnostics?.blocking_items, []);
+      assert.equal(planArtifact.planning_diagnostics?.partial_output ?? null, null);
       assert.equal(planArtifact.planning_readiness?.ready, true);
       assert.equal(planArtifact.carry_forward?.confidence?.level, "low");
       assert.ok((planArtifact.carry_forward?.ambiguities?.length ?? 0) > 0);
@@ -181,6 +206,12 @@ await runScenario(
       const reportPath = planReportPath(repoRoot);
       const planArtifact = await readJsonFile<{
         status: "ready" | "blocked" | "failed";
+        planning_diagnostics?: {
+          usability_status?: "actionable" | "non_actionable" | "upstream_blocked";
+          warning_items?: Array<{ code?: string; message?: string }>;
+          blocking_items?: Array<{ code?: string; message?: string }>;
+          partial_output?: { code?: string; message?: string; fallbackReason?: string } | null;
+        };
         planning_readiness?: { ready?: boolean };
         failure?: { code?: string; message?: string } | null;
         plan_items?: Array<{ dependencies: Array<{ planItemId: string; type: string; reason: string }> }>;
@@ -191,6 +222,11 @@ await runScenario(
       assert.equal(await fileExists(artifactPath), true);
       assert.equal(await fileExists(reportPath), true);
       assert.equal(planArtifact.status, "blocked");
+      assert.equal(planArtifact.planning_diagnostics?.usability_status, "upstream_blocked");
+      assert.ok(
+        planArtifact.planning_diagnostics?.blocking_items?.some((item) => item.code === "LOW_CONFIDENCE_ESCALATED"),
+      );
+      assert.equal(planArtifact.planning_diagnostics?.partial_output ?? null, null);
       assert.equal(planArtifact.planning_readiness?.ready, false);
       assert.equal(planArtifact.failure, null);
       assert.ok((planArtifact.plan_items?.length ?? 0) > 0, "expected diagnostic plan items");
@@ -362,6 +398,12 @@ await runScenario(
         status: "ready" | "blocked" | "failed";
         requestedOutputRoot?: string | null;
         outputRoot?: string;
+        planning_diagnostics?: {
+          usability_status?: "actionable" | "non_actionable" | "upstream_blocked";
+          warning_items?: Array<{ code?: string; message?: string }>;
+          blocking_items?: Array<{ code?: string; message?: string }>;
+          partial_output?: { code?: string; message?: string; fallbackReason?: string } | null;
+        };
         failure?: { code?: string; message?: string; fallbackReason?: string } | null;
         source_intake?: { readyForPlanning?: boolean };
       }>(planArtifactPath(repoRoot));
@@ -369,6 +411,9 @@ await runScenario(
       assert.equal(planArtifact.status, "failed");
       assert.equal(planArtifact.requestedOutputRoot, join(repoRoot, blockedOutputDir));
       assert.equal(planArtifact.outputRoot, join(repoRoot, ".forge"));
+      assert.equal(planArtifact.planning_diagnostics?.usability_status, "actionable");
+      assert.equal(planArtifact.planning_diagnostics?.partial_output?.code, "OUTPUT_ROOT_FALLBACK");
+      assert.ok(planArtifact.planning_diagnostics?.partial_output?.fallbackReason);
       assert.equal(planArtifact.failure?.code, "OUTPUT_ROOT_FALLBACK");
       assert.ok(planArtifact.failure?.fallbackReason);
       assert.equal(planArtifact.source_intake?.readyForPlanning, true);
@@ -448,10 +493,21 @@ await runScenario(
       const planArtifact = await readJsonFile<{
         status: "ready" | "blocked" | "failed";
         summary: string;
+        planning_diagnostics?: {
+          usability_status?: "actionable" | "non_actionable" | "upstream_blocked";
+          warning_items?: Array<{ code?: string; message?: string }>;
+          blocking_items?: Array<{ code?: string; message?: string }>;
+          partial_output?: { code?: string; message?: string; fallbackReason?: string } | null;
+        };
         failure?: { code?: string; message?: string; fallbackReason?: string } | null;
       }>(join(repoRoot, ".forge", "plan.json"));
 
-      assert.equal(planArtifact.status, "blocked");
+      assert.equal(planArtifact.status, "failed");
+      assert.equal(planArtifact.planning_diagnostics?.usability_status, "non_actionable");
+      assert.ok(
+        planArtifact.planning_diagnostics?.blocking_items?.some((item) => item.code === "PLAN_INPUT_TOO_WEAK"),
+      );
+      assert.equal(planArtifact.planning_diagnostics?.partial_output?.code, "OUTPUT_ROOT_FALLBACK");
       assert.equal(planArtifact.failure?.code, "OUTPUT_ROOT_FALLBACK");
       assert.match(
         planArtifact.summary,

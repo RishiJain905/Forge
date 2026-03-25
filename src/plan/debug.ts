@@ -1,6 +1,7 @@
 import { PLAN_DEBUG_ENV_VAR } from "./constants.js";
 import type {
   PlanArtifact,
+  PlanAssistResolution,
   PlanConflictZone,
   PlanDependencyGraphEntry,
   PlanResolvedOutputPaths,
@@ -28,8 +29,10 @@ export interface PlanDebugArtifact {
     debugDependenciesPath: string;
     debugConflictZonesPath: string;
     debugTestObligationsPath: string;
+    debugPlanningReadinessPath: string;
   };
   source_intake: PlanArtifact["source_intake"];
+  planning_diagnostics: PlanArtifact["planning_diagnostics"];
   planning_readiness: PlanArtifact["planning_readiness"];
   plan_items: PlanArtifact["plan_items"];
   dependency_graph: PlanDependencyGraphEntry[];
@@ -37,6 +40,7 @@ export interface PlanDebugArtifact {
   test_obligations: PlanTestObligationEntry[];
   parallelization_signals: PlanArtifact["parallelization_signals"];
   carry_forward: PlanArtifact["carry_forward"];
+  planning_assist: PlanAssistResolution;
   failure: PlanArtifact["failure"];
 }
 
@@ -59,6 +63,7 @@ export function isPlanDebugEnabled(env: NodeJS.ProcessEnv = process.env): boolea
 export function createPlanDebugArtifact(
   artifact: PlanArtifact,
   paths: PlanResolvedOutputPaths,
+  planningAssist: PlanAssistResolution,
 ): PlanDebugArtifact {
   return {
     command: artifact.command,
@@ -76,8 +81,10 @@ export function createPlanDebugArtifact(
       debugDependenciesPath: requireDebugPath(paths.debugDependenciesPath, "debugDependenciesPath"),
       debugConflictZonesPath: requireDebugPath(paths.debugConflictZonesPath, "debugConflictZonesPath"),
       debugTestObligationsPath: requireDebugPath(paths.debugTestObligationsPath, "debugTestObligationsPath"),
+      debugPlanningReadinessPath: requireDebugPath(paths.debugPlanningReadinessPath, "debugPlanningReadinessPath"),
     },
     source_intake: artifact.source_intake,
+    planning_diagnostics: artifact.planning_diagnostics,
     planning_readiness: artifact.planning_readiness,
     plan_items: artifact.plan_items,
     dependency_graph: artifact.dependency_graph,
@@ -85,6 +92,7 @@ export function createPlanDebugArtifact(
     test_obligations: artifact.test_obligations,
     parallelization_signals: artifact.parallelization_signals,
     carry_forward: artifact.carry_forward,
+    planning_assist: planningAssist,
     failure: artifact.failure,
   };
 }
@@ -92,8 +100,9 @@ export function createPlanDebugArtifact(
 export function createPlanDebugWrites(params: {
   artifact: PlanArtifact;
   paths: PlanResolvedOutputPaths;
+  planningAssist: PlanAssistResolution;
 }): PlannedWrite[] {
-  const debugArtifact = createPlanDebugArtifact(params.artifact, params.paths);
+  const debugArtifact = createPlanDebugArtifact(params.artifact, params.paths, params.planningAssist);
 
   return [
     {
@@ -115,6 +124,10 @@ export function createPlanDebugWrites(params: {
     {
       filePath: requireDebugPath(params.paths.debugTestObligationsPath, "debugTestObligationsPath"),
       contents: stringifyJson({ test_obligations: params.artifact.test_obligations }),
+    },
+    {
+      filePath: requireDebugPath(params.paths.debugPlanningReadinessPath, "debugPlanningReadinessPath"),
+      contents: stringifyJson({ planning_readiness: params.artifact.planning_readiness }),
     },
   ];
 }

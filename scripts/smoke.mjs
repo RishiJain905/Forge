@@ -147,6 +147,14 @@ async function main() {
     assert.ok(planArtifact.conflict_zones.length > 0);
     assert.ok(planArtifact.test_obligations.length > 0);
     assert.ok(planArtifact.parallelization_signals.length > 0);
+    assert.equal(planArtifact.planning_readiness.ready, true);
+    assert.equal(planArtifact.planning_readiness.status, "ready");
+    assert.ok(planArtifact.planning_readiness.summary.length > 0);
+    assert.deepEqual(planArtifact.planning_readiness.warning_items, []);
+    assert.deepEqual(planArtifact.planning_readiness.blocking_issues, []);
+    assert.equal(planArtifact.planning_readiness.partial_output, null);
+    assert.deepEqual(planArtifact.planning_readiness.constraining_concern_ids, []);
+    assert.ok(Array.isArray(planArtifact.planning_readiness.recommended_user_actions));
     assert.ok(planArtifact.plan_items.some((item) => item.category === "implementation"));
     assert.ok(planArtifact.plan_items.some((item) => item.category === "test"));
     assert.ok(
@@ -268,6 +276,48 @@ async function main() {
     assert.match(lowConfidenceReport, /## Task Spec/);
     assert.match(lowConfidenceReport, /## Confidence/);
     assert.match(lowConfidenceReport, /## Next Step Readiness/);
+
+    const warningPlanResult = spawnSync(process.execPath, [
+      entryPointPath,
+      "plan",
+      "--repo",
+      tempRepo,
+    ], {
+      cwd: tempRepo,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+      },
+    });
+
+    if (warningPlanResult.error) {
+      throw warningPlanResult.error;
+    }
+
+    assert.equal(warningPlanResult.status, 0);
+    assert.match(warningPlanResult.stdout, /Status: ready/);
+
+    const warningPlanArtifact = JSON.parse(await readFile(planArtifactPath, "utf8"));
+    const warningPlanReport = await readFile(planReportPath, "utf8");
+
+    assert.equal(warningPlanArtifact.status, "ready");
+    assert.equal(warningPlanArtifact.source_intake.status, "warning");
+    assert.equal(warningPlanArtifact.planning_readiness.ready, true);
+    assert.equal(warningPlanArtifact.planning_readiness.status, "ready_with_warnings");
+    assert.ok(warningPlanArtifact.planning_readiness.summary.length > 0);
+    assert.ok(warningPlanArtifact.planning_readiness.warning_items.length > 0);
+    assert.deepEqual(warningPlanArtifact.planning_readiness.blocking_issues, []);
+    assert.equal(warningPlanArtifact.planning_readiness.partial_output, null);
+    assert.ok(warningPlanArtifact.planning_readiness.constraining_concern_ids.length > 0);
+    assert.ok(Array.isArray(warningPlanArtifact.planning_readiness.recommended_user_actions));
+    assert.equal(warningPlanArtifact.carry_forward.confidence.level, "low");
+    assert.ok(Array.isArray(warningPlanArtifact.carry_forward.concerns));
+    assert.ok(warningPlanArtifact.carry_forward.concerns.length > 0);
+    assert.match(warningPlanReport, /## Carry-Forward Context/);
+    assert.match(warningPlanReport, /## Planning Readiness/);
+    assert.match(warningPlanReport, /ready_with_warnings/);
+    assert.match(warningPlanReport, /`forge verify` gate:/);
+    assert.match(warningPlanReport, /Planning Assist:\s+not_attempted/);
 
     const assistFallbackResult = spawnSync(process.execPath, [
       entryPointPath,

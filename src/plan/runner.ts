@@ -14,6 +14,7 @@ import {
   PlanInputResolutionError,
   resolvePlanFoundationInput,
 } from "./input.js";
+import { applyPlanningAssist } from "./assist.js";
 import { createPlanArtifact, buildPlanCommandFailure } from "./artifact.js";
 import { createPlanDebugWrites, isPlanDebugEnabled } from "./debug.js";
 import { buildPlanModel } from "./planner.js";
@@ -24,6 +25,7 @@ import { extractErrorCode } from "../intake/errors.js";
 import type {
   PlanCarryForwardContext,
   LoadedPlanFoundationInput,
+  PlanCommandDependencies,
   PlanFoundationCommandResult,
   PlanFoundationOptions,
   PlanFoundationResult,
@@ -138,80 +140,38 @@ async function persistPlanCommandOutputs(params: {
   });
 }
 
-function resolvePlanningReadiness(
-  foundation: PlanFoundationResult,
-  model: ReturnType<typeof buildPlanModel>,
-): {
-  planningReadiness: PlanFoundationResult["carryForward"]["nextStepReadiness"];
-  summaryOverride?: string;
-} {
-  if (foundation.planningInput.usability.status === "upstream_blocked") {
-    return {
-      planningReadiness: foundation.carryForward.nextStepReadiness,
-    };
-  }
-
-  if (foundation.planningInput.usability.status === "non_actionable") {
-    return {
-      planningReadiness: {
-        ...foundation.carryForward.nextStepReadiness,
-        ready: false,
-        blocking_issues: foundation.planningInput.usability.blockingItems.map((item) => ({
-          code: item.code,
-          message: item.message,
-        })),
-      },
-      summaryOverride:
-        "Forge plan preserved the persisted Step 1 handoff, but planning is blocked because the handoff is non-actionable for real Step 2 planning.",
-    };
-  }
-
-  if (model.planItems.length > 0) {
-    return {
-      planningReadiness: foundation.carryForward.nextStepReadiness,
-    };
-  }
-
-  return {
-    planningReadiness: {
-      ...foundation.carryForward.nextStepReadiness,
-      ready: false,
-      blocking_issues: [
-        ...foundation.carryForward.nextStepReadiness.blocking_issues,
-        {
-          code: "PLAN_INPUT_TOO_WEAK",
-          message: "Step 1 output is structurally valid but does not provide enough actionable planning signal for Step 2 to build real plan items.",
-        },
-      ],
-    },
-    summaryOverride:
-      "Forge plan preserved the persisted Step 1 handoff, but planning is blocked because the handoff is non-actionable for real Step 2 planning.",
-  };
-}
-
 export async function runPlanCommand(
   options: PlanCommandOptions = {},
   currentWorkingDirectory = process.cwd(),
+  dependencies: PlanCommandDependencies = {},
 ): Promise<PlanCommandResult> {
   try {
     const input = await resolvePlanFoundationInput(options, currentWorkingDirectory);
     const foundation = buildPlanFoundation(input);
-    const model = buildPlanModel(foundation);
-    const { planningReadiness, summaryOverride } = resolvePlanningReadiness(foundation, model);
+    const assistedPlanning = await applyPlanningAssist({
+      foundation,
+      model: buildPlanModel(foundation),
+      planningAssistHook: dependencies.planningAssistHook,
+    });
     const startedAt = new Date().toISOString();
     const finishedAt = new Date().toISOString();
     const artifact = createPlanArtifact({
       foundation,
-      model,
+      model: assistedPlanning.model,
       paths: input.paths,
       startedAt,
       finishedAt,
-      planningReadiness,
-      summaryOverride,
+      planningAssist: assistedPlanning.resolution,
     });
-    const report = createPlanReport(artifact);
+    const report = createPlanReport(artifact, {
+      planningAssist: assistedPlanning.resolution,
+    });
     const debugWrites = isPlanDebugEnabled()
-      ? createPlanDebugWrites({ artifact, paths: input.paths })
+      ? createPlanDebugWrites({
+        artifact,
+        paths: input.paths,
+        planningAssist: assistedPlanning.resolution,
+      })
       : null;
 
     try {

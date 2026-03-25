@@ -7,12 +7,16 @@ import {
 } from "./constants.js";
 import { FORGE_SCHEMA_VERSION } from "../intake/constants.js";
 import { validatePlanArtifact } from "./schema.js";
+import { resolvePlanReadiness } from "./readiness.js";
 import type {
   PlanArtifact,
+  PlanAssistResolution,
   PlanCommandFailure,
   PlanCommandStatus,
   PlanFoundationResult,
   PlanModel,
+  PlanInputIssue,
+  PlanPlanningDiagnostics,
   PlanResolvedOutputPaths,
 } from "./types.js";
 
@@ -21,8 +25,15 @@ function buildPlanSummary(
   failure: PlanCommandFailure | null,
   summaryOverride?: string,
 ): string {
+  const fallbackSummary =
+    "Forge plan wrote its outputs to the default .forge root because the requested output root was unsafe.";
+
   if (failure?.code === "OUTPUT_ROOT_FALLBACK") {
-    return "Forge plan wrote its outputs to the default .forge root because the requested output root was unsafe.";
+    if (summaryOverride) {
+      return `${summaryOverride} ${fallbackSummary}`;
+    }
+
+    return fallbackSummary;
   }
 
   if (summaryOverride) {
@@ -40,24 +51,42 @@ function buildPlanSummary(
   return "Forge plan could not persist a usable planning artifact.";
 }
 
+function buildPlanningDiagnostics(params: {
+  foundation: PlanFoundationResult;
+  failure: PlanCommandFailure | null;
+  planningAssist: PlanAssistResolution;
+  blockingItems: PlanInputIssue[];
+}): PlanPlanningDiagnostics {
+  return {
+    usability_status: params.foundation.planningInput.usability.status,
+    warning_items: params.foundation.planningInput.usability.warningItems.map((item) => ({
+      code: item.code,
+      message: item.message,
+    })),
+    blocking_items: params.blockingItems.map((item) => ({
+      code: item.code,
+      message: item.message,
+    })),
+    partial_output: params.failure
+      ? {
+        code: params.failure.code,
+        message: params.failure.message,
+        ...(params.failure.fallbackReason ? { fallbackReason: params.failure.fallbackReason } : {}),
+      }
+      : null,
+    planning_assist: params.planningAssist,
+  };
+}
+
 export function createPlanArtifact(params: {
   foundation: PlanFoundationResult;
   model: PlanModel;
   paths: PlanResolvedOutputPaths;
   startedAt: string;
   finishedAt: string;
-  planningReadiness?: PlanFoundationResult["carryForward"]["nextStepReadiness"];
-  summaryOverride?: string;
+  planningAssist: PlanAssistResolution;
 }): PlanArtifact {
-  const planningReadiness = params.planningReadiness ?? params.foundation.carryForward.nextStepReadiness;
-  const planningReady = planningReadiness.ready;
-  const usedFallbackRoot = params.paths.usedFallbackRoot;
-  const status: PlanCommandStatus = planningReady
-    ? usedFallbackRoot
-      ? "failed"
-      : "ready"
-    : "blocked";
-  const failure: PlanCommandFailure | null = usedFallbackRoot
+  const failure: PlanCommandFailure | null = params.paths.usedFallbackRoot
     ? buildPlanCommandFailure(
         "OUTPUT_ROOT_FALLBACK",
         params.paths.fallbackReason ??
@@ -65,6 +94,13 @@ export function createPlanArtifact(params: {
         params.paths.fallbackReason ?? undefined,
       )
     : null;
+  const readinessResolution = resolvePlanReadiness({
+    foundation: params.foundation,
+    model: params.model,
+    failure,
+  });
+  const planningReadiness = readinessResolution.planningReadiness;
+  const status = readinessResolution.status;
 
   return validatePlanArtifact({
     schemaVersion: FORGE_SCHEMA_VERSION,
@@ -89,7 +125,7 @@ export function createPlanArtifact(params: {
     },
     startedAt: params.startedAt,
     finishedAt: params.finishedAt,
-    summary: buildPlanSummary(status, failure, params.summaryOverride),
+    summary: buildPlanSummary(status, failure, planningReadiness.summary),
     boundaryNotes: [...PLAN_BOUNDARY_NOTES],
     source_intake: {
       artifactPath: params.foundation.sourceIntake.artifactPath,
@@ -116,6 +152,12 @@ export function createPlanArtifact(params: {
       next_step_readiness: params.foundation.carryForward.nextStepReadiness,
       concerns: params.model.carryForwardConcerns,
     },
+    planning_diagnostics: buildPlanningDiagnostics({
+      foundation: params.foundation,
+      failure,
+      planningAssist: params.planningAssist,
+      blockingItems: planningReadiness.blocking_issues,
+    }),
     planning_readiness: planningReadiness,
     failure,
   });

@@ -1,0 +1,276 @@
+import assert from "node:assert/strict";
+import { readdir, rm } from "node:fs/promises";
+import { join } from "node:path";
+
+import { STEP2_ALLOWED_SIDE_EFFECTS } from "../src/plan/constants.js";
+import { runPlanCommand } from "../src/plan/runner.js";
+import type { PlanArtifact } from "../src/plan/types.js";
+import {
+  createTempRepo,
+  disposeTempRepo,
+  fileExists,
+  readJsonFile,
+  readTextFile,
+  runForgeBinary,
+  runForgeCli,
+  runForgePlanBinary,
+  writeRepoFile,
+} from "./support/forge-cli.js";
+
+async function runScenario(name: string, scenario: () => Promise<void>): Promise<void> {
+  try {
+    await scenario();
+    process.stdout.write(`PASS ${name}\n`);
+  } catch (error) {
+    process.stderr.write(`FAIL ${name}\n`);
+    process.stderr.write(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
+    process.exitCode = 1;
+  }
+}
+
+async function seedSpecRepo(repoRoot: string): Promise<void> {
+  await writeRepoFile(repoRoot, "src/app.ts", "export const app = true;\n");
+  await writeRepoFile(
+    repoRoot,
+    "tests/app.test.ts",
+    "import assert from 'node:assert/strict';\n\nassert.equal(1, 1);\n",
+  );
+  await writeRepoFile(
+    repoRoot,
+    "task.md",
+    [
+      "# Update app behavior",
+      "",
+      "Revise `src/app.ts` and keep `tests/app.test.ts` aligned.",
+      "",
+      "## Acceptance Criteria",
+      "",
+      "- `src/app.ts` is updated",
+      "- `tests/app.test.ts` stays aligned",
+    ].join("\n"),
+  );
+}
+
+async function removePlanningInputs(repoRoot: string): Promise<void> {
+  await rm(join(repoRoot, "task.md"), { force: true });
+  await rm(join(repoRoot, "src", "app.ts"), { force: true });
+  await rm(join(repoRoot, "tests", "app.test.ts"), { force: true });
+}
+
+function normalizePlanArtifact(artifact: PlanArtifact): Omit<PlanArtifact, "startedAt" | "finishedAt"> {
+  const {
+    startedAt,
+    finishedAt,
+    ...stableArtifact
+  } = artifact;
+
+  void startedAt;
+  void finishedAt;
+
+  return stableArtifact;
+}
+
+async function collectFiles(directory: string): Promise<string[]> {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const files: string[] = [];
+
+  for (const entry of entries) {
+    const path = join(directory, entry.name);
+
+    if (entry.isDirectory()) {
+      files.push(...await collectFiles(path));
+      continue;
+    }
+
+    if (entry.isFile()) {
+      files.push(path);
+    }
+  }
+
+  return files;
+}
+
+async function assertNoStep2Markers(): Promise<void> {
+  const repoRoot = process.cwd();
+  const runtimeFiles = await collectFiles(join(repoRoot, "src", "plan"));
+  const scannedFiles = [
+    ...runtimeFiles,
+    join(repoRoot, "README.md"),
+    join(repoRoot, "scripts", "smoke.mjs"),
+  ];
+  const offenders: string[] = [];
+
+  for (const filePath of scannedFiles) {
+    const contents = await readTextFile(filePath);
+
+    if (/TODO|FIXME|XXX/.test(contents)) {
+      offenders.push(filePath);
+    }
+  }
+
+  assert.deepEqual(offenders, [], `unexpected freeze markers found in Step 2 surface: ${offenders.join(", ")}`);
+}
+
+await runScenario(
+  "forge plan satisfies the Batch 3 Part 1 finish line for a grounded spec run",
+  async () => {
+    const repoRoot = await createTempRepo("forge-plan-b3-freeze-ready-");
+
+    try {
+      await seedSpecRepo(repoRoot);
+
+      const intakeResult = await runForgeCli(["intake", "--repo", repoRoot, "--spec", join(repoRoot, "task.md")], repoRoot);
+      assert.equal(intakeResult.code, 0, intakeResult.stderr);
+      await removePlanningInputs(repoRoot);
+
+      const planResult = runForgePlanBinary(["--repo", repoRoot], repoRoot);
+      assert.equal(planResult.code, 0, planResult.stderr);
+
+      const artifact = await readJsonFile<PlanArtifact>(join(repoRoot, ".forge", "plan.json"));
+      const report = await readTextFile(join(repoRoot, ".forge", "reports", "plan-report.md"));
+
+      assert.equal(artifact.status, "ready");
+      assert.equal(artifact.planning_readiness.ready, true);
+      assert.ok(artifact.plan_items.length > 0);
+      assert.ok(artifact.dependency_graph.length > 0);
+      assert.ok(artifact.conflict_zones.length > 0);
+      assert.ok(artifact.test_obligations.length > 0);
+      assert.ok(artifact.parallelization_signals.length > 0);
+      assert.ok(!/later Step 2 batches will populate/i.test(report));
+      assert.doesNotMatch(report, /later Step 2/i);
+      assert.ok(!STEP2_ALLOWED_SIDE_EFFECTS.some((entry) => /later Step 2 parts/i.test(entry)));
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "forge plan keeps warning-heavy but usable handoffs coherent under the Batch 3 Part 1 finish line",
+  async () => {
+    const repoRoot = await createTempRepo("forge-plan-b3-freeze-warning-");
+
+    try {
+      const intakeResult = await runForgeCli(["intake", "--repo", repoRoot, "--prompt", "fix"], repoRoot);
+      assert.equal(intakeResult.code, 0, intakeResult.stderr);
+
+      const planResult = runForgePlanBinary(["--repo", repoRoot], repoRoot);
+      assert.equal(planResult.code, 0, planResult.stderr);
+
+      const artifact = await readJsonFile<PlanArtifact>(join(repoRoot, ".forge", "plan.json"));
+      const report = await readTextFile(join(repoRoot, ".forge", "reports", "plan-report.md"));
+
+      assert.equal(artifact.status, "ready");
+      assert.equal(artifact.source_intake.status, "warning");
+      assert.equal(artifact.carry_forward.confidence.level, "low");
+      assert.ok(artifact.carry_forward.concerns.length > 0);
+      assert.equal(artifact.planning_diagnostics.planning_assist.outcome, "not_attempted");
+      assert.match(report, /## Carry-Forward Context/);
+      assert.match(report, /## Planning Readiness/);
+      assert.match(report, /Planning Assist:\s+not_attempted/);
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "forge plan stays deterministic across repeated warning-heavy runs and keeps freeze markers out of the Step 2 surface",
+  async () => {
+    const repoRoot = await createTempRepo("forge-plan-b3-freeze-warning-repeat-");
+
+    try {
+      const warningResult = runForgeBinary(["intake", "--repo", repoRoot, "--prompt", "fix"], repoRoot);
+      assert.equal(warningResult.code, 0, warningResult.stderr);
+      await removePlanningInputs(repoRoot);
+
+      const firstRun = runForgePlanBinary(["--repo", repoRoot], repoRoot);
+      assert.equal(firstRun.code, 0, firstRun.stderr);
+      const firstArtifact = await readJsonFile<PlanArtifact>(join(repoRoot, ".forge", "plan.json"));
+      const firstReport = await readTextFile(join(repoRoot, ".forge", "reports", "plan-report.md"));
+
+      const secondRun = runForgePlanBinary(["--repo", repoRoot], repoRoot);
+      assert.equal(secondRun.code, 0, secondRun.stderr);
+      const secondArtifact = await readJsonFile<PlanArtifact>(join(repoRoot, ".forge", "plan.json"));
+      const secondReport = await readTextFile(join(repoRoot, ".forge", "reports", "plan-report.md"));
+
+      assert.equal(firstArtifact.status, "ready");
+      assert.equal(firstArtifact.planning_readiness.status, "ready_with_warnings");
+      assert.ok(firstArtifact.planning_readiness.warning_items.length > 0);
+      assert.deepEqual(normalizePlanArtifact(firstArtifact), normalizePlanArtifact(secondArtifact));
+      assert.equal(firstReport, secondReport);
+      assert.doesNotMatch(firstReport, /later Step 2/i);
+      await assertNoStep2Markers();
+      const readme = await readTextFile(join(process.cwd(), "README.md"));
+      assert.match(readme, /Step 2: Plan is implemented through Batch 3 Part 5\./);
+      assert.match(readme, /frozen for V1 except for future bug fixes/i);
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "forge plan keeps debug and bounded assist usable under the Batch 3 Part 1 finish line",
+  async () => {
+    const repoRoot = await createTempRepo("forge-plan-b3-freeze-assist-");
+    const originalDebugEnv = process.env.FORGE_PLAN_DEBUG;
+
+    try {
+      await seedSpecRepo(repoRoot);
+
+      const intakeResult = runForgeBinary(["intake", "--repo", repoRoot, "--spec", join(repoRoot, "task.md")], repoRoot);
+      assert.equal(intakeResult.code, 0, intakeResult.stderr);
+      await removePlanningInputs(repoRoot);
+
+      process.env.FORGE_PLAN_DEBUG = "1";
+      const result = await runPlanCommand(
+        { repo: repoRoot },
+        repoRoot,
+        {
+          planningAssistHook: async ({ model }) => ({
+            provider: "test-hook",
+            planItemEdits: model.planItems.map((item) => ({
+              id: item.id,
+              title: `${item.title} (freeze)`,
+            })),
+            reportNotes: ["Planning assist stayed bounded to wording during the Batch 3 Part 1 finish-line run."],
+          }),
+        },
+      );
+
+      assert.equal(result.status, "ready");
+      assert.equal(await fileExists(join(repoRoot, ".forge", "debug", "plan-debug.json")), true);
+
+      const report = await readTextFile(join(repoRoot, ".forge", "reports", "plan-report.md"));
+      const debugArtifact = await readJsonFile<{
+        planning_assist?: {
+          outcome: "not_attempted" | "no_suggestion" | "applied" | "ignored_only" | "failed";
+          attempted: boolean;
+          used: boolean;
+          provider: string | null;
+        };
+      }>(join(repoRoot, ".forge", "debug", "plan-debug.json"));
+
+      assert.equal(result.artifact?.planning_diagnostics.planning_assist.outcome, "applied");
+      assert.match(report, /Planning Assist:\s+applied/);
+      assert.match(report, /bounded to wording/i);
+      assert.equal(debugArtifact.planning_assist?.attempted, true);
+      assert.equal(debugArtifact.planning_assist?.used, true);
+      assert.equal(debugArtifact.planning_assist?.outcome, "applied");
+      assert.equal(debugArtifact.planning_assist?.provider, "test-hook");
+    } finally {
+      if (originalDebugEnv === undefined) {
+        delete process.env.FORGE_PLAN_DEBUG;
+      } else {
+        process.env.FORGE_PLAN_DEBUG = originalDebugEnv;
+      }
+
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+if (process.exitCode && process.exitCode !== 0) {
+  process.exit(process.exitCode);
+}

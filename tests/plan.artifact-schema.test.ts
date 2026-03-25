@@ -62,6 +62,7 @@ const REQUIRED_TOP_LEVEL_KEYS = [
   "test_obligations",
   "parallelization_signals",
   "carry_forward",
+  "planning_diagnostics",
   "planning_readiness",
   "failure",
 ] as const;
@@ -144,7 +145,22 @@ type PlanArtifact = {
       status: "carried_forward";
     }>;
   };
-  planning_readiness: IntakeArtifact["next_step_readiness"];
+  planning_diagnostics: {
+    usability_status: "actionable" | "non_actionable" | "upstream_blocked";
+    warning_items: Array<{ code: string; message: string }>;
+    blocking_items: Array<{ code: string; message: string }>;
+    partial_output: { code: string; message: string; fallbackReason?: string } | null;
+  };
+  planning_readiness: {
+    ready: boolean;
+    status: "ready" | "ready_with_warnings" | "blocked";
+    summary: string;
+    warning_items: Array<{ code: string; message: string }>;
+    blocking_issues: Array<{ code: string; message: string }>;
+    partial_output: { code: string; message: string; fallbackReason?: string } | null;
+    constraining_concern_ids: string[];
+    recommended_user_actions: string[];
+  };
   failure: { code: string; message: string } | null;
 };
 
@@ -195,6 +211,10 @@ await runScenario(
       assert.equal(artifact.source_intake.status, intakeArtifact.status);
       assert.equal(artifact.source_intake.summary, intakeArtifact.summary);
       assert.equal(artifact.source_intake.readyForPlanning, true);
+      assert.equal(artifact.planning_diagnostics.usability_status, "actionable");
+      assert.deepEqual(artifact.planning_diagnostics.warning_items, []);
+      assert.deepEqual(artifact.planning_diagnostics.blocking_items, []);
+      assert.equal(artifact.planning_diagnostics.partial_output, null);
       assert.equal(artifact.planning_readiness.ready, true);
       assert.deepEqual(artifact.plan_item_contract.requiredFields, [...PLAN_ITEM_REQUIRED_FIELDS]);
       assert.deepEqual(artifact.plan_item_contract.categories, [...PLAN_ITEM_CATEGORIES]);
@@ -290,6 +310,14 @@ await runScenario(
       assert.deepEqual(artifact.carry_forward.warnings, intakeArtifact.warnings);
       assert.deepEqual(artifact.carry_forward.confidence, intakeArtifact.confidence);
       assert.deepEqual(artifact.carry_forward.next_step_readiness, intakeArtifact.next_step_readiness);
+      assert.equal(artifact.planning_readiness.ready, true);
+      assert.equal(artifact.planning_readiness.status, "ready");
+      assert.ok(artifact.planning_readiness.summary.length > 0);
+      assert.deepEqual(artifact.planning_readiness.warning_items, []);
+      assert.deepEqual(artifact.planning_readiness.blocking_issues, []);
+      assert.equal(artifact.planning_readiness.partial_output, null);
+      assert.ok(Array.isArray(artifact.planning_readiness.constraining_concern_ids));
+      assert.ok(Array.isArray(artifact.planning_readiness.recommended_user_actions));
       assert.ok(Array.isArray(artifact.carry_forward.concerns));
       assert.ok(
         artifact.test_obligations.every((entry) =>

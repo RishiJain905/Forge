@@ -10,6 +10,7 @@ export const PLAN_DEBUG_PLAN_ITEMS_NAME = "plan-items.json" as const;
 export const PLAN_DEBUG_DEPENDENCIES_NAME = "dependencies.json" as const;
 export const PLAN_DEBUG_CONFLICT_ZONES_NAME = "conflict-zones.json" as const;
 export const PLAN_DEBUG_TEST_OBLIGATIONS_NAME = "test-obligations.json" as const;
+export const PLAN_DEBUG_PLANNING_READINESS_NAME = "planning-readiness.json" as const;
 
 export const STEP2_PLAN_PURPOSE =
   "Transform Step 1 Intake output into a structured implementation plan that later steps can trust." as const;
@@ -17,14 +18,14 @@ export const STEP2_PLAN_PURPOSE =
 export const STEP2_DETERMINISTIC_FIRST_NOTES = [
   "Consume the persisted Step 1 intake artifact instead of re-parsing raw task text or re-running broad intake logic.",
   "Treat Step 1 task, repo, targeting, risk, ambiguity, warning, confidence, and readiness sections as authoritative planning inputs.",
-  "Keep the initial planning skeleton deterministic-first so later optional reasoning remains bounded and non-authoritative.",
+  "Keep the planning skeleton deterministic-first so optional assistive wording remains bounded and non-authoritative.",
 ] as const;
 
 export const STEP2_ALLOWED_SIDE_EFFECTS = [
   "read the Step 1 intake artifact",
   "validate the Step 1 handoff contract before planning continues",
-  "in later Step 2 parts, write plan artifacts inside the resolved output root",
-  `in later Step 2 parts, optionally write internal planning debug artifacts inside the resolved output root when ${PLAN_DEBUG_ENV_VAR}=1 is set`,
+  "write plan artifacts inside the resolved output root",
+  `optionally write internal planning debug artifacts inside the resolved output root when ${PLAN_DEBUG_ENV_VAR}=1 is set`,
 ] as const;
 
 export const STEP2_DEFERRED_CAPABILITIES = [
@@ -50,12 +51,13 @@ export const PLAN_ALLOWED_SIDE_EFFECTS = [
   "read the Step 1 intake artifact",
   "write `plan.json`",
   "write `plan-report.md`",
-  `optionally write \`plan-debug.json\`, \`plan-items.json\`, \`dependencies.json\`, \`conflict-zones.json\`, and \`test-obligations.json\` under \`.forge/debug/\` when ${PLAN_DEBUG_ENV_VAR}=1 is set`,
+  `optionally write \`plan-debug.json\`, \`plan-items.json\`, \`dependencies.json\`, \`conflict-zones.json\`, \`test-obligations.json\`, and \`planning-readiness.json\` under \`.forge/debug/\` when ${PLAN_DEBUG_ENV_VAR}=1 is set`,
 ] as const;
 
 export const PLAN_BOUNDARY_NOTES = [
   "Plan consumes the persisted Step 1 intake artifact instead of re-running intake parsing.",
   "Plan carries forward Step 1 ambiguity, warning, confidence, and readiness state without hiding it.",
+  "Plan may apply bounded internal planning-assist wording after deterministic planning, but deterministic structure remains authoritative.",
   "Plan emits explicit plan-item, dependency, conflict-zone, test-obligation, parallelization, and carry-forward concern modeling while still deferring later verify, split, execute, and integrate behavior.",
   `Plan may optionally write debug artifacts under .forge/debug/ when ${PLAN_DEBUG_ENV_VAR}=1 is set, but those files stay secondary to plan.json and plan-report.md.`,
 ] as const;
@@ -123,6 +125,19 @@ export const PLAN_PARALLELIZATION_SIGNALS = [
   "parallel_after_dependency",
   "risky_shared",
   "protected_merge_order",
+] as const;
+
+export const PLAN_READINESS_STATUSES = [
+  "ready",
+  "ready_with_warnings",
+  "blocked",
+] as const;
+
+export const PLAN_READINESS_CONSTRAINING_EFFECTS = [
+  "planning_readiness",
+  "dependency_caution",
+  "parallelization_caution",
+  "test_strategy",
 ] as const;
 
 export const PLAN_CARRY_FORWARD_CONCERN_SOURCES = [
