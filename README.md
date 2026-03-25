@@ -523,9 +523,11 @@ Step 2 also now emits stronger dependency, conflict-zone, test-obligation, and p
 
 Batch 3 Part 5 makes that handoff explicit for `forge verify` by naming the verification gate directly in readiness/report wording, adding a dedicated Step 3 handoff-contract suite, and freezing Step 2 as the planning foundation that Step 3 should consume instead of re-planning from prose.
 
-Step 3: Verify now has Batch 1 Part 1 implemented as an internal foundation.
+Step 3: Verify now has Batch 1 Part 1 and Part 2 implemented.
 
-This adds `src/verify` foundation modules that consume the persisted Step 2 `plan.json` handoff, normalize verify-input usability, preserve Step 2 uncertainty/readiness context, and freeze the structural lane, formal lane, and TLA+/TLC entry contract for V1. Public `forge verify` CLI wiring, `verify.json`, `verify-report.md`, and executable structural/formal verification work remain deferred to the next Step 3 parts.
+Part 1 adds `src/verify` foundation modules that consume the persisted Step 2 `plan.json` handoff, normalize verify-input usability, preserve Step 2 uncertainty/readiness context, and freeze the structural lane, formal lane, and TLA+/TLC entry contract for V1.
+
+Part 2 adds the first public `forge verify` CLI path, persists `.forge/verify.json` plus `.forge/reports/verify-report.md`, freezes the top-level verification artifact/report contract, and keeps structural/formal outputs as explicit placeholder sections until the later Step 3 parts implement real target selection, structural checks, and formal/TLA+/TLC execution.
 
 ---
 

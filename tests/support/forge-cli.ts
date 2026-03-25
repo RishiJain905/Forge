@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
 import { execFileSync, spawnSync } from "node:child_process";
@@ -99,6 +100,52 @@ export function runForgeBinary(args: string[], cwd: string): ForgeRunResult {
 
 export function runForgePlanBinary(args: string[], cwd: string): ForgeRunResult {
   return runForgeBinary(["plan", ...args], cwd);
+}
+
+export function runForgeVerifyBinary(args: string[], cwd: string): ForgeRunResult {
+  return runForgeBinary(["verify", ...args], cwd);
+}
+
+export function verifyArtifactPath(repoRoot: string, outputDir = ".forge"): string {
+  return join(repoRoot, outputDir, "verify.json");
+}
+
+export function verifyReportPath(repoRoot: string, outputDir = ".forge"): string {
+  return join(repoRoot, outputDir, "reports", "verify-report.md");
+}
+
+const VERIFY_REPORT_HEADING_MARKERS = [
+  "# Forge Verify Report",
+  "## Overview",
+  "## Purpose",
+  "## Source Plan",
+  "## Verification Target Contract",
+  "## Formal Lane Contract",
+  "## Verification Targets",
+  "## Verification Cases",
+  "## Structural Verification",
+  "## Formal Verification",
+  "## Findings",
+  "## Constraints",
+  "## Carry-Forward Context",
+  "## Verification Readiness",
+  "## Boundary Notes",
+  "## Deferred Capabilities",
+  "## Allowed Side Effects",
+  "## Disallowed Capabilities",
+  "## Output Files",
+  "## Failure",
+  "## Summary",
+] as const;
+
+export function assertForgeVerifyOutputHasNoReportHeadings(
+  result: Pick<ForgeRunResult, "stdout" | "stderr">,
+): void {
+  for (const output of [result.stdout, result.stderr]) {
+    for (const heading of VERIFY_REPORT_HEADING_MARKERS) {
+      assert.equal(output.includes(heading), false);
+    }
+  }
 }
 
 export async function writeRepoFile(

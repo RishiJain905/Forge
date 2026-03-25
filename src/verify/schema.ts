@@ -1,6 +1,8 @@
 import { z } from "zod";
 
+import { FORGE_SCHEMA_VERSION } from "../intake/constants.js";
 import type {
+  VerifyArtifact,
   VerifyFormalLaneContract,
   VerifyFoundationResult,
   VerifyTargetContract,
@@ -9,6 +11,7 @@ import {
   FORGE_VERIFY_COMMAND,
   FORGE_VERIFY_STAGE,
   STEP3_BOUNDARY_POLICY,
+  VERIFY_INPUT_TOO_WEAK,
   VERIFY_FORMAL_ENTRY_CRITERIA,
   VERIFY_FORMAL_FOCUS_AREAS,
   VERIFY_FORMAL_TOOLING,
@@ -101,6 +104,145 @@ const verifyFormalLaneContractSchema = z.object({
   tlcStatuses: z.array(z.enum(VERIFY_TLC_STATUSES)).min(1),
 }).strict();
 
+const verifyCommandFailureSchema = z.object({
+  code: z.string().min(1),
+  message: z.string().min(1),
+  fallbackReason: z.string().min(1).optional(),
+}).strict();
+
+const verifyWritePolicySchema = z.object({
+  mode: z.literal("output-root-only"),
+  repoReadOnlyOutsideOutputRoot: z.boolean(),
+  allowedRoot: z.string().min(1),
+  allowedSideEffects: z.array(z.string().min(1)).min(1),
+  deferredCapabilities: z.array(z.string().min(1)).min(1),
+  disallowedCapabilities: z.array(z.string().min(1)).min(1),
+}).strict();
+
+const verifyFilesSchema = z.object({
+  artifactPath: z.string().min(1),
+  reportPath: z.string().min(1),
+}).strict();
+
+const verifyVerificationTargetSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  category: z.string().min(1),
+  sourcePlanItemIds: z.array(z.string().min(1)),
+  riskSummary: z.string().min(1),
+  candidateLanes: z.array(z.enum(VERIFY_SUPPORTED_LANES)),
+  expectedFindingKinds: z.array(z.string().min(1)),
+  traceabilityNotes: z.array(z.string().min(1)),
+}).strict();
+
+const verifyVerificationCaseSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  category: z.string().min(1),
+  sourcePlanItemIds: z.array(z.string().min(1)),
+  lanes: z.array(z.enum(VERIFY_SUPPORTED_LANES)),
+  goal: z.string().min(1),
+  status: z.enum(VERIFY_TLC_STATUSES),
+  summary: z.string().min(1),
+  findings: z.array(z.string().min(1)),
+  mitigations: z.array(z.string().min(1)),
+  constraints: z.array(z.string().min(1)),
+  traceabilityNotes: z.array(z.string().min(1)),
+}).strict();
+
+const verifyStructuralVerificationSchema = z.object({
+  status: z.enum(["not_run", "passed", "failed", "errored"]),
+  summary: z.string().min(1),
+  findings: z.array(z.string().min(1)),
+  constraints: z.array(z.string().min(1)),
+}).strict();
+
+const verifyStateModelSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  summary: z.string().min(1),
+  actors: z.array(z.string().min(1)),
+  entities: z.array(z.string().min(1)),
+  states: z.array(z.string().min(1)),
+  transitions: z.array(z.string().min(1)),
+  unsafe_states: z.array(z.string().min(1)),
+  invariants: z.array(z.string().min(1)),
+  initial_conditions: z.array(z.string().min(1)),
+}).strict();
+
+const verifyTlaSpecSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  summary: z.string().min(1),
+  spec_path: z.string().min(1),
+}).strict();
+
+const verifyTlcResultSchema = z.object({
+  id: z.string().min(1),
+  status: z.enum(VERIFY_TLC_STATUSES),
+  summary: z.string().min(1),
+  trace: z.string().min(1).nullable(),
+  errors: z.array(z.string().min(1)),
+}).strict();
+
+const verifyFormalVerificationSchema = z.object({
+  status: z.enum(VERIFY_TLC_STATUSES),
+  summary: z.string().min(1),
+  state_models: z.array(verifyStateModelSchema),
+  tla_specs: z.array(verifyTlaSpecSchema),
+  tlc_results: z.array(verifyTlcResultSchema),
+  findings: z.array(z.string().min(1)),
+  constraints: z.array(z.string().min(1)),
+}).strict();
+
+const verifyVerificationDiagnosticsSchema = z.object({
+  usability_status: z.enum(["actionable", "non_actionable", "upstream_blocked"]),
+  warning_items: z.array(verifyInputIssueSchema),
+  blocking_items: z.array(verifyInputIssueSchema),
+  partial_output: verifyCommandFailureSchema.nullable(),
+}).strict();
+
+const verifyVerificationReadinessSchema = z.object({
+  ready: z.boolean(),
+  status: z.enum(["ready", "ready_with_warnings", "blocked"]),
+  summary: z.string().min(1),
+  warning_items: z.array(verifyInputIssueSchema),
+  blocking_issues: z.array(verifyInputIssueSchema),
+  partial_output: verifyCommandFailureSchema.nullable(),
+  constraining_concern_ids: z.array(z.string().min(1)),
+  recommended_user_actions: z.array(z.string().min(1)),
+}).strict();
+
+export const VERIFY_ARTIFACT_TOP_LEVEL_KEYS = [
+  "schemaVersion",
+  "command",
+  "stage",
+  "status",
+  "purpose",
+  "repoRoot",
+  "requestedOutputRoot",
+  "outputRoot",
+  "writePolicy",
+  "files",
+  "startedAt",
+  "finishedAt",
+  "summary",
+  "boundaryNotes",
+  "source_plan",
+  "verification_target_contract",
+  "formal_lane_contract",
+  "verification_targets",
+  "verification_cases",
+  "structural_verification",
+  "formal_verification",
+  "findings",
+  "constraints",
+  "carry_forward",
+  "verification_diagnostics",
+  "verification_readiness",
+  "failure",
+] as const satisfies readonly (keyof VerifyArtifact)[];
+
 export const verifyFoundationSchema = z.object({
   command: z.literal(`forge ${FORGE_VERIFY_COMMAND}`),
   stage: z.literal(FORGE_VERIFY_STAGE),
@@ -140,7 +282,7 @@ export const verifyFoundationSchema = z.object({
   }
   if (
     value.verificationInput.usability.status === "non_actionable" &&
-    value.verificationInput.usability.blockingItems.every((item) => item.code !== "VERIFY_INPUT_TOO_WEAK")
+    value.verificationInput.usability.blockingItems.every((item) => item.code !== VERIFY_INPUT_TOO_WEAK)
   ) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
@@ -160,4 +302,182 @@ export function validateVerifyTargetContract(contract: unknown): VerifyTargetCon
 
 export function validateVerifyFormalLaneContract(contract: unknown): VerifyFormalLaneContract {
   return verifyFormalLaneContractSchema.parse(contract);
+}
+
+function assertVerifyArtifactTopLevelKeys(artifact: VerifyArtifact): void {
+  const actualKeys = Object.keys(artifact).sort();
+  const expectedKeys = [...VERIFY_ARTIFACT_TOP_LEVEL_KEYS].sort();
+
+  if (
+    actualKeys.length !== expectedKeys.length ||
+    actualKeys.some((key, index) => key !== expectedKeys[index])
+  ) {
+    throw new Error("Verify artifact top-level key contract drifted from the required set.");
+  }
+}
+
+export const verifyArtifactSchema = z.object({
+  schemaVersion: z.literal(FORGE_SCHEMA_VERSION),
+  command: z.literal(`forge ${FORGE_VERIFY_COMMAND}`),
+  stage: z.literal(FORGE_VERIFY_STAGE),
+  status: z.enum(["ready", "blocked", "failed"]),
+  purpose: z.string().min(1),
+  repoRoot: z.string().min(1),
+  requestedOutputRoot: z.string().nullable(),
+  outputRoot: z.string().min(1),
+  writePolicy: verifyWritePolicySchema,
+  files: verifyFilesSchema,
+  startedAt: z.string().min(1),
+  finishedAt: z.string().min(1),
+  summary: z.string().min(1),
+  boundaryNotes: z.array(z.string().min(1)).min(1),
+  source_plan: verifyPlanReferenceSchema,
+  verification_target_contract: verifyTargetContractSchema,
+  formal_lane_contract: verifyFormalLaneContractSchema,
+  verification_targets: z.array(verifyVerificationTargetSchema),
+  verification_cases: z.array(verifyVerificationCaseSchema),
+  structural_verification: verifyStructuralVerificationSchema,
+  formal_verification: verifyFormalVerificationSchema,
+  findings: z.array(z.string().min(1)),
+  constraints: z.array(z.string().min(1)),
+  carry_forward: planArtifactSchema.shape.carry_forward,
+  verification_diagnostics: verifyVerificationDiagnosticsSchema,
+  verification_readiness: verifyVerificationReadinessSchema,
+  failure: verifyCommandFailureSchema.nullable(),
+}).strict().superRefine((value, context) => {
+  if (value.source_plan.readyForVerification && value.verification_diagnostics.usability_status === "upstream_blocked") {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Verify input cannot be upstream_blocked when Step 2 marked the plan ready for verification.",
+      path: ["verification_diagnostics", "usability_status"],
+    });
+  }
+  if (!value.source_plan.readyForVerification && value.verification_diagnostics.usability_status === "actionable") {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Blocked Step 2 handoffs must stay blocked in the normalized verify-input usability state.",
+      path: ["verification_diagnostics", "usability_status"],
+    });
+  }
+  if (
+    value.verification_diagnostics.usability_status === "non_actionable" &&
+    value.verification_diagnostics.blocking_items.every((item) => item.code !== VERIFY_INPUT_TOO_WEAK)
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Non-actionable verify input must expose VERIFY_INPUT_TOO_WEAK.",
+      path: ["verification_diagnostics", "blocking_items"],
+    });
+  }
+
+  const readinessWarningItems = value.verification_readiness.warning_items;
+  const mirroredWarningItems = value.verification_diagnostics.warning_items;
+  if (
+    readinessWarningItems.length !== mirroredWarningItems.length ||
+    readinessWarningItems.some(
+      (item, index) =>
+        item.code !== mirroredWarningItems[index]?.code ||
+        item.message !== mirroredWarningItems[index]?.message,
+    )
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Verification readiness warning items must mirror verification diagnostics warning items.",
+      path: ["verification_readiness", "warning_items"],
+    });
+  }
+
+  const readinessBlockingIssues = value.verification_readiness.blocking_issues;
+  const mirroredBlockingItems = value.verification_diagnostics.blocking_items;
+  if (
+    readinessBlockingIssues.length !== mirroredBlockingItems.length ||
+    readinessBlockingIssues.some(
+      (item, index) =>
+        item.code !== mirroredBlockingItems[index]?.code ||
+        item.message !== mirroredBlockingItems[index]?.message,
+    )
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Verification readiness blocking issues must mirror verification diagnostics blocking items.",
+      path: ["verification_readiness", "blocking_issues"],
+    });
+  }
+
+  if (
+    value.verification_readiness.partial_output?.code !== value.verification_diagnostics.partial_output?.code ||
+    value.verification_readiness.partial_output?.message !== value.verification_diagnostics.partial_output?.message ||
+    value.verification_readiness.partial_output?.fallbackReason !== value.verification_diagnostics.partial_output?.fallbackReason
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Verification readiness partial output must mirror verification diagnostics partial output.",
+      path: ["verification_readiness", "partial_output"],
+    });
+  }
+
+  const readinessHasWarnings =
+    readinessWarningItems.length > 0 ||
+    value.verification_readiness.constraining_concern_ids.length > 0 ||
+    value.verification_readiness.partial_output !== null;
+  const expectedReadinessStatus = value.verification_readiness.ready
+    ? readinessHasWarnings
+      ? "ready_with_warnings"
+      : "ready"
+    : "blocked";
+  if (value.verification_readiness.status !== expectedReadinessStatus) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Verification readiness status must match the resolved ready/warning/block state.",
+      path: ["verification_readiness", "status"],
+    });
+  }
+
+  const expectedTopLevelStatus = value.failure
+    ? "failed"
+    : value.verification_readiness.ready
+      ? "ready"
+      : "blocked";
+  if (value.status !== expectedTopLevelStatus) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Verify artifact status must match the readiness and failure matrix.",
+      path: ["status"],
+    });
+  }
+
+  if (value.verification_readiness.ready && readinessBlockingIssues.length > 0) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Ready verification readiness must not carry blocking issues.",
+      path: ["verification_readiness", "blocking_issues"],
+    });
+  }
+  if (!value.verification_readiness.ready && readinessBlockingIssues.length === 0) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Blocked verification readiness must carry at least one blocking issue.",
+      path: ["verification_readiness", "blocking_issues"],
+    });
+  }
+  if (value.failure && !value.verification_diagnostics.partial_output) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Artifacts with a failure must mirror it in verification diagnostics partial_output.",
+      path: ["verification_diagnostics", "partial_output"],
+    });
+  }
+  if (!value.failure && value.verification_diagnostics.partial_output) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Artifacts without a failure must keep verification diagnostics partial_output empty.",
+      path: ["verification_diagnostics", "partial_output"],
+    });
+  }
+});
+
+export function validateVerifyArtifact(artifact: unknown): VerifyArtifact {
+  const parsedArtifact = verifyArtifactSchema.parse(artifact);
+  assertVerifyArtifactTopLevelKeys(parsedArtifact);
+  return parsedArtifact;
 }

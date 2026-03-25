@@ -1,6 +1,9 @@
 export const FORGE_VERIFY_COMMAND = "verify" as const;
 export const FORGE_VERIFY_STAGE = "step3" as const;
 export const FORGE_VERIFY_FULL_COMMAND = `forge ${FORGE_VERIFY_COMMAND}` as const;
+export const VERIFY_ARTIFACT_NAME = "verify.json" as const;
+export const VERIFY_REPORT_NAME = "verify-report.md" as const;
+export const VERIFY_INPUT_TOO_WEAK = "VERIFY_INPUT_TOO_WEAK" as const;
 
 export const STEP3_VERIFY_PURPOSE =
   "Transform Step 2 planning output into verified or constrained planning output by applying both structural verification and formal TLA+/TLC-backed verification to risky coordination/workflow logic." as const;

@@ -8,6 +8,35 @@ import { fileURLToPath } from "node:url";
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(currentDirectory, "..");
 const entryPointPath = resolve(repoRoot, "dist", "src", "index.js");
+const VERIFY_REPORT_HEADINGS = [
+  "# Forge Verify Report",
+  "## Overview",
+  "## Purpose",
+  "## Source Plan",
+  "## Verification Target Contract",
+  "## Formal Lane Contract",
+  "## Verification Targets",
+  "## Verification Cases",
+  "## Structural Verification",
+  "## Formal Verification",
+  "## Findings",
+  "## Constraints",
+  "## Carry-Forward Context",
+  "## Verification Readiness",
+  "## Boundary Notes",
+  "## Deferred Capabilities",
+  "## Allowed Side Effects",
+  "## Disallowed Capabilities",
+  "## Output Files",
+  "## Failure",
+  "## Summary",
+];
+
+function assertNoVerifyReportHeadings(output) {
+  for (const heading of VERIFY_REPORT_HEADINGS) {
+    assert.equal(output.includes(heading), false);
+  }
+}
 
 async function main() {
   const tempRepo = await mkdtemp(join(tmpdir(), "forge-smoke-"));
@@ -166,6 +195,45 @@ async function main() {
     assert.match(planReport, /## Test Obligations/);
     assert.match(planReport, /## Parallelization/);
     assert.match(planReport, /## Planning Readiness/);
+
+    const verifyResult = spawnSync(process.execPath, [
+      entryPointPath,
+      "verify",
+      "--repo",
+      tempRepo,
+    ], {
+      cwd: tempRepo,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+      },
+    });
+
+    if (verifyResult.error) {
+      throw verifyResult.error;
+    }
+
+    assert.equal(verifyResult.status, 0);
+    assert.match(verifyResult.stdout, /Status: ready/);
+    assert.match(verifyResult.stdout, /Summary:/);
+    assert.match(verifyResult.stdout, /Output root:/);
+    assert.match(verifyResult.stdout, /Artifact:/);
+    assert.match(verifyResult.stdout, /Report:/);
+    assertNoVerifyReportHeadings(verifyResult.stdout);
+    assertNoVerifyReportHeadings(verifyResult.stderr);
+
+    const verifyArtifactPath = join(tempRepo, ".forge", "verify.json");
+    const verifyReportPath = join(tempRepo, ".forge", "reports", "verify-report.md");
+    const verifyArtifact = JSON.parse(await readFile(verifyArtifactPath, "utf8"));
+    const verifyReport = await readFile(verifyReportPath, "utf8");
+
+    assert.equal(verifyArtifact.status, "ready");
+    assert.equal(verifyArtifact.command, "forge verify");
+    assert.equal(verifyArtifact.files.artifactPath, verifyArtifactPath);
+    assert.equal(verifyArtifact.files.reportPath, verifyReportPath);
+    assert.match(verifyReport, /Forge Verify Report/);
+    assert.match(verifyReport, /## Overview/);
+    assert.match(verifyReport, /## Summary/);
 
     await writeFile(join(tempRepo, "src", "app.ts"), "export const smoke = true;\n", "utf8");
     await writeFile(

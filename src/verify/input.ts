@@ -1,14 +1,17 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
+import { REPORTS_DIRECTORY } from "../intake/constants.js";
 import { resolveFilesystemRepoRoot, resolveOutputFilePath, resolveOutputRoot } from "../intake/path-policy.js";
 import { validatePlanArtifact } from "../plan/schema.js";
 import { PLAN_ARTIFACT_NAME } from "../plan/constants.js";
 import type { PlanArtifact } from "../plan/types.js";
+import { VERIFY_INPUT_TOO_WEAK, VERIFY_ARTIFACT_NAME, VERIFY_REPORT_NAME } from "./constants.js";
 import type {
   LoadedVerifyFoundationInput,
   VerifyFoundationOptions,
   VerifyInputIssue,
+  VerifyFoundationResolvedPaths,
   VerifyPlanReference,
   VerifyPlanningInput,
   VerifyResolvedOutputPaths,
@@ -113,7 +116,7 @@ function buildBlockingItems(
   if (!actionableVerificationSignal) {
     return [
       {
-        code: "VERIFY_INPUT_TOO_WEAK",
+        code: VERIFY_INPUT_TOO_WEAK,
         message: "Step 2 output is structurally valid but does not provide enough risky verification signal for Step 3 to build meaningful verification work.",
       },
     ];
@@ -164,6 +167,8 @@ export async function resolveVerifyOutputPaths(
     usedFallbackRoot: outputRoot.usedFallbackRoot,
     fallbackReason: outputRoot.fallbackReason,
     planArtifactPath: resolveOutputFilePath(outputRoot.outputRoot, PLAN_ARTIFACT_NAME),
+    verifyArtifactPath: resolveOutputFilePath(outputRoot.outputRoot, VERIFY_ARTIFACT_NAME),
+    verifyReportPath: resolveOutputFilePath(outputRoot.outputRoot, REPORTS_DIRECTORY, VERIFY_REPORT_NAME),
   };
 }
 
@@ -203,7 +208,13 @@ export async function resolveVerifyFoundationInput(
 
     return {
       repoRoot,
-      paths,
+      paths: {
+        requestedOutputRoot: paths.requestedOutputRoot,
+        outputRoot: paths.outputRoot,
+        usedFallbackRoot: paths.usedFallbackRoot,
+        fallbackReason: paths.fallbackReason,
+        planArtifactPath,
+      } satisfies VerifyFoundationResolvedPaths,
       sourcePlan: buildVerifyPlanReference(artifact, planArtifactPath),
       sourceIntake: artifact.source_intake,
       verificationInput: buildVerifyPlanningInput(artifact),

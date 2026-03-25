@@ -12,11 +12,22 @@ import {
   VERIFY_TARGET_RISK_SOURCES,
   VERIFY_TLC_STATUSES,
 } from "./constants.js";
-import { VerifyInputResolutionError, resolveVerifyFoundationInput } from "./input.js";
+import {
+  buildVerifyCommandFailureObject,
+  buildVerifyCommandResult,
+  createVerifyArtifact,
+  toVerifyArtifactJson,
+} from "./artifact.js";
+import { VerifyInputResolutionError, resolveVerifyFoundationInput, resolveVerifyOutputPaths } from "./input.js";
+import { createVerifyReport } from "./report.js";
 import { validateVerifyFoundationResult } from "./schema.js";
+import { extractErrorCode } from "../intake/errors.js";
+import { persistIntakeOutputs } from "../intake/persistence.js";
 import type {
   LoadedVerifyFoundationInput,
   VerifyCarryForwardContext,
+  VerifyCommandOptions,
+  VerifyCommandResult,
   VerifyFoundationCommandResult,
   VerifyFoundationOptions,
   VerifyFoundationResult,
@@ -101,6 +112,102 @@ export async function runVerifyFoundation(
         error instanceof Error
           ? `Forge verify could not build its Step 3 foundation: ${error.message}`
           : "Forge verify could not build its Step 3 foundation.",
+      ),
+    };
+  }
+}
+
+async function persistVerifyCommandOutputs(params: {
+  artifactPath: string;
+  reportPath: string;
+  artifact: string;
+  report: string;
+}): Promise<void> {
+  await persistIntakeOutputs({
+    criticalWrites: [
+      {
+        filePath: params.artifactPath,
+        contents: params.artifact,
+      },
+      {
+        filePath: params.reportPath,
+        contents: params.report,
+      },
+    ],
+  });
+}
+
+export async function runVerifyCommand(
+  options: VerifyCommandOptions = {},
+  currentWorkingDirectory = process.cwd(),
+): Promise<VerifyCommandResult> {
+  try {
+    const input = await resolveVerifyFoundationInput(options, currentWorkingDirectory);
+    const paths = await resolveVerifyOutputPaths(input.repoRoot, options.outputDir);
+    const foundation = buildVerifyFoundation(input);
+    const startedAt = new Date().toISOString();
+    const finishedAt = new Date().toISOString();
+    const artifact = createVerifyArtifact({
+      foundation,
+      paths,
+      startedAt,
+      finishedAt,
+    });
+    const report = createVerifyReport(artifact);
+
+    try {
+      await persistVerifyCommandOutputs({
+        artifactPath: paths.verifyArtifactPath,
+        reportPath: paths.verifyReportPath,
+        artifact: toVerifyArtifactJson(artifact),
+        report,
+      });
+    } catch (error) {
+      return {
+        status: "failed",
+        artifact: null,
+        artifactPath: null,
+        reportPath: null,
+        outputRoot: input.paths.outputRoot,
+        summary: "Forge verify failed while persisting its verification artifacts.",
+        failure: buildVerifyCommandFailureObject(
+          extractErrorCode(error) ?? "VERIFY_PERSISTENCE_FAILED",
+          error instanceof Error
+            ? error.message
+            : "Forge verify failed while persisting its verification artifacts.",
+        ),
+      };
+    }
+
+    return buildVerifyCommandResult({
+      artifact,
+      paths,
+    });
+  } catch (error) {
+    if (error instanceof VerifyInputResolutionError) {
+      return {
+        status: "failed",
+        artifact: null,
+        artifactPath: null,
+        reportPath: null,
+        outputRoot: null,
+        summary: "Forge verify could not load a valid Step 2 plan artifact, so no verification outputs were written.",
+        failure: buildVerifyCommandFailureObject(error.code, error.message),
+      };
+    }
+
+    return {
+      status: "failed",
+      artifact: null,
+      artifactPath: null,
+      reportPath: null,
+      outputRoot: null,
+      summary: "Forge verify could not build a usable verification artifact.",
+      failure: buildVerifyCommandFailureObject(
+        "VERIFY_COMMAND_FAILED",
+        error instanceof Error
+          ? error.message
+          : "Forge verify could not build a usable verification artifact.",
       ),
     };
   }

@@ -296,6 +296,12 @@
   - Locked explicit Step 3 boundary-policy and formal-lane contracts so V1 now treats structural verification plus TLA+/TLC-backed formal verification as first-class behavior for risky coordination and workflow logic.
   - Added dedicated Step 3 Part 1 coverage for ready, warning-heavy, partial-output, blocked, missing-input, invalid-input, non-actionable, and boundary-policy scenarios, and wired the suite into `npm.cmd test`.
   - Updated the top-level README plus `S3-B1-Done/p1-done-summary.md` so Step 3 Batch 1 Part 1 is documented and traceable.
+- Batch 1.02: `part-2-verify-command-contract-and-output-artifacts.md` (Step 3)
+  - Added the first public `forge verify` CLI command with deterministic Step 2 plan consumption, repo/output-root handling, and persisted `verify.json` / `verify-report.md` outputs in the resolved output root.
+  - Added a frozen Step 3 verification artifact contract with stable top-level metadata, source-plan references, verification target/formal-lane contract sections, placeholder structural/formal result sections, carried-forward Step 2 context, and explicit verification diagnostics/readiness output.
+  - Added an artifact-driven Step 3 verify report with the required heading order and explicit visibility into source plan state, carry-forward uncertainty, structural/formal placeholder sections, readiness, boundary notes, and output-file metadata.
+  - Added dedicated Step 3 Part 2 regression coverage for command behavior, artifact-schema shape, report parity, runner export, custom output-root handling, unsafe output-root fallback, blocked-output persistence, and packaged CLI execution, and extended `scripts/smoke.mjs` to prove `forge intake -> forge plan -> forge verify`.
+  - Updated `README.md`, `progress.md`, and `S3-B1-Done/p2-done-summary.md` so Step 3 Batch 1 Part 2 is documented and traceable.
 
 ## Current Branch State
 - `dev` includes the completed Step 1 work through Batch 4.05, including the frozen Step 2 handoff contract from Intake.
@@ -307,7 +313,8 @@
 - `dev` now includes Step 2 Batch 3 Part 5, including the explicit `forge verify` handoff contract, dedicated Step 3 handoff coverage, and report/readiness wording that names the verification gate directly.
 - `dev` now treats the Step 2 planning runtime surface as frozen for V1 except future bug fixes while keeping optional debug outputs behind `FORGE_PLAN_DEBUG=1` and treating `plan.json`, `plan-report.md`, and `planning_readiness` as the frozen Step 3 verify inputs.
 - `dev` now includes Step 3 Batch 1 Part 1, including the internal verify foundation, deterministic `plan.json` consumption, explicit structural/formal lane contracts, and real V1 TLA+/TLC entry points in the Step 3 boundary contract.
-- `dev` still defers public `forge verify` CLI wiring, verification artifacts/reports, and executable structural/formal verification work to the remaining Step 3 parts.
+- `dev` now includes Step 3 Batch 1 Part 2, including the public `forge verify` CLI, persisted `verify.json` / `verify-report.md` outputs, the frozen Step 3 command/output contract, and a runnable smoke path from `forge intake` through `forge verify`.
+- `dev` still defers real verification-target/case construction, executable structural checks, formal state-model/TLA+ generation, TLC execution, and any optional verify debug artifacts to the remaining Step 3 parts.
 
 ## Verification
 - `npm.cmd test`
@@ -317,4 +324,5 @@
 
 ## Next
 - Step 3 Batch 1 Part 1 is complete.
-- Next implementation work should begin Step 3 Batch 1 Part 2 `part-2-verify-command-contract-and-output-artifacts.md`.
+- Step 3 Batch 1 Part 2 is complete.
+- Next implementation work should begin Step 3 Batch 1 Part 3 `part-3-verification-target-model-cases-and-lanes.md`.
