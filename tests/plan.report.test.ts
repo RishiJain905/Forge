@@ -294,7 +294,7 @@ await runScenario(
         overviewBody,
         new RegExp(`Planning Readiness Status:\\s+${artifact.planning_readiness.status}`),
       );
-      assert.match(readinessBody, /Later-step gate:\s+blocked\./);
+      assert.match(readinessBody, /`forge verify` gate:\s+blocked\./);
       assert.match(readinessBody, /Status:\s+blocked/);
       assert.match(readinessBody, /Partial Output/);
       assert.match(readinessBody, /OUTPUT_ROOT_FALLBACK/);

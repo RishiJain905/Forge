@@ -202,7 +202,7 @@ await runScenario(
       assert.doesNotMatch(firstReport, /later Step 2/i);
       await assertNoStep2Markers();
       const readme = await readTextFile(join(process.cwd(), "README.md"));
-      assert.match(readme, /Step 2: Plan is implemented through Batch 3 Part 4\./);
+      assert.match(readme, /Step 2: Plan is implemented through Batch 3 Part 5\./);
       assert.match(readme, /frozen for V1 except for future bug fixes/i);
     } finally {
       await disposeTempRepo(repoRoot);

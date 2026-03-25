@@ -55,7 +55,7 @@ function planningAssistLabel(planningAssist?: PlanAssistResolution): string {
 
 function renderPlanItemContractSection(artifact: PlanArtifact): string {
   return renderSection("Plan Item Contract", [
-    "This section freezes the stable Step 2 plan-item contract that later steps can consume directly.",
+    "This section freezes the stable Step 2 plan-item contract that `forge verify` and later steps can consume directly.",
     "",
     "### Required Fields",
     "",
@@ -193,7 +193,7 @@ function renderCarryForwardContextSection(artifact: PlanArtifact): string {
   const readiness = artifact.carry_forward.next_step_readiness;
 
   return renderSection("Carry-Forward Context", [
-    "This section preserves the Step 1 planning handoff exactly as Step 2 received it.",
+    "This section preserves the Step 1 planning handoff exactly as Step 2 received it so `forge verify` does not need to reconstruct intake context from prose.",
     "",
     "### Task Spec",
     "",
@@ -286,8 +286,8 @@ function renderPlanningReadinessSection(artifact: PlanArtifact): string {
 
   return renderSection("Planning Readiness", [
     readiness.ready
-      ? "Later-step gate: proceed."
-      : "Later-step gate: blocked.",
+      ? "`forge verify` gate: proceed."
+      : "`forge verify` gate: blocked.",
     "",
     readiness.summary,
     "",
@@ -404,7 +404,7 @@ export function createPlanReport(
     ]),
     renderSection("Purpose", [artifact.purpose]),
     renderSection("Source Intake", [
-      "This section records the persisted Step 1 handoff consumed by `forge plan`.",
+      "This section records the persisted Step 1 handoff consumed by `forge plan` before it prepares the Step 3 `forge verify` contract.",
       ...renderKeyValueList([
         ["Artifact Path", artifact.source_intake.artifactPath],
         ["Command", artifact.source_intake.command],

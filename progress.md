@@ -284,6 +284,12 @@
   - Kept the public Step 2 contract stable while extending the report overview with readiness status/counts and preserving the bounded planning-assist path as wording-only.
   - Updated `README.md`, `progress.md`, and `S2-B3-Done/p4-done-summary.md` so Step 2 is now documented through Batch 3 Part 4 and marked frozen for V1 except future bug fixes.
   - Re-verified the full Step 2 gate on `dev` with fresh `npm.cmd test`, `npm.cmd run typecheck`, `npm.cmd run build`, and `npm.cmd run smoke`.
+- Batch 3.05: `part-5-step3-handoff-contract-for-verify.md` (Step 2)
+  - Reworked Step 2 readiness and report wording so the existing `planning_readiness` surface now states the explicit `forge verify` gate instead of generic later-step language, without changing the public `plan.json` top-level contract or report heading order.
+  - Added a dedicated `tests/plan.step3-handoff-contract.test.ts` suite covering grounded ready runs, warning-heavy verify-ready runs, blocked persisted handoffs, and failed fallback-output runs as Step 3 inputs.
+  - Kept the Step 3 handoff narrow by freezing the existing `plan.json` sections as the verification contract instead of adding a new handoff block or any Step 3 runtime behavior.
+  - Wired the new handoff-contract suite into `npm.cmd test` and updated report regression coverage to lock the explicit `forge verify` wording.
+  - Updated `README.md`, `progress.md`, and `S2-B3-Done/p5-done-summary.md` so Step 2 Batch 3 Part 5 is documented and traceable.
 
 ## Current Branch State
 - `dev` includes the completed Step 1 work through Batch 4.05, including the frozen Step 2 handoff contract from Intake.
@@ -292,7 +298,8 @@
 - `dev` now includes Step 2 Batch 3 Part 2, including persisted Step 2 planning diagnostics, hardened warning/failure visibility, and explicit bounded planning-assist outcomes across artifact, report, and debug output.
 - `dev` now includes Step 2 Batch 3 Part 3, including a Step 2-owned `planning_readiness` contract, readiness/debug/report parity hardening, and a dedicated readiness split debug artifact.
 - `dev` now includes Step 2 Batch 3 Part 4, including blocked-fallback report polish, debug/readiness parity hardening, bounded-assist structural freeze coverage, and repeated warning-path determinism coverage.
-- `dev` now treats the Step 2 planning runtime surface as frozen for V1 except future bug fixes while keeping optional debug outputs behind `FORGE_PLAN_DEBUG=1` and leaving Part 5 as the Step 3 handoff-contract follow-on.
+- `dev` now includes Step 2 Batch 3 Part 5, including the explicit `forge verify` handoff contract, dedicated Step 3 handoff coverage, and report/readiness wording that names the verification gate directly.
+- `dev` now treats the Step 2 planning runtime surface as frozen for V1 except future bug fixes while keeping optional debug outputs behind `FORGE_PLAN_DEBUG=1` and treating `plan.json`, `plan-report.md`, and `planning_readiness` as the frozen Step 3 verify inputs.
 
 ## Verification
 - `npm.cmd test`
@@ -309,4 +316,5 @@
 - Step 2 Batch 3 Part 2 is complete.
 - Step 2 Batch 3 Part 3 is complete.
 - Step 2 Batch 3 Part 4 is complete.
-- Next implementation work should begin `forge_step2_batch3/part-5-step3-handoff-contract-for-verify.md`.
+- Step 2 Batch 3 Part 5 is complete.
+- Next implementation work should begin Step 3 `forge verify`.

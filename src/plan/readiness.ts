@@ -124,18 +124,18 @@ function buildReadinessSummary(params: {
 }): string {
   if (!params.ready) {
     if (params.foundation.planningInput.usability.status === "upstream_blocked") {
-      return "Later steps should not proceed until the persisted Step 1 handoff is unblocked.";
+      return "`forge verify` should not proceed until the persisted Step 1 handoff is unblocked.";
     }
 
     if (params.foundation.planningInput.usability.status === "non_actionable") {
-      return "Later steps should not proceed until the Step 1 handoff becomes actionable; the current handoff is non-actionable.";
+      return "`forge verify` should not proceed until the Step 1 handoff becomes actionable; the current handoff is non-actionable.";
     }
 
     if (params.blockingIssues.some((issue) => issue.code === "PLAN_INPUT_TOO_WEAK")) {
-      return "Later steps should not proceed until the handoff exposes enough actionable planning signal; the current handoff is insufficient.";
+      return "`forge verify` should not proceed until the handoff exposes enough actionable planning signal; the current handoff is insufficient.";
     }
 
-    return "Later steps should not proceed yet.";
+    return "`forge verify` should not proceed yet.";
   }
 
   if (params.status === "ready_with_warnings") {
@@ -143,13 +143,13 @@ function buildReadinessSummary(params: {
       params.partialOutput !== null &&
       params.warningItems.length === 0
     ) {
-      return "Later steps can proceed, but a partial output fallback remains visible.";
+      return "`forge verify` can proceed, but a partial output fallback remains visible.";
     }
 
-    return "Later steps can proceed, but carried-forward warnings still constrain this plan.";
+    return "`forge verify` can proceed, but carried-forward warnings still constrain this plan.";
   }
 
-  return "Later steps can proceed.";
+  return "`forge verify` can proceed.";
 }
 
 export function resolvePlanReadiness(params: {

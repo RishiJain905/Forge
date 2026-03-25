@@ -316,7 +316,7 @@ async function main() {
     assert.match(warningPlanReport, /## Carry-Forward Context/);
     assert.match(warningPlanReport, /## Planning Readiness/);
     assert.match(warningPlanReport, /ready_with_warnings/);
-    assert.match(warningPlanReport, /Later-step gate:/);
+    assert.match(warningPlanReport, /`forge verify` gate:/);
     assert.match(warningPlanReport, /Planning Assist:\s+not_attempted/);
 
     const assistFallbackResult = spawnSync(process.execPath, [
