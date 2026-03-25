@@ -25,8 +25,15 @@ function buildPlanSummary(
   failure: PlanCommandFailure | null,
   summaryOverride?: string,
 ): string {
+  const fallbackSummary =
+    "Forge plan wrote its outputs to the default .forge root because the requested output root was unsafe.";
+
   if (failure?.code === "OUTPUT_ROOT_FALLBACK") {
-    return "Forge plan wrote its outputs to the default .forge root because the requested output root was unsafe.";
+    if (summaryOverride) {
+      return `${summaryOverride} ${fallbackSummary}`;
+    }
+
+    return fallbackSummary;
   }
 
   if (summaryOverride) {

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { rm } from "node:fs/promises";
+import { readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 
 import { STEP2_ALLOWED_SIDE_EFFECTS } from "../src/plan/constants.js";
@@ -57,6 +57,60 @@ async function removePlanningInputs(repoRoot: string): Promise<void> {
   await rm(join(repoRoot, "tests", "app.test.ts"), { force: true });
 }
 
+function normalizePlanArtifact(artifact: PlanArtifact): Omit<PlanArtifact, "startedAt" | "finishedAt"> {
+  const {
+    startedAt,
+    finishedAt,
+    ...stableArtifact
+  } = artifact;
+
+  void startedAt;
+  void finishedAt;
+
+  return stableArtifact;
+}
+
+async function collectFiles(directory: string): Promise<string[]> {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const files: string[] = [];
+
+  for (const entry of entries) {
+    const path = join(directory, entry.name);
+
+    if (entry.isDirectory()) {
+      files.push(...await collectFiles(path));
+      continue;
+    }
+
+    if (entry.isFile()) {
+      files.push(path);
+    }
+  }
+
+  return files;
+}
+
+async function assertNoStep2Markers(): Promise<void> {
+  const repoRoot = process.cwd();
+  const runtimeFiles = await collectFiles(join(repoRoot, "src", "plan"));
+  const scannedFiles = [
+    ...runtimeFiles,
+    join(repoRoot, "README.md"),
+    join(repoRoot, "scripts", "smoke.mjs"),
+  ];
+  const offenders: string[] = [];
+
+  for (const filePath of scannedFiles) {
+    const contents = await readTextFile(filePath);
+
+    if (/TODO|FIXME|XXX/.test(contents)) {
+      offenders.push(filePath);
+    }
+  }
+
+  assert.deepEqual(offenders, [], `unexpected freeze markers found in Step 2 surface: ${offenders.join(", ")}`);
+}
+
 await runScenario(
   "forge plan satisfies the Batch 3 Part 1 finish line for a grounded spec run",
   async () => {
@@ -83,6 +137,7 @@ await runScenario(
       assert.ok(artifact.test_obligations.length > 0);
       assert.ok(artifact.parallelization_signals.length > 0);
       assert.ok(!/later Step 2 batches will populate/i.test(report));
+      assert.doesNotMatch(report, /later Step 2/i);
       assert.ok(!STEP2_ALLOWED_SIDE_EFFECTS.some((entry) => /later Step 2 parts/i.test(entry)));
     } finally {
       await disposeTempRepo(repoRoot);
@@ -113,6 +168,42 @@ await runScenario(
       assert.match(report, /## Carry-Forward Context/);
       assert.match(report, /## Planning Readiness/);
       assert.match(report, /Planning Assist:\s+not_attempted/);
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "forge plan stays deterministic across repeated warning-heavy runs and keeps freeze markers out of the Step 2 surface",
+  async () => {
+    const repoRoot = await createTempRepo("forge-plan-b3-freeze-warning-repeat-");
+
+    try {
+      const warningResult = runForgeBinary(["intake", "--repo", repoRoot, "--prompt", "fix"], repoRoot);
+      assert.equal(warningResult.code, 0, warningResult.stderr);
+      await removePlanningInputs(repoRoot);
+
+      const firstRun = runForgePlanBinary(["--repo", repoRoot], repoRoot);
+      assert.equal(firstRun.code, 0, firstRun.stderr);
+      const firstArtifact = await readJsonFile<PlanArtifact>(join(repoRoot, ".forge", "plan.json"));
+      const firstReport = await readTextFile(join(repoRoot, ".forge", "reports", "plan-report.md"));
+
+      const secondRun = runForgePlanBinary(["--repo", repoRoot], repoRoot);
+      assert.equal(secondRun.code, 0, secondRun.stderr);
+      const secondArtifact = await readJsonFile<PlanArtifact>(join(repoRoot, ".forge", "plan.json"));
+      const secondReport = await readTextFile(join(repoRoot, ".forge", "reports", "plan-report.md"));
+
+      assert.equal(firstArtifact.status, "ready");
+      assert.equal(firstArtifact.planning_readiness.status, "ready_with_warnings");
+      assert.ok(firstArtifact.planning_readiness.warning_items.length > 0);
+      assert.deepEqual(normalizePlanArtifact(firstArtifact), normalizePlanArtifact(secondArtifact));
+      assert.equal(firstReport, secondReport);
+      assert.doesNotMatch(firstReport, /later Step 2/i);
+      await assertNoStep2Markers();
+      const readme = await readTextFile(join(process.cwd(), "README.md"));
+      assert.match(readme, /Step 2: Plan is implemented through Batch 3 Part 4\./);
+      assert.match(readme, /frozen for V1 except for future bug fixes/i);
     } finally {
       await disposeTempRepo(repoRoot);
     }

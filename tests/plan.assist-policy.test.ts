@@ -61,6 +61,68 @@ function normalizeArtifact(
   return stableArtifact;
 }
 
+function normalizePlanItemDependency(
+  dependency: PlanArtifact["plan_items"][number]["dependencies"][number],
+): Omit<typeof dependency, "reason"> {
+  const { reason, ...stableDependency } = dependency;
+
+  void reason;
+
+  return stableDependency;
+}
+
+function normalizeDependencyGraphEntry(
+  dependency: PlanArtifact["dependency_graph"][number],
+): Omit<typeof dependency, "reason"> {
+  const { reason, ...stableDependency } = dependency;
+
+  void reason;
+
+  return stableDependency;
+}
+
+function normalizeConflictZone(zone: PlanArtifact["conflict_zones"][number]): Omit<typeof zone, "reason"> {
+  const { reason, ...stableZone } = zone;
+
+  void reason;
+
+  return stableZone;
+}
+
+function normalizePlanItem(item: PlanArtifact["plan_items"][number]): Omit<typeof item, "title" | "description"> {
+  const { title, description, dependencies, ...stableItem } = item;
+
+  void title;
+  void description;
+
+  return {
+    ...stableItem,
+    dependencies: dependencies.map(normalizePlanItemDependency),
+  } as unknown as Omit<typeof item, "title" | "description">;
+}
+
+function normalizeStructuralArtifact(
+  artifact: PlanArtifact | Omit<PlanArtifact, "startedAt" | "finishedAt">,
+): Record<string, unknown> {
+  const stableArtifact = normalizeArtifact(artifact as PlanArtifact);
+  const {
+    planning_assist,
+    ...planningDiagnostics
+  } = stableArtifact.planning_diagnostics;
+
+  void planning_assist;
+
+  return {
+    ...stableArtifact,
+    plan_items: stableArtifact.plan_items.map(normalizePlanItem),
+    dependency_graph: stableArtifact.dependency_graph.map(normalizeDependencyGraphEntry),
+    conflict_zones: stableArtifact.conflict_zones.map(normalizeConflictZone),
+    planning_diagnostics: {
+      ...planningDiagnostics,
+    },
+  };
+}
+
 await runScenario(
   "forge plan assist can enrich wording without changing deterministic structure",
   async () => {
@@ -164,10 +226,24 @@ await runScenario(
         assistedArtifact.conflict_zones.every((zone) =>
           /Assist clarified the shared-risk explanation\./.test(zone.reason)),
       );
+      assert.deepEqual(
+        normalizeStructuralArtifact(assistedArtifact),
+        normalizeStructuralArtifact(deterministicArtifact),
+      );
+      assert.deepEqual(
+        assistedArtifact.planning_readiness,
+        deterministicArtifact.planning_readiness,
+      );
+      assert.deepEqual(
+        assistedArtifact.carry_forward,
+        deterministicArtifact.carry_forward,
+      );
 
       const report = await readTextFile(assisted.reportPath as string);
       assert.equal(assistedArtifact.planning_diagnostics.planning_assist.outcome, "applied");
       assert.equal(assistedArtifact.planning_diagnostics.planning_assist.provider, "test-hook");
+      assert.deepEqual(assistedArtifact.planning_diagnostics.planning_assist.warnings, []);
+      assert.deepEqual(assistedArtifact.planning_diagnostics.planning_assist.ignoredEdits, []);
       assert.match(report, /Planning Assist:\s+applied/);
       assert.match(report, /Planning Assist Provider:\s+test-hook/);
       assert.match(

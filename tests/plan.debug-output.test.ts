@@ -97,6 +97,7 @@ type PlanDebugArtifact = {
     debugDependenciesPath: string;
     debugConflictZonesPath: string;
     debugTestObligationsPath: string;
+    debugPlanningReadinessPath: string;
   };
   status: "ready" | "blocked" | "failed";
   plan_items: Array<{ id: string }>;
@@ -128,6 +129,10 @@ type PlanDebugArtifact = {
     outcome: "not_attempted" | "no_suggestion" | "applied" | "ignored_only" | "failed";
     provider: string | null;
   };
+};
+
+type PlanReadinessDebugArtifact = {
+  planning_readiness: PlanDebugArtifact["planning_readiness"];
 };
 
 await runScenario(
@@ -195,6 +200,10 @@ await runScenario(
       assert.equal(debugArtifact.files.debugDependenciesPath, planDebugPath(repoRoot, "dependencies.json"));
       assert.equal(debugArtifact.files.debugConflictZonesPath, planDebugPath(repoRoot, "conflict-zones.json"));
       assert.equal(debugArtifact.files.debugTestObligationsPath, planDebugPath(repoRoot, "test-obligations.json"));
+      assert.equal(
+        debugArtifact.files.debugPlanningReadinessPath,
+        planReadinessDebugPath(repoRoot),
+      );
       assert.ok(debugArtifact.plan_items.length > 0);
       assert.ok(debugArtifact.dependency_graph.length > 0);
       assert.ok(debugArtifact.conflict_zones.length > 0);
@@ -208,6 +217,10 @@ await runScenario(
       assert.equal(debugArtifact.planning_readiness.partial_output, null);
       assert.ok(Array.isArray(debugArtifact.planning_readiness.constraining_concern_ids));
       assert.ok(Array.isArray(debugArtifact.planning_readiness.recommended_user_actions));
+      assert.deepEqual(
+        await readJsonFile<PlanReadinessDebugArtifact>(planReadinessDebugPath(repoRoot)),
+        { planning_readiness: debugArtifact.planning_readiness },
+      );
       assert.equal(debugArtifact.planning_diagnostics.usability_status, "actionable");
       assert.equal(debugArtifact.planning_diagnostics.planning_assist.outcome, "not_attempted");
       assert.equal(debugArtifact.planning_assist.outcome, "not_attempted");
@@ -271,8 +284,13 @@ await runScenario(
       assert.equal(await fileExists(planArtifactPath(repoRoot)), true);
       assert.equal(await fileExists(planReportPath(repoRoot)), true);
       assert.equal(await fileExists(planDebugPath(repoRoot, "plan-debug.json")), true);
+      assert.equal(
+        await fileExists(planReadinessDebugPath(repoRoot)),
+        true,
+      );
 
       const debugArtifact = await readJsonFile<PlanDebugArtifact>(planDebugPath(repoRoot, "plan-debug.json"));
+      const readinessArtifact = await readJsonFile<PlanReadinessDebugArtifact>(planReadinessDebugPath(repoRoot));
 
       assert.equal(debugArtifact.status, "blocked");
       assert.equal(debugArtifact.planning_readiness.ready, false);
@@ -281,11 +299,16 @@ await runScenario(
       assert.ok(debugArtifact.planning_readiness.blocking_issues.length > 0);
       assert.equal(debugArtifact.planning_diagnostics.usability_status, "upstream_blocked");
       assert.equal(debugArtifact.planning_diagnostics.planning_assist.outcome, "not_attempted");
+      assert.equal(
+        debugArtifact.files.debugPlanningReadinessPath,
+        planReadinessDebugPath(repoRoot),
+      );
       assert.ok(debugArtifact.plan_items.length > 0);
       assert.ok(debugArtifact.carry_forward.concerns.length > 0);
       assert.ok(
         debugArtifact.carry_forward.concerns.every((concern) => concern.planItemIds.length > 0),
       );
+      assert.deepEqual(readinessArtifact.planning_readiness, debugArtifact.planning_readiness);
     } finally {
       delete process.env.FORGE_PLAN_DEBUG;
       await disposeTempRepo(repoRoot);

@@ -380,10 +380,16 @@ export function createPlanReport(
         ["Output Root", artifact.outputRoot],
         ["Requested Output Root", artifact.requestedOutputRoot],
         ["Planning Readiness", artifact.planning_readiness.ready],
+        ["Planning Readiness Status", artifact.planning_readiness.status],
         ["Planning Usability", artifact.planning_diagnostics.usability_status],
+        ["Planning Warning Items", artifact.planning_readiness.warning_items.length],
+        ["Planning Blocking Issues", artifact.planning_readiness.blocking_issues.length],
         ["Planning Assist", planningAssistLabel(planningAssist)],
         ...(planningAssist.provider
           ? [["Planning Assist Provider", planningAssist.provider] as [string, string]]
+          : []),
+        ...(artifact.failure
+          ? [["Failure Code", artifact.failure.code] as [string, string]]
           : []),
       ]),
       ...(planningAssist?.reportNotes.length

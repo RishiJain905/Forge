@@ -58,6 +58,14 @@ function sectionBody(report: string, heading: string): string[] {
     .filter((line) => line.length > 0);
 }
 
+function planArtifactPath(repoRoot: string, outputDir = ".forge"): string {
+  return join(repoRoot, outputDir, "plan.json");
+}
+
+function planReportPath(repoRoot: string, outputDir = ".forge"): string {
+  return join(repoRoot, outputDir, "reports", "plan-report.md");
+}
+
 const REQUIRED_HEADINGS = [
   "## Overview",
   "## Purpose",
@@ -210,6 +218,93 @@ await runScenario(
       for (const zone of artifact.conflict_zones) {
         assert.ok(report.includes(zone.id), `expected report to reference conflict zone ${zone.id}`);
       }
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "forge plan report keeps blocked fallback output coherent across overview, readiness, failure, and summary sections",
+  async () => {
+    const repoRoot = await createTempRepo("forge-plan-report-blocked-");
+    const blockedOutputDir = join("..", "forge-plan-report-fallback");
+
+    try {
+      const intakeResult = runForgeBinary(
+        ["intake", "--repo", repoRoot, "--prompt", "fix", "--fail-on-low-confidence"],
+        repoRoot,
+      );
+
+      assert.equal(intakeResult.code, 1);
+
+      const planResult = runForgePlanBinary(
+        ["--repo", repoRoot, "--output-dir", blockedOutputDir],
+        repoRoot,
+      );
+
+      assert.notEqual(planResult.code, 0);
+      assert.match(planResult.stderr, /OUTPUT_ROOT_FALLBACK/);
+
+      const artifact = await readJsonFile<{
+        status: "ready" | "blocked" | "failed";
+        summary: string;
+        planning_diagnostics: {
+          usability_status: "actionable" | "non_actionable" | "upstream_blocked";
+          warning_items: Array<{ code: string; message: string }>;
+          blocking_items: Array<{ code: string; message: string }>;
+          partial_output: { code: string; message: string; fallbackReason?: string } | null;
+        };
+        planning_readiness: {
+          ready: boolean;
+          status: "ready" | "ready_with_warnings" | "blocked";
+          summary: string;
+          warning_items: Array<{ code: string; message: string }>;
+          blocking_issues: Array<{ code: string; message: string }>;
+          partial_output: { code: string; message: string; fallbackReason?: string } | null;
+          constraining_concern_ids: string[];
+          recommended_user_actions: string[];
+        };
+        failure: { code: string; message: string; fallbackReason?: string } | null;
+      }>(planArtifactPath(repoRoot));
+      const report = await readTextFile(planReportPath(repoRoot));
+      const overviewBody = sectionBody(report, "Overview").join("\n");
+      const readinessBody = sectionBody(report, "Planning Readiness").join("\n");
+      const failureBody = sectionBody(report, "Failure").join("\n");
+      const summaryBody = sectionBody(report, "Summary").join("\n");
+
+      assert.equal(artifact.status, "failed");
+      assert.equal(artifact.planning_diagnostics.usability_status, "upstream_blocked");
+      assert.ok(
+        artifact.planning_diagnostics.blocking_items.some((item) => item.code === "LOW_CONFIDENCE_ESCALATED"),
+      );
+      assert.equal(artifact.planning_diagnostics.partial_output?.code, "OUTPUT_ROOT_FALLBACK");
+      assert.ok(artifact.planning_diagnostics.partial_output?.fallbackReason);
+      assert.equal(artifact.planning_readiness.ready, false);
+      assert.equal(artifact.planning_readiness.status, "blocked");
+      assert.ok(
+        artifact.planning_readiness.blocking_issues.some((issue) => issue.code === "LOW_CONFIDENCE_ESCALATED"),
+      );
+      assert.equal(artifact.failure?.code, "OUTPUT_ROOT_FALLBACK");
+      assert.ok(artifact.failure?.fallbackReason);
+      assert.match(overviewBody, /Planning Readiness:\s+false/);
+      assert.match(overviewBody, /Planning Usability:\s+upstream_blocked/);
+      assert.match(overviewBody, /Planning Assist:\s+not_attempted/);
+      assert.match(
+        overviewBody,
+        new RegExp(`Planning Readiness Status:\\s+${artifact.planning_readiness.status}`),
+      );
+      assert.match(readinessBody, /Later-step gate:\s+blocked\./);
+      assert.match(readinessBody, /Status:\s+blocked/);
+      assert.match(readinessBody, /Partial Output/);
+      assert.match(readinessBody, /OUTPUT_ROOT_FALLBACK/);
+      assert.match(failureBody, /OUTPUT_ROOT_FALLBACK/);
+      assert.match(failureBody, /default \.forge output root|unsafe/i);
+      assert.match(
+        summaryBody,
+        new RegExp(artifact.planning_readiness.summary.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+      );
+      assert.match(summaryBody, /default \.forge output root|unsafe/i);
     } finally {
       await disposeTempRepo(repoRoot);
     }
