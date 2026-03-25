@@ -29,6 +29,7 @@ export interface PlanDebugArtifact {
     debugDependenciesPath: string;
     debugConflictZonesPath: string;
     debugTestObligationsPath: string;
+    debugPlanningReadinessPath: string;
   };
   source_intake: PlanArtifact["source_intake"];
   planning_diagnostics: PlanArtifact["planning_diagnostics"];
@@ -80,6 +81,7 @@ export function createPlanDebugArtifact(
       debugDependenciesPath: requireDebugPath(paths.debugDependenciesPath, "debugDependenciesPath"),
       debugConflictZonesPath: requireDebugPath(paths.debugConflictZonesPath, "debugConflictZonesPath"),
       debugTestObligationsPath: requireDebugPath(paths.debugTestObligationsPath, "debugTestObligationsPath"),
+      debugPlanningReadinessPath: requireDebugPath(paths.debugPlanningReadinessPath, "debugPlanningReadinessPath"),
     },
     source_intake: artifact.source_intake,
     planning_diagnostics: artifact.planning_diagnostics,
@@ -122,6 +124,10 @@ export function createPlanDebugWrites(params: {
     {
       filePath: requireDebugPath(params.paths.debugTestObligationsPath, "debugTestObligationsPath"),
       contents: stringifyJson({ test_obligations: params.artifact.test_obligations }),
+    },
+    {
+      filePath: requireDebugPath(params.paths.debugPlanningReadinessPath, "debugPlanningReadinessPath"),
+      contents: stringifyJson({ planning_readiness: params.artifact.planning_readiness }),
     },
   ];
 }

@@ -76,7 +76,16 @@ await runScenario(
           blocking_items: Array<{ code: string; message: string }>;
           partial_output: { code: string; message: string; fallbackReason?: string } | null;
         };
-        planning_readiness: { ready: boolean; blocking_issues: Array<{ code: string; message: string }> };
+        planning_readiness: {
+          ready: boolean;
+          status: "ready" | "ready_with_warnings" | "blocked";
+          summary: string;
+          warning_items: Array<{ code: string; message: string }>;
+          blocking_issues: Array<{ code: string; message: string }>;
+          partial_output: { code: string; message: string; fallbackReason?: string } | null;
+          constraining_concern_ids: string[];
+          recommended_user_actions: string[];
+        };
         summary: string;
         plan_items: unknown[];
       }>(join(repoRoot, ".forge", "plan.json"));
@@ -89,7 +98,10 @@ await runScenario(
       assert.ok(planArtifact.planning_diagnostics.blocking_items.some((issue) => issue.code === "PLAN_INPUT_TOO_WEAK"));
       assert.equal(planArtifact.planning_diagnostics.partial_output, null);
       assert.equal(planArtifact.planning_readiness.ready, false);
+      assert.equal(planArtifact.planning_readiness.status, "blocked");
+      assert.ok(planArtifact.planning_readiness.summary.length > 0);
       assert.ok(planArtifact.planning_readiness.blocking_issues.some((issue) => issue.code === "PLAN_INPUT_TOO_WEAK"));
+      assert.ok(planArtifact.planning_readiness.recommended_user_actions.length > 0);
       assert.match(planArtifact.summary, /non-actionable|not actionable|insufficient/i);
       assert.deepEqual(planArtifact.plan_items, []);
     } finally {

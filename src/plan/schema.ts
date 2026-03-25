@@ -14,6 +14,8 @@ import {
   PLAN_ITEM_REQUIRED_FIELDS,
   PLAN_PARALLELIZATION_SIGNALS,
   PLAN_RISK_LEVELS,
+  PLAN_READINESS_CONSTRAINING_EFFECTS,
+  PLAN_READINESS_STATUSES,
   PLAN_TEST_OBLIGATION_CATEGORIES,
   PLAN_VERIFICATION_TARGET_CATEGORIES,
   STEP2_BOUNDARY_POLICY,
@@ -64,6 +66,7 @@ const planConflictZoneSchema = z.object({
   planItemIds: z.array(z.string().min(1)),
   riskLevel: z.enum(PLAN_RISK_LEVELS),
 }).strict();
+const PLAN_READINESS_CONSTRAINING_EFFECT_SET = new Set<string>(PLAN_READINESS_CONSTRAINING_EFFECTS);
 
 const planParallelizationSignalEntrySchema = z.object({
   planItemId: z.string().min(1),
@@ -195,7 +198,6 @@ const planFilesSchema = z.object({
   reportPath: z.string().min(1).nullable(),
 }).strict();
 
-const planPlanningReadinessSchema = intakeArtifactSchema.shape.next_step_readiness;
 const planAssistResolutionSchema = z.object({
   outcome: z.enum(["not_attempted", "no_suggestion", "applied", "ignored_only", "failed"]),
   attempted: z.boolean(),
@@ -238,6 +240,16 @@ const planPartialOutputSchema = z.object({
   code: z.string().min(1),
   message: z.string().min(1),
   fallbackReason: z.string().optional(),
+}).strict();
+const planPlanningReadinessSchema = z.object({
+  ready: z.boolean(),
+  status: z.enum(PLAN_READINESS_STATUSES),
+  summary: z.string().min(1),
+  warning_items: z.array(planInputIssueSchema),
+  blocking_issues: z.array(planInputIssueSchema),
+  partial_output: planPartialOutputSchema.nullable(),
+  constraining_concern_ids: z.array(z.string().min(1)),
+  recommended_user_actions: z.array(z.string().min(1)),
 }).strict();
 const planPlanningDiagnosticsSchema = z.object({
   usability_status: z.enum(["actionable", "non_actionable", "upstream_blocked"]),
@@ -648,6 +660,107 @@ export const planArtifactSchema = z.object({
       code: z.ZodIssueCode.custom,
       message: "Artifacts without a failure must keep planning diagnostics partial_output empty.",
       path: ["planning_diagnostics", "partial_output"],
+    });
+  }
+  const readinessWarningItems = value.planning_readiness.warning_items;
+  const mirroredWarningItems = value.planning_diagnostics.warning_items;
+  if (
+    readinessWarningItems.length !== mirroredWarningItems.length ||
+    readinessWarningItems.some(
+      (item, index) =>
+        item.code !== mirroredWarningItems[index]?.code ||
+        item.message !== mirroredWarningItems[index]?.message,
+    )
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Planning readiness warning items must mirror planning diagnostics warning items.",
+      path: ["planning_readiness", "warning_items"],
+    });
+  }
+  const readinessBlockingIssues = value.planning_readiness.blocking_issues;
+  const mirroredBlockingItems = value.planning_diagnostics.blocking_items;
+  if (
+    readinessBlockingIssues.length !== mirroredBlockingItems.length ||
+    readinessBlockingIssues.some(
+      (item, index) =>
+        item.code !== mirroredBlockingItems[index]?.code ||
+        item.message !== mirroredBlockingItems[index]?.message,
+    )
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Planning readiness blocking issues must mirror planning diagnostics blocking items.",
+      path: ["planning_readiness", "blocking_issues"],
+    });
+  }
+  if (
+    value.planning_readiness.partial_output?.code !== value.planning_diagnostics.partial_output?.code ||
+    value.planning_readiness.partial_output?.message !== value.planning_diagnostics.partial_output?.message ||
+    value.planning_readiness.partial_output?.fallbackReason !==
+      value.planning_diagnostics.partial_output?.fallbackReason
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Planning readiness partial output must mirror planning diagnostics partial output.",
+      path: ["planning_readiness", "partial_output"],
+    });
+  }
+  const readinessConcernIds = value.carry_forward.concerns
+    .filter((concern) =>
+      concern.effects.some((effect) => PLAN_READINESS_CONSTRAINING_EFFECT_SET.has(effect)),
+    )
+    .map((concern) => concern.id);
+  if (
+    readinessConcernIds.length !== value.planning_readiness.constraining_concern_ids.length ||
+    readinessConcernIds.some((id, index) => id !== value.planning_readiness.constraining_concern_ids[index])
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Planning readiness constraining concern ids must mirror readiness-impacting carry-forward concerns.",
+      path: ["planning_readiness", "constraining_concern_ids"],
+    });
+  }
+  const readinessHasWarnings =
+    readinessWarningItems.length > 0 ||
+    value.planning_readiness.constraining_concern_ids.length > 0 ||
+    value.planning_readiness.partial_output !== null;
+  const expectedReadinessStatus = value.planning_readiness.ready
+    ? readinessHasWarnings
+      ? "ready_with_warnings"
+      : "ready"
+    : "blocked";
+  if (value.planning_readiness.status !== expectedReadinessStatus) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Planning readiness status must match the resolved ready/warning/block state.",
+      path: ["planning_readiness", "status"],
+    });
+  }
+  const expectedTopLevelStatus = value.failure
+    ? "failed"
+    : value.planning_readiness.ready
+      ? "ready"
+      : "blocked";
+  if (value.status !== expectedTopLevelStatus) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Plan artifact status must match the readiness and failure matrix.",
+      path: ["status"],
+    });
+  }
+  if (value.planning_readiness.ready && readinessBlockingIssues.length > 0) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Ready planning readiness must not carry blocking issues.",
+      path: ["planning_readiness", "blocking_issues"],
+    });
+  }
+  if (!value.planning_readiness.ready && readinessBlockingIssues.length === 0) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Blocked planning readiness must carry at least one blocking issue.",
+      path: ["planning_readiness", "blocking_issues"],
     });
   }
 });

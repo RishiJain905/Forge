@@ -7,6 +7,7 @@ import {
 } from "./constants.js";
 import { FORGE_SCHEMA_VERSION } from "../intake/constants.js";
 import { validatePlanArtifact } from "./schema.js";
+import { resolvePlanReadiness } from "./readiness.js";
 import type {
   PlanArtifact,
   PlanAssistResolution,
@@ -14,6 +15,7 @@ import type {
   PlanCommandStatus,
   PlanFoundationResult,
   PlanModel,
+  PlanInputIssue,
   PlanPlanningDiagnostics,
   PlanResolvedOutputPaths,
 } from "./types.js";
@@ -46,6 +48,7 @@ function buildPlanningDiagnostics(params: {
   foundation: PlanFoundationResult;
   failure: PlanCommandFailure | null;
   planningAssist: PlanAssistResolution;
+  blockingItems: PlanInputIssue[];
 }): PlanPlanningDiagnostics {
   return {
     usability_status: params.foundation.planningInput.usability.status,
@@ -53,7 +56,7 @@ function buildPlanningDiagnostics(params: {
       code: item.code,
       message: item.message,
     })),
-    blocking_items: params.foundation.planningInput.usability.blockingItems.map((item) => ({
+    blocking_items: params.blockingItems.map((item) => ({
       code: item.code,
       message: item.message,
     })),
@@ -74,19 +77,9 @@ export function createPlanArtifact(params: {
   paths: PlanResolvedOutputPaths;
   startedAt: string;
   finishedAt: string;
-  planningReadiness?: PlanFoundationResult["carryForward"]["nextStepReadiness"];
-  summaryOverride?: string;
   planningAssist: PlanAssistResolution;
 }): PlanArtifact {
-  const planningReadiness = params.planningReadiness ?? params.foundation.carryForward.nextStepReadiness;
-  const planningReady = planningReadiness.ready;
-  const usedFallbackRoot = params.paths.usedFallbackRoot;
-  const status: PlanCommandStatus = planningReady
-    ? usedFallbackRoot
-      ? "failed"
-      : "ready"
-    : "blocked";
-  const failure: PlanCommandFailure | null = usedFallbackRoot
+  const failure: PlanCommandFailure | null = params.paths.usedFallbackRoot
     ? buildPlanCommandFailure(
         "OUTPUT_ROOT_FALLBACK",
         params.paths.fallbackReason ??
@@ -94,6 +87,13 @@ export function createPlanArtifact(params: {
         params.paths.fallbackReason ?? undefined,
       )
     : null;
+  const readinessResolution = resolvePlanReadiness({
+    foundation: params.foundation,
+    model: params.model,
+    failure,
+  });
+  const planningReadiness = readinessResolution.planningReadiness;
+  const status = readinessResolution.status;
 
   return validatePlanArtifact({
     schemaVersion: FORGE_SCHEMA_VERSION,
@@ -118,7 +118,7 @@ export function createPlanArtifact(params: {
     },
     startedAt: params.startedAt,
     finishedAt: params.finishedAt,
-    summary: buildPlanSummary(status, failure, params.summaryOverride),
+    summary: buildPlanSummary(status, failure, planningReadiness.summary),
     boundaryNotes: [...PLAN_BOUNDARY_NOTES],
     source_intake: {
       artifactPath: params.foundation.sourceIntake.artifactPath,
@@ -149,6 +149,7 @@ export function createPlanArtifact(params: {
       foundation: params.foundation,
       failure,
       planningAssist: params.planningAssist,
+      blockingItems: planningReadiness.blocking_issues,
     }),
     planning_readiness: planningReadiness,
     failure,

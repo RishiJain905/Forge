@@ -18,6 +18,7 @@ import {
   PLAN_DEBUG_CONFLICT_ZONES_NAME,
   PLAN_DEBUG_DEPENDENCIES_NAME,
   PLAN_DEBUG_PLAN_ITEMS_NAME,
+  PLAN_DEBUG_PLANNING_READINESS_NAME,
   PLAN_DEBUG_TEST_OBLIGATIONS_NAME,
   PLAN_REPORT_NAME,
 } from "./constants.js";
@@ -203,6 +204,11 @@ export async function resolvePlanOutputPaths(
       outputRoot.outputRoot,
       DEBUG_DIRECTORY,
       PLAN_DEBUG_TEST_OBLIGATIONS_NAME,
+    ),
+    debugPlanningReadinessPath: resolveOutputFilePath(
+      outputRoot.outputRoot,
+      DEBUG_DIRECTORY,
+      PLAN_DEBUG_PLANNING_READINESS_NAME,
     ),
   };
 }

@@ -75,6 +75,21 @@ function assertExport(
   );
 }
 
+type PlanReadiness = {
+  ready: boolean;
+  status: "ready" | "ready_with_warnings" | "blocked";
+  summary: string;
+  warning_items: Array<{ code: string; message: string }>;
+  blocking_issues: Array<{ code: string; message: string }>;
+  partial_output: { code: string; message: string; fallbackReason?: string } | null;
+  constraining_concern_ids: string[];
+  recommended_user_actions: string[];
+};
+
+type PlanArtifactWithReadiness = Omit<PlanArtifact, "planning_readiness"> & {
+  planning_readiness: PlanReadiness;
+};
+
 await runScenario(
   "Gate 1 - contract stays frozen across the plan handoff and main artifact shape",
   async () => {
@@ -226,7 +241,7 @@ await runScenario(
       const warningPlan = runForgePlanBinary(["--repo", repoRoot], repoRoot);
       assert.equal(warningPlan.code, 0, warningPlan.stderr);
 
-      const warningArtifact = await readJsonFile<PlanArtifact>(planArtifactPath(repoRoot));
+      const warningArtifact = await readJsonFile<PlanArtifactWithReadiness>(planArtifactPath(repoRoot));
 
       assert.equal(warningArtifact.status, "ready");
       assert.equal(warningArtifact.source_intake.status, "warning");
@@ -238,6 +253,10 @@ await runScenario(
       assert.ok(warningArtifact.carry_forward.warnings.length > 0);
       assert.equal(warningArtifact.carry_forward.confidence.level, "low");
       assert.ok(warningArtifact.carry_forward.concerns.length > 0);
+      assert.equal(warningArtifact.planning_readiness.status, "ready_with_warnings");
+      assert.ok(warningArtifact.planning_readiness.summary.length > 0);
+      assert.ok(warningArtifact.planning_readiness.warning_items.length > 0);
+      assert.ok(warningArtifact.planning_readiness.constraining_concern_ids.length > 0);
       assert.ok(
         warningArtifact.carry_forward.concerns.some((concern) => concern.source === "low_confidence"),
         "expected warning-grade output to preserve the low-confidence concern source",
@@ -255,12 +274,14 @@ await runScenario(
         const blockedPlan = runForgePlanBinary(["--repo", blockedRepoRoot], blockedRepoRoot);
         assert.notEqual(blockedPlan.code, 0);
 
-        const blockedArtifact = await readJsonFile<PlanArtifact>(planArtifactPath(blockedRepoRoot));
+        const blockedArtifact = await readJsonFile<PlanArtifactWithReadiness>(planArtifactPath(blockedRepoRoot));
 
         assert.equal(blockedArtifact.status, "blocked");
         assert.equal(blockedArtifact.source_intake.status, "failed");
         assert.equal(blockedArtifact.source_intake.readyForPlanning, false);
         assert.equal(blockedArtifact.planning_readiness.ready, false);
+        assert.equal(blockedArtifact.planning_readiness.status, "blocked");
+        assert.ok(blockedArtifact.planning_readiness.summary.length > 0);
         assert.ok(blockedArtifact.plan_items.length > 0);
         assert.ok(blockedArtifact.dependency_graph.length > 0);
         assert.ok(blockedArtifact.conflict_zones.length > 0);

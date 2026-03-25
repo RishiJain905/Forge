@@ -42,6 +42,10 @@ function planDebugPath(repoRoot: string, fileName: string, outputDir = ".forge")
   return join(repoRoot, outputDir, "debug", fileName);
 }
 
+function planReadinessDebugPath(repoRoot: string, outputDir = ".forge"): string {
+  return planDebugPath(repoRoot, "planning-readiness.json", outputDir);
+}
+
 async function writeTaskRepo(repoRoot: string): Promise<void> {
   await writeRepoFile(
     repoRoot,
@@ -105,7 +109,13 @@ type PlanDebugArtifact = {
   };
   planning_readiness: {
     ready: boolean;
+    status: "ready" | "ready_with_warnings" | "blocked";
+    summary: string;
+    warning_items: Array<{ code: string; message: string }>;
     blocking_issues: Array<{ code: string; message: string }>;
+    partial_output: { code: string; message: string; fallbackReason?: string } | null;
+    constraining_concern_ids: string[];
+    recommended_user_actions: string[];
   };
   planning_diagnostics: {
     usability_status: "actionable" | "non_actionable" | "upstream_blocked";
@@ -171,6 +181,7 @@ await runScenario(
       assert.equal(await fileExists(planDebugPath(repoRoot, "dependencies.json")), true);
       assert.equal(await fileExists(planDebugPath(repoRoot, "conflict-zones.json")), true);
       assert.equal(await fileExists(planDebugPath(repoRoot, "test-obligations.json")), true);
+      assert.equal(await fileExists(planReadinessDebugPath(repoRoot)), true);
 
       const debugArtifact = await readJsonFile<PlanDebugArtifact>(planDebugPath(repoRoot, "plan-debug.json"));
 
@@ -190,6 +201,13 @@ await runScenario(
       assert.ok(debugArtifact.test_obligations.length > 0);
       assert.ok(debugArtifact.parallelization_signals.length > 0);
       assert.equal(debugArtifact.planning_readiness.ready, true);
+      assert.equal(debugArtifact.planning_readiness.status, "ready");
+      assert.ok(debugArtifact.planning_readiness.summary.length > 0);
+      assert.ok(Array.isArray(debugArtifact.planning_readiness.warning_items));
+      assert.ok(Array.isArray(debugArtifact.planning_readiness.blocking_issues));
+      assert.equal(debugArtifact.planning_readiness.partial_output, null);
+      assert.ok(Array.isArray(debugArtifact.planning_readiness.constraining_concern_ids));
+      assert.ok(Array.isArray(debugArtifact.planning_readiness.recommended_user_actions));
       assert.equal(debugArtifact.planning_diagnostics.usability_status, "actionable");
       assert.equal(debugArtifact.planning_diagnostics.planning_assist.outcome, "not_attempted");
       assert.equal(debugArtifact.planning_assist.outcome, "not_attempted");
@@ -225,6 +243,7 @@ await runScenario(
       assert.equal(await fileExists(planDebugPath(repoRoot, "dependencies.json", outputDir)), true);
       assert.equal(await fileExists(planDebugPath(repoRoot, "conflict-zones.json", outputDir)), true);
       assert.equal(await fileExists(planDebugPath(repoRoot, "test-obligations.json", outputDir)), true);
+      assert.equal(await fileExists(planReadinessDebugPath(repoRoot, outputDir)), true);
       assert.equal(await fileExists(planDebugPath(repoRoot, "plan-debug.json")), false);
     } finally {
       delete process.env.FORGE_PLAN_DEBUG;
@@ -257,6 +276,9 @@ await runScenario(
 
       assert.equal(debugArtifact.status, "blocked");
       assert.equal(debugArtifact.planning_readiness.ready, false);
+      assert.equal(debugArtifact.planning_readiness.status, "blocked");
+      assert.ok(debugArtifact.planning_readiness.summary.length > 0);
+      assert.ok(debugArtifact.planning_readiness.blocking_issues.length > 0);
       assert.equal(debugArtifact.planning_diagnostics.usability_status, "upstream_blocked");
       assert.equal(debugArtifact.planning_diagnostics.planning_assist.outcome, "not_attempted");
       assert.ok(debugArtifact.plan_items.length > 0);
@@ -292,6 +314,7 @@ await runScenario(
       assert.equal(await fileExists(planArtifactPath(repoRoot)), true);
       assert.equal(await fileExists(planReportPath(repoRoot)), true);
       assert.equal(await fileExists(planDebugPath(repoRoot, "plan-debug.json")), true);
+      assert.equal(await fileExists(planReadinessDebugPath(repoRoot)), true);
       assert.equal(await fileExists(planDebugPath(repoRoot, "dependencies.json")), true);
       assert.equal(await fileExists(planDebugPath(repoRoot, "conflict-zones.json")), true);
       assert.equal(await fileExists(planDebugPath(repoRoot, "test-obligations.json")), true);

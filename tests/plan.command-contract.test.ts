@@ -502,7 +502,7 @@ await runScenario(
         failure?: { code?: string; message?: string; fallbackReason?: string } | null;
       }>(join(repoRoot, ".forge", "plan.json"));
 
-      assert.equal(planArtifact.status, "blocked");
+      assert.equal(planArtifact.status, "failed");
       assert.equal(planArtifact.planning_diagnostics?.usability_status, "non_actionable");
       assert.ok(
         planArtifact.planning_diagnostics?.blocking_items?.some((item) => item.code === "PLAN_INPUT_TOO_WEAK"),

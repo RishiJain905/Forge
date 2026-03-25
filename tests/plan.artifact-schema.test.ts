@@ -151,7 +151,16 @@ type PlanArtifact = {
     blocking_items: Array<{ code: string; message: string }>;
     partial_output: { code: string; message: string; fallbackReason?: string } | null;
   };
-  planning_readiness: IntakeArtifact["next_step_readiness"];
+  planning_readiness: {
+    ready: boolean;
+    status: "ready" | "ready_with_warnings" | "blocked";
+    summary: string;
+    warning_items: Array<{ code: string; message: string }>;
+    blocking_issues: Array<{ code: string; message: string }>;
+    partial_output: { code: string; message: string; fallbackReason?: string } | null;
+    constraining_concern_ids: string[];
+    recommended_user_actions: string[];
+  };
   failure: { code: string; message: string } | null;
 };
 
@@ -301,6 +310,14 @@ await runScenario(
       assert.deepEqual(artifact.carry_forward.warnings, intakeArtifact.warnings);
       assert.deepEqual(artifact.carry_forward.confidence, intakeArtifact.confidence);
       assert.deepEqual(artifact.carry_forward.next_step_readiness, intakeArtifact.next_step_readiness);
+      assert.equal(artifact.planning_readiness.ready, true);
+      assert.equal(artifact.planning_readiness.status, "ready");
+      assert.ok(artifact.planning_readiness.summary.length > 0);
+      assert.deepEqual(artifact.planning_readiness.warning_items, []);
+      assert.deepEqual(artifact.planning_readiness.blocking_issues, []);
+      assert.equal(artifact.planning_readiness.partial_output, null);
+      assert.ok(Array.isArray(artifact.planning_readiness.constraining_concern_ids));
+      assert.ok(Array.isArray(artifact.planning_readiness.recommended_user_actions));
       assert.ok(Array.isArray(artifact.carry_forward.concerns));
       assert.ok(
         artifact.test_obligations.every((entry) =>

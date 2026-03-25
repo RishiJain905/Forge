@@ -10,6 +10,7 @@ export const PLAN_DEBUG_PLAN_ITEMS_NAME = "plan-items.json" as const;
 export const PLAN_DEBUG_DEPENDENCIES_NAME = "dependencies.json" as const;
 export const PLAN_DEBUG_CONFLICT_ZONES_NAME = "conflict-zones.json" as const;
 export const PLAN_DEBUG_TEST_OBLIGATIONS_NAME = "test-obligations.json" as const;
+export const PLAN_DEBUG_PLANNING_READINESS_NAME = "planning-readiness.json" as const;
 
 export const STEP2_PLAN_PURPOSE =
   "Transform Step 1 Intake output into a structured implementation plan that later steps can trust." as const;
@@ -50,7 +51,7 @@ export const PLAN_ALLOWED_SIDE_EFFECTS = [
   "read the Step 1 intake artifact",
   "write `plan.json`",
   "write `plan-report.md`",
-  `optionally write \`plan-debug.json\`, \`plan-items.json\`, \`dependencies.json\`, \`conflict-zones.json\`, and \`test-obligations.json\` under \`.forge/debug/\` when ${PLAN_DEBUG_ENV_VAR}=1 is set`,
+  `optionally write \`plan-debug.json\`, \`plan-items.json\`, \`dependencies.json\`, \`conflict-zones.json\`, \`test-obligations.json\`, and \`planning-readiness.json\` under \`.forge/debug/\` when ${PLAN_DEBUG_ENV_VAR}=1 is set`,
 ] as const;
 
 export const PLAN_BOUNDARY_NOTES = [
@@ -124,6 +125,19 @@ export const PLAN_PARALLELIZATION_SIGNALS = [
   "parallel_after_dependency",
   "risky_shared",
   "protected_merge_order",
+] as const;
+
+export const PLAN_READINESS_STATUSES = [
+  "ready",
+  "ready_with_warnings",
+  "blocked",
+] as const;
+
+export const PLAN_READINESS_CONSTRAINING_EFFECTS = [
+  "planning_readiness",
+  "dependency_caution",
+  "parallelization_caution",
+  "test_strategy",
 ] as const;
 
 export const PLAN_CARRY_FORWARD_CONCERN_SOURCES = [

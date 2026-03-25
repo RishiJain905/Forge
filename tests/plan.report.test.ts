@@ -115,7 +115,16 @@ await runScenario(
             reportNotes: string[];
           };
         };
-        planning_readiness: { ready: boolean };
+        planning_readiness: {
+          ready: boolean;
+          status: "ready" | "ready_with_warnings" | "blocked";
+          summary: string;
+          warning_items: Array<{ code: string; message: string }>;
+          blocking_issues: Array<{ code: string; message: string }>;
+          partial_output: { code: string; message: string; fallbackReason?: string } | null;
+          constraining_concern_ids: string[];
+          recommended_user_actions: string[];
+        };
         plan_items: Array<{ id: string; dependencies: Array<{ planItemId: string; type: string; reason: string }> }>;
         dependency_graph: Array<{
           planItemId: string;
@@ -165,6 +174,13 @@ await runScenario(
         report.includes(artifact.planning_diagnostics.warning_items[0]?.code ?? "LOW_CONFIDENCE_PLANNING_INPUT"),
       );
       assert.ok(readinessBody.includes(String(artifact.planning_readiness.ready)));
+      assert.ok(readinessBody.includes("ready_with_warnings"));
+      assert.ok(readinessBody.includes(artifact.planning_readiness.summary));
+      assert.ok(readinessBody.includes(artifact.planning_readiness.recommended_user_actions[0]));
+      assert.ok(
+        readinessBody.includes(artifact.planning_readiness.constraining_concern_ids[0] ?? ""),
+        "expected the report to surface constraining concern ids",
+      );
       assert.ok(carryForwardBody.includes(artifact.carry_forward.task_spec.goal));
       assert.ok(carryForwardBody.includes(artifact.carry_forward.confidence.level));
       const carriedForwardEvidence =

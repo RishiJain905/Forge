@@ -8,6 +8,7 @@ import type {
   PLAN_ITEM_REQUIRED_FIELDS,
   PLAN_PARALLELIZATION_SIGNALS,
   PLAN_RISK_LEVELS,
+  PLAN_READINESS_STATUSES,
   PLAN_TEST_OBLIGATION_CATEGORIES,
   PLAN_VERIFICATION_TARGET_CATEGORIES,
   Step2BoundaryPolicy,
@@ -19,6 +20,7 @@ export type PlanRiskLevel = typeof PLAN_RISK_LEVELS[number];
 export type PlanTestObligationCategory = typeof PLAN_TEST_OBLIGATION_CATEGORIES[number];
 export type PlanVerificationCategory = typeof PLAN_VERIFICATION_TARGET_CATEGORIES[number];
 export type PlanParallelizationSignal = typeof PLAN_PARALLELIZATION_SIGNALS[number];
+export type PlanReadinessStatus = typeof PLAN_READINESS_STATUSES[number];
 export type PlanCarryForwardConcernSource = typeof PLAN_CARRY_FORWARD_CONCERN_SOURCES[number];
 export type PlanCarryForwardConcernEffect = typeof PLAN_CARRY_FORWARD_CONCERN_EFFECTS[number];
 export type PlanItemRequiredField = typeof PLAN_ITEM_REQUIRED_FIELDS[number];
@@ -54,6 +56,7 @@ export interface PlanResolvedOutputPaths {
   debugDependenciesPath?: string;
   debugConflictZonesPath?: string;
   debugTestObligationsPath?: string;
+  debugPlanningReadinessPath?: string;
 }
 
 export interface LoadedPlanFoundationInput {
@@ -320,7 +323,16 @@ export interface PlanAssistResolution {
   reportNotes: string[];
 }
 
-export type PlanPlanningReadiness = IntakeArtifact["next_step_readiness"];
+export interface PlanPlanningReadiness {
+  ready: boolean;
+  status: PlanReadinessStatus;
+  summary: string;
+  warning_items: PlanInputIssue[];
+  blocking_issues: PlanInputIssue[];
+  partial_output: PlanPartialOutput | null;
+  constraining_concern_ids: string[];
+  recommended_user_actions: string[];
+}
 
 export interface PlanPartialOutput {
   code: string;

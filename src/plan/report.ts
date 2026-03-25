@@ -280,26 +280,30 @@ function renderCarryForwardContextSection(artifact: PlanArtifact): string {
 
 function renderPlanningReadinessSection(artifact: PlanArtifact): string {
   const readiness = artifact.planning_readiness;
-  const diagnostics = artifact.planning_diagnostics;
+  const constrainingConcerns = artifact.carry_forward.concerns.filter((concern) =>
+    readiness.constraining_concern_ids.includes(concern.id),
+  );
 
   return renderSection("Planning Readiness", [
     readiness.ready
-      ? "Forge plan is ready for later workflow steps."
-      : "Forge plan is blocked until the remaining Step 1 issues are addressed.",
+      ? "Later-step gate: proceed."
+      : "Later-step gate: blocked.",
+    "",
+    readiness.summary,
     "",
     ...renderKeyValueList([
       ["Ready", readiness.ready],
-      ["Planning Usability", diagnostics.usability_status],
-      ["Warning Items", diagnostics.warning_items.length],
+      ["Status", readiness.status],
+      ["Warning Items", readiness.warning_items.length],
       ["Blocking Issues", readiness.blocking_issues.length],
-      ["Planning Blocking Items", diagnostics.blocking_items.length],
+      ["Constraining Concerns", readiness.constraining_concern_ids.length],
       ["Recommended Actions", readiness.recommended_user_actions.length],
     ]),
     "",
-    "### Step 2 Warning Items",
+    "### Warning Items",
     "",
     renderList(
-      diagnostics.warning_items.map((item) => `\`${item.code}\`: ${item.message}`),
+      readiness.warning_items.map((item) => `\`${item.code}\`: ${item.message}`),
     ),
     "",
     "### Blocking Issues",
@@ -308,22 +312,25 @@ function renderPlanningReadinessSection(artifact: PlanArtifact): string {
       readiness.blocking_issues.map((issue) => `\`${issue.code}\`: ${issue.message}`),
     ),
     "",
-    "### Step 2 Blocking Items",
-    "",
-    renderList(
-      diagnostics.blocking_items.map((item) => `\`${item.code}\`: ${item.message}`),
-    ),
-    "",
     "### Partial Output",
     "",
-    diagnostics.partial_output
+    readiness.partial_output
       ? renderList([
-        `\`${diagnostics.partial_output.code}\`: ${diagnostics.partial_output.message}`,
-        diagnostics.partial_output.fallbackReason
-          ? `Fallback: ${diagnostics.partial_output.fallbackReason}`
+        `\`${readiness.partial_output.code}\`: ${readiness.partial_output.message}`,
+        readiness.partial_output.fallbackReason
+          ? `Fallback: ${readiness.partial_output.fallbackReason}`
           : "Fallback: none",
       ])
       : "- none",
+    "",
+    "### Constraining Concerns",
+    "",
+    renderList(
+      constrainingConcerns.map((concern) => {
+        const code = concern.code ? ` [code: ${concern.code}]` : "";
+        return `\`${concern.id}\` (${concern.source})${code} - ${concern.message}`;
+      }),
+    ),
     "",
     "### Recommended Actions",
     "",
