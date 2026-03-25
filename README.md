@@ -118,7 +118,7 @@ Forge aims to introduce selective pre-implementation verification for:
 - parallel overlap
 - ordering constraints
 
-This is where future TLA+ / TLC integration fits.
+This is where Step 3's selective V1 TLA+/TLC lane fits.
 
 ## 6. Testing is a first-class requirement
 
@@ -264,14 +264,14 @@ Step 2 does not verify correctness directly, split work into execution streams, 
 Purpose:
 Check risky coordination and workflow logic before coding begins.
 
-V1 verification is selective and bounded. It is intended for things like:
+V1 verification is selective and bounded. It uses a deterministic structural lane plus a formal TLA+/TLC-backed lane for risky coordination and workflow logic such as:
 - retries
 - ownership
 - migration ordering
 - stream interference
 - handoff safety
-
-This step may later support formal or semi-formal checks such as TLA+ / TLC-backed modeling.
+- stale-write and duplicate-execution risk
+- unsafe serialization or ordering assumptions
 
 ## 4. Split
 Purpose:
@@ -427,10 +427,12 @@ However, Forge should use verification carefully.
 
 The goal is practical leverage, not theoretical maximalism.
 
-Long-term, Forge may support:
+Step 3 V1 includes formal entry points for:
 - state-machine modeling
 - TLA+ generation
 - TLC-based checking
+
+Later versions may support:
 - failure trace interpretation
 - repair suggestions for plan refinement
 
@@ -520,6 +522,10 @@ Step 2 remains frozen for V1 except for future bug fixes.
 Step 2 also now emits stronger dependency, conflict-zone, test-obligation, and parallelization modeling, keeps carried-forward concern mapping visible on ready and blocked runs, and can optionally write internal planning debug artifacts behind `FORGE_PLAN_DEBUG=1` without changing the public `plan.json` top-level contract. Batch 3 Part 1 adds a bounded internal planning-assist seam that can tighten wording without changing deterministic structure and removes stale “later Step 2” report/boundary language. Batch 3 Part 2 hardens warning, blocking, partial-failure, and planning-assist diagnostics across the artifact, report, and debug outputs. Batch 3 Part 3 turns `planning_readiness` into a Step 2-owned later-step handoff object, adds `planning-readiness.json` to the optional debug outputs, and hardens ready, warning-heavy, blocked, and persisted-failure reporting so later steps do not have to reinterpret planning quality from scratch.
 
 Batch 3 Part 5 makes that handoff explicit for `forge verify` by naming the verification gate directly in readiness/report wording, adding a dedicated Step 3 handoff-contract suite, and freezing Step 2 as the planning foundation that Step 3 should consume instead of re-planning from prose.
+
+Step 3: Verify now has Batch 1 Part 1 implemented as an internal foundation.
+
+This adds `src/verify` foundation modules that consume the persisted Step 2 `plan.json` handoff, normalize verify-input usability, preserve Step 2 uncertainty/readiness context, and freeze the structural lane, formal lane, and TLA+/TLC entry contract for V1. Public `forge verify` CLI wiring, `verify.json`, `verify-report.md`, and executable structural/formal verification work remain deferred to the next Step 3 parts.
 
 ---
 

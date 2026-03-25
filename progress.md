@@ -290,6 +290,12 @@
   - Kept the Step 3 handoff narrow by freezing the existing `plan.json` sections as the verification contract instead of adding a new handoff block or any Step 3 runtime behavior.
   - Wired the new handoff-contract suite into `npm.cmd test` and updated report regression coverage to lock the explicit `forge verify` wording.
   - Updated `README.md`, `progress.md`, and `S2-B3-Done/p5-done-summary.md` so Step 2 Batch 3 Part 5 is documented and traceable.
+- Batch 1.01: `part-1-step3-goal-and-boundaries.md` (Step 3)
+  - Added a new internal `src/verify` foundation that defines the Step 3 mission, deterministic-first policy, explicit guardrails, and the initial structural/formal verification contracts without introducing the public `forge verify` CLI yet.
+  - Added a deterministic Step 3 input seam that reads `.forge/plan.json`, validates it through the frozen Step 2 plan artifact schema, and preserves the Step 2 handoff context instead of re-planning from prose.
+  - Locked explicit Step 3 boundary-policy and formal-lane contracts so V1 now treats structural verification plus TLA+/TLC-backed formal verification as first-class behavior for risky coordination and workflow logic.
+  - Added dedicated Step 3 Part 1 coverage for ready, warning-heavy, partial-output, blocked, missing-input, invalid-input, non-actionable, and boundary-policy scenarios, and wired the suite into `npm.cmd test`.
+  - Updated the top-level README plus `S3-B1-Done/p1-done-summary.md` so Step 3 Batch 1 Part 1 is documented and traceable.
 
 ## Current Branch State
 - `dev` includes the completed Step 1 work through Batch 4.05, including the frozen Step 2 handoff contract from Intake.
@@ -300,6 +306,8 @@
 - `dev` now includes Step 2 Batch 3 Part 4, including blocked-fallback report polish, debug/readiness parity hardening, bounded-assist structural freeze coverage, and repeated warning-path determinism coverage.
 - `dev` now includes Step 2 Batch 3 Part 5, including the explicit `forge verify` handoff contract, dedicated Step 3 handoff coverage, and report/readiness wording that names the verification gate directly.
 - `dev` now treats the Step 2 planning runtime surface as frozen for V1 except future bug fixes while keeping optional debug outputs behind `FORGE_PLAN_DEBUG=1` and treating `plan.json`, `plan-report.md`, and `planning_readiness` as the frozen Step 3 verify inputs.
+- `dev` now includes Step 3 Batch 1 Part 1, including the internal verify foundation, deterministic `plan.json` consumption, explicit structural/formal lane contracts, and real V1 TLA+/TLC entry points in the Step 3 boundary contract.
+- `dev` still defers public `forge verify` CLI wiring, verification artifacts/reports, and executable structural/formal verification work to the remaining Step 3 parts.
 
 ## Verification
 - `npm.cmd test`
@@ -308,13 +316,5 @@
 - `npm.cmd run smoke`
 
 ## Next
-- Step 2 Batch 2 Part 2 is complete.
-- Step 2 Batch 2 Part 3 is complete.
-- Step 2 Batch 2 Part 4 is complete.
-- Step 2 Batch 2 Part 5 is complete.
-- Step 2 Batch 3 Part 1 is complete.
-- Step 2 Batch 3 Part 2 is complete.
-- Step 2 Batch 3 Part 3 is complete.
-- Step 2 Batch 3 Part 4 is complete.
-- Step 2 Batch 3 Part 5 is complete.
-- Next implementation work should begin Step 3 `forge verify`.
+- Step 3 Batch 1 Part 1 is complete.
+- Next implementation work should begin Step 3 Batch 1 Part 2 `part-2-verify-command-contract-and-output-artifacts.md`.
