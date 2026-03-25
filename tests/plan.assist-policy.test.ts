@@ -257,6 +257,149 @@ await runScenario(
 );
 
 await runScenario(
+  "forge plan assist ignores hook mutations when the hook returns no suggestion",
+  async () => {
+    const repoRoot = await createTempRepo("forge-plan-assist-mutation-null-");
+
+    try {
+      await seedPlanningRepo(repoRoot);
+
+      const intakeResult = runForgeBinary(["intake", "--repo", repoRoot, "--spec", join(repoRoot, "task.md")], repoRoot);
+      assert.equal(intakeResult.code, 0, intakeResult.stderr);
+      await removeSpecInputs(repoRoot);
+
+      const deterministic = await runPlanCommand({ repo: repoRoot }, repoRoot);
+      assert.equal(deterministic.status, "ready");
+      assert.ok(deterministic.artifact);
+
+      const assisted = await runPlanCommand(
+        { repo: repoRoot },
+        repoRoot,
+        {
+          planningAssistHook: async ({ foundation, model }) => {
+            foundation.purpose = "mutated assist purpose";
+            if (model.planItems[0]) {
+              model.planItems[0].title = "mutated assist title";
+            }
+            if (model.dependencyGraph[0]) {
+              model.dependencyGraph[0].reason = "mutated assist reason";
+            }
+            if (model.conflictZones[0]) {
+              model.conflictZones[0].reason = "mutated assist conflict reason";
+            }
+
+            return null;
+          },
+        },
+      );
+
+      assert.equal(assisted.status, "ready");
+      assert.ok(assisted.artifact);
+      assert.deepEqual(
+        normalizeStructuralArtifact(assisted.artifact as PlanArtifact),
+        normalizeStructuralArtifact(deterministic.artifact as PlanArtifact),
+      );
+      assert.equal(assisted.artifact?.planning_diagnostics.planning_assist.outcome, "no_suggestion");
+      assert.equal(assisted.artifact?.planning_diagnostics.planning_assist.used, false);
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "forge plan assist ignores hook mutations when the hook throws",
+  async () => {
+    const repoRoot = await createTempRepo("forge-plan-assist-mutation-throw-");
+
+    try {
+      await seedPlanningRepo(repoRoot);
+
+      const intakeResult = runForgeBinary(["intake", "--repo", repoRoot, "--spec", join(repoRoot, "task.md")], repoRoot);
+      assert.equal(intakeResult.code, 0, intakeResult.stderr);
+      await removeSpecInputs(repoRoot);
+
+      const deterministic = await runPlanCommand({ repo: repoRoot }, repoRoot);
+      assert.equal(deterministic.status, "ready");
+      assert.ok(deterministic.artifact);
+
+      const assisted = await runPlanCommand(
+        { repo: repoRoot },
+        repoRoot,
+        {
+          planningAssistHook: async ({ foundation, model }) => {
+            foundation.purpose = "mutated assist purpose";
+            if (model.planItems[0]) {
+              model.planItems[0].title = "mutated assist title";
+            }
+            if (model.dependencyGraph[0]) {
+              model.dependencyGraph[0].reason = "mutated assist reason";
+            }
+            if (model.conflictZones[0]) {
+              model.conflictZones[0].reason = "mutated assist conflict reason";
+            }
+
+            throw new Error("assist exploded");
+          },
+        },
+      );
+
+      assert.equal(assisted.status, "ready");
+      assert.ok(assisted.artifact);
+      assert.deepEqual(
+        normalizeStructuralArtifact(assisted.artifact as PlanArtifact),
+        normalizeStructuralArtifact(deterministic.artifact as PlanArtifact),
+      );
+      assert.equal(assisted.artifact?.planning_diagnostics.planning_assist.outcome, "failed");
+      assert.equal(assisted.artifact?.planning_diagnostics.planning_assist.used, false);
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "forge plan assist sanitizes multiline report notes before rendering",
+  async () => {
+    const repoRoot = await createTempRepo("forge-plan-assist-notes-");
+
+    try {
+      await seedPlanningRepo(repoRoot);
+
+      const intakeResult = runForgeBinary(["intake", "--repo", repoRoot, "--spec", join(repoRoot, "task.md")], repoRoot);
+      assert.equal(intakeResult.code, 0, intakeResult.stderr);
+      await removeSpecInputs(repoRoot);
+
+      const result = await runPlanCommand(
+        { repo: repoRoot },
+        repoRoot,
+        {
+          planningAssistHook: async () => ({
+            provider: "test-hook",
+            reportNotes: ["Line one\n## sneaky heading\nLine three"],
+          }),
+        },
+      );
+
+      assert.equal(result.status, "ready");
+      assert.ok(result.artifact);
+      assert.ok(result.reportPath);
+      assert.deepEqual(
+        result.artifact?.planning_diagnostics.planning_assist.reportNotes,
+        ["Line one ## sneaky heading Line three"],
+      );
+
+      const report = await readTextFile(result.reportPath as string);
+      assert.match(report, /Planning Assist:\s+applied/);
+      assert.match(report, /Line one ## sneaky heading Line three/);
+      assert.equal(report.includes("\n## sneaky heading"), false);
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
   "forge plan assist failures fall back to deterministic planning and stay visible in debug output",
   async () => {
     const repoRoot = await createTempRepo("forge-plan-assist-fallback-");

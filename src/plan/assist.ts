@@ -48,7 +48,9 @@ function normalizeReportNotes(value: unknown, resolution: PlanAssistResolution):
       continue;
     }
 
-    const note = value[index].trim();
+    const note = value[index]
+      .replace(/\r?\n|\r/g, " ")
+      .trim();
     if (note) {
       notes.push(note);
     }
@@ -310,9 +312,13 @@ export async function applyPlanningAssist(params: {
   resolution.attempted = true;
 
   try {
-    const rawSuggestion = await params.planningAssistHook({
+    const hookInput = structuredClone({
       foundation: params.foundation,
       model: params.model,
+    });
+    const rawSuggestion = await params.planningAssistHook({
+      foundation: hookInput.foundation,
+      model: hookInput.model,
     });
 
     if (!rawSuggestion) {
