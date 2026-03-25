@@ -196,6 +196,56 @@ const planFilesSchema = z.object({
 }).strict();
 
 const planPlanningReadinessSchema = intakeArtifactSchema.shape.next_step_readiness;
+const planAssistResolutionSchema = z.object({
+  outcome: z.enum(["not_attempted", "no_suggestion", "applied", "ignored_only", "failed"]),
+  attempted: z.boolean(),
+  used: z.boolean(),
+  provider: z.string().min(1).nullable(),
+  warnings: z.array(z.string().min(1)),
+  ignoredEdits: z.array(z.string().min(1)),
+  reportNotes: z.array(z.string().min(1)),
+}).superRefine((value, context) => {
+  if (value.outcome === "not_attempted" && value.attempted) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "not_attempted planning assist cannot mark attempted=true.",
+      path: ["attempted"],
+    });
+  }
+  if (value.outcome === "applied" && !value.used) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Applied planning assist must mark used=true.",
+      path: ["used"],
+    });
+  }
+  if (value.outcome === "ignored_only" && value.ignoredEdits.length === 0 && value.warnings.length === 0) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "ignored_only planning assist must expose ignored edits or warnings.",
+      path: ["ignoredEdits"],
+    });
+  }
+  if (value.outcome === "failed" && value.warnings.length === 0) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Failed planning assist must expose at least one warning.",
+      path: ["warnings"],
+    });
+  }
+}).strict();
+const planPartialOutputSchema = z.object({
+  code: z.string().min(1),
+  message: z.string().min(1),
+  fallbackReason: z.string().optional(),
+}).strict();
+const planPlanningDiagnosticsSchema = z.object({
+  usability_status: z.enum(["actionable", "non_actionable", "upstream_blocked"]),
+  warning_items: z.array(planInputIssueSchema),
+  blocking_items: z.array(planInputIssueSchema),
+  partial_output: planPartialOutputSchema.nullable(),
+  planning_assist: planAssistResolutionSchema,
+}).strict();
 
 function extractRequirementSeedsFromArtifact(
   artifact: Pick<PlanArtifact, "carry_forward">,
@@ -264,6 +314,7 @@ export const PLAN_ARTIFACT_TOP_LEVEL_KEYS = [
   "test_obligations",
   "parallelization_signals",
   "carry_forward",
+  "planning_diagnostics",
   "planning_readiness",
   "failure",
 ] as const satisfies readonly (keyof PlanArtifact)[];
@@ -350,6 +401,7 @@ export const planArtifactSchema = z.object({
   test_obligations: z.array(planTestObligationEntrySchema),
   parallelization_signals: z.array(planParallelizationSignalEntrySchema),
   carry_forward: planArtifactCarryForwardSchema,
+  planning_diagnostics: planPlanningDiagnosticsSchema,
   planning_readiness: planPlanningReadinessSchema,
   failure: z.object({
     code: z.string().min(1),
@@ -574,6 +626,28 @@ export const planArtifactSchema = z.object({
       code: z.ZodIssueCode.custom,
       message: "Artifacts with unresolved Step 1 uncertainty must expose carry-forward concerns.",
       path: ["carry_forward", "concerns"],
+    });
+  }
+  if (value.planning_diagnostics.usability_status === "non_actionable" &&
+    value.planning_diagnostics.blocking_items.every((item) => item.code !== "PLAN_INPUT_TOO_WEAK")) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Non-actionable planning diagnostics must expose PLAN_INPUT_TOO_WEAK.",
+      path: ["planning_diagnostics", "blocking_items"],
+    });
+  }
+  if (value.failure && !value.planning_diagnostics.partial_output) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Artifacts with a failure must mirror it in planning diagnostics partial_output.",
+      path: ["planning_diagnostics", "partial_output"],
+    });
+  }
+  if (!value.failure && value.planning_diagnostics.partial_output) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Artifacts without a failure must keep planning diagnostics partial_output empty.",
+      path: ["planning_diagnostics", "partial_output"],
     });
   }
 });

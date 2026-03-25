@@ -166,7 +166,10 @@ await runScenario(
       );
 
       const report = await readTextFile(assisted.reportPath as string);
-      assert.match(report, /Planning Assist:\s+used/);
+      assert.equal(assistedArtifact.planning_diagnostics.planning_assist.outcome, "applied");
+      assert.equal(assistedArtifact.planning_diagnostics.planning_assist.provider, "test-hook");
+      assert.match(report, /Planning Assist:\s+applied/);
+      assert.match(report, /Planning Assist Provider:\s+test-hook/);
       assert.match(
         report,
         /Planning assist tightened wording only; deterministic structure stayed authoritative\./,
@@ -210,6 +213,7 @@ await runScenario(
       const report = await readTextFile(result.reportPath as string);
       const debugArtifact = await readJsonFile<{
         planning_assist?: {
+          outcome: "not_attempted" | "no_suggestion" | "applied" | "ignored_only" | "failed";
           attempted: boolean;
           used: boolean;
           warnings: string[];
@@ -217,9 +221,11 @@ await runScenario(
       }>(join(repoRoot, ".forge", "debug", "plan-debug.json"));
 
       assert.equal(artifact.status, "ready");
-      assert.match(report, /Planning Assist:\s+deterministic fallback/);
+      assert.equal(artifact.planning_diagnostics.planning_assist.outcome, "failed");
+      assert.match(report, /Planning Assist:\s+failed/);
       assert.ok(debugArtifact.planning_assist?.attempted);
       assert.equal(debugArtifact.planning_assist?.used, false);
+      assert.equal(debugArtifact.planning_assist?.outcome, "failed");
       assert.ok(
         debugArtifact.planning_assist?.warnings.some((warning) => /assist exploded/i.test(warning)),
       );
@@ -230,6 +236,62 @@ await runScenario(
         process.env.FORGE_PLAN_DEBUG = originalDebugEnv;
       }
 
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "forge plan assist classifies null suggestions and ignored-only edits without changing deterministic structure",
+  async () => {
+    const repoRoot = await createTempRepo("forge-plan-assist-outcomes-");
+
+    try {
+      await seedPlanningRepo(repoRoot);
+
+      const intakeResult = runForgeBinary(["intake", "--repo", repoRoot, "--spec", join(repoRoot, "task.md")], repoRoot);
+      assert.equal(intakeResult.code, 0, intakeResult.stderr);
+      await removeSpecInputs(repoRoot);
+
+      const noSuggestion = await runPlanCommand(
+        { repo: repoRoot },
+        repoRoot,
+        {
+          planningAssistHook: async () => null,
+        },
+      );
+
+      assert.equal(noSuggestion.status, "ready");
+      assert.ok(noSuggestion.artifact);
+      assert.equal(noSuggestion.artifact?.planning_diagnostics.planning_assist.outcome, "no_suggestion");
+      assert.equal(noSuggestion.artifact?.planning_diagnostics.planning_assist.used, false);
+
+      const ignoredOnly = await runPlanCommand(
+        { repo: repoRoot },
+        repoRoot,
+        {
+          planningAssistHook: async () => ({
+            provider: "test-hook",
+            planItemEdits: [{ id: "missing-item", title: "ignored" }],
+            dependencyEdits: [{ planItemId: "", dependsOnPlanItemId: "", reason: "" }] as unknown as never[],
+            conflictZoneEdits: [{ id: "missing-zone", reason: "ignored" }],
+          }),
+        },
+      );
+
+      assert.equal(ignoredOnly.status, "ready");
+      assert.ok(ignoredOnly.artifact);
+      assert.equal(ignoredOnly.artifact?.planning_diagnostics.planning_assist.outcome, "ignored_only");
+      assert.equal(ignoredOnly.artifact?.planning_diagnostics.planning_assist.provider, "test-hook");
+      assert.equal(ignoredOnly.artifact?.planning_diagnostics.planning_assist.used, false);
+      assert.ok(
+        (ignoredOnly.artifact?.planning_diagnostics.planning_assist.ignoredEdits.length ?? 0) > 0,
+      );
+
+      const ignoredReport = await readTextFile(ignoredOnly.reportPath as string);
+      assert.match(ignoredReport, /Planning Assist:\s+ignored_only/);
+      assert.match(ignoredReport, /Ignored plan item edit for unknown id `missing-item`\./);
+    } finally {
       await disposeTempRepo(repoRoot);
     }
   },

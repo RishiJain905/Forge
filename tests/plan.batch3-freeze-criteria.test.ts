@@ -109,9 +109,10 @@ await runScenario(
       assert.equal(artifact.source_intake.status, "warning");
       assert.equal(artifact.carry_forward.confidence.level, "low");
       assert.ok(artifact.carry_forward.concerns.length > 0);
+      assert.equal(artifact.planning_diagnostics.planning_assist.outcome, "not_attempted");
       assert.match(report, /## Carry-Forward Context/);
       assert.match(report, /## Planning Readiness/);
-      assert.match(report, /Planning Assist:\s+not used/);
+      assert.match(report, /Planning Assist:\s+not_attempted/);
     } finally {
       await disposeTempRepo(repoRoot);
     }
@@ -153,16 +154,19 @@ await runScenario(
       const report = await readTextFile(join(repoRoot, ".forge", "reports", "plan-report.md"));
       const debugArtifact = await readJsonFile<{
         planning_assist?: {
+          outcome: "not_attempted" | "no_suggestion" | "applied" | "ignored_only" | "failed";
           attempted: boolean;
           used: boolean;
           provider: string | null;
         };
       }>(join(repoRoot, ".forge", "debug", "plan-debug.json"));
 
-      assert.match(report, /Planning Assist:\s+used/);
+      assert.equal(result.artifact?.planning_diagnostics.planning_assist.outcome, "applied");
+      assert.match(report, /Planning Assist:\s+applied/);
       assert.match(report, /bounded to wording/i);
       assert.equal(debugArtifact.planning_assist?.attempted, true);
       assert.equal(debugArtifact.planning_assist?.used, true);
+      assert.equal(debugArtifact.planning_assist?.outcome, "applied");
       assert.equal(debugArtifact.planning_assist?.provider, "test-hook");
     } finally {
       if (originalDebugEnv === undefined) {

@@ -31,6 +31,7 @@ export interface PlanDebugArtifact {
     debugTestObligationsPath: string;
   };
   source_intake: PlanArtifact["source_intake"];
+  planning_diagnostics: PlanArtifact["planning_diagnostics"];
   planning_readiness: PlanArtifact["planning_readiness"];
   plan_items: PlanArtifact["plan_items"];
   dependency_graph: PlanDependencyGraphEntry[];
@@ -81,6 +82,7 @@ export function createPlanDebugArtifact(
       debugTestObligationsPath: requireDebugPath(paths.debugTestObligationsPath, "debugTestObligationsPath"),
     },
     source_intake: artifact.source_intake,
+    planning_diagnostics: artifact.planning_diagnostics,
     planning_readiness: artifact.planning_readiness,
     plan_items: artifact.plan_items,
     dependency_graph: artifact.dependency_graph,

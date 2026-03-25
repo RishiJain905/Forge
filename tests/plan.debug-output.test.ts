@@ -107,6 +107,17 @@ type PlanDebugArtifact = {
     ready: boolean;
     blocking_issues: Array<{ code: string; message: string }>;
   };
+  planning_diagnostics: {
+    usability_status: "actionable" | "non_actionable" | "upstream_blocked";
+    planning_assist: {
+      outcome: "not_attempted" | "no_suggestion" | "applied" | "ignored_only" | "failed";
+      provider: string | null;
+    };
+  };
+  planning_assist: {
+    outcome: "not_attempted" | "no_suggestion" | "applied" | "ignored_only" | "failed";
+    provider: string | null;
+  };
 };
 
 await runScenario(
@@ -179,6 +190,9 @@ await runScenario(
       assert.ok(debugArtifact.test_obligations.length > 0);
       assert.ok(debugArtifact.parallelization_signals.length > 0);
       assert.equal(debugArtifact.planning_readiness.ready, true);
+      assert.equal(debugArtifact.planning_diagnostics.usability_status, "actionable");
+      assert.equal(debugArtifact.planning_diagnostics.planning_assist.outcome, "not_attempted");
+      assert.equal(debugArtifact.planning_assist.outcome, "not_attempted");
     } finally {
       delete process.env.FORGE_PLAN_DEBUG;
       await disposeTempRepo(repoRoot);
@@ -243,6 +257,8 @@ await runScenario(
 
       assert.equal(debugArtifact.status, "blocked");
       assert.equal(debugArtifact.planning_readiness.ready, false);
+      assert.equal(debugArtifact.planning_diagnostics.usability_status, "upstream_blocked");
+      assert.equal(debugArtifact.planning_diagnostics.planning_assist.outcome, "not_attempted");
       assert.ok(debugArtifact.plan_items.length > 0);
       assert.ok(debugArtifact.carry_forward.concerns.length > 0);
       assert.ok(

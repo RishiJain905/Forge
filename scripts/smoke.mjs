@@ -298,7 +298,7 @@ async function main() {
     assert.ok(Array.isArray(warningPlanArtifact.carry_forward.concerns));
     assert.ok(warningPlanArtifact.carry_forward.concerns.length > 0);
     assert.match(warningPlanReport, /## Carry-Forward Context/);
-    assert.match(warningPlanReport, /Planning Assist:\s+not used/);
+    assert.match(warningPlanReport, /Planning Assist:\s+not_attempted/);
 
     const assistFallbackResult = spawnSync(process.execPath, [
       entryPointPath,

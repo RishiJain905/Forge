@@ -47,18 +47,10 @@ function renderKeyValueList(entries: Array<[string, string | number | boolean | 
 
 function planningAssistLabel(planningAssist?: PlanAssistResolution): string {
   if (!planningAssist) {
-    return "not used";
+    return "not_attempted";
   }
 
-  if (planningAssist.used) {
-    return "used";
-  }
-
-  if (planningAssist.attempted) {
-    return "deterministic fallback";
-  }
-
-  return "not used";
+  return planningAssist.outcome;
 }
 
 function renderPlanItemContractSection(artifact: PlanArtifact): string {
@@ -288,6 +280,7 @@ function renderCarryForwardContextSection(artifact: PlanArtifact): string {
 
 function renderPlanningReadinessSection(artifact: PlanArtifact): string {
   const readiness = artifact.planning_readiness;
+  const diagnostics = artifact.planning_diagnostics;
 
   return renderSection("Planning Readiness", [
     readiness.ready
@@ -296,15 +289,41 @@ function renderPlanningReadinessSection(artifact: PlanArtifact): string {
     "",
     ...renderKeyValueList([
       ["Ready", readiness.ready],
+      ["Planning Usability", diagnostics.usability_status],
+      ["Warning Items", diagnostics.warning_items.length],
       ["Blocking Issues", readiness.blocking_issues.length],
+      ["Planning Blocking Items", diagnostics.blocking_items.length],
       ["Recommended Actions", readiness.recommended_user_actions.length],
     ]),
+    "",
+    "### Step 2 Warning Items",
+    "",
+    renderList(
+      diagnostics.warning_items.map((item) => `\`${item.code}\`: ${item.message}`),
+    ),
     "",
     "### Blocking Issues",
     "",
     renderList(
       readiness.blocking_issues.map((issue) => `\`${issue.code}\`: ${issue.message}`),
     ),
+    "",
+    "### Step 2 Blocking Items",
+    "",
+    renderList(
+      diagnostics.blocking_items.map((item) => `\`${item.code}\`: ${item.message}`),
+    ),
+    "",
+    "### Partial Output",
+    "",
+    diagnostics.partial_output
+      ? renderList([
+        `\`${diagnostics.partial_output.code}\`: ${diagnostics.partial_output.message}`,
+        diagnostics.partial_output.fallbackReason
+          ? `Fallback: ${diagnostics.partial_output.fallbackReason}`
+          : "Fallback: none",
+      ])
+      : "- none",
     "",
     "### Recommended Actions",
     "",
@@ -343,7 +362,7 @@ export function createPlanReport(
     planningAssist?: PlanAssistResolution;
   },
 ): string {
-  const planningAssist = options?.planningAssist;
+  const planningAssist = options?.planningAssist ?? artifact.planning_diagnostics.planning_assist;
   const sections = [
     renderSection("Overview", [
       `Forge plan completed with status \`${artifact.status}\`.`,
@@ -354,13 +373,20 @@ export function createPlanReport(
         ["Output Root", artifact.outputRoot],
         ["Requested Output Root", artifact.requestedOutputRoot],
         ["Planning Readiness", artifact.planning_readiness.ready],
+        ["Planning Usability", artifact.planning_diagnostics.usability_status],
         ["Planning Assist", planningAssistLabel(planningAssist)],
+        ...(planningAssist.provider
+          ? [["Planning Assist Provider", planningAssist.provider] as [string, string]]
+          : []),
       ]),
       ...(planningAssist?.reportNotes.length
         ? ["", renderList(planningAssist.reportNotes)]
         : []),
       ...(planningAssist?.warnings.length
         ? ["", renderList(planningAssist.warnings)]
+        : []),
+      ...(planningAssist?.ignoredEdits.length
+        ? ["", renderList(planningAssist.ignoredEdits)]
         : []),
     ]),
     renderSection("Purpose", [artifact.purpose]),

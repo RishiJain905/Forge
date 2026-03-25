@@ -102,6 +102,19 @@ await runScenario(
       const artifact = await readJsonFile<{
         summary: string;
         files: { artifactPath: string | null; reportPath: string | null };
+        planning_diagnostics: {
+          usability_status: "actionable" | "non_actionable" | "upstream_blocked";
+          warning_items: Array<{ code: string; message: string }>;
+          blocking_items: Array<{ code: string; message: string }>;
+          partial_output: { code: string; message: string; fallbackReason?: string } | null;
+          planning_assist: {
+            outcome: "not_attempted" | "no_suggestion" | "applied" | "ignored_only" | "failed";
+            provider: string | null;
+            warnings: string[];
+            ignoredEdits: string[];
+            reportNotes: string[];
+          };
+        };
         planning_readiness: { ready: boolean };
         plan_items: Array<{ id: string; dependencies: Array<{ planItemId: string; type: string; reason: string }> }>;
         dependency_graph: Array<{
@@ -146,6 +159,11 @@ await runScenario(
       assert.ok(report.includes(artifact.summary));
       assert.ok(report.includes(artifact.files.artifactPath ?? ""));
       assert.ok(report.includes(artifact.files.reportPath ?? ""));
+      assert.ok(report.includes(artifact.planning_diagnostics.usability_status));
+      assert.ok(report.includes(artifact.planning_diagnostics.planning_assist.outcome));
+      assert.ok(
+        report.includes(artifact.planning_diagnostics.warning_items[0]?.code ?? "LOW_CONFIDENCE_PLANNING_INPUT"),
+      );
       assert.ok(readinessBody.includes(String(artifact.planning_readiness.ready)));
       assert.ok(carryForwardBody.includes(artifact.carry_forward.task_spec.goal));
       assert.ok(carryForwardBody.includes(artifact.carry_forward.confidence.level));

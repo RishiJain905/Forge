@@ -266,11 +266,18 @@
   - Removed stale “later Step 2” report and boundary language, and exposed bounded assist provenance through the report overview and optional `plan-debug.json` output.
   - Added `tests/plan.assist-policy.test.ts`, `tests/plan.batch3-freeze-criteria.test.ts`, and stronger smoke coverage for warning-grade planning runs, then wired the new suites into `npm.cmd test`.
   - Updated `README.md`, `progress.md`, and `S2-B3-Done/p1-done-summary.md` so Step 2 Batch 3 Part 1 is documented and traceable.
+- Batch 3.02: `part-2-edge-cases-warnings-failures-and-planning-assist-hardening.md` (Step 2)
+  - Added a stable nested `planning_diagnostics` surface to `plan.json` so Step 2 now persists normalized usability state, Step 2 warning items, Step 2 blocking items, partial-output metadata, and planning-assist diagnostics without changing the top-level `ready` / `blocked` / `failed` contract.
+  - Hardened warning and failure handling so weak-but-usable handoffs stay `ready` with explicit diagnostics, non-actionable handoffs stay `blocked` with visible `PLAN_INPUT_TOO_WEAK`, and output-root fallback remains visible as an inspectable partial failure.
+  - Reworked planning-assist resolution into explicit bounded outcomes (`not_attempted`, `no_suggestion`, `applied`, `ignored_only`, `failed`) while keeping deterministic planning authoritative and downgrading malformed or unknown edits into visible ignored-edit diagnostics instead of whole-path failure.
+  - Updated `plan-report.md` and `plan-debug.json` so assist outcome, provider, warnings, ignored edits, report notes, and Step 2 warning/blocking diagnostics are visible and consistent across artifact, report, and debug output.
+  - Added focused regression coverage for the new diagnostics contract, warning-heavy ready runs, blocked non-actionable runs, assist no-suggestion and ignored-only paths, assist failure fallback, and Batch 3 freeze/debug parity, and documented completion in `S2-B3-Done/p2-done-summary.md`.
 
 ## Current Branch State
 - `dev` includes the completed Step 1 work through Batch 4.05, including the frozen Step 2 handoff contract from Intake.
 - `dev` includes the completed Step 2 Batch 2 Part 1 through Part 5 work for the real `forge plan` path.
 - `dev` now includes Step 2 Batch 3 Part 1, including bounded internal planning-assist wording support, refreshed finish-line messaging, and dedicated Batch 3 freeze coverage.
+- `dev` now includes Step 2 Batch 3 Part 2, including persisted Step 2 planning diagnostics, hardened warning/failure visibility, and explicit bounded planning-assist outcomes across artifact, report, and debug output.
 - `dev` keeps optional Step 2 planning debug outputs behind `FORGE_PLAN_DEBUG=1` while keeping the public plan artifact and report contract stable.
 
 ## Verification
@@ -285,4 +292,5 @@
 - Step 2 Batch 2 Part 4 is complete.
 - Step 2 Batch 2 Part 5 is complete.
 - Step 2 Batch 3 Part 1 is complete.
-- Next implementation work should begin `forge_step2_batch3/part-2-edge-cases-warnings-failures-and-planning-assist-hardening.md`.
+- Step 2 Batch 3 Part 2 is complete.
+- Next implementation work should begin `forge_step2_batch3/part-3-artifact-report-debug-output-and-readiness-hardening.md`.

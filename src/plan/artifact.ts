@@ -9,10 +9,12 @@ import { FORGE_SCHEMA_VERSION } from "../intake/constants.js";
 import { validatePlanArtifact } from "./schema.js";
 import type {
   PlanArtifact,
+  PlanAssistResolution,
   PlanCommandFailure,
   PlanCommandStatus,
   PlanFoundationResult,
   PlanModel,
+  PlanPlanningDiagnostics,
   PlanResolvedOutputPaths,
 } from "./types.js";
 
@@ -40,6 +42,32 @@ function buildPlanSummary(
   return "Forge plan could not persist a usable planning artifact.";
 }
 
+function buildPlanningDiagnostics(params: {
+  foundation: PlanFoundationResult;
+  failure: PlanCommandFailure | null;
+  planningAssist: PlanAssistResolution;
+}): PlanPlanningDiagnostics {
+  return {
+    usability_status: params.foundation.planningInput.usability.status,
+    warning_items: params.foundation.planningInput.usability.warningItems.map((item) => ({
+      code: item.code,
+      message: item.message,
+    })),
+    blocking_items: params.foundation.planningInput.usability.blockingItems.map((item) => ({
+      code: item.code,
+      message: item.message,
+    })),
+    partial_output: params.failure
+      ? {
+        code: params.failure.code,
+        message: params.failure.message,
+        ...(params.failure.fallbackReason ? { fallbackReason: params.failure.fallbackReason } : {}),
+      }
+      : null,
+    planning_assist: params.planningAssist,
+  };
+}
+
 export function createPlanArtifact(params: {
   foundation: PlanFoundationResult;
   model: PlanModel;
@@ -48,6 +76,7 @@ export function createPlanArtifact(params: {
   finishedAt: string;
   planningReadiness?: PlanFoundationResult["carryForward"]["nextStepReadiness"];
   summaryOverride?: string;
+  planningAssist: PlanAssistResolution;
 }): PlanArtifact {
   const planningReadiness = params.planningReadiness ?? params.foundation.carryForward.nextStepReadiness;
   const planningReady = planningReadiness.ready;
@@ -116,6 +145,11 @@ export function createPlanArtifact(params: {
       next_step_readiness: params.foundation.carryForward.nextStepReadiness,
       concerns: params.model.carryForwardConcerns,
     },
+    planning_diagnostics: buildPlanningDiagnostics({
+      foundation: params.foundation,
+      failure,
+      planningAssist: params.planningAssist,
+    }),
     planning_readiness: planningReadiness,
     failure,
   });

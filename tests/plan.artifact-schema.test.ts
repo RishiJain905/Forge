@@ -62,6 +62,7 @@ const REQUIRED_TOP_LEVEL_KEYS = [
   "test_obligations",
   "parallelization_signals",
   "carry_forward",
+  "planning_diagnostics",
   "planning_readiness",
   "failure",
 ] as const;
@@ -144,6 +145,12 @@ type PlanArtifact = {
       status: "carried_forward";
     }>;
   };
+  planning_diagnostics: {
+    usability_status: "actionable" | "non_actionable" | "upstream_blocked";
+    warning_items: Array<{ code: string; message: string }>;
+    blocking_items: Array<{ code: string; message: string }>;
+    partial_output: { code: string; message: string; fallbackReason?: string } | null;
+  };
   planning_readiness: IntakeArtifact["next_step_readiness"];
   failure: { code: string; message: string } | null;
 };
@@ -195,6 +202,10 @@ await runScenario(
       assert.equal(artifact.source_intake.status, intakeArtifact.status);
       assert.equal(artifact.source_intake.summary, intakeArtifact.summary);
       assert.equal(artifact.source_intake.readyForPlanning, true);
+      assert.equal(artifact.planning_diagnostics.usability_status, "actionable");
+      assert.deepEqual(artifact.planning_diagnostics.warning_items, []);
+      assert.deepEqual(artifact.planning_diagnostics.blocking_items, []);
+      assert.equal(artifact.planning_diagnostics.partial_output, null);
       assert.equal(artifact.planning_readiness.ready, true);
       assert.deepEqual(artifact.plan_item_contract.requiredFields, [...PLAN_ITEM_REQUIRED_FIELDS]);
       assert.deepEqual(artifact.plan_item_contract.categories, [...PLAN_ITEM_CATEGORIES]);

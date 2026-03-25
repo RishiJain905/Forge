@@ -70,12 +70,24 @@ await runScenario(
 
       const planArtifact = await readJsonFile<{
         status: "ready" | "blocked" | "failed";
+        planning_diagnostics: {
+          usability_status: "actionable" | "non_actionable" | "upstream_blocked";
+          warning_items: Array<{ code: string; message: string }>;
+          blocking_items: Array<{ code: string; message: string }>;
+          partial_output: { code: string; message: string; fallbackReason?: string } | null;
+        };
         planning_readiness: { ready: boolean; blocking_issues: Array<{ code: string; message: string }> };
         summary: string;
         plan_items: unknown[];
       }>(join(repoRoot, ".forge", "plan.json"));
 
       assert.equal(planArtifact.status, "blocked");
+      assert.equal(planArtifact.planning_diagnostics.usability_status, "non_actionable");
+      assert.ok(
+        planArtifact.planning_diagnostics.warning_items.some((issue) => issue.code === "LOW_CONFIDENCE_PLANNING_INPUT"),
+      );
+      assert.ok(planArtifact.planning_diagnostics.blocking_items.some((issue) => issue.code === "PLAN_INPUT_TOO_WEAK"));
+      assert.equal(planArtifact.planning_diagnostics.partial_output, null);
       assert.equal(planArtifact.planning_readiness.ready, false);
       assert.ok(planArtifact.planning_readiness.blocking_issues.some((issue) => issue.code === "PLAN_INPUT_TOO_WEAK"));
       assert.match(planArtifact.summary, /non-actionable|not actionable|insufficient/i);

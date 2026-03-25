@@ -16,6 +16,7 @@ function normalizeOptionalText(value: string | undefined): string | null {
 
 function createNoopResolution(): PlanAssistResolution {
   return {
+    outcome: "not_attempted",
     attempted: false,
     used: false,
     provider: null,
@@ -23,6 +24,159 @@ function createNoopResolution(): PlanAssistResolution {
     ignoredEdits: [],
     reportNotes: [],
   };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function normalizeReportNotes(value: unknown, resolution: PlanAssistResolution): string[] {
+  if (value === undefined) {
+    return [];
+  }
+
+  if (!Array.isArray(value)) {
+    resolution.warnings.push("Ignored malformed planning assist reportNotes payload.");
+    return [];
+  }
+
+  const notes: string[] = [];
+
+  for (let index = 0; index < value.length; index += 1) {
+    if (typeof value[index] !== "string") {
+      resolution.warnings.push(`Ignored malformed planning assist report note at index ${index}.`);
+      continue;
+    }
+
+    const note = value[index].trim();
+    if (note) {
+      notes.push(note);
+    }
+  }
+
+  return notes;
+}
+
+function normalizePlanItemEdits(value: unknown, resolution: PlanAssistResolution): PlanAssistPlanItemEdit[] {
+  if (value === undefined) {
+    return [];
+  }
+
+  if (!Array.isArray(value)) {
+    resolution.warnings.push("Ignored malformed planning assist planItemEdits payload.");
+    return [];
+  }
+
+  const edits: PlanAssistPlanItemEdit[] = [];
+
+  for (let index = 0; index < value.length; index += 1) {
+    const entry = value[index];
+    if (!isRecord(entry)) {
+      resolution.ignoredEdits.push(`Ignored malformed plan item edit at index ${index}.`);
+      continue;
+    }
+
+    const id = normalizeOptionalText(typeof entry.id === "string" ? entry.id : undefined);
+    if (!id) {
+      resolution.ignoredEdits.push(`Ignored malformed plan item edit at index ${index}.`);
+      continue;
+    }
+
+    if (entry.title !== undefined && typeof entry.title !== "string") {
+      resolution.ignoredEdits.push(`Ignored malformed plan item edit for \`${id}\` because title must be a string.`);
+      continue;
+    }
+
+    if (entry.description !== undefined && typeof entry.description !== "string") {
+      resolution.ignoredEdits.push(`Ignored malformed plan item edit for \`${id}\` because description must be a string.`);
+      continue;
+    }
+
+    edits.push({
+      id,
+      ...(entry.title !== undefined ? { title: entry.title as string } : {}),
+      ...(entry.description !== undefined ? { description: entry.description as string } : {}),
+    });
+  }
+
+  return edits;
+}
+
+function normalizeDependencyEdits(value: unknown, resolution: PlanAssistResolution): PlanAssistDependencyEdit[] {
+  if (value === undefined) {
+    return [];
+  }
+
+  if (!Array.isArray(value)) {
+    resolution.warnings.push("Ignored malformed planning assist dependencyEdits payload.");
+    return [];
+  }
+
+  const edits: PlanAssistDependencyEdit[] = [];
+
+  for (let index = 0; index < value.length; index += 1) {
+    const entry = value[index];
+    if (!isRecord(entry)) {
+      resolution.ignoredEdits.push(`Ignored malformed dependency edit at index ${index}.`);
+      continue;
+    }
+
+    const planItemId = normalizeOptionalText(
+      typeof entry.planItemId === "string" ? entry.planItemId : undefined,
+    );
+    const dependsOnPlanItemId = normalizeOptionalText(
+      typeof entry.dependsOnPlanItemId === "string" ? entry.dependsOnPlanItemId : undefined,
+    );
+    if (!planItemId || !dependsOnPlanItemId || typeof entry.reason !== "string") {
+      resolution.ignoredEdits.push(`Ignored malformed dependency edit at index ${index}.`);
+      continue;
+    }
+
+    edits.push({
+      planItemId,
+      dependsOnPlanItemId,
+      reason: entry.reason,
+    });
+  }
+
+  return edits;
+}
+
+function normalizeConflictZoneEdits(
+  value: unknown,
+  resolution: PlanAssistResolution,
+): PlanAssistConflictZoneEdit[] {
+  if (value === undefined) {
+    return [];
+  }
+
+  if (!Array.isArray(value)) {
+    resolution.warnings.push("Ignored malformed planning assist conflictZoneEdits payload.");
+    return [];
+  }
+
+  const edits: PlanAssistConflictZoneEdit[] = [];
+
+  for (let index = 0; index < value.length; index += 1) {
+    const entry = value[index];
+    if (!isRecord(entry)) {
+      resolution.ignoredEdits.push(`Ignored malformed conflict-zone edit at index ${index}.`);
+      continue;
+    }
+
+    const id = normalizeOptionalText(typeof entry.id === "string" ? entry.id : undefined);
+    if (!id || typeof entry.reason !== "string") {
+      resolution.ignoredEdits.push(`Ignored malformed conflict-zone edit at index ${index}.`);
+      continue;
+    }
+
+    edits.push({
+      id,
+      reason: entry.reason,
+    });
+  }
+
+  return edits;
 }
 
 function dependencyEditKey(edit: PlanAssistDependencyEdit): string {
@@ -33,8 +187,9 @@ function applyPlanItemEdits(
   model: PlanModel,
   edits: PlanAssistPlanItemEdit[],
   resolution: PlanAssistResolution,
-): PlanModel["planItems"] {
+): { planItems: PlanModel["planItems"]; appliedCount: number } {
   const editMap = new Map(edits.map((edit) => [edit.id, edit]));
+  let appliedCount = 0;
 
   for (const edit of edits) {
     if (!model.planItems.some((item) => item.id === edit.id)) {
@@ -42,18 +197,26 @@ function applyPlanItemEdits(
     }
   }
 
-  return model.planItems.map((item) => {
+  const planItems = model.planItems.map((item) => {
     const edit = editMap.get(item.id);
     if (!edit) {
       return item;
     }
 
+    const title = normalizeOptionalText(edit.title) ?? item.title;
+    const description = normalizeOptionalText(edit.description) ?? item.description;
+    if (title !== item.title || description !== item.description) {
+      appliedCount += 1;
+    }
+
     return {
       ...item,
-      title: normalizeOptionalText(edit.title) ?? item.title,
-      description: normalizeOptionalText(edit.description) ?? item.description,
+      title,
+      description,
     };
   });
+
+  return { planItems, appliedCount };
 }
 
 function applyDependencyEdits(
@@ -63,9 +226,11 @@ function applyDependencyEdits(
 ): {
   planItems: PlanModel["planItems"];
   dependencyGraph: PlanModel["dependencyGraph"];
+  appliedCount: number;
 } {
   const validKeys = new Set(model.dependencyGraph.map(dependencyEditKey));
   const editMap = new Map<string, PlanAssistDependencyEdit>();
+  let appliedCount = 0;
 
   for (const edit of edits) {
     const key = dependencyEditKey(edit);
@@ -84,17 +249,20 @@ function applyDependencyEdits(
       ...item,
       dependencies: item.dependencies.map((dependency) => {
         const edit = editMap.get(`${item.id}:${dependency.planItemId}`);
-        return edit
-          ? { ...dependency, reason: edit.reason.trim() || dependency.reason }
-          : dependency;
+        const reason = edit?.reason.trim() || dependency.reason;
+        if (reason !== dependency.reason) {
+          appliedCount += 1;
+        }
+
+        return edit ? { ...dependency, reason } : dependency;
       }),
     })),
     dependencyGraph: model.dependencyGraph.map((dependency) => {
       const edit = editMap.get(dependencyEditKey(dependency));
-      return edit
-        ? { ...dependency, reason: edit.reason.trim() || dependency.reason }
-        : dependency;
+      const reason = edit?.reason.trim() || dependency.reason;
+      return edit ? { ...dependency, reason } : dependency;
     }),
+    appliedCount,
   };
 }
 
@@ -102,8 +270,9 @@ function applyConflictZoneEdits(
   model: PlanModel,
   edits: PlanAssistConflictZoneEdit[],
   resolution: PlanAssistResolution,
-): PlanModel["conflictZones"] {
+): { conflictZones: PlanModel["conflictZones"]; appliedCount: number } {
   const editMap = new Map(edits.map((edit) => [edit.id, edit]));
+  let appliedCount = 0;
 
   for (const edit of edits) {
     if (!model.conflictZones.some((zone) => zone.id === edit.id)) {
@@ -111,12 +280,17 @@ function applyConflictZoneEdits(
     }
   }
 
-  return model.conflictZones.map((zone) => {
+  const conflictZones = model.conflictZones.map((zone) => {
     const edit = editMap.get(zone.id);
-    return edit
-      ? { ...zone, reason: normalizeOptionalText(edit.reason) ?? zone.reason }
-      : zone;
+    const reason = edit ? normalizeOptionalText(edit.reason) ?? zone.reason : zone.reason;
+    if (reason !== zone.reason) {
+      appliedCount += 1;
+    }
+
+    return edit ? { ...zone, reason } : zone;
   });
+
+  return { conflictZones, appliedCount };
 }
 
 export async function applyPlanningAssist(params: {
@@ -136,56 +310,87 @@ export async function applyPlanningAssist(params: {
   resolution.attempted = true;
 
   try {
-    const suggestion = await params.planningAssistHook({
+    const rawSuggestion = await params.planningAssistHook({
       foundation: params.foundation,
       model: params.model,
     });
 
-    if (!suggestion) {
+    if (!rawSuggestion) {
+      resolution.outcome = "no_suggestion";
       return {
         model: params.model,
         resolution,
       };
     }
 
-    resolution.provider = suggestion.provider?.trim() || null;
-    resolution.reportNotes = (suggestion.reportNotes ?? []).map((note) => note.trim()).filter(Boolean);
+    if (!isRecord(rawSuggestion)) {
+      resolution.outcome = "ignored_only";
+      resolution.warnings = [
+        "Ignored malformed planning assist payload and kept deterministic planning authoritative.",
+      ];
+      return {
+        model: params.model,
+        resolution,
+      };
+    }
 
-    const planItems = applyPlanItemEdits(params.model, suggestion.planItemEdits ?? [], resolution);
+    resolution.provider = typeof rawSuggestion.provider === "string"
+      ? rawSuggestion.provider.trim() || null
+      : null;
+    if (rawSuggestion.provider !== undefined && typeof rawSuggestion.provider !== "string") {
+      resolution.warnings.push("Ignored malformed planning assist provider value.");
+    }
+    resolution.reportNotes = normalizeReportNotes(rawSuggestion.reportNotes, resolution);
+
+    const normalizedPlanItemEdits = normalizePlanItemEdits(rawSuggestion.planItemEdits, resolution);
+    const normalizedDependencyEdits = normalizeDependencyEdits(rawSuggestion.dependencyEdits, resolution);
+    const normalizedConflictZoneEdits = normalizeConflictZoneEdits(
+      rawSuggestion.conflictZoneEdits,
+      resolution,
+    );
+
+    const planItemResult = applyPlanItemEdits(params.model, normalizedPlanItemEdits, resolution);
     const dependencyResult = applyDependencyEdits(
       {
         ...params.model,
-        planItems,
+        planItems: planItemResult.planItems,
       },
-      suggestion.dependencyEdits ?? [],
+      normalizedDependencyEdits,
       resolution,
     );
-    const conflictZones = applyConflictZoneEdits(
+    const conflictZoneResult = applyConflictZoneEdits(
       {
         ...params.model,
         planItems: dependencyResult.planItems,
         dependencyGraph: dependencyResult.dependencyGraph,
       },
-      suggestion.conflictZoneEdits ?? [],
+      normalizedConflictZoneEdits,
       resolution,
     );
-
-    resolution.used =
-      (suggestion.planItemEdits?.length ?? 0) > 0 ||
-      (suggestion.dependencyEdits?.length ?? 0) > 0 ||
-      (suggestion.conflictZoneEdits?.length ?? 0) > 0 ||
-      resolution.reportNotes.length > 0;
+    const appliedCount =
+      planItemResult.appliedCount +
+      dependencyResult.appliedCount +
+      conflictZoneResult.appliedCount;
+    resolution.used = appliedCount > 0 || resolution.reportNotes.length > 0;
+    if (resolution.used) {
+      resolution.outcome = "applied";
+    } else if (resolution.ignoredEdits.length > 0 || resolution.warnings.length > 0) {
+      resolution.outcome = "ignored_only";
+    } else {
+      resolution.outcome = "no_suggestion";
+    }
 
     return {
       model: {
         ...params.model,
         planItems: dependencyResult.planItems,
         dependencyGraph: dependencyResult.dependencyGraph,
-        conflictZones,
+        conflictZones: conflictZoneResult.conflictZones,
       },
       resolution,
     };
   } catch (error) {
+    resolution.outcome = "failed";
     resolution.warnings = [
       `Planning assist failed and deterministic planning stayed authoritative: ${error instanceof Error ? error.message : "unknown planning assist failure"}.`,
     ];

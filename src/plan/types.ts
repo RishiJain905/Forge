@@ -114,6 +114,8 @@ export interface PlanInputUsability {
   blockingItems: PlanInputIssue[];
 }
 
+export type PlanInputUsabilityStatus = PlanInputUsability["status"];
+
 export interface PlanPlanningInput {
   context: PlanPlanningContext;
   uncertainty: PlanPlanningUncertainty;
@@ -309,6 +311,7 @@ export type PlanningAssistHook =
   (input: PlanAssistInput) => Promise<PlanAssistSuggestion | null>;
 
 export interface PlanAssistResolution {
+  outcome: "not_attempted" | "no_suggestion" | "applied" | "ignored_only" | "failed";
   attempted: boolean;
   used: boolean;
   provider: string | null;
@@ -318,6 +321,20 @@ export interface PlanAssistResolution {
 }
 
 export type PlanPlanningReadiness = IntakeArtifact["next_step_readiness"];
+
+export interface PlanPartialOutput {
+  code: string;
+  message: string;
+  fallbackReason?: string;
+}
+
+export interface PlanPlanningDiagnostics {
+  usability_status: PlanInputUsabilityStatus;
+  warning_items: PlanInputIssue[];
+  blocking_items: PlanInputIssue[];
+  partial_output: PlanPartialOutput | null;
+  planning_assist: PlanAssistResolution;
+}
 
 export interface PlanArtifact {
   schemaVersion: string;
@@ -342,6 +359,7 @@ export interface PlanArtifact {
   test_obligations: PlanTestObligationEntry[];
   parallelization_signals: PlanParallelizationSignalEntry[];
   carry_forward: PlanArtifactCarryForward;
+  planning_diagnostics: PlanPlanningDiagnostics;
   planning_readiness: PlanPlanningReadiness;
   failure: PlanCommandFailure | null;
 }

@@ -216,6 +216,7 @@ export async function runPlanCommand(
       finishedAt,
       planningReadiness,
       summaryOverride,
+      planningAssist: assistedPlanning.resolution,
     });
     const report = createPlanReport(artifact, {
       planningAssist: assistedPlanning.resolution,
