@@ -157,6 +157,11 @@ function buildSummary(params: {
 }): string {
   const formalCaseCount = params.model.cases.filter((verificationCase) => verificationCase.lanes.includes("formal")).length;
   const structuralCaseCount = params.model.cases.filter((verificationCase) => verificationCase.lanes.includes("structural")).length;
+  const laneCoverageSummary = structuralCaseCount > 0
+    ? "structural checks ran"
+    : formalCaseCount > 0
+      ? "formal checks ran"
+      : "no verification cases were modeled";
 
   if (params.blockingItems.some((issue) => issue.code === VERIFY_INPUT_TOO_WEAK)) {
     return "Forge verify is blocked because Step 2 did not produce enough risky verification signal to build meaningful Step 3 verification work.";
@@ -185,9 +190,11 @@ function buildSummary(params: {
   if (formalCaseCount > 0 && params.formalExecution.formalVerification.status === "not_run") {
     return [
       "`forge verify` can proceed with caution:",
-      "structural checks ran,",
+      `${laneCoverageSummary},`,
       `formal cases were modeled for ${formalCaseCount} target(s),`,
-      "but TLC was not run,",
+      structuralCaseCount > 0
+        ? "but TLC was not run,"
+        : "no structural cases were modeled for this plan, and TLC was not run,",
       "so the formal lane has not validated those cases yet.",
     ].join(" ");
   }
@@ -197,7 +204,7 @@ function buildSummary(params: {
   if (params.warningItems.length > 0) {
     return [
       "`forge verify` can proceed,",
-      "structural checks ran,",
+      `${laneCoverageSummary},`,
       formalCaseCount > 0
         ? `formal cases were modeled for ${formalCaseCount} target(s),`
         : "no formal cases were modeled,",
@@ -210,7 +217,7 @@ function buildSummary(params: {
 
   return [
     "`forge verify` can proceed.",
-    "Structural checks ran,",
+    `${laneCoverageSummary.charAt(0).toUpperCase()}${laneCoverageSummary.slice(1)},`,
     formalCaseCount > 0
       ? `formal cases were modeled for ${formalCaseCount} target(s),`
       : "no formal cases were modeled,",

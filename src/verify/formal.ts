@@ -708,6 +708,8 @@ async function buildCaseExecution(params: {
   return {
     case: {
       ...params.verificationCase,
+      status: tlcStatus,
+      summary: tlcSummary,
       formalDetails,
       findings: buildCaseFindings(params.verificationCase.id, tlcSummary, tlcStatus, tlcConfigured),
       mitigations: buildCaseMitigations(tlcStatus),

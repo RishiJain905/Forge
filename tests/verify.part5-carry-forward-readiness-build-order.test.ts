@@ -3,6 +3,7 @@ import { chmod, rm } from "node:fs/promises";
 import { delimiter, join } from "node:path";
 
 import type { PlanArtifact } from "../src/plan/types.js";
+import { resolveVerifyReadiness } from "../src/verify/readiness.js";
 import {
   assertForgeVerifyOutputHasNoReportHeadings,
   createTempRepo,
@@ -564,6 +565,73 @@ await runScenario(
     } finally {
       await disposeTempRepo(repoRoot);
     }
+  },
+);
+
+await runScenario(
+  "Gate 3 - formal-only readiness should say formal checks ran when structural checks were not modeled",
+  async () => {
+    const result = resolveVerifyReadiness({
+      foundation: {
+        verificationInput: {
+          usability: {
+            status: "actionable",
+            warningItems: [
+              {
+                code: "PLAN_WARNING_CONTEXT_PRESENT",
+                message: "Formal-only verification still carries warning context.",
+              },
+            ],
+            blockingItems: [],
+          },
+          uncertainty: {
+            planningReadiness: {
+              constraining_concern_ids: [],
+              recommended_user_actions: [],
+            },
+          },
+        },
+      } as any,
+      model: {
+        cases: [
+          {
+            lanes: ["formal"],
+          },
+        ],
+      } as any,
+      structuralExecution: {
+        structuralVerification: {
+          status: "not_run",
+          summary: "No structural verification cases were selected in Part 3.",
+          findings: [],
+          constraints: [],
+        },
+        cases: [],
+        findings: [],
+        constraints: [],
+      } as any,
+      formalExecution: {
+        formalVerification: {
+          status: "passed",
+          summary: "TLC passed for the formal-only case.",
+          caution_notes: [],
+          state_models: [],
+          tla_specs: [],
+          tlc_results: [],
+          findings: [],
+          constraints: [],
+        },
+        cases: [],
+        findings: [],
+        constraints: [],
+      } as any,
+      failure: null,
+    });
+
+    assert.equal(result.verificationReadiness.status, "ready_with_warnings");
+    assert.match(result.verificationReadiness.summary, /formal checks ran/i);
+    assert.doesNotMatch(result.verificationReadiness.summary, /structural checks ran/i);
+    assert.ok(result.verificationReadiness.warning_items.length > 0);
   },
 );
 

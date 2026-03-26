@@ -473,6 +473,14 @@ await runScenario(
         firstOutputs.artifact.formal_verification.tlc_results,
         secondOutputs.artifact.formal_verification.tlc_results,
       );
+      assert.ok(
+        firstOutputs.artifact.verification_cases.filter((entry) => entry.lanes.includes("formal")).length > 0,
+      );
+      assert.ok(
+        firstOutputs.artifact.verification_cases
+          .filter((entry) => entry.lanes.includes("formal"))
+          .every((entry) => entry.status === "passed"),
+      );
       assert.ok(firstOutputs.artifact.formal_verification.tlc_results.every((entry) => entry.status === "passed"));
       assert.ok(firstOutputs.artifact.formal_verification.caution_notes.length > 0);
       assert.ok(
@@ -509,6 +517,12 @@ await runScenario(
       const { artifact, report } = await readFormalOutputs(repoRoot);
 
       assert.equal(artifact.formal_verification.status, "failed");
+      assert.ok(artifact.verification_cases.filter((entry) => entry.lanes.includes("formal")).length > 0);
+      assert.ok(
+        artifact.verification_cases
+          .filter((entry) => entry.lanes.includes("formal"))
+          .every((entry) => entry.status === "failed"),
+      );
       assert.ok(artifact.formal_verification.tlc_results.some((entry) => entry.status === "failed"));
       assert.ok(
         artifact.formal_verification.tlc_results.some((entry) =>
@@ -541,6 +555,12 @@ await runScenario(
       const { artifact, report } = await readFormalOutputs(repoRoot);
 
       assert.equal(artifact.formal_verification.status, "errored");
+      assert.ok(artifact.verification_cases.filter((entry) => entry.lanes.includes("formal")).length > 0);
+      assert.ok(
+        artifact.verification_cases
+          .filter((entry) => entry.lanes.includes("formal"))
+          .every((entry) => entry.status === "errored"),
+      );
       assert.ok(artifact.formal_verification.tlc_results.some((entry) => entry.status === "errored"));
       assert.ok(
         artifact.formal_verification.tlc_results.some((entry) =>
@@ -569,6 +589,12 @@ await runScenario(
       const { artifact, report } = await readFormalOutputs(repoRoot);
 
       assert.equal(artifact.formal_verification.status, "invalid_spec");
+      assert.ok(artifact.verification_cases.filter((entry) => entry.lanes.includes("formal")).length > 0);
+      assert.ok(
+        artifact.verification_cases
+          .filter((entry) => entry.lanes.includes("formal"))
+          .every((entry) => entry.status === "invalid_spec"),
+      );
       assert.ok(artifact.formal_verification.tlc_results.some((entry) => entry.status === "invalid_spec"));
       assert.ok(
         artifact.formal_verification.tlc_results.some((entry) =>
