@@ -489,11 +489,23 @@ function buildTlcSummary(
   }
 }
 
-function buildCaseConstraints(stateModel: VerifyStateModel): string[] {
-  return dedupeStable([
+function buildCaseConstraints(stateModel: VerifyStateModel, status: VerifyTlcStatus): string[] {
+  const constraints = [
     ...stateModel.invariants,
     ...stateModel.initial_conditions.map((condition) => `Initial condition: ${condition}`),
-  ]);
+  ];
+
+  if (status === "failed") {
+    constraints.push("TLC found a counterexample; later steps must not proceed until the violating trace is resolved.");
+  } else if (status === "invalid_spec") {
+    constraints.push("The generated TLA+ spec is not runnable; later steps must treat the formal lane as unresolved.");
+  } else if (status === "errored") {
+    constraints.push("TLC errored before completion; later steps must treat the formal lane as unresolved.");
+  } else if (status === "not_run") {
+    constraints.push(`TLC did not run; formal validation remains pending until ${VERIFY_TLC_JAR_PATH_ENV_VAR} is configured.`);
+  }
+
+  return dedupeStable(constraints);
 }
 
 function buildCaseFindings(caseId: string, summary: string, status: VerifyTlcStatus, configured: boolean): string[] {
@@ -699,13 +711,13 @@ async function buildCaseExecution(params: {
       formalDetails,
       findings: buildCaseFindings(params.verificationCase.id, tlcSummary, tlcStatus, tlcConfigured),
       mitigations: buildCaseMitigations(tlcStatus),
-      constraints: buildCaseConstraints(stateModel),
+      constraints: buildCaseConstraints(stateModel, tlcStatus),
     },
     stateModel,
     tlaSpec,
     tlcResult,
     findings: buildCaseFindings(params.verificationCase.id, tlcSummary, tlcStatus, tlcConfigured),
-    constraints: buildCaseConstraints(stateModel),
+    constraints: buildCaseConstraints(stateModel, tlcStatus),
     cautionNotes,
   };
 }

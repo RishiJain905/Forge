@@ -273,20 +273,20 @@ function createVerifyArtifactFixture(repoRoot: string, planArtifact: PlanArtifac
         sourcePlanItemIds: ["plan-item-config"],
         lanes: ["structural"],
         goal: "Check config surface structurally against Step 2 signals.",
-        status: "not_run",
-        summary: "Selected for structural verification in Part 3; execution has not run yet.",
-        findings: [],
-        mitigations: [],
-        constraints: [],
+        status: "passed",
+        summary: "Structural verification passed for config_surface.",
+        findings: ["Structural verification passed for config_surface."],
+        mitigations: ["Carry the structural safeguards forward into later steps."],
+        constraints: ["Keep validation visible: Config changes should keep contract validation visible."],
         traceabilityNotes: ["Step 2 marked plan-item-config as verification-relevant for config_surface."],
         formalDetails: null,
       },
     ],
     structural_verification: {
-      status: "not_run",
-      summary: "1 structural verification case(s) were selected in Part 3; execution has not run yet.",
-      findings: [],
-      constraints: [],
+      status: "passed",
+      summary: "1 structural verification case(s) passed deterministic structural verification.",
+      findings: ["Structural verification passed for config_surface."],
+      constraints: ["Keep validation visible: Config changes should keep contract validation visible."],
     },
     formal_verification: {
       status: "not_run",
@@ -382,8 +382,8 @@ await runScenario(
       assert.equal(parsed.verification_targets[0]?.verificationCaseIds[0], "verify-case-001");
       assert.equal(parsed.verification_cases[0]?.verificationTargetId, "verify-target-001");
       assert.deepEqual(parsed.verification_cases[0]?.lanes, ["structural"]);
-      assert.equal(parsed.structural_verification.status, "not_run");
-      assert.match(parsed.structural_verification.summary, /selected in Part 3/i);
+      assert.equal(parsed.structural_verification.status, "passed");
+      assert.match(parsed.structural_verification.summary, /passed deterministic structural verification/i);
       assert.equal(parsed.formal_verification.status, "not_run");
       assert.match(parsed.formal_verification.summary, /No formal verification cases/i);
       assert.deepEqual(parsed.formal_verification.caution_notes, []);

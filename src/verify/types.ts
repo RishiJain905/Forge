@@ -171,6 +171,13 @@ export interface VerifyStructuralVerification {
   constraints: string[];
 }
 
+export interface VerifyStructuralExecutionResult {
+  cases: VerifyVerificationCase[];
+  structuralVerification: VerifyStructuralVerification;
+  findings: string[];
+  constraints: string[];
+}
+
 export interface VerifyStateModel {
   id: string;
   verification_case_id: string;
@@ -241,6 +248,12 @@ export interface VerifyVerificationReadiness {
   partial_output: VerifyCommandFailure | null;
   constraining_concern_ids: string[];
   recommended_user_actions: string[];
+}
+
+export interface VerifyReadinessResolution {
+  status: VerifyFoundationStatus;
+  verificationDiagnostics: VerifyVerificationDiagnostics;
+  verificationReadiness: VerifyVerificationReadiness;
 }
 
 export interface VerifyWritePolicy {

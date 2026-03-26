@@ -561,6 +561,9 @@ export const verifyArtifactSchema = z.object({
   }
 
   const targetById = new Map(value.verification_targets.map((target) => [target.id, target] as const));
+  const structuralCases = value.verification_cases.filter((verificationCase) =>
+    verificationCase.lanes.includes("structural"),
+  );
   const formalCases = value.verification_cases.filter((verificationCase) =>
     verificationCase.lanes.includes("formal"),
   );
@@ -569,11 +572,48 @@ export const verifyArtifactSchema = z.object({
   const tlaSpecById = new Map(value.formal_verification.tla_specs.map((spec) => [spec.id, spec] as const));
   const tlcResultById = new Map(value.formal_verification.tlc_results.map((result) => [result.id, result] as const));
 
+  function buildWorstStructuralStatus(
+    cases: Array<{ status: typeof VERIFY_CASE_STATUSES[number] }>,
+  ): "not_run" | "passed" | "failed" | "errored" {
+    if (cases.length === 0) {
+      return "not_run";
+    }
+
+    if (cases.some((verificationCase) => verificationCase.status === "failed")) {
+      return "failed";
+    }
+    if (cases.some((verificationCase) => verificationCase.status === "errored")) {
+      return "errored";
+    }
+    if (cases.some((verificationCase) => verificationCase.status === "not_run")) {
+      return "not_run";
+    }
+
+    return "passed";
+  }
+
   if (value.formal_verification.status !== buildWorstTlcStatus(value.formal_verification.tlc_results)) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
       message: "Formal verification status must match the worst TLC result status.",
       path: ["formal_verification", "status"],
+    });
+  }
+  if (value.structural_verification.status !== buildWorstStructuralStatus(structuralCases)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Structural verification status must match the resolved structural case outcomes.",
+      path: ["structural_verification", "status"],
+    });
+  }
+  if (
+    structuralCases.length > 0 &&
+    value.structural_verification.status === "not_run"
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Structural verification cannot remain not_run once structural cases were selected.",
+      path: ["structural_verification", "status"],
     });
   }
 

@@ -286,9 +286,8 @@ await runScenario(
 
       const targetCases = artifact.verification_cases.filter((item) => item.verificationTargetId === migrationTarget.id);
       assert.equal(targetCases.length, 2);
-      assert.ok(targetCases.some((item) => item.lanes.length === 1 && item.lanes[0] === "structural"));
-      assert.ok(targetCases.some((item) => item.lanes.length === 1 && item.lanes[0] === "formal"));
-      assert.ok(targetCases.every((item) => item.status === "not_run"));
+      assert.ok(targetCases.some((item) => item.lanes.length === 1 && item.lanes[0] === "structural" && item.status === "passed"));
+      assert.ok(targetCases.some((item) => item.lanes.length === 1 && item.lanes[0] === "formal" && item.status === "not_run"));
       assert.ok(
         targetCases.every((item) =>
           item.sourcePlanItemIds.includes("plan-item-config") &&
@@ -301,6 +300,7 @@ await runScenario(
         codeSurfaceTarget.sourcePlanItemIds.sort(),
         ["plan-item-config", "plan-item-interface"].sort(),
       );
+      assert.equal(artifact.structural_verification.status, "passed");
       assert.match(artifact.structural_verification.summary, /case/i);
       assert.match(artifact.formal_verification.summary, /case/i);
     } finally {
@@ -397,7 +397,8 @@ await runScenario(
       assert.deepEqual(artifact.verification_targets[0]?.candidateLanes, ["structural"]);
       assert.equal(artifact.verification_cases.length, 1);
       assert.deepEqual(artifact.verification_cases[0]?.lanes, ["structural"]);
-      assert.equal(artifact.verification_cases[0]?.status, "not_run");
+      assert.equal(artifact.verification_cases[0]?.status, "passed");
+      assert.equal(artifact.structural_verification.status, "passed");
     } finally {
       await disposeTempRepo(repoRoot);
     }

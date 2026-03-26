@@ -219,11 +219,14 @@ export function buildFormalVerifyArtifactFixture(params: {
     sourcePlanItemIds: ["plan-item-config"],
     lanes: ["structural"],
     goal: "Check config surface structurally against Step 2 signals.",
-    status: "not_run",
-    summary: "Selected for structural verification in Part 4; execution has not run yet.",
-    findings: [],
-    mitigations: [],
-    constraints: [],
+    status: "passed",
+    summary: "Structural verification passed for config_surface.",
+    findings: [
+      "Structural verification passed for config_surface.",
+      "Structural evidence remained traceable to plan_item_verification_relevance.",
+    ],
+    mitigations: ["Carry the structural safeguards forward into later steps."],
+    constraints: ["Keep validation visible: Config changes should keep contract validation visible."],
     traceabilityNotes: [
       "Step 2 marked plan-item-config as verification-relevant for config_surface.",
     ],
@@ -299,10 +302,13 @@ export function buildFormalVerifyArtifactFixture(params: {
       structuralCase,
     ],
     structural_verification: {
-      status: "not_run",
-      summary: "1 structural verification case(s) were selected in Part 4; execution has not run yet.",
-      findings: [],
-      constraints: [],
+      status: "passed",
+      summary: "1 structural verification case(s) passed deterministic structural verification.",
+      findings: [
+        "Structural verification passed for config_surface.",
+        "Structural evidence remained traceable to plan_item_verification_relevance.",
+      ],
+      constraints: ["Keep validation visible: Config changes should keep contract validation visible."],
     },
     formal_verification: {
       status: params.formalVerificationStatus ?? "failed",

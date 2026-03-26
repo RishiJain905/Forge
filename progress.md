@@ -314,6 +314,12 @@
   - Expanded the nested verify schema, artifact assembly, and report rendering so formal state models, generated specs, TLC results, traces, errors, and top-level formal caution notes are persisted and rendered without changing the frozen `verify.json` top-level keys or report heading order.
   - Added a dedicated Part 4 runtime suite plus supporting fixture coverage for state-model generation, generated-artifact persistence, TLC status normalization, warning-heavy caution retention, schema/report parity, and smoke assertions that prove formal outputs exist even when TLC is not configured.
   - Updated `README.md`, `progress.md`, and `S3-B1-Done/p4-done-summary.md` so Step 3 Batch 1 Part 4 is documented and traceable.
+- Batch 1.05: `part-5-carry-forward-rules-readiness-and-first-build-order.md` (Step 3)
+  - Added `src/verify/structural.ts` so Step 3 now executes deterministic structural verification directly from persisted Step 2 dependency, conflict-zone, parallelization, test-obligation, and carry-forward signals instead of leaving the structural lane as a placeholder summary.
+  - Added `src/verify/readiness.ts` and rewired the verify runner/build order so runs now execute structural first, formal second, then resolve `verification_diagnostics`, `verification_readiness`, and top-level status from actual structural plus formal outcomes while preserving existing Step 2 blockers and `VERIFY_INPUT_TOO_WEAK`.
+  - Reworked verify artifact assembly so `verify.json` and `verify-report.md` now persist real structural case statuses, aggregate structural/formal findings and constraints together, keep top-level keys and report heading order frozen, and block later steps on structural failures plus formal `failed` / `errored` / `invalid_spec` outcomes while treating TLC `not_run` as warning-grade.
+  - Added the dedicated Part 5 acceptance-gates suite, updated prior verify fixture/schema coverage to assert executable structural behavior instead of placeholder `not_run` output, and kept the packaged `forge verify` path honest for structural-only, formal-not-run, and TLC-failure scenarios.
+  - Updated `README.md`, `progress.md`, and `S3-B1-Done/p5-done-summary.md` so Step 3 Batch 1 Part 5 is documented and traceable.
 
 ## Current Branch State
 - `dev` includes the completed Step 1 work through Batch 4.05, including the frozen Step 2 handoff contract from Intake.
@@ -328,7 +334,8 @@
 - `dev` now includes Step 3 Batch 1 Part 2, including the public `forge verify` CLI, persisted `verify.json` / `verify-report.md` outputs, the frozen Step 3 command/output contract, and a runnable smoke path from `forge intake` through `forge verify`.
 - `dev` now includes Step 3 Batch 1 Part 3, including explicit verification target/case construction, deterministic structural-versus-formal lane assignment, case-to-target traceability, and populated verify artifact/report sections for selected verification work.
 - `dev` now includes Step 3 Batch 1 Part 4, including explicit formal-lane entry criteria, deterministic state-model generation, generated TLA+ / TLC config artifacts, TLC execution and status classification via `FORGE_TLC_JAR_PATH`, and populated formal findings/traces/errors/caution output in `verify.json` and `verify-report.md`.
-- `dev` still defers executable structural checks, any optional verify debug artifacts, and the later Step 3 readiness/build-order refinements to the remaining Step 3 parts.
+- `dev` now includes Step 3 Batch 1 Part 5, including executable structural verification, Step 3-owned readiness resolution from structural plus formal outcomes, explicit later-step blocking rules, and dedicated Batch 1 acceptance gates for the shipped build order.
+- `dev` now treats Step 3 Batch 1 as complete for V1 while still deferring any optional verify debug artifacts and any later Step 3 batches that are not yet specified in-repo.
 
 ## Verification
 - `npm.cmd test`
@@ -341,4 +348,6 @@
 - Step 3 Batch 1 Part 2 is complete.
 - Step 3 Batch 1 Part 3 is complete.
 - Step 3 Batch 1 Part 4 is complete.
-- Next implementation work should begin Step 3 Batch 1 Part 5 `part-5-carry-forward-rules-readiness-and-first-build-order.md`.
+- Step 3 Batch 1 Part 5 is complete.
+- Step 3 Batch 1 is complete.
+- Next implementation work should move to the next Step 3 batch/spec once it is defined in-repo.

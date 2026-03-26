@@ -20,6 +20,8 @@ import {
 } from "./artifact.js";
 import { buildVerifyFormalExecution } from "./formal.js";
 import { buildVerifyVerificationModel } from "./model.js";
+import { resolveVerifyReadiness } from "./readiness.js";
+import { buildVerifyStructuralExecution } from "./structural.js";
 import { VerifyInputResolutionError, resolveVerifyFoundationInput, resolveVerifyOutputPaths } from "./input.js";
 import { createVerifyReport } from "./report.js";
 import { validateVerifyFoundationResult } from "./schema.js";
@@ -184,17 +186,43 @@ export async function runVerifyCommand(
       ? initialModel
       : buildVerifyVerificationModel(foundation);
     const startedAt = new Date().toISOString();
-    const formalExecution = await buildVerifyFormalExecution({
+    const structuralExecution = buildVerifyStructuralExecution({
       foundation,
       model,
+    });
+    const structuralModel = {
+      ...model,
+      cases: structuralExecution.cases,
+    };
+    const formalExecution = await buildVerifyFormalExecution({
+      foundation,
+      model: structuralModel,
       outputRoot: paths.outputRoot,
       currentWorkingDirectory,
+    });
+    const failure = paths.usedFallbackRoot
+      ? buildVerifyCommandFailureObject(
+          "OUTPUT_ROOT_FALLBACK",
+          paths.fallbackReason ??
+            "Forge verify fell back to the default .forge output root because the requested output root was unsafe.",
+          paths.fallbackReason ?? undefined,
+        )
+      : null;
+    const readinessResolution = resolveVerifyReadiness({
+      foundation,
+      model,
+      structuralExecution,
+      formalExecution,
+      failure,
     });
     const finishedAt = new Date().toISOString();
     const artifact = createVerifyArtifact({
       foundation,
       model,
+      structuralExecution,
       formalExecution,
+      readinessResolution,
+      failure,
       paths,
       startedAt,
       finishedAt,

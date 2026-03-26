@@ -13,13 +13,12 @@ import type {
   VerifyCommandFailure,
   VerifyCommandResult,
   VerifyFoundationResult,
+  VerifyReadinessResolution,
+  VerifyStructuralExecutionResult,
   VerifyVerificationModel,
   VerifyResolvedOutputPaths,
-  VerifyVerificationDiagnostics,
-  VerifyVerificationReadiness,
 } from "./types.js";
 import type { VerifyFormalExecutionResult } from "./formal.js";
-import { VERIFY_INPUT_TOO_WEAK } from "./constants.js";
 
 function copyIssue(issue: { code: string; message: string }): { code: string; message: string } {
   return {
@@ -40,52 +39,21 @@ function buildVerifyCommandFailure(
   };
 }
 
-function buildVerificationDiagnostics(params: {
-  foundation: VerifyFoundationResult;
-  failure: VerifyCommandFailure | null;
-}): VerifyVerificationDiagnostics {
-  return {
-    usability_status: params.foundation.verificationInput.usability.status,
-    warning_items: params.foundation.verificationInput.usability.warningItems.map(copyIssue),
-    blocking_items: params.foundation.verificationInput.usability.blockingItems.map(copyIssue),
-    partial_output: params.failure,
-  };
-}
+function dedupeStable(values: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
 
-function buildVerificationReadiness(params: {
-  foundation: VerifyFoundationResult;
-  failure: VerifyCommandFailure | null;
-}): VerifyVerificationReadiness {
-  const warningItems = params.foundation.verificationInput.usability.warningItems.map(copyIssue);
-  const blockingIssues = params.foundation.verificationInput.usability.blockingItems.map(copyIssue);
-  const partialOutput = params.failure;
-  const ready = blockingIssues.length === 0;
-  const hasWarnings =
-    warningItems.length > 0 ||
-    params.foundation.verificationInput.uncertainty.planningReadiness.constraining_concern_ids.length > 0 ||
-    partialOutput !== null;
-  const hasWeakInputBlocker = blockingIssues.some((issue) => issue.code === VERIFY_INPUT_TOO_WEAK);
+  for (const value of values) {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized || seen.has(normalized)) {
+      continue;
+    }
 
-  return {
-    ready,
-    status: ready
-      ? hasWarnings
-        ? "ready_with_warnings"
-        : "ready"
-      : "blocked",
-    summary: hasWeakInputBlocker
-      ? "Forge verify is blocked because Step 2 did not produce enough risky verification signal to build Part 3 targets and cases."
-      : params.foundation.verificationInput.uncertainty.planningReadiness.summary,
-    warning_items: warningItems,
-    blocking_issues: blockingIssues,
-    partial_output: partialOutput,
-    constraining_concern_ids: [...params.foundation.verificationInput.uncertainty.planningReadiness.constraining_concern_ids],
-    recommended_user_actions: hasWeakInputBlocker
-      ? [
-          "Strengthen the Step 2 plan with clearer verification-relevant risk, conflict, or ordering signals before rerunning forge verify.",
-        ]
-      : [...params.foundation.verificationInput.uncertainty.planningReadiness.recommended_user_actions],
-  };
+    seen.add(normalized);
+    result.push(value.trim());
+  }
+
+  return result;
 }
 
 function buildVerifySummary(params: {
@@ -106,54 +74,29 @@ function buildVerifySummary(params: {
 export function createVerifyArtifact(params: {
   foundation: VerifyFoundationResult;
   model: VerifyVerificationModel;
-  formalExecution?: VerifyFormalExecutionResult | null;
+  structuralExecution: VerifyStructuralExecutionResult;
+  formalExecution: VerifyFormalExecutionResult;
+  readinessResolution: VerifyReadinessResolution;
+  failure: VerifyCommandFailure | null;
   paths: VerifyResolvedOutputPaths;
   startedAt: string;
   finishedAt: string;
 }): VerifyArtifact {
-  const formalExecution = params.formalExecution ?? null;
-  const failure = params.paths.usedFallbackRoot
-    ? buildVerifyCommandFailure(
-        "OUTPUT_ROOT_FALLBACK",
-        params.paths.fallbackReason ??
-          "Forge verify fell back to the default .forge output root because the requested output root was unsafe.",
-        params.paths.fallbackReason ?? undefined,
-      )
-    : null;
-  const verificationDiagnostics = buildVerificationDiagnostics({
-    foundation: params.foundation,
-    failure,
-  });
-  const verificationReadiness = buildVerificationReadiness({
-    foundation: params.foundation,
-    failure,
-  });
-  const formalVerification = formalExecution?.formalVerification ?? {
-    status: "not_run" as const,
-    summary: params.model.formalCaseCount > 0
-      ? `${params.model.formalCaseCount} formal verification case(s) were selected in Part 3; execution has not run yet.`
-      : "No formal verification cases were selected in Part 3.",
-    caution_notes: [],
-    state_models: [],
-    tla_specs: [],
-    tlc_results: [],
-    findings: [],
-    constraints: [],
-  };
-  const verificationCases = formalExecution?.cases ?? params.model.cases;
-  const findings = formalExecution?.findings ?? [];
-  const constraints = formalExecution?.constraints ?? [];
-  const status = failure
-    ? "failed"
-    : verificationReadiness.ready
-      ? "ready"
-      : "blocked";
+  const verificationCases = params.formalExecution.cases;
+  const findings = dedupeStable([
+    ...params.structuralExecution.findings,
+    ...params.formalExecution.findings,
+  ]);
+  const constraints = dedupeStable([
+    ...params.structuralExecution.constraints,
+    ...params.formalExecution.constraints,
+  ]);
 
   return validateVerifyArtifact({
     schemaVersion: FORGE_SCHEMA_VERSION,
     command: FORGE_VERIFY_FULL_COMMAND,
     stage: params.foundation.stage,
-    status,
+    status: params.readinessResolution.status,
     purpose: STEP3_VERIFY_PURPOSE,
     repoRoot: params.foundation.sourcePlan.repoRoot,
     requestedOutputRoot: params.paths.requestedOutputRoot,
@@ -173,8 +116,8 @@ export function createVerifyArtifact(params: {
     startedAt: params.startedAt,
     finishedAt: params.finishedAt,
     summary: buildVerifySummary({
-      readinessSummary: verificationReadiness.summary,
-      failure,
+      readinessSummary: params.readinessResolution.verificationReadiness.summary,
+      failure: params.failure,
     }),
     boundaryNotes: [...STEP3_DETERMINISTIC_FIRST_NOTES],
     source_plan: params.foundation.sourcePlan,
@@ -182,21 +125,40 @@ export function createVerifyArtifact(params: {
     formal_lane_contract: params.foundation.formalLaneContract,
     verification_targets: params.model.targets,
     verification_cases: verificationCases,
-    structural_verification: {
-      status: "not_run",
-      summary: params.model.structuralCaseCount > 0
-        ? `${params.model.structuralCaseCount} structural verification case(s) were selected in Part 3; execution has not run yet.`
-        : "No structural verification cases were selected in Part 3.",
-      findings: [],
-      constraints: [],
-    },
-    formal_verification: formalVerification,
+    structural_verification: params.structuralExecution.structuralVerification,
+    formal_verification: params.formalExecution.formalVerification,
     findings,
     constraints,
     carry_forward: params.foundation.carryForward.carryForward,
-    verification_diagnostics: verificationDiagnostics,
-    verification_readiness: verificationReadiness,
-    failure,
+    verification_diagnostics: {
+      usability_status: params.readinessResolution.verificationDiagnostics.usability_status,
+      warning_items: params.readinessResolution.verificationDiagnostics.warning_items.map(copyIssue),
+      blocking_items: params.readinessResolution.verificationDiagnostics.blocking_items.map(copyIssue),
+      partial_output: params.readinessResolution.verificationDiagnostics.partial_output
+        ? buildVerifyCommandFailure(
+            params.readinessResolution.verificationDiagnostics.partial_output.code,
+            params.readinessResolution.verificationDiagnostics.partial_output.message,
+            params.readinessResolution.verificationDiagnostics.partial_output.fallbackReason,
+          )
+        : null,
+    },
+    verification_readiness: {
+      ready: params.readinessResolution.verificationReadiness.ready,
+      status: params.readinessResolution.verificationReadiness.status,
+      summary: params.readinessResolution.verificationReadiness.summary,
+      warning_items: params.readinessResolution.verificationReadiness.warning_items.map(copyIssue),
+      blocking_issues: params.readinessResolution.verificationReadiness.blocking_issues.map(copyIssue),
+      partial_output: params.readinessResolution.verificationReadiness.partial_output
+        ? buildVerifyCommandFailure(
+            params.readinessResolution.verificationReadiness.partial_output.code,
+            params.readinessResolution.verificationReadiness.partial_output.message,
+            params.readinessResolution.verificationReadiness.partial_output.fallbackReason,
+          )
+        : null,
+      constraining_concern_ids: [...params.readinessResolution.verificationReadiness.constraining_concern_ids],
+      recommended_user_actions: [...params.readinessResolution.verificationReadiness.recommended_user_actions],
+    },
+    failure: params.failure,
   });
 }
 
