@@ -35,6 +35,7 @@ import {
   verifyArtifactPath,
   verifyReportPath,
 } from "./support/forge-cli.js";
+import { buildFormalVerifyArtifactFixture } from "./support/verify-formal-fixtures.js";
 
 type VerifyDiagnostics = {
   usability_status: "actionable" | "non_actionable" | "upstream_blocked";
@@ -108,6 +109,16 @@ type VerifyArtifact = {
     mitigations: string[];
     constraints: string[];
     traceabilityNotes: string[];
+    formalDetails: {
+      enteredFormalLane: boolean;
+      entryCriteria: string[];
+      stateModelId: string | null;
+      tlaSpecId: string | null;
+      tlcResultId: string | null;
+      trace: string | null;
+      errors: string[];
+      cautionNotes: string[];
+    } | null;
   }>;
   structural_verification: {
     status: string;
@@ -118,6 +129,7 @@ type VerifyArtifact = {
   formal_verification: {
     status: string;
     summary: string;
+    caution_notes: unknown[];
     state_models: unknown[];
     tla_specs: unknown[];
     tlc_results: unknown[];
@@ -267,6 +279,7 @@ function createVerifyArtifactFixture(repoRoot: string, planArtifact: PlanArtifac
         mitigations: [],
         constraints: [],
         traceabilityNotes: ["Step 2 marked plan-item-config as verification-relevant for config_surface."],
+        formalDetails: null,
       },
     ],
     structural_verification: {
@@ -278,6 +291,7 @@ function createVerifyArtifactFixture(repoRoot: string, planArtifact: PlanArtifac
     formal_verification: {
       status: "not_run",
       summary: "No formal verification cases were selected in Part 3.",
+      caution_notes: [],
       state_models: [],
       tla_specs: [],
       tlc_results: [],
@@ -372,6 +386,7 @@ await runScenario(
       assert.match(parsed.structural_verification.summary, /selected in Part 3/i);
       assert.equal(parsed.formal_verification.status, "not_run");
       assert.match(parsed.formal_verification.summary, /No formal verification cases/i);
+      assert.deepEqual(parsed.formal_verification.caution_notes, []);
       assert.equal(parsed.findings.length, 0);
       assert.equal(parsed.constraints.length, 0);
       assert.deepEqual(parsed.carry_forward, planArtifact.carry_forward);
@@ -510,6 +525,68 @@ await runScenario(
           }),
         /unrecognized|unexpected/i,
       );
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "verify artifact accepts formal lane metadata, generated specs, and mixed TLC statuses",
+  async () => {
+    const { repoRoot, planArtifact } = await prepareWarningHeavyPlanArtifact();
+
+    try {
+      const schemaModule = await import("../src/verify/schema.js");
+      const validateVerifyArtifact = (
+        schemaModule as Record<string, unknown>
+      ).validateVerifyArtifact as ((artifact: unknown) => VerifyArtifact) | undefined;
+
+      assert.equal(typeof validateVerifyArtifact, "function");
+
+      const artifact = buildFormalVerifyArtifactFixture({
+        repoRoot,
+        planArtifact,
+      });
+
+      assert.deepEqual(Object.keys(artifact).sort(), [...REQUIRED_TOP_LEVEL_KEYS].sort());
+
+      const parsed = validateVerifyArtifact!(artifact) as Record<string, unknown>;
+      const verificationCases = parsed.verification_cases as Array<Record<string, unknown>>;
+      const formalVerification = parsed.formal_verification as Record<string, unknown>;
+
+      assert.equal(formalVerification.status, "failed");
+      assert.match(String(formalVerification.summary), /mixed TLC outcomes/i);
+      assert.deepEqual(
+        (formalVerification.state_models as Array<Record<string, unknown>>).map((model) => model.verification_case_id),
+        ["verify-case-001", "verify-case-002", "verify-case-003", "verify-case-004"],
+      );
+      assert.deepEqual(
+        (formalVerification.tla_specs as Array<Record<string, unknown>>).map((spec) => spec.generation_status),
+        ["generated", "generated", "generated", "generated"],
+      );
+      assert.deepEqual(
+        (formalVerification.tla_specs as Array<Record<string, unknown>>).map((spec) => spec.name),
+        [
+          "ForgeVerifyOwnership1 TLA+ spec",
+          "ForgeVerifyOwnership2 TLA+ spec",
+          "ForgeVerifyOwnership3 TLA+ spec",
+          "ForgeVerifyOwnership4 TLA+ spec",
+        ],
+      );
+      assert.deepEqual(
+        (formalVerification.tlc_results as Array<Record<string, unknown>>).map((result) => result.status),
+        ["passed", "failed", "errored", "invalid_spec"],
+      );
+      assert.ok((formalVerification.caution_notes as string[]).length > 0);
+      assert.equal(
+        verificationCases.filter((verificationCase) => verificationCase.formalDetails !== null).length,
+        4,
+      );
+      const structuralCase = verificationCases.find((verificationCase) => verificationCase.category === "config_surface");
+      const formalCase = verificationCases.find((verificationCase) => verificationCase.id === "verify-case-002");
+      assert.equal(structuralCase?.formalDetails, null);
+      assert.equal((formalCase?.formalDetails as Record<string, unknown> | undefined)?.tlcResultId, "verify-tlc-result-002");
     } finally {
       await disposeTempRepo(repoRoot);
     }

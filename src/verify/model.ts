@@ -7,6 +7,10 @@ import type {
   VerifyVerificationModel,
   VerifyVerificationTarget,
 } from "./types.js";
+import {
+  buildVerifyFormalBaseCautionNotes,
+  buildVerifyFormalEntryCriteria,
+} from "./formal.js";
 
 interface TargetDraft {
   category: VerifyVerificationCategory;
@@ -549,6 +553,7 @@ export function buildVerifyVerificationModel(
   }
 
   const baseTraceabilityNotes: string[] = [];
+  const baseFormalCautionNotes = buildVerifyFormalBaseCautionNotes(foundation);
   if (foundation.carryForward.carryForward.confidence.level === "low") {
     baseTraceabilityNotes.push("Step 2 carried low-confidence context into verification; results must stay conservative.");
   }
@@ -629,6 +634,22 @@ export function buildVerifyVerificationModel(
         mitigations: [],
         constraints: [],
         traceabilityNotes: [...target.traceabilityNotes],
+        formalDetails: lane === "formal"
+          ? {
+              enteredFormalLane: true,
+              entryCriteria: buildVerifyFormalEntryCriteria(
+                target.category,
+                target.sourceRiskSources,
+                target.sourcePlanItemIds,
+              ),
+              stateModelId: null,
+              tlaSpecId: null,
+              tlcResultId: null,
+              cautionNotes: [...baseFormalCautionNotes],
+              trace: null,
+              errors: [],
+            }
+          : null,
       });
     }
 

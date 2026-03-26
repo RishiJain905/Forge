@@ -17,6 +17,7 @@ import {
   VERIFY_FORMAL_FOCUS_AREAS,
   VERIFY_FORMAL_TOOLING,
   VERIFY_CASE_STATUSES,
+  VERIFY_TLA_SPEC_GENERATION_STATUSES,
   VERIFY_STATE_MODEL_REQUIRED_FIELDS,
   VERIFY_STRUCTURAL_FOCUS_AREAS,
   VERIFY_SUPPORTED_LANES,
@@ -158,6 +159,16 @@ const verifyVerificationCaseSchema = z.object({
   mitigations: z.array(z.string().min(1)),
   constraints: z.array(z.string().min(1)),
   traceabilityNotes: z.array(z.string().min(1)),
+  formalDetails: z.object({
+    enteredFormalLane: z.literal(true),
+    entryCriteria: z.array(z.enum(VERIFY_FORMAL_ENTRY_CRITERIA)).min(1),
+    stateModelId: z.string().min(1).nullable(),
+    tlaSpecId: z.string().min(1).nullable(),
+    tlcResultId: z.string().min(1).nullable(),
+    cautionNotes: z.array(z.string().min(1)),
+    trace: z.string().min(1).nullable(),
+    errors: z.array(z.string().min(1)),
+  }).strict().nullable(),
 }).strict();
 
 const verifyStructuralVerificationSchema = z.object({
@@ -169,6 +180,8 @@ const verifyStructuralVerificationSchema = z.object({
 
 const verifyStateModelSchema = z.object({
   id: z.string().min(1),
+  verification_case_id: z.string().min(1),
+  verification_target_id: z.string().min(1),
   name: z.string().min(1),
   summary: z.string().min(1),
   actors: z.array(z.string().min(1)),
@@ -182,13 +195,20 @@ const verifyStateModelSchema = z.object({
 
 const verifyTlaSpecSchema = z.object({
   id: z.string().min(1),
+  verification_case_id: z.string().min(1),
+  state_model_id: z.string().min(1),
   name: z.string().min(1),
   summary: z.string().min(1),
+  module_name: z.string().min(1),
   spec_path: z.string().min(1),
+  config_path: z.string().min(1),
+  generation_status: z.enum(VERIFY_TLA_SPEC_GENERATION_STATUSES),
 }).strict();
 
 const verifyTlcResultSchema = z.object({
   id: z.string().min(1),
+  verification_case_id: z.string().min(1),
+  tla_spec_id: z.string().min(1),
   status: z.enum(VERIFY_TLC_STATUSES),
   summary: z.string().min(1),
   trace: z.string().min(1).nullable(),
@@ -198,6 +218,7 @@ const verifyTlcResultSchema = z.object({
 const verifyFormalVerificationSchema = z.object({
   status: z.enum(VERIFY_TLC_STATUSES),
   summary: z.string().min(1),
+  caution_notes: z.array(z.string().min(1)),
   state_models: z.array(verifyStateModelSchema),
   tla_specs: z.array(verifyTlaSpecSchema),
   tlc_results: z.array(verifyTlcResultSchema),
@@ -540,12 +561,98 @@ export const verifyArtifactSchema = z.object({
   }
 
   const targetById = new Map(value.verification_targets.map((target) => [target.id, target] as const));
+  const formalCases = value.verification_cases.filter((verificationCase) =>
+    verificationCase.lanes.includes("formal"),
+  );
+  const formalCaseById = new Map(formalCases.map((verificationCase) => [verificationCase.id, verificationCase] as const));
+  const stateModelById = new Map(value.formal_verification.state_models.map((stateModel) => [stateModel.id, stateModel] as const));
+  const tlaSpecById = new Map(value.formal_verification.tla_specs.map((spec) => [spec.id, spec] as const));
+  const tlcResultById = new Map(value.formal_verification.tlc_results.map((result) => [result.id, result] as const));
+
+  if (value.formal_verification.status !== buildWorstTlcStatus(value.formal_verification.tlc_results)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Formal verification status must match the worst TLC result status.",
+      path: ["formal_verification", "status"],
+    });
+  }
+
+  if (value.formal_verification.state_models.length !== formalCases.length) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Formal verification must emit one state model per formal verification case.",
+      path: ["formal_verification", "state_models"],
+    });
+  }
+  if (value.formal_verification.tla_specs.length !== formalCases.length) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Formal verification must emit one TLA spec per formal verification case.",
+      path: ["formal_verification", "tla_specs"],
+    });
+  }
+  if (value.formal_verification.tlc_results.length !== formalCases.length) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Formal verification must emit one TLC result per formal verification case.",
+      path: ["formal_verification", "tlc_results"],
+    });
+  }
+
+  function buildWorstTlcStatus(results: Array<{ status: typeof VERIFY_TLC_STATUSES[number] }>): typeof VERIFY_TLC_STATUSES[number] {
+    const precedence: typeof VERIFY_TLC_STATUSES[number][] = ["failed", "errored", "invalid_spec", "not_run", "passed"];
+    for (const status of precedence) {
+      if (results.some((result) => result.status === status)) {
+        return status;
+      }
+    }
+    return "not_run";
+  }
+
   for (const [index, verificationCase] of value.verification_cases.entries()) {
     if ((caseIdCounts.get(verificationCase.id) ?? 0) > 1) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         message: "Verification case ids must be unique.",
         path: ["verification_cases", index, "id"],
+      });
+    }
+
+    if (verificationCase.lanes.includes("formal")) {
+      if (!verificationCase.formalDetails) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Formal verification cases must carry formalDetails.",
+          path: ["verification_cases", index, "formalDetails"],
+        });
+      } else {
+        if (verificationCase.formalDetails.stateModelId === null) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Formal verification cases must keep a stateModelId.",
+            path: ["verification_cases", index, "formalDetails", "stateModelId"],
+          });
+        }
+        if (verificationCase.formalDetails.tlaSpecId === null) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Formal verification cases must keep a tlaSpecId.",
+            path: ["verification_cases", index, "formalDetails", "tlaSpecId"],
+          });
+        }
+        if (verificationCase.formalDetails.tlcResultId === null) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Formal verification cases must keep a tlcResultId.",
+            path: ["verification_cases", index, "formalDetails", "tlcResultId"],
+          });
+        }
+      }
+    } else if (verificationCase.formalDetails !== null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Structural-only verification cases must keep formalDetails null.",
+        path: ["verification_cases", index, "formalDetails"],
       });
     }
 
@@ -585,6 +692,117 @@ export const verifyArtifactSchema = z.object({
           path: ["verification_cases", index, "sourcePlanItemIds", planItemIndex],
         });
       }
+    }
+  }
+
+  for (const [index, stateModel] of value.formal_verification.state_models.entries()) {
+    if (stateModelById.get(stateModel.id) !== stateModel) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Formal state model ids must be unique.",
+        path: ["formal_verification", "state_models", index, "id"],
+      });
+    }
+
+    const owningCase = formalCaseById.get(stateModel.verification_case_id);
+    if (!owningCase) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Formal state models must point at an existing formal verification case.",
+        path: ["formal_verification", "state_models", index, "verification_case_id"],
+      });
+      continue;
+    }
+
+    const owningTarget = targetById.get(owningCase.verificationTargetId);
+    if (!owningTarget || owningTarget.id !== stateModel.verification_target_id) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Formal state models must point at the owning verification target.",
+        path: ["formal_verification", "state_models", index, "verification_target_id"],
+      });
+    }
+
+    if (owningCase.formalDetails?.stateModelId !== stateModel.id) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Formal state models must be referenced by the owning case formalDetails.",
+        path: ["formal_verification", "state_models", index, "id"],
+      });
+    }
+  }
+
+  for (const [index, spec] of value.formal_verification.tla_specs.entries()) {
+    if (tlaSpecById.get(spec.id) !== spec) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Formal TLA spec ids must be unique.",
+        path: ["formal_verification", "tla_specs", index, "id"],
+      });
+    }
+
+    const owningCase = formalCaseById.get(spec.verification_case_id);
+    if (!owningCase) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Formal TLA specs must point at an existing formal verification case.",
+        path: ["formal_verification", "tla_specs", index, "verification_case_id"],
+      });
+      continue;
+    }
+
+    if (owningCase.formalDetails?.tlaSpecId !== spec.id) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Formal TLA specs must be referenced by the owning case formalDetails.",
+        path: ["formal_verification", "tla_specs", index, "id"],
+      });
+    }
+
+    const stateModel = stateModelById.get(spec.state_model_id);
+    if (!stateModel || stateModel.verification_case_id !== spec.verification_case_id) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Formal TLA specs must point at an emitted state model for the same case.",
+        path: ["formal_verification", "tla_specs", index, "state_model_id"],
+      });
+    }
+  }
+
+  for (const [index, result] of value.formal_verification.tlc_results.entries()) {
+    if (tlcResultById.get(result.id) !== result) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Formal TLC result ids must be unique.",
+        path: ["formal_verification", "tlc_results", index, "id"],
+      });
+    }
+
+    const owningCase = formalCaseById.get(result.verification_case_id);
+    if (!owningCase) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Formal TLC results must point at an existing formal verification case.",
+        path: ["formal_verification", "tlc_results", index, "verification_case_id"],
+      });
+      continue;
+    }
+
+    if (owningCase.formalDetails?.tlcResultId !== result.id) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Formal TLC results must be referenced by the owning case formalDetails.",
+        path: ["formal_verification", "tlc_results", index, "id"],
+      });
+    }
+
+    const spec = tlaSpecById.get(result.tla_spec_id);
+    if (!spec || spec.verification_case_id !== result.verification_case_id) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Formal TLC results must point at an emitted TLA spec for the same case.",
+        path: ["formal_verification", "tlc_results", index, "tla_spec_id"],
+      });
     }
   }
 });

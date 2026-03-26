@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -62,6 +62,7 @@ async function main() {
     await mkdir(join(tempRepo, "src"), { recursive: true });
     await mkdir(join(tempRepo, "tests"), { recursive: true });
     await writeFile(join(tempRepo, "src", "app.ts"), "export const smoke = true;\n", "utf8");
+    await writeFile(join(tempRepo, "src", "worker.ts"), "export function claimOwnership() {\n  return 'claimed';\n}\n", "utf8");
     await writeFile(
       join(tempRepo, "tests", "app.test.ts"),
       "import assert from 'node:assert/strict';\n\nassert.equal(1, 1);\n",
@@ -70,14 +71,18 @@ async function main() {
     await writeFile(
       join(tempRepo, "task.md"),
       [
-        "# Update app behavior",
+        "# Update worker ownership behavior",
         "",
-        "Revise `src/app.ts` and keep `tests/app.test.ts` aligned.",
+        "Revise `src/worker.ts` ownership handling and keep `tests/app.test.ts` aligned.",
         "",
         "## Acceptance Criteria",
         "",
-        "- `src/app.ts` is updated",
+        "- `src/worker.ts` keeps ownership transitions safe",
         "- `tests/app.test.ts` stays aligned",
+        "",
+        "## Constraints",
+        "",
+        "- Keep public API unchanged.",
       ].join("\n"),
       "utf8",
     );
@@ -235,6 +240,10 @@ async function main() {
     assert.ok(Array.isArray(verifyArtifact.verification_cases));
     assert.ok(verifyArtifact.verification_targets.length > 0);
     assert.ok(verifyArtifact.verification_cases.length > 0);
+    assert.ok(Array.isArray(verifyArtifact.formal_verification.state_models));
+    assert.ok(Array.isArray(verifyArtifact.formal_verification.tla_specs));
+    assert.ok(Array.isArray(verifyArtifact.formal_verification.tlc_results));
+    assert.ok(Array.isArray(verifyArtifact.formal_verification.caution_notes));
     assert.ok(
       verifyArtifact.verification_targets.every((target) =>
         Array.isArray(target.sourceRiskSources) && target.sourceRiskSources.length > 0,
@@ -245,10 +254,34 @@ async function main() {
         verificationCase.verificationTargetId && Array.isArray(verificationCase.lanes) && verificationCase.lanes.length === 1,
       ),
     );
+    assert.ok(
+      verifyArtifact.verification_cases.some((verificationCase) =>
+        Array.isArray(verificationCase.lanes) && verificationCase.lanes.includes("formal") && verificationCase.formalDetails !== null,
+      ),
+    );
+    assert.equal(verifyArtifact.formal_verification.status, "not_run");
+    assert.ok(verifyArtifact.formal_verification.state_models.length > 0);
+    assert.ok(verifyArtifact.formal_verification.tla_specs.length > 0);
+    assert.ok(verifyArtifact.formal_verification.tlc_results.length > 0);
+    assert.ok(verifyArtifact.formal_verification.tlc_results.every((result) => result.status === "not_run"));
+    assert.ok(
+      verifyArtifact.formal_verification.tla_specs.every((spec) =>
+        spec.spec_path.endsWith(".tla") && spec.config_path.endsWith(".cfg"),
+      ),
+    );
+    await Promise.all(
+      verifyArtifact.formal_verification.tla_specs.flatMap((spec) => [
+        access(spec.spec_path),
+        access(spec.config_path),
+      ]),
+    );
     assert.match(verifyReport, /Forge Verify Report/);
     assert.match(verifyReport, /## Overview/);
     assert.match(verifyReport, /## Verification Targets/);
     assert.match(verifyReport, /## Verification Cases/);
+    assert.match(verifyReport, /## Formal Verification/);
+    assert.match(verifyReport, /Entry Criteria:/);
+    assert.match(verifyReport, /TLC Results/);
     assert.match(verifyReport, /## Summary/);
     assert.equal(/deferred in Part 2/i.test(verifyReport), false);
 

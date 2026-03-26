@@ -84,6 +84,18 @@ function renderVerificationCaseList(artifact: VerifyArtifact): string {
       `  - Mitigations: ${renderList(verificationCase.mitigations)}`,
       `  - Constraints: ${renderList(verificationCase.constraints)}`,
       `  - Traceability Notes: ${verificationCase.traceabilityNotes.join("; ") || "none"}`,
+      verificationCase.formalDetails
+        ? [
+            "  - Formal Details:",
+            `    - Entry Criteria: ${verificationCase.formalDetails.entryCriteria.join(", ") || "none"}`,
+            `    - State Model ID: ${verificationCase.formalDetails.stateModelId ?? "none"}`,
+            `    - TLA Spec ID: ${verificationCase.formalDetails.tlaSpecId ?? "none"}`,
+            `    - TLC Result ID: ${verificationCase.formalDetails.tlcResultId ?? "none"}`,
+            `    - Caution Notes: ${verificationCase.formalDetails.cautionNotes.join("; ") || "none"}`,
+            `    - Trace: ${verificationCase.formalDetails.trace ?? "none"}`,
+            `    - Errors: ${verificationCase.formalDetails.errors.length > 0 ? verificationCase.formalDetails.errors.join("; ") : "none"}`,
+          ].join("\n")
+        : "  - Formal Details: none",
     ].join("\n"))
     .join("\n");
 }
@@ -114,6 +126,10 @@ function renderFormalVerification(artifact: VerifyArtifact): string {
       ["Summary", formalVerification.summary],
     ]),
     "",
+    "### Caution Notes",
+    "",
+    renderList(formalVerification.caution_notes),
+    "",
     "### State Models",
     "",
     formalVerification.state_models.length === 0
@@ -121,6 +137,8 @@ function renderFormalVerification(artifact: VerifyArtifact): string {
       : formalVerification.state_models
           .map((stateModel) => [
             `- ${stateModel.id}: ${stateModel.name}`,
+            `  - Verification Case ID: ${stateModel.verification_case_id}`,
+            `  - Verification Target ID: ${stateModel.verification_target_id}`,
             `  - Summary: ${stateModel.summary}`,
             `  - Actors: ${stateModel.actors.join(", ") || "none"}`,
             `  - Entities: ${stateModel.entities.join(", ") || "none"}`,
@@ -139,8 +157,13 @@ function renderFormalVerification(artifact: VerifyArtifact): string {
       : formalVerification.tla_specs
           .map((spec) => [
             `- ${spec.id}: ${spec.name}`,
+            `  - Verification Case ID: ${spec.verification_case_id}`,
+            `  - State Model ID: ${spec.state_model_id}`,
             `  - Summary: ${spec.summary}`,
+            `  - Module Name: ${spec.module_name}`,
             `  - Spec Path: ${spec.spec_path}`,
+            `  - Config Path: ${spec.config_path}`,
+            `  - Generation Status: ${spec.generation_status}`,
           ].join("\n"))
           .join("\n"),
     "",
@@ -151,6 +174,8 @@ function renderFormalVerification(artifact: VerifyArtifact): string {
       : formalVerification.tlc_results
           .map((result) => [
             `- ${result.id}: ${result.status}`,
+            `  - Verification Case ID: ${result.verification_case_id}`,
+            `  - TLA Spec ID: ${result.tla_spec_id}`,
             `  - Summary: ${result.summary}`,
             `  - Trace: ${result.trace ?? "none"}`,
             `  - Errors: ${result.errors.length > 0 ? result.errors.join("; ") : "none"}`,

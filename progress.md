@@ -308,6 +308,12 @@
   - Reworked `forge verify` artifact assembly so ready and warning-heavy runs now persist populated `verification_targets` and `verification_cases`, while blocked non-actionable runs still emit empty target/case sections with `VERIFY_INPUT_TOO_WEAK`.
   - Updated schema, report, command-contract, and smoke coverage to lock deterministic target selection, structural-only versus dual-lane case fan-out, nested referential integrity, and the removal of stale “deferred in Part 2” lane-summary wording.
   - Updated `package.json`, `scripts/smoke.mjs`, `progress.md`, and `S3-B1-Done/p3-done-summary.md` so Step 3 Batch 1 Part 3 is documented and wired into the default verification gate.
+- Batch 1.04: `part-4-formal-verification-scope-state-models-and-tla-entry.md` (Step 3)
+  - Reworked the Step 3 formal lane so formal-case entry is explicit, deterministic, and traceable through per-case `formalDetails`, formal entry criteria, carried caution notes, and generated state-model / TLA+ / TLC identifiers.
+  - Added `src/verify/formal.ts` as the Step 3 owner for state-model generation, `.tla` / `.cfg` emission under the verify output root, TLC execution through `FORGE_TLC_JAR_PATH`, and honest TLC result classification across `not_run`, `passed`, `failed`, `errored`, and `invalid_spec`.
+  - Expanded the nested verify schema, artifact assembly, and report rendering so formal state models, generated specs, TLC results, traces, errors, and top-level formal caution notes are persisted and rendered without changing the frozen `verify.json` top-level keys or report heading order.
+  - Added a dedicated Part 4 runtime suite plus supporting fixture coverage for state-model generation, generated-artifact persistence, TLC status normalization, warning-heavy caution retention, schema/report parity, and smoke assertions that prove formal outputs exist even when TLC is not configured.
+  - Updated `README.md`, `progress.md`, and `S3-B1-Done/p4-done-summary.md` so Step 3 Batch 1 Part 4 is documented and traceable.
 
 ## Current Branch State
 - `dev` includes the completed Step 1 work through Batch 4.05, including the frozen Step 2 handoff contract from Intake.
@@ -321,7 +327,8 @@
 - `dev` now includes Step 3 Batch 1 Part 1, including the internal verify foundation, deterministic `plan.json` consumption, explicit structural/formal lane contracts, and real V1 TLA+/TLC entry points in the Step 3 boundary contract.
 - `dev` now includes Step 3 Batch 1 Part 2, including the public `forge verify` CLI, persisted `verify.json` / `verify-report.md` outputs, the frozen Step 3 command/output contract, and a runnable smoke path from `forge intake` through `forge verify`.
 - `dev` now includes Step 3 Batch 1 Part 3, including explicit verification target/case construction, deterministic structural-versus-formal lane assignment, case-to-target traceability, and populated verify artifact/report sections for selected verification work.
-- `dev` still defers executable structural checks, formal state-model generation, TLA+ spec generation, TLC execution, and any optional verify debug artifacts to the remaining Step 3 parts.
+- `dev` now includes Step 3 Batch 1 Part 4, including explicit formal-lane entry criteria, deterministic state-model generation, generated TLA+ / TLC config artifacts, TLC execution and status classification via `FORGE_TLC_JAR_PATH`, and populated formal findings/traces/errors/caution output in `verify.json` and `verify-report.md`.
+- `dev` still defers executable structural checks, any optional verify debug artifacts, and the later Step 3 readiness/build-order refinements to the remaining Step 3 parts.
 
 ## Verification
 - `npm.cmd test`
@@ -333,4 +340,5 @@
 - Step 3 Batch 1 Part 1 is complete.
 - Step 3 Batch 1 Part 2 is complete.
 - Step 3 Batch 1 Part 3 is complete.
-- Next implementation work should begin Step 3 Batch 1 Part 4 `part-4-formal-verification-scope-state-models-and-tla-entry.md`.
+- Step 3 Batch 1 Part 4 is complete.
+- Next implementation work should begin Step 3 Batch 1 Part 5 `part-5-carry-forward-rules-readiness-and-first-build-order.md`.

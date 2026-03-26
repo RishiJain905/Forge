@@ -6,6 +6,7 @@ import type {
   VERIFY_FORMAL_FOCUS_AREAS,
   VERIFY_FORMAL_TOOLING,
   VERIFY_CASE_STATUSES,
+  VERIFY_TLA_SPEC_GENERATION_STATUSES,
   VERIFY_STATE_MODEL_REQUIRED_FIELDS,
   VERIFY_STRUCTURAL_FOCUS_AREAS,
   VERIFY_SUPPORTED_LANES,
@@ -24,6 +25,7 @@ export type VerifyFormalTooling = typeof VERIFY_FORMAL_TOOLING[number];
 export type VerifyStateModelField = typeof VERIFY_STATE_MODEL_REQUIRED_FIELDS[number];
 export type VerifyTlcStatus = typeof VERIFY_TLC_STATUSES[number];
 export type VerifyCaseStatus = typeof VERIFY_CASE_STATUSES[number];
+export type VerifyTlaSpecGenerationStatus = typeof VERIFY_TLA_SPEC_GENERATION_STATUSES[number];
 export type VerifyVerificationCategory = PlanVerificationCategory | VerifyStructuralFocusArea;
 export type VerifyFoundationStatus = "ready" | "blocked" | "failed";
 
@@ -148,6 +150,18 @@ export interface VerifyVerificationCase {
   mitigations: string[];
   constraints: string[];
   traceabilityNotes: string[];
+  formalDetails: VerifyCaseFormalDetails | null;
+}
+
+export interface VerifyCaseFormalDetails {
+  enteredFormalLane: true;
+  entryCriteria: VerifyFormalEntryCriterion[];
+  stateModelId: string | null;
+  tlaSpecId: string | null;
+  tlcResultId: string | null;
+  cautionNotes: string[];
+  trace: string | null;
+  errors: string[];
 }
 
 export interface VerifyStructuralVerification {
@@ -159,6 +173,8 @@ export interface VerifyStructuralVerification {
 
 export interface VerifyStateModel {
   id: string;
+  verification_case_id: string;
+  verification_target_id: string;
   name: string;
   summary: string;
   actors: string[];
@@ -172,13 +188,20 @@ export interface VerifyStateModel {
 
 export interface VerifyTlaSpec {
   id: string;
+  verification_case_id: string;
+  state_model_id: string;
   name: string;
   summary: string;
+  module_name: string;
   spec_path: string;
+  config_path: string;
+  generation_status: VerifyTlaSpecGenerationStatus;
 }
 
 export interface VerifyTlcResult {
   id: string;
+  verification_case_id: string;
+  tla_spec_id: string;
   status: VerifyTlcStatus;
   summary: string;
   trace: string | null;
@@ -188,6 +211,7 @@ export interface VerifyTlcResult {
 export interface VerifyFormalVerification {
   status: VerifyTlcStatus;
   summary: string;
+  caution_notes: string[];
   state_models: VerifyStateModel[];
   tla_specs: VerifyTlaSpec[];
   tlc_results: VerifyTlcResult[];

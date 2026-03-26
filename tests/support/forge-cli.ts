@@ -20,6 +20,8 @@ type TestIntakeCommandOptions = IntakeCommandOptions & {
   strictFocus?: boolean;
 };
 
+type ForgeEnvOverrides = Record<string, string | null | undefined>;
+
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(currentDirectory, "..", "..", "..");
 const forgeEntrypointPath = resolve(projectRoot, "dist", "src", "index.js");
@@ -62,7 +64,10 @@ export async function readTextFile(filePath: string): Promise<string> {
   return readFile(filePath, "utf8");
 }
 
-export async function runForgeCli(args: string[], cwd: string): Promise<ForgeRunResult> {
+export async function runForgeCli(
+  args: string[],
+  cwd: string,
+): Promise<ForgeRunResult> {
   if (args[0] !== "intake") {
     throw new Error(`Unsupported test command: ${args.join(" ")}`);
   }
@@ -78,13 +83,30 @@ export async function runForgeCli(args: string[], cwd: string): Promise<ForgeRun
   };
 }
 
-export function runForgeBinary(args: string[], cwd: string): ForgeRunResult {
+function mergeForgeEnv(envOverrides: ForgeEnvOverrides): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env };
+
+  for (const [key, value] of Object.entries(envOverrides)) {
+    if (value === null || value === undefined) {
+      delete env[key];
+      continue;
+    }
+
+    env[key] = value;
+  }
+
+  return env;
+}
+
+export function runForgeBinary(
+  args: string[],
+  cwd: string,
+  envOverrides: ForgeEnvOverrides = {},
+): ForgeRunResult {
   const result = spawnSync(process.execPath, [forgeEntrypointPath, ...args], {
     cwd,
     encoding: "utf8",
-    env: {
-      ...process.env,
-    },
+    env: mergeForgeEnv(envOverrides),
   });
 
   if (result.error) {
@@ -98,12 +120,20 @@ export function runForgeBinary(args: string[], cwd: string): ForgeRunResult {
   };
 }
 
-export function runForgePlanBinary(args: string[], cwd: string): ForgeRunResult {
-  return runForgeBinary(["plan", ...args], cwd);
+export function runForgePlanBinary(
+  args: string[],
+  cwd: string,
+  envOverrides: ForgeEnvOverrides = {},
+): ForgeRunResult {
+  return runForgeBinary(["plan", ...args], cwd, envOverrides);
 }
 
-export function runForgeVerifyBinary(args: string[], cwd: string): ForgeRunResult {
-  return runForgeBinary(["verify", ...args], cwd);
+export function runForgeVerifyBinary(
+  args: string[],
+  cwd: string,
+  envOverrides: ForgeEnvOverrides = {},
+): ForgeRunResult {
+  return runForgeBinary(["verify", ...args], cwd, envOverrides);
 }
 
 export function verifyArtifactPath(repoRoot: string, outputDir = ".forge"): string {

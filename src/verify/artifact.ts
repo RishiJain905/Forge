@@ -18,6 +18,7 @@ import type {
   VerifyVerificationDiagnostics,
   VerifyVerificationReadiness,
 } from "./types.js";
+import type { VerifyFormalExecutionResult } from "./formal.js";
 import { VERIFY_INPUT_TOO_WEAK } from "./constants.js";
 
 function copyIssue(issue: { code: string; message: string }): { code: string; message: string } {
@@ -105,10 +106,12 @@ function buildVerifySummary(params: {
 export function createVerifyArtifact(params: {
   foundation: VerifyFoundationResult;
   model: VerifyVerificationModel;
+  formalExecution?: VerifyFormalExecutionResult | null;
   paths: VerifyResolvedOutputPaths;
   startedAt: string;
   finishedAt: string;
 }): VerifyArtifact {
+  const formalExecution = params.formalExecution ?? null;
   const failure = params.paths.usedFallbackRoot
     ? buildVerifyCommandFailure(
         "OUTPUT_ROOT_FALLBACK",
@@ -125,6 +128,21 @@ export function createVerifyArtifact(params: {
     foundation: params.foundation,
     failure,
   });
+  const formalVerification = formalExecution?.formalVerification ?? {
+    status: "not_run" as const,
+    summary: params.model.formalCaseCount > 0
+      ? `${params.model.formalCaseCount} formal verification case(s) were selected in Part 3; execution has not run yet.`
+      : "No formal verification cases were selected in Part 3.",
+    caution_notes: [],
+    state_models: [],
+    tla_specs: [],
+    tlc_results: [],
+    findings: [],
+    constraints: [],
+  };
+  const verificationCases = formalExecution?.cases ?? params.model.cases;
+  const findings = formalExecution?.findings ?? [];
+  const constraints = formalExecution?.constraints ?? [];
   const status = failure
     ? "failed"
     : verificationReadiness.ready
@@ -163,7 +181,7 @@ export function createVerifyArtifact(params: {
     verification_target_contract: params.foundation.targetContract,
     formal_lane_contract: params.foundation.formalLaneContract,
     verification_targets: params.model.targets,
-    verification_cases: params.model.cases,
+    verification_cases: verificationCases,
     structural_verification: {
       status: "not_run",
       summary: params.model.structuralCaseCount > 0
@@ -172,19 +190,9 @@ export function createVerifyArtifact(params: {
       findings: [],
       constraints: [],
     },
-    formal_verification: {
-      status: "not_run",
-      summary: params.model.formalCaseCount > 0
-        ? `${params.model.formalCaseCount} formal verification case(s) were selected in Part 3; execution has not run yet.`
-        : "No formal verification cases were selected in Part 3.",
-      state_models: [],
-      tla_specs: [],
-      tlc_results: [],
-      findings: [],
-      constraints: [],
-    },
-    findings: [],
-    constraints: [],
+    formal_verification: formalVerification,
+    findings,
+    constraints,
     carry_forward: params.foundation.carryForward.carryForward,
     verification_diagnostics: verificationDiagnostics,
     verification_readiness: verificationReadiness,

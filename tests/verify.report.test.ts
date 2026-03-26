@@ -14,6 +14,8 @@ import {
   verifyReportPath,
   writeRepoFile,
 } from "./support/forge-cli.js";
+import { buildFormalVerifyArtifactFixture } from "./support/verify-formal-fixtures.js";
+import { createVerifyReport } from "../src/verify/report.js";
 
 async function runScenario(name: string, scenario: () => Promise<void>): Promise<void> {
   try {
@@ -181,6 +183,48 @@ await runScenario(
       assert.match(report, /OUTPUT_ROOT_FALLBACK/);
       assert.match(report, /default \.forge output root|unsafe/i);
       assert.match(report, new RegExp(artifact.verification_readiness.summary.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "forge verify report renders the formal lane state model, spec, trace, and caution details",
+  async () => {
+    const repoRoot = await createTempRepo("forge-verify-report-formal-");
+
+    try {
+      await seedSpecRepo(repoRoot);
+      const intakeResult = runForgeBinary(
+        ["intake", "--repo", repoRoot, "--spec", join(repoRoot, "task.md")],
+        repoRoot,
+      );
+      assert.equal(intakeResult.code, 0, intakeResult.stderr);
+
+      const planResult = runForgePlanBinary(["--repo", repoRoot], repoRoot);
+      assert.equal(planResult.code, 0, planResult.stderr);
+
+      const planArtifact = await readJsonFile<Record<string, unknown>>(join(repoRoot, ".forge", "plan.json"));
+      const report = createVerifyReport(
+        buildFormalVerifyArtifactFixture({
+          repoRoot,
+          planArtifact: planArtifact as never,
+        }) as never,
+      );
+
+      assert.equal(extractLevelTwoHeadings(report).join("|"), [...REQUIRED_HEADINGS].join("|"));
+      assert.match(report, /Entry Criteria:/);
+      assert.match(report, /State Model ID:/);
+      assert.match(report, /TLA Spec ID:/);
+      assert.match(report, /TLC Result ID:/);
+      assert.match(report, /Config Path:/);
+      assert.match(report, /Trace:/);
+      assert.match(report, /Errors:/);
+      assert.match(report, /invalid_spec/);
+      assert.match(report, /passed/);
+      assert.match(report, /failed/);
+      assert.match(report, /errored/);
     } finally {
       await disposeTempRepo(repoRoot);
     }

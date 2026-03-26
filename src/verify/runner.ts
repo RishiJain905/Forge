@@ -18,6 +18,7 @@ import {
   createVerifyArtifact,
   toVerifyArtifactJson,
 } from "./artifact.js";
+import { buildVerifyFormalExecution } from "./formal.js";
 import { buildVerifyVerificationModel } from "./model.js";
 import { VerifyInputResolutionError, resolveVerifyFoundationInput, resolveVerifyOutputPaths } from "./input.js";
 import { createVerifyReport } from "./report.js";
@@ -183,10 +184,17 @@ export async function runVerifyCommand(
       ? initialModel
       : buildVerifyVerificationModel(foundation);
     const startedAt = new Date().toISOString();
+    const formalExecution = await buildVerifyFormalExecution({
+      foundation,
+      model,
+      outputRoot: paths.outputRoot,
+      currentWorkingDirectory,
+    });
     const finishedAt = new Date().toISOString();
     const artifact = createVerifyArtifact({
       foundation,
       model,
+      formalExecution,
       paths,
       startedAt,
       finishedAt,
