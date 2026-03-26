@@ -320,6 +320,12 @@
   - Reworked verify artifact assembly so `verify.json` and `verify-report.md` now persist real structural case statuses, aggregate structural/formal findings and constraints together, keep top-level keys and report heading order frozen, and block later steps on structural failures plus formal `failed` / `errored` / `invalid_spec` outcomes while treating TLC `not_run` as warning-grade.
   - Added the dedicated Part 5 acceptance-gates suite, updated prior verify fixture/schema coverage to assert executable structural behavior instead of placeholder `not_run` output, and kept the packaged `forge verify` path honest for structural-only, formal-not-run, and TLC-failure scenarios.
   - Updated `README.md`, `progress.md`, and `S3-B1-Done/p5-done-summary.md` so Step 3 Batch 1 Part 5 is documented and traceable.
+- Batch 2.01: `part-1-batch2-goal-and-do-not-touch.md` (Step 3)
+  - Treated Step 3 Batch 2 Part 1 as a narrow alignment pass over the already real verify pipeline instead of reopening the Step 3 architecture or pulling Part 2-5 work forward.
+  - Expanded the Step 3 boundary policy with the explicit Batch 2 mission, an ordered implementation-priority list, and the missing do-not-touch guardrails for Step 4+ drift, interactive shell behavior, memory backends, execution-packet generation, code editing, broad repo cleanup, fuzzy verification reasoning, and fake TLA+/TLC participation.
+  - Kept the public `forge verify` CLI surface and the top-level `verify.json` / `verify-report.md` contracts stable while letting the stronger boundary wording flow through the existing policy surfaces.
+  - Tightened `tests/verify.goal-and-boundaries.test.ts` so the stronger Batch 2 mission and guardrails are locked by direct Step 3 boundary coverage.
+  - Updated `README.md`, `progress.md`, and `S3-B2-Done/p1-done-summary.md` so Step 3 Batch 2 Part 1 is documented and traceable.
 
 ## Current Branch State
 - `dev` includes the completed Step 1 work through Batch 4.05, including the frozen Step 2 handoff contract from Intake.
@@ -335,6 +341,7 @@
 - `dev` now includes Step 3 Batch 1 Part 3, including explicit verification target/case construction, deterministic structural-versus-formal lane assignment, case-to-target traceability, and populated verify artifact/report sections for selected verification work.
 - `dev` now includes Step 3 Batch 1 Part 4, including explicit formal-lane entry criteria, deterministic state-model generation, generated TLA+ / TLC config artifacts, TLC execution and status classification via `FORGE_TLC_JAR_PATH`, and populated formal findings/traces/errors/caution output in `verify.json` and `verify-report.md`.
 - `dev` now includes Step 3 Batch 1 Part 5, including executable structural verification, Step 3-owned readiness resolution from structural plus formal outcomes, explicit later-step blocking rules, and dedicated Batch 1 acceptance gates for the shipped build order.
+- `dev` now includes Step 3 Batch 2 Part 1, including the explicit Batch 2 verify mission, ordered implementation priorities, strengthened do-not-touch boundary policy, and tighter goal-and-boundaries coverage while keeping the public verify surface stable.
 - `dev` now treats Step 3 Batch 1 as complete for V1 while still deferring any optional verify debug artifacts and any later Step 3 batches that are not yet specified in-repo.
 
 ## Verification
@@ -350,4 +357,5 @@
 - Step 3 Batch 1 Part 4 is complete.
 - Step 3 Batch 1 Part 5 is complete.
 - Step 3 Batch 1 is complete.
-- Next implementation work should move to the next Step 3 batch/spec once it is defined in-repo.
+- Step 3 Batch 2 Part 1 is complete.
+- Next implementation work should move to `forge_step3_batch2/part-2-stage-1-and-2-plan-consumption-verification-targets-and-structural-lane.md`.

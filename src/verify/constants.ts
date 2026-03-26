@@ -14,12 +14,30 @@ export const VERIFY_TLA_SPEC_GENERATION_STATUSES = [
 ] as const;
 
 export const STEP3_VERIFY_PURPOSE =
-  "Transform Step 2 planning output into verified or constrained planning output by applying both structural verification and formal TLA+/TLC-backed verification to risky coordination/workflow logic." as const;
+  "Make forge verify run through the real Step 3 pipeline and produce usable verification outputs by consuming Step 2 planning output through structural verification and selective formal TLA+/TLC-backed verification for risky coordination and workflow logic." as const;
+
+export const STEP3_IMPLEMENTATION_PRIORITIES = [
+  "verification target/case construction",
+  "structural verification lane",
+  "formal lane foundations",
+  "real TLA+ generation",
+  "real TLC execution for the selected high-value subset",
+  "machine-readable artifact generation",
+  "human-readable verification report",
+  "stable verification orchestration",
+  "real tests for implemented behavior",
+  "optional lightweight debug artifacts",
+  "safe cleanup inside Step 3",
+  "broad polish for every edge case",
+  "freeze-quality hardening",
+  "expanding formal coverage too widely before the first subset is stable",
+] as const;
 
 export const STEP3_DETERMINISTIC_FIRST_NOTES = [
   "Consume the persisted Step 2 plan artifact instead of re-planning from prose or re-running broad planning logic.",
   "Treat Step 2 plan structure, carried-forward uncertainty, and planning readiness as authoritative verification inputs.",
   "Keep target selection, lane assignment, and formal-lane entry deterministic-first so optional explanation can remain bounded later.",
+  "Keep one real orchestration path from persisted Step 2 output to persisted verify outputs.",
 ] as const;
 
 export const STEP3_ALLOWED_SIDE_EFFECTS = [
@@ -34,6 +52,8 @@ export const STEP3_DEFERRED_CAPABILITIES = [
   "forge split",
   "forge execute",
   "forge integrate",
+  "interactive shell mode",
+  "memory backends",
   "universal business-logic verification",
   "freeform LLM verification orchestration",
 ] as const;
@@ -41,11 +61,16 @@ export const STEP3_DEFERRED_CAPABILITIES = [
 export const STEP3_DISALLOWED_CAPABILITIES = [
   "re-plan the task from prose",
   "modify code",
+  "edit source files directly",
   "split into workstreams",
   "generate execution packets",
+  "broad repo cleanup unrelated to Step 3",
+  "make verification depend on fuzzy reasoning",
   "hide weak plan inputs behind fake verification confidence",
   "claim proofs where TLC did not validate the case",
+  "pretend TLA+/TLC ran when they did not",
   "treat all plan work as equally worthy of formal modeling",
+  "redesign Step 3 architecture without strong reason",
 ] as const;
 
 export const VERIFY_SUPPORTED_LANES = [
@@ -144,6 +169,7 @@ export interface Step3BoundaryPolicy {
   command: string;
   stage: string;
   purpose: string;
+  implementationPriorities: readonly string[];
   authoritativeInputs: readonly string[];
   deterministicFirst: true;
   allowedSideEffects: readonly string[];
@@ -157,6 +183,7 @@ export const STEP3_BOUNDARY_POLICY: Step3BoundaryPolicy = {
   command: FORGE_VERIFY_FULL_COMMAND,
   stage: FORGE_VERIFY_STAGE,
   purpose: STEP3_VERIFY_PURPOSE,
+  implementationPriorities: STEP3_IMPLEMENTATION_PRIORITIES,
   authoritativeInputs: [
     ".forge/plan.json",
     "source_intake",

@@ -83,6 +83,7 @@ const verifyBoundaryPolicySchema = z.object({
   command: z.literal(`forge ${FORGE_VERIFY_COMMAND}`),
   stage: z.literal(FORGE_VERIFY_STAGE),
   purpose: z.string().min(1),
+  implementationPriorities: z.array(z.string().min(1)).min(1),
   authoritativeInputs: z.array(z.string().min(1)).min(1),
   deterministicFirst: z.literal(true),
   allowedSideEffects: z.array(z.string().min(1)).min(1),
