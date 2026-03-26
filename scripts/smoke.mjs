@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -8,6 +8,35 @@ import { fileURLToPath } from "node:url";
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(currentDirectory, "..");
 const entryPointPath = resolve(repoRoot, "dist", "src", "index.js");
+const VERIFY_REPORT_HEADINGS = [
+  "# Forge Verify Report",
+  "## Overview",
+  "## Purpose",
+  "## Source Plan",
+  "## Verification Target Contract",
+  "## Formal Lane Contract",
+  "## Verification Targets",
+  "## Verification Cases",
+  "## Structural Verification",
+  "## Formal Verification",
+  "## Findings",
+  "## Constraints",
+  "## Carry-Forward Context",
+  "## Verification Readiness",
+  "## Boundary Notes",
+  "## Deferred Capabilities",
+  "## Allowed Side Effects",
+  "## Disallowed Capabilities",
+  "## Output Files",
+  "## Failure",
+  "## Summary",
+];
+
+function assertNoVerifyReportHeadings(output) {
+  for (const heading of VERIFY_REPORT_HEADINGS) {
+    assert.equal(output.includes(heading), false);
+  }
+}
 
 async function main() {
   const tempRepo = await mkdtemp(join(tmpdir(), "forge-smoke-"));
@@ -33,6 +62,7 @@ async function main() {
     await mkdir(join(tempRepo, "src"), { recursive: true });
     await mkdir(join(tempRepo, "tests"), { recursive: true });
     await writeFile(join(tempRepo, "src", "app.ts"), "export const smoke = true;\n", "utf8");
+    await writeFile(join(tempRepo, "src", "worker.ts"), "export function claimOwnership() {\n  return 'claimed';\n}\n", "utf8");
     await writeFile(
       join(tempRepo, "tests", "app.test.ts"),
       "import assert from 'node:assert/strict';\n\nassert.equal(1, 1);\n",
@@ -41,14 +71,18 @@ async function main() {
     await writeFile(
       join(tempRepo, "task.md"),
       [
-        "# Update app behavior",
+        "# Update worker ownership behavior",
         "",
-        "Revise `src/app.ts` and keep `tests/app.test.ts` aligned.",
+        "Revise `src/worker.ts` ownership handling and keep `tests/app.test.ts` aligned.",
         "",
         "## Acceptance Criteria",
         "",
-        "- `src/app.ts` is updated",
+        "- `src/worker.ts` keeps ownership transitions safe",
         "- `tests/app.test.ts` stays aligned",
+        "",
+        "## Constraints",
+        "",
+        "- Keep public API unchanged.",
       ].join("\n"),
       "utf8",
     );
@@ -166,6 +200,90 @@ async function main() {
     assert.match(planReport, /## Test Obligations/);
     assert.match(planReport, /## Parallelization/);
     assert.match(planReport, /## Planning Readiness/);
+
+    const verifyResult = spawnSync(process.execPath, [
+      entryPointPath,
+      "verify",
+      "--repo",
+      tempRepo,
+    ], {
+      cwd: tempRepo,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+      },
+    });
+
+    if (verifyResult.error) {
+      throw verifyResult.error;
+    }
+
+    assert.equal(verifyResult.status, 0);
+    assert.match(verifyResult.stdout, /Status: ready/);
+    assert.match(verifyResult.stdout, /Summary:/);
+    assert.match(verifyResult.stdout, /Output root:/);
+    assert.match(verifyResult.stdout, /Artifact:/);
+    assert.match(verifyResult.stdout, /Report:/);
+    assertNoVerifyReportHeadings(verifyResult.stdout);
+    assertNoVerifyReportHeadings(verifyResult.stderr);
+
+    const verifyArtifactPath = join(tempRepo, ".forge", "verify.json");
+    const verifyReportPath = join(tempRepo, ".forge", "reports", "verify-report.md");
+    const verifyArtifact = JSON.parse(await readFile(verifyArtifactPath, "utf8"));
+    const verifyReport = await readFile(verifyReportPath, "utf8");
+
+    assert.equal(verifyArtifact.status, "ready");
+    assert.equal(verifyArtifact.command, "forge verify");
+    assert.equal(verifyArtifact.files.artifactPath, verifyArtifactPath);
+    assert.equal(verifyArtifact.files.reportPath, verifyReportPath);
+    assert.ok(Array.isArray(verifyArtifact.verification_targets));
+    assert.ok(Array.isArray(verifyArtifact.verification_cases));
+    assert.ok(verifyArtifact.verification_targets.length > 0);
+    assert.ok(verifyArtifact.verification_cases.length > 0);
+    assert.ok(Array.isArray(verifyArtifact.formal_verification.state_models));
+    assert.ok(Array.isArray(verifyArtifact.formal_verification.tla_specs));
+    assert.ok(Array.isArray(verifyArtifact.formal_verification.tlc_results));
+    assert.ok(Array.isArray(verifyArtifact.formal_verification.caution_notes));
+    assert.ok(
+      verifyArtifact.verification_targets.every((target) =>
+        Array.isArray(target.sourceRiskSources) && target.sourceRiskSources.length > 0,
+      ),
+    );
+    assert.ok(
+      verifyArtifact.verification_cases.every((verificationCase) =>
+        verificationCase.verificationTargetId && Array.isArray(verificationCase.lanes) && verificationCase.lanes.length === 1,
+      ),
+    );
+    assert.ok(
+      verifyArtifact.verification_cases.some((verificationCase) =>
+        Array.isArray(verificationCase.lanes) && verificationCase.lanes.includes("formal") && verificationCase.formalDetails !== null,
+      ),
+    );
+    assert.equal(verifyArtifact.formal_verification.status, "not_run");
+    assert.ok(verifyArtifact.formal_verification.state_models.length > 0);
+    assert.ok(verifyArtifact.formal_verification.tla_specs.length > 0);
+    assert.ok(verifyArtifact.formal_verification.tlc_results.length > 0);
+    assert.ok(verifyArtifact.formal_verification.tlc_results.every((result) => result.status === "not_run"));
+    assert.ok(
+      verifyArtifact.formal_verification.tla_specs.every((spec) =>
+        spec.spec_path.endsWith(".tla") && spec.config_path.endsWith(".cfg"),
+      ),
+    );
+    await Promise.all(
+      verifyArtifact.formal_verification.tla_specs.flatMap((spec) => [
+        access(spec.spec_path),
+        access(spec.config_path),
+      ]),
+    );
+    assert.match(verifyReport, /Forge Verify Report/);
+    assert.match(verifyReport, /## Overview/);
+    assert.match(verifyReport, /## Verification Targets/);
+    assert.match(verifyReport, /## Verification Cases/);
+    assert.match(verifyReport, /## Formal Verification/);
+    assert.match(verifyReport, /Entry Criteria:/);
+    assert.match(verifyReport, /TLC Results/);
+    assert.match(verifyReport, /## Summary/);
+    assert.equal(/deferred in Part 2/i.test(verifyReport), false);
 
     await writeFile(join(tempRepo, "src", "app.ts"), "export const smoke = true;\n", "utf8");
     await writeFile(

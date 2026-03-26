@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
 import { execFileSync, spawnSync } from "node:child_process";
@@ -18,6 +19,8 @@ export interface ForgeRunResult {
 type TestIntakeCommandOptions = IntakeCommandOptions & {
   strictFocus?: boolean;
 };
+
+type ForgeEnvOverrides = Record<string, string | null | undefined>;
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(currentDirectory, "..", "..", "..");
@@ -61,7 +64,10 @@ export async function readTextFile(filePath: string): Promise<string> {
   return readFile(filePath, "utf8");
 }
 
-export async function runForgeCli(args: string[], cwd: string): Promise<ForgeRunResult> {
+export async function runForgeCli(
+  args: string[],
+  cwd: string,
+): Promise<ForgeRunResult> {
   if (args[0] !== "intake") {
     throw new Error(`Unsupported test command: ${args.join(" ")}`);
   }
@@ -77,13 +83,30 @@ export async function runForgeCli(args: string[], cwd: string): Promise<ForgeRun
   };
 }
 
-export function runForgeBinary(args: string[], cwd: string): ForgeRunResult {
+function mergeForgeEnv(envOverrides: ForgeEnvOverrides): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env };
+
+  for (const [key, value] of Object.entries(envOverrides)) {
+    if (value === null || value === undefined) {
+      delete env[key];
+      continue;
+    }
+
+    env[key] = value;
+  }
+
+  return env;
+}
+
+export function runForgeBinary(
+  args: string[],
+  cwd: string,
+  envOverrides: ForgeEnvOverrides = {},
+): ForgeRunResult {
   const result = spawnSync(process.execPath, [forgeEntrypointPath, ...args], {
     cwd,
     encoding: "utf8",
-    env: {
-      ...process.env,
-    },
+    env: mergeForgeEnv(envOverrides),
   });
 
   if (result.error) {
@@ -97,8 +120,62 @@ export function runForgeBinary(args: string[], cwd: string): ForgeRunResult {
   };
 }
 
-export function runForgePlanBinary(args: string[], cwd: string): ForgeRunResult {
-  return runForgeBinary(["plan", ...args], cwd);
+export function runForgePlanBinary(
+  args: string[],
+  cwd: string,
+  envOverrides: ForgeEnvOverrides = {},
+): ForgeRunResult {
+  return runForgeBinary(["plan", ...args], cwd, envOverrides);
+}
+
+export function runForgeVerifyBinary(
+  args: string[],
+  cwd: string,
+  envOverrides: ForgeEnvOverrides = {},
+): ForgeRunResult {
+  return runForgeBinary(["verify", ...args], cwd, envOverrides);
+}
+
+export function verifyArtifactPath(repoRoot: string, outputDir = ".forge"): string {
+  return join(repoRoot, outputDir, "verify.json");
+}
+
+export function verifyReportPath(repoRoot: string, outputDir = ".forge"): string {
+  return join(repoRoot, outputDir, "reports", "verify-report.md");
+}
+
+const VERIFY_REPORT_HEADING_MARKERS = [
+  "# Forge Verify Report",
+  "## Overview",
+  "## Purpose",
+  "## Source Plan",
+  "## Verification Target Contract",
+  "## Formal Lane Contract",
+  "## Verification Targets",
+  "## Verification Cases",
+  "## Structural Verification",
+  "## Formal Verification",
+  "## Findings",
+  "## Constraints",
+  "## Carry-Forward Context",
+  "## Verification Readiness",
+  "## Boundary Notes",
+  "## Deferred Capabilities",
+  "## Allowed Side Effects",
+  "## Disallowed Capabilities",
+  "## Output Files",
+  "## Failure",
+  "## Summary",
+] as const;
+
+export function assertForgeVerifyOutputHasNoReportHeadings(
+  result: Pick<ForgeRunResult, "stdout" | "stderr">,
+): void {
+  for (const output of [result.stdout, result.stderr]) {
+    for (const heading of VERIFY_REPORT_HEADING_MARKERS) {
+      assert.equal(output.includes(heading), false);
+    }
+  }
 }
 
 export async function writeRepoFile(
