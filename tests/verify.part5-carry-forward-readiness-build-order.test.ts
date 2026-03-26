@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { rm } from "node:fs/promises";
-import { join } from "node:path";
+import { chmod, rm } from "node:fs/promises";
+import { delimiter, join } from "node:path";
 
 import type { PlanArtifact } from "../src/plan/types.js";
 import {
@@ -456,9 +456,35 @@ async function createTlcStubEnv(
       "exit /b 0",
     ].join("\r\n"),
   );
+  await writeRepoFile(
+    repoRoot,
+    "tools/java",
+    [
+      "#!/usr/bin/env bash",
+      "set -euo pipefail",
+      "case \"${FORGE_TLC_STUB_MODE:-passed}\" in",
+      "  passed)",
+      "    echo 'Model checking completed. No error has been found.'",
+      "    exit 0",
+      "    ;;",
+      "  failed)",
+      "    echo 'Error: Invariant violation.'",
+      "    echo 'Trace:'",
+      "    echo '  state 1'",
+      "    echo '  state 2'",
+      "    exit 1",
+      "    ;;",
+      "  *)",
+      "    echo 'Model checking completed. No error has been found.'",
+      "    exit 0",
+      "    ;;",
+      "esac",
+    ].join("\n"),
+  );
+  await chmod(join(toolsDir, "java"), 0o755);
   await writeRepoFile(repoRoot, "tools/fake-tlc.jar", "");
 
-  const pathValue = `${toolsDir};${process.env.PATH ?? ""}`;
+  const pathValue = `${toolsDir}${delimiter}${process.env.PATH ?? ""}`;
 
   return {
     PATH: pathValue,
