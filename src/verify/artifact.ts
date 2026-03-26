@@ -13,10 +13,12 @@ import type {
   VerifyCommandFailure,
   VerifyCommandResult,
   VerifyFoundationResult,
+  VerifyVerificationModel,
   VerifyResolvedOutputPaths,
   VerifyVerificationDiagnostics,
   VerifyVerificationReadiness,
 } from "./types.js";
+import { VERIFY_INPUT_TOO_WEAK } from "./constants.js";
 
 function copyIssue(issue: { code: string; message: string }): { code: string; message: string } {
   return {
@@ -61,6 +63,7 @@ function buildVerificationReadiness(params: {
     warningItems.length > 0 ||
     params.foundation.verificationInput.uncertainty.planningReadiness.constraining_concern_ids.length > 0 ||
     partialOutput !== null;
+  const hasWeakInputBlocker = blockingIssues.some((issue) => issue.code === VERIFY_INPUT_TOO_WEAK);
 
   return {
     ready,
@@ -69,12 +72,18 @@ function buildVerificationReadiness(params: {
         ? "ready_with_warnings"
         : "ready"
       : "blocked",
-    summary: params.foundation.verificationInput.uncertainty.planningReadiness.summary,
+    summary: hasWeakInputBlocker
+      ? "Forge verify is blocked because Step 2 did not produce enough risky verification signal to build Part 3 targets and cases."
+      : params.foundation.verificationInput.uncertainty.planningReadiness.summary,
     warning_items: warningItems,
     blocking_issues: blockingIssues,
     partial_output: partialOutput,
     constraining_concern_ids: [...params.foundation.verificationInput.uncertainty.planningReadiness.constraining_concern_ids],
-    recommended_user_actions: [...params.foundation.verificationInput.uncertainty.planningReadiness.recommended_user_actions],
+    recommended_user_actions: hasWeakInputBlocker
+      ? [
+          "Strengthen the Step 2 plan with clearer verification-relevant risk, conflict, or ordering signals before rerunning forge verify.",
+        ]
+      : [...params.foundation.verificationInput.uncertainty.planningReadiness.recommended_user_actions],
   };
 }
 
@@ -95,6 +104,7 @@ function buildVerifySummary(params: {
 
 export function createVerifyArtifact(params: {
   foundation: VerifyFoundationResult;
+  model: VerifyVerificationModel;
   paths: VerifyResolvedOutputPaths;
   startedAt: string;
   finishedAt: string;
@@ -152,17 +162,21 @@ export function createVerifyArtifact(params: {
     source_plan: params.foundation.sourcePlan,
     verification_target_contract: params.foundation.targetContract,
     formal_lane_contract: params.foundation.formalLaneContract,
-    verification_targets: [],
-    verification_cases: [],
+    verification_targets: params.model.targets,
+    verification_cases: params.model.cases,
     structural_verification: {
       status: "not_run",
-      summary: "Structural verification is deferred in Part 2.",
+      summary: params.model.structuralCaseCount > 0
+        ? `${params.model.structuralCaseCount} structural verification case(s) were selected in Part 3; execution has not run yet.`
+        : "No structural verification cases were selected in Part 3.",
       findings: [],
       constraints: [],
     },
     formal_verification: {
       status: "not_run",
-      summary: "Formal verification is deferred in Part 2.",
+      summary: params.model.formalCaseCount > 0
+        ? `${params.model.formalCaseCount} formal verification case(s) were selected in Part 3; execution has not run yet.`
+        : "No formal verification cases were selected in Part 3.",
       state_models: [],
       tla_specs: [],
       tlc_results: [],

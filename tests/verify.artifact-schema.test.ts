@@ -82,8 +82,33 @@ type VerifyArtifact = {
   source_plan: VerifyPlanReference;
   verification_target_contract: VerifyTargetContract;
   formal_lane_contract: VerifyFormalLaneContract;
-  verification_targets: unknown[];
-  verification_cases: unknown[];
+  verification_targets: Array<{
+    id: string;
+    title: string;
+    category: string;
+    sourcePlanItemIds: string[];
+    riskSummary: string;
+    candidateLanes: string[];
+    sourceRiskSources: string[];
+    expectedFindingKinds: string[];
+    verificationCaseIds: string[];
+    traceabilityNotes: string[];
+  }>;
+  verification_cases: Array<{
+    id: string;
+    verificationTargetId: string;
+    title: string;
+    category: string;
+    sourcePlanItemIds: string[];
+    lanes: string[];
+    goal: string;
+    status: string;
+    summary: string;
+    findings: string[];
+    mitigations: string[];
+    constraints: string[];
+    traceabilityNotes: string[];
+  }>;
   structural_verification: {
     status: string;
     summary: string;
@@ -213,17 +238,46 @@ function createVerifyArtifactFixture(repoRoot: string, planArtifact: PlanArtifac
       stateModelRequiredFields: [...VERIFY_STATE_MODEL_REQUIRED_FIELDS],
       tlcStatuses: [...VERIFY_TLC_STATUSES],
     },
-    verification_targets: [],
-    verification_cases: [],
+    verification_targets: [
+      {
+        id: "verify-target-001",
+        title: "Verify config surface for package.json",
+        category: "config_surface",
+        sourcePlanItemIds: ["plan-item-config"],
+        riskSummary: "Step 3 should inspect Config Surface across package.json.",
+        candidateLanes: ["structural"],
+        sourceRiskSources: ["plan_item_verification_relevance"],
+        expectedFindingKinds: ["merge_or_serialization_contradiction"],
+        verificationCaseIds: ["verify-case-001"],
+        traceabilityNotes: ["Step 2 marked plan-item-config as verification-relevant for config_surface."],
+      },
+    ],
+    verification_cases: [
+      {
+        id: "verify-case-001",
+        verificationTargetId: "verify-target-001",
+        title: "Verify config surface for package.json (structural)",
+        category: "config_surface",
+        sourcePlanItemIds: ["plan-item-config"],
+        lanes: ["structural"],
+        goal: "Check config surface structurally against Step 2 signals.",
+        status: "not_run",
+        summary: "Selected for structural verification in Part 3; execution has not run yet.",
+        findings: [],
+        mitigations: [],
+        constraints: [],
+        traceabilityNotes: ["Step 2 marked plan-item-config as verification-relevant for config_surface."],
+      },
+    ],
     structural_verification: {
       status: "not_run",
-      summary: "Structural verification is deferred in Part 2.",
+      summary: "1 structural verification case(s) were selected in Part 3; execution has not run yet.",
       findings: [],
       constraints: [],
     },
     formal_verification: {
       status: "not_run",
-      summary: "Formal verification is deferred in Part 2.",
+      summary: "No formal verification cases were selected in Part 3.",
       state_models: [],
       tla_specs: [],
       tlc_results: [],
@@ -254,7 +308,7 @@ function createVerifyArtifactFixture(repoRoot: string, planArtifact: PlanArtifac
 }
 
 await runScenario(
-  "verify artifact exposes the frozen top-level keys and the placeholder public shape",
+  "verify artifact exposes the frozen top-level keys and the populated Part 3 nested shape",
   async () => {
     const { repoRoot, planArtifact } = await prepareWarningHeavyPlanArtifact();
 
@@ -308,12 +362,16 @@ await runScenario(
       assert.deepEqual(parsed.formal_lane_contract.entryCriteria, [...VERIFY_FORMAL_ENTRY_CRITERIA]);
       assert.deepEqual(parsed.formal_lane_contract.stateModelRequiredFields, [...VERIFY_STATE_MODEL_REQUIRED_FIELDS]);
       assert.deepEqual(parsed.formal_lane_contract.tlcStatuses, [...VERIFY_TLC_STATUSES]);
-      assert.equal(parsed.verification_targets.length, 0);
-      assert.equal(parsed.verification_cases.length, 0);
+      assert.equal(parsed.verification_targets.length, 1);
+      assert.equal(parsed.verification_cases.length, 1);
+      assert.equal(parsed.verification_targets[0]?.sourceRiskSources.length, 1);
+      assert.equal(parsed.verification_targets[0]?.verificationCaseIds[0], "verify-case-001");
+      assert.equal(parsed.verification_cases[0]?.verificationTargetId, "verify-target-001");
+      assert.deepEqual(parsed.verification_cases[0]?.lanes, ["structural"]);
       assert.equal(parsed.structural_verification.status, "not_run");
-      assert.equal(parsed.structural_verification.summary, "Structural verification is deferred in Part 2.");
+      assert.match(parsed.structural_verification.summary, /selected in Part 3/i);
       assert.equal(parsed.formal_verification.status, "not_run");
-      assert.equal(parsed.formal_verification.summary, "Formal verification is deferred in Part 2.");
+      assert.match(parsed.formal_verification.summary, /No formal verification cases/i);
       assert.equal(parsed.findings.length, 0);
       assert.equal(parsed.constraints.length, 0);
       assert.deepEqual(parsed.carry_forward, planArtifact.carry_forward);
@@ -336,6 +394,93 @@ await runScenario(
         planArtifact.planning_readiness.recommended_user_actions,
       );
       assert.equal(parsed.failure, null);
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "verify artifact rejects a case that does not point at an existing target",
+  async () => {
+    const { repoRoot, planArtifact } = await prepareWarningHeavyPlanArtifact();
+
+    try {
+      const schemaModule = await import("../src/verify/schema.js");
+      const validateVerifyArtifact = (
+        schemaModule as Record<string, unknown>
+      ).validateVerifyArtifact as ((artifact: unknown) => VerifyArtifact) | undefined;
+
+      assert.equal(typeof validateVerifyArtifact, "function");
+
+      const artifact = createVerifyArtifactFixture(repoRoot, planArtifact);
+      artifact.verification_cases[0] = {
+        ...artifact.verification_cases[0]!,
+        verificationTargetId: "missing-target-id",
+      };
+
+      assert.throws(
+        () => validateVerifyArtifact!(artifact),
+        /existing verification target|target/i,
+      );
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "verify artifact rejects duplicate verification target ids",
+  async () => {
+    const { repoRoot, planArtifact } = await prepareWarningHeavyPlanArtifact();
+
+    try {
+      const schemaModule = await import("../src/verify/schema.js");
+      const validateVerifyArtifact = (
+        schemaModule as Record<string, unknown>
+      ).validateVerifyArtifact as ((artifact: unknown) => VerifyArtifact) | undefined;
+
+      assert.equal(typeof validateVerifyArtifact, "function");
+
+      const artifact = createVerifyArtifactFixture(repoRoot, planArtifact);
+      artifact.verification_targets.push({
+        ...artifact.verification_targets[0]!,
+        verificationCaseIds: [],
+      });
+
+      assert.throws(
+        () => validateVerifyArtifact!(artifact),
+        /target ids must be unique|duplicate/i,
+      );
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "verify artifact rejects duplicate verification case ids listed on a target",
+  async () => {
+    const { repoRoot, planArtifact } = await prepareWarningHeavyPlanArtifact();
+
+    try {
+      const schemaModule = await import("../src/verify/schema.js");
+      const validateVerifyArtifact = (
+        schemaModule as Record<string, unknown>
+      ).validateVerifyArtifact as ((artifact: unknown) => VerifyArtifact) | undefined;
+
+      assert.equal(typeof validateVerifyArtifact, "function");
+
+      const artifact = createVerifyArtifactFixture(repoRoot, planArtifact);
+      artifact.verification_targets[0] = {
+        ...artifact.verification_targets[0]!,
+        verificationCaseIds: ["verify-case-001", "verify-case-001"],
+      };
+
+      assert.throws(
+        () => validateVerifyArtifact!(artifact),
+        /case ids must not contain duplicates|duplicate/i,
+      );
     } finally {
       await disposeTempRepo(repoRoot);
     }

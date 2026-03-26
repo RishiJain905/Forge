@@ -50,6 +50,32 @@ interface VerifyArtifact {
     constraining_concern_ids: string[];
     recommended_user_actions: string[];
   };
+  verification_targets: Array<{
+    id: string;
+    title: string;
+    category: string;
+    sourcePlanItemIds: string[];
+    candidateLanes: string[];
+    sourceRiskSources: string[];
+    verificationCaseIds: string[];
+  }>;
+  verification_cases: Array<{
+    id: string;
+    verificationTargetId: string;
+    title: string;
+    category: string;
+    sourcePlanItemIds: string[];
+    lanes: string[];
+    status: string;
+  }>;
+  structural_verification: {
+    status: string;
+    summary: string;
+  };
+  formal_verification: {
+    status: string;
+    summary: string;
+  };
   failure: { code: string; message: string; fallbackReason?: string } | null;
 }
 
@@ -223,6 +249,20 @@ await runScenario(
       assert.equal(artifact.source_plan.planningReadinessStatus, "ready");
       assert.equal(artifact.verification_readiness.ready, true);
       assert.equal(artifact.verification_diagnostics.blocking_items.length, 0);
+      assert.ok(artifact.verification_targets.length > 0);
+      assert.ok(artifact.verification_cases.length > 0);
+      assert.ok(
+        artifact.verification_targets.every((target) =>
+          target.sourceRiskSources.length > 0 && target.verificationCaseIds.length > 0,
+        ),
+      );
+      assert.ok(
+        artifact.verification_cases.every((verificationCase) =>
+          verificationCase.lanes.length === 1 && verificationCase.verificationTargetId.length > 0,
+        ),
+      );
+      assert.doesNotMatch(artifact.structural_verification.summary, /deferred in Part 2/i);
+      assert.doesNotMatch(artifact.formal_verification.summary, /deferred in Part 2/i);
     } finally {
       await disposeTempRepo(repoRoot);
     }
@@ -257,6 +297,8 @@ await runScenario(
         ),
       );
       assert.ok(artifact.verification_readiness.warning_items.length > 0);
+      assert.ok(artifact.verification_targets.length > 0);
+      assert.ok(artifact.verification_cases.length > 0);
     } finally {
       await disposeTempRepo(repoRoot);
     }
@@ -324,6 +366,8 @@ await runScenario(
       assert.ok(
         weakArtifact.verification_diagnostics.blocking_items.some((item) => item.code === "VERIFY_INPUT_TOO_WEAK"),
       );
+      assert.equal(weakArtifact.verification_targets.length, 0);
+      assert.equal(weakArtifact.verification_cases.length, 0);
     } finally {
       await disposeTempRepo(blockedRepoRoot);
       await disposeTempRepo(weakRepoRoot);

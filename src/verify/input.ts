@@ -64,6 +64,7 @@ function buildVerifyPlanReference(
 function hasActionableVerificationSignal(artifact: PlanArtifact): boolean {
   return (
     artifact.plan_items.some((item) => item.verificationRelevance.relevant) ||
+    artifact.test_obligations.length > 0 ||
     artifact.conflict_zones.length > 0 ||
     artifact.parallelization_signals.some((entry) => entry.signal !== "safe_parallel") ||
     artifact.carry_forward.initial_verification_targets.length > 0 ||

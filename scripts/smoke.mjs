@@ -231,9 +231,26 @@ async function main() {
     assert.equal(verifyArtifact.command, "forge verify");
     assert.equal(verifyArtifact.files.artifactPath, verifyArtifactPath);
     assert.equal(verifyArtifact.files.reportPath, verifyReportPath);
+    assert.ok(Array.isArray(verifyArtifact.verification_targets));
+    assert.ok(Array.isArray(verifyArtifact.verification_cases));
+    assert.ok(verifyArtifact.verification_targets.length > 0);
+    assert.ok(verifyArtifact.verification_cases.length > 0);
+    assert.ok(
+      verifyArtifact.verification_targets.every((target) =>
+        Array.isArray(target.sourceRiskSources) && target.sourceRiskSources.length > 0,
+      ),
+    );
+    assert.ok(
+      verifyArtifact.verification_cases.every((verificationCase) =>
+        verificationCase.verificationTargetId && Array.isArray(verificationCase.lanes) && verificationCase.lanes.length === 1,
+      ),
+    );
     assert.match(verifyReport, /Forge Verify Report/);
     assert.match(verifyReport, /## Overview/);
+    assert.match(verifyReport, /## Verification Targets/);
+    assert.match(verifyReport, /## Verification Cases/);
     assert.match(verifyReport, /## Summary/);
+    assert.equal(/deferred in Part 2/i.test(verifyReport), false);
 
     await writeFile(join(tempRepo, "src", "app.ts"), "export const smoke = true;\n", "utf8");
     await writeFile(

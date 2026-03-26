@@ -1,10 +1,11 @@
-import type { PlanArtifact } from "../plan/types.js";
+import type { PlanArtifact, PlanVerificationCategory } from "../plan/types.js";
 
 import type {
   Step3BoundaryPolicy,
   VERIFY_FORMAL_ENTRY_CRITERIA,
   VERIFY_FORMAL_FOCUS_AREAS,
   VERIFY_FORMAL_TOOLING,
+  VERIFY_CASE_STATUSES,
   VERIFY_STATE_MODEL_REQUIRED_FIELDS,
   VERIFY_STRUCTURAL_FOCUS_AREAS,
   VERIFY_SUPPORTED_LANES,
@@ -22,6 +23,8 @@ export type VerifyFormalEntryCriterion = typeof VERIFY_FORMAL_ENTRY_CRITERIA[num
 export type VerifyFormalTooling = typeof VERIFY_FORMAL_TOOLING[number];
 export type VerifyStateModelField = typeof VERIFY_STATE_MODEL_REQUIRED_FIELDS[number];
 export type VerifyTlcStatus = typeof VERIFY_TLC_STATUSES[number];
+export type VerifyCaseStatus = typeof VERIFY_CASE_STATUSES[number];
+export type VerifyVerificationCategory = PlanVerificationCategory | VerifyStructuralFocusArea;
 export type VerifyFoundationStatus = "ready" | "blocked" | "failed";
 
 export interface VerifyFoundationOptions {
@@ -121,22 +124,25 @@ export interface VerifyFormalLaneContract {
 export interface VerifyVerificationTarget {
   id: string;
   title: string;
-  category: string;
+  category: VerifyVerificationCategory;
   sourcePlanItemIds: string[];
   riskSummary: string;
   candidateLanes: VerifyLane[];
+  sourceRiskSources: VerifyTargetRiskSource[];
   expectedFindingKinds: string[];
+  verificationCaseIds: string[];
   traceabilityNotes: string[];
 }
 
 export interface VerifyVerificationCase {
   id: string;
+  verificationTargetId: string;
   title: string;
-  category: string;
+  category: VerifyVerificationCategory;
   sourcePlanItemIds: string[];
   lanes: VerifyLane[];
   goal: string;
-  status: VerifyTlcStatus;
+  status: VerifyCaseStatus;
   summary: string;
   findings: string[];
   mitigations: string[];
@@ -255,6 +261,13 @@ export interface VerifyArtifact {
   verification_diagnostics: VerifyVerificationDiagnostics;
   verification_readiness: VerifyVerificationReadiness;
   failure: VerifyCommandFailure | null;
+}
+
+export interface VerifyVerificationModel {
+  targets: VerifyVerificationTarget[];
+  cases: VerifyVerificationCase[];
+  structuralCaseCount: number;
+  formalCaseCount: number;
 }
 
 export interface LoadedVerifyFoundationInput {

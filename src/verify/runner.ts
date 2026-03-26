@@ -18,11 +18,13 @@ import {
   createVerifyArtifact,
   toVerifyArtifactJson,
 } from "./artifact.js";
+import { buildVerifyVerificationModel } from "./model.js";
 import { VerifyInputResolutionError, resolveVerifyFoundationInput, resolveVerifyOutputPaths } from "./input.js";
 import { createVerifyReport } from "./report.js";
 import { validateVerifyFoundationResult } from "./schema.js";
 import { extractErrorCode } from "../intake/errors.js";
 import { persistIntakeOutputs } from "../intake/persistence.js";
+import { VERIFY_INPUT_TOO_WEAK } from "./constants.js";
 import type {
   LoadedVerifyFoundationInput,
   VerifyCarryForwardContext,
@@ -78,6 +80,36 @@ export function buildVerifyFoundation(
       entryCriteria: VERIFY_FORMAL_ENTRY_CRITERIA,
       stateModelRequiredFields: VERIFY_STATE_MODEL_REQUIRED_FIELDS,
       tlcStatuses: VERIFY_TLC_STATUSES,
+    },
+  });
+}
+
+function applyDerivedVerifyModelUsability(
+  foundation: VerifyFoundationResult,
+  targetCount: number,
+): VerifyFoundationResult {
+  if (
+    foundation.verificationInput.usability.status !== "actionable" ||
+    targetCount > 0
+  ) {
+    return foundation;
+  }
+
+  return validateVerifyFoundationResult({
+    ...foundation,
+    verificationInput: {
+      ...foundation.verificationInput,
+      usability: {
+        status: "non_actionable",
+        warningItems: [...foundation.verificationInput.usability.warningItems],
+        blockingItems: [
+          ...foundation.verificationInput.usability.blockingItems,
+          {
+            code: VERIFY_INPUT_TOO_WEAK,
+            message: "Step 3 could not derive any verification targets or cases from the Step 2 artifact.",
+          },
+        ],
+      },
     },
   });
 }
@@ -144,11 +176,17 @@ export async function runVerifyCommand(
   try {
     const input = await resolveVerifyFoundationInput(options, currentWorkingDirectory);
     const paths = await resolveVerifyOutputPaths(input.repoRoot, options.outputDir);
-    const foundation = buildVerifyFoundation(input);
+    const initialFoundation = buildVerifyFoundation(input);
+    const initialModel = buildVerifyVerificationModel(initialFoundation);
+    const foundation = applyDerivedVerifyModelUsability(initialFoundation, initialModel.targets.length);
+    const model = foundation === initialFoundation
+      ? initialModel
+      : buildVerifyVerificationModel(foundation);
     const startedAt = new Date().toISOString();
     const finishedAt = new Date().toISOString();
     const artifact = createVerifyArtifact({
       foundation,
+      model,
       paths,
       startedAt,
       finishedAt,

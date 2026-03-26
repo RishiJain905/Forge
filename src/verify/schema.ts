@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { FORGE_SCHEMA_VERSION } from "../intake/constants.js";
+import { PLAN_VERIFICATION_TARGET_CATEGORIES } from "../plan/constants.js";
 import type {
   VerifyArtifact,
   VerifyFormalLaneContract,
@@ -15,6 +16,7 @@ import {
   VERIFY_FORMAL_ENTRY_CRITERIA,
   VERIFY_FORMAL_FOCUS_AREAS,
   VERIFY_FORMAL_TOOLING,
+  VERIFY_CASE_STATUSES,
   VERIFY_STATE_MODEL_REQUIRED_FIELDS,
   VERIFY_STRUCTURAL_FOCUS_AREAS,
   VERIFY_SUPPORTED_LANES,
@@ -104,6 +106,11 @@ const verifyFormalLaneContractSchema = z.object({
   tlcStatuses: z.array(z.enum(VERIFY_TLC_STATUSES)).min(1),
 }).strict();
 
+const verifyVerificationCategorySchema = z.union([
+  z.enum(PLAN_VERIFICATION_TARGET_CATEGORIES),
+  z.enum(VERIFY_STRUCTURAL_FOCUS_AREAS),
+]);
+
 const verifyCommandFailureSchema = z.object({
   code: z.string().min(1),
   message: z.string().min(1),
@@ -127,22 +134,25 @@ const verifyFilesSchema = z.object({
 const verifyVerificationTargetSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
-  category: z.string().min(1),
+  category: verifyVerificationCategorySchema,
   sourcePlanItemIds: z.array(z.string().min(1)),
   riskSummary: z.string().min(1),
   candidateLanes: z.array(z.enum(VERIFY_SUPPORTED_LANES)),
+  sourceRiskSources: z.array(z.enum(VERIFY_TARGET_RISK_SOURCES)).min(1),
   expectedFindingKinds: z.array(z.string().min(1)),
+  verificationCaseIds: z.array(z.string().min(1)),
   traceabilityNotes: z.array(z.string().min(1)),
 }).strict();
 
 const verifyVerificationCaseSchema = z.object({
   id: z.string().min(1),
+  verificationTargetId: z.string().min(1),
   title: z.string().min(1),
-  category: z.string().min(1),
+  category: verifyVerificationCategorySchema,
   sourcePlanItemIds: z.array(z.string().min(1)),
-  lanes: z.array(z.enum(VERIFY_SUPPORTED_LANES)),
+  lanes: z.array(z.enum(VERIFY_SUPPORTED_LANES)).min(1),
   goal: z.string().min(1),
-  status: z.enum(VERIFY_TLC_STATUSES),
+  status: z.enum(VERIFY_CASE_STATUSES),
   summary: z.string().min(1),
   findings: z.array(z.string().min(1)),
   mitigations: z.array(z.string().min(1)),
@@ -473,6 +483,109 @@ export const verifyArtifactSchema = z.object({
       message: "Artifacts without a failure must keep verification diagnostics partial_output empty.",
       path: ["verification_diagnostics", "partial_output"],
     });
+  }
+
+  const targetIdCounts = new Map<string, number>();
+  const caseIdCounts = new Map<string, number>();
+  for (const target of value.verification_targets) {
+    targetIdCounts.set(target.id, (targetIdCounts.get(target.id) ?? 0) + 1);
+  }
+  for (const verificationCase of value.verification_cases) {
+    caseIdCounts.set(verificationCase.id, (caseIdCounts.get(verificationCase.id) ?? 0) + 1);
+  }
+
+  for (const [index, target] of value.verification_targets.entries()) {
+    if ((targetIdCounts.get(target.id) ?? 0) > 1) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Verification target ids must be unique.",
+        path: ["verification_targets", index, "id"],
+      });
+    }
+
+    if (target.sourcePlanItemIds.length === 0) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Verification targets must keep at least one source plan item id.",
+        path: ["verification_targets", index, "sourcePlanItemIds"],
+      });
+    }
+    if (target.candidateLanes.length === 0) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Verification targets must keep at least one candidate lane.",
+        path: ["verification_targets", index, "candidateLanes"],
+      });
+    }
+    const targetCaseIds = new Set<string>();
+    for (const [caseIndex, caseId] of target.verificationCaseIds.entries()) {
+      if (targetCaseIds.has(caseId)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Verification target case ids must not contain duplicates.",
+          path: ["verification_targets", index, "verificationCaseIds", caseIndex],
+        });
+      } else {
+        targetCaseIds.add(caseId);
+      }
+
+      if (!value.verification_cases.some((verificationCase) => verificationCase.id === caseId)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Verification target case ids must point at existing verification cases.",
+          path: ["verification_targets", index, "verificationCaseIds", caseIndex],
+        });
+      }
+    }
+  }
+
+  const targetById = new Map(value.verification_targets.map((target) => [target.id, target] as const));
+  for (const [index, verificationCase] of value.verification_cases.entries()) {
+    if ((caseIdCounts.get(verificationCase.id) ?? 0) > 1) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Verification case ids must be unique.",
+        path: ["verification_cases", index, "id"],
+      });
+    }
+
+    const target = targetById.get(verificationCase.verificationTargetId);
+    if (!target) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Verification cases must point at an existing verification target.",
+        path: ["verification_cases", index, "verificationTargetId"],
+      });
+      continue;
+    }
+
+    if (!target.verificationCaseIds.includes(verificationCase.id)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Verification cases must be listed back on the owning verification target.",
+        path: ["verification_cases", index, "id"],
+      });
+    }
+
+    for (const [laneIndex, lane] of verificationCase.lanes.entries()) {
+      if (!target.candidateLanes.includes(lane)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Verification case lanes must be a subset of the target candidate lanes.",
+          path: ["verification_cases", index, "lanes", laneIndex],
+        });
+      }
+    }
+
+    for (const [planItemIndex, planItemId] of verificationCase.sourcePlanItemIds.entries()) {
+      if (!target.sourcePlanItemIds.includes(planItemId)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Verification case source plan items must be a subset of the target source plan items.",
+          path: ["verification_cases", index, "sourcePlanItemIds", planItemIndex],
+        });
+      }
+    }
   }
 });
 

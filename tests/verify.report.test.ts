@@ -115,6 +115,15 @@ await runScenario(
       assert.equal(report.includes(String(artifact.verification_readiness.status)), true);
       assert.equal(report.includes("Verification Readiness"), true);
       assert.equal(report.includes("Verification Cases"), true);
+      assert.ok(Array.isArray(artifact.verification_targets));
+      assert.ok(Array.isArray(artifact.verification_cases));
+      assert.ok(artifact.verification_targets.length > 0);
+      assert.ok(artifact.verification_cases.length > 0);
+      assert.match(report, /Risk Sources:/);
+      assert.match(report, /Target ID:/);
+      assert.match(report, /Lanes:\s+structural|Lanes:\s+formal/i);
+      assert.doesNotMatch(report, /deferred in Part 2/i);
+      assert.doesNotMatch(report, /in Part 2/i);
     } finally {
       await disposeTempRepo(repoRoot);
     }

@@ -50,12 +50,15 @@ export const VERIFY_TARGET_REQUIRED_FIELDS = [
   "sourcePlanItemIds",
   "riskSummary",
   "candidateLanes",
+  "sourceRiskSources",
   "expectedFindingKinds",
+  "verificationCaseIds",
   "traceabilityNotes",
 ] as const;
 
 export const VERIFY_TARGET_RISK_SOURCES = [
   "plan_item_verification_relevance",
+  "test_obligation",
   "conflict_zone",
   "parallelization_signal",
   "carry_forward_concern",
@@ -104,6 +107,14 @@ export const VERIFY_FORMAL_TOOLING = [
 ] as const;
 
 export const VERIFY_TLC_STATUSES = [
+  "not_run",
+  "passed",
+  "failed",
+  "errored",
+  "invalid_spec",
+] as const;
+
+export const VERIFY_CASE_STATUSES = [
   "not_run",
   "passed",
   "failed",

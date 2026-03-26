@@ -57,7 +57,9 @@ function renderVerificationTargetList(artifact: VerifyArtifact): string {
       `  - Source Plan Item IDs: ${target.sourcePlanItemIds.join(", ") || "none"}`,
       `  - Risk Summary: ${target.riskSummary}`,
       `  - Candidate Lanes: ${target.candidateLanes.join(", ") || "none"}`,
+      `  - Risk Sources: ${target.sourceRiskSources.join(", ") || "none"}`,
       `  - Expected Finding Kinds: ${target.expectedFindingKinds.join(", ") || "none"}`,
+      `  - Case IDs: ${target.verificationCaseIds.join(", ") || "none"}`,
       `  - Traceability Notes: ${target.traceabilityNotes.join("; ") || "none"}`,
     ].join("\n"))
     .join("\n");
@@ -71,6 +73,7 @@ function renderVerificationCaseList(artifact: VerifyArtifact): string {
   return artifact.verification_cases
     .map((verificationCase) => [
       `- ${verificationCase.id}: ${verificationCase.title}`,
+      `  - Target ID: ${verificationCase.verificationTargetId}`,
       `  - Category: ${verificationCase.category}`,
       `  - Source Plan Item IDs: ${verificationCase.sourcePlanItemIds.join(", ") || "none"}`,
       `  - Lanes: ${verificationCase.lanes.join(", ") || "none"}`,
@@ -346,7 +349,7 @@ export function createVerifyReport(artifact: VerifyArtifact): string {
     ]),
     "",
     renderSection("Verification Target Contract", [
-      "This is the frozen public contract for target selection in Part 2.",
+      "This is the frozen public contract for target selection in Part 3.",
       "",
       "### Required Fields",
       "",
@@ -370,7 +373,7 @@ export function createVerifyReport(artifact: VerifyArtifact): string {
     ]),
     "",
     renderSection("Formal Lane Contract", [
-      "This is the frozen public contract for the formal lane in Part 2.",
+      "This is the frozen public contract for the formal lane in Part 3.",
       "",
       "### Tooling",
       "",

@@ -302,6 +302,12 @@
   - Added an artifact-driven Step 3 verify report with the required heading order and explicit visibility into source plan state, carry-forward uncertainty, structural/formal placeholder sections, readiness, boundary notes, and output-file metadata.
   - Added dedicated Step 3 Part 2 regression coverage for command behavior, artifact-schema shape, report parity, runner export, custom output-root handling, unsafe output-root fallback, blocked-output persistence, and packaged CLI execution, and extended `scripts/smoke.mjs` to prove `forge intake -> forge plan -> forge verify`.
   - Updated `README.md`, `progress.md`, and `S3-B1-Done/p2-done-summary.md` so Step 3 Batch 1 Part 2 is documented and traceable.
+- Batch 1.03: `part-3-verification-target-model-cases-and-lanes.md` (Step 3)
+  - Added a pure Step 3 verification-model layer in `src/verify/model.ts` that deterministically derives explicit verification targets and lane-specific cases from persisted Step 2 plan items, conflict zones, parallelization signals, carry-forward concerns, and initial verification targets.
+  - Refined the nested Step 3 verify contract so targets now record source risk kinds and owning case ids, cases point back to a target id, and artifact/report output stays top-level compatible while making traceability and lane fan-out explicit.
+  - Reworked `forge verify` artifact assembly so ready and warning-heavy runs now persist populated `verification_targets` and `verification_cases`, while blocked non-actionable runs still emit empty target/case sections with `VERIFY_INPUT_TOO_WEAK`.
+  - Updated schema, report, command-contract, and smoke coverage to lock deterministic target selection, structural-only versus dual-lane case fan-out, nested referential integrity, and the removal of stale “deferred in Part 2” lane-summary wording.
+  - Updated `package.json`, `scripts/smoke.mjs`, `progress.md`, and `S3-B1-Done/p3-done-summary.md` so Step 3 Batch 1 Part 3 is documented and wired into the default verification gate.
 
 ## Current Branch State
 - `dev` includes the completed Step 1 work through Batch 4.05, including the frozen Step 2 handoff contract from Intake.
@@ -314,7 +320,8 @@
 - `dev` now treats the Step 2 planning runtime surface as frozen for V1 except future bug fixes while keeping optional debug outputs behind `FORGE_PLAN_DEBUG=1` and treating `plan.json`, `plan-report.md`, and `planning_readiness` as the frozen Step 3 verify inputs.
 - `dev` now includes Step 3 Batch 1 Part 1, including the internal verify foundation, deterministic `plan.json` consumption, explicit structural/formal lane contracts, and real V1 TLA+/TLC entry points in the Step 3 boundary contract.
 - `dev` now includes Step 3 Batch 1 Part 2, including the public `forge verify` CLI, persisted `verify.json` / `verify-report.md` outputs, the frozen Step 3 command/output contract, and a runnable smoke path from `forge intake` through `forge verify`.
-- `dev` still defers real verification-target/case construction, executable structural checks, formal state-model/TLA+ generation, TLC execution, and any optional verify debug artifacts to the remaining Step 3 parts.
+- `dev` now includes Step 3 Batch 1 Part 3, including explicit verification target/case construction, deterministic structural-versus-formal lane assignment, case-to-target traceability, and populated verify artifact/report sections for selected verification work.
+- `dev` still defers executable structural checks, formal state-model generation, TLA+ spec generation, TLC execution, and any optional verify debug artifacts to the remaining Step 3 parts.
 
 ## Verification
 - `npm.cmd test`
@@ -325,4 +332,5 @@
 ## Next
 - Step 3 Batch 1 Part 1 is complete.
 - Step 3 Batch 1 Part 2 is complete.
-- Next implementation work should begin Step 3 Batch 1 Part 3 `part-3-verification-target-model-cases-and-lanes.md`.
+- Step 3 Batch 1 Part 3 is complete.
+- Next implementation work should begin Step 3 Batch 1 Part 4 `part-4-formal-verification-scope-state-models-and-tla-entry.md`.
