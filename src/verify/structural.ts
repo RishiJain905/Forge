@@ -103,16 +103,9 @@ function hasSurfaceProtection(context: StructuralContext): boolean {
     || context.concernEffects.has("planning_readiness");
 }
 
-function requiresSurfaceProtection(category: VerifyVerificationCategory): boolean {
-  return category === "merge_or_serialization_contradiction"
-    || category === "config_surface"
-    || category === "api_contract";
-}
-
 function buildStructuralFailureReason(
   verificationCase: VerifyVerificationCase,
   context: StructuralContext,
-  protectedSurfaceTargetCount: number,
 ): string {
   if (
     verificationCase.category === "dependency_contradiction"
@@ -153,21 +146,14 @@ function buildStructuralFailureReason(
     || verificationCase.category === "code_surface"
     || verificationCase.category === "test_surface"
   ) {
-    if (
-      requiresSurfaceProtection(verificationCase.category)
-      && protectedSurfaceTargetCount > 1
-      && hasSafeParallel(context)
-      && !hasSurfaceProtection(context)
-    ) {
-      return "The case still carries safe_parallel without merge or serialization protection.";
+    if (verificationCase.category === "merge_or_serialization_contradiction") {
+      return hasSurfaceProtection(context)
+        ? "The case lacks structural validation or protection."
+        : "The case lacks merge or serialization protection.";
     }
 
-    if (
-      requiresSurfaceProtection(verificationCase.category)
-      && protectedSurfaceTargetCount > 1
-      && !hasSurfaceProtection(context)
-    ) {
-      return "The case lacks merge or serialization protection.";
+    if (hasSafeParallel(context) && !hasSurfaceSafeguard(context)) {
+      return "The case still carries safe_parallel without surface safeguards.";
     }
 
     return "The case lacks structural validation or protection.";
@@ -179,7 +165,6 @@ function buildStructuralFailureReason(
 function hasStructuralSupport(
   verificationCase: VerifyVerificationCase,
   context: StructuralContext,
-  protectedSurfaceTargetCount: number,
 ): boolean {
   switch (verificationCase.category) {
     case "dependency_contradiction":
@@ -198,15 +183,12 @@ function hasStructuralSupport(
     case "conflict_zone_hazard":
       return hasOverlapSafeguard(context) && !hasSafeParallel(context);
     case "merge_or_serialization_contradiction":
+      return hasSurfaceProtection(context);
     case "config_surface":
     case "api_contract":
     case "code_surface":
     case "test_surface":
-      return requiresSurfaceProtection(verificationCase.category)
-        ? protectedSurfaceTargetCount > 1
-          ? hasSurfaceProtection(context)
-          : hasSurfaceSafeguard(context)
-        : hasSurfaceSafeguard(context);
+      return hasSurfaceSafeguard(context);
     default:
       return false;
   }
@@ -271,11 +253,10 @@ function buildCaseExecution(params: {
   foundation: VerifyFoundationResult;
   verificationCase: VerifyVerificationCase;
   target: VerifyVerificationTarget | null;
-  protectedSurfaceTargetCount: number;
 }): VerifyVerificationCase {
   const context = buildStructuralContext(params.foundation, params.verificationCase);
-  const supported = hasStructuralSupport(params.verificationCase, context, params.protectedSurfaceTargetCount);
-  const reason = supported ? null : buildStructuralFailureReason(params.verificationCase, context, params.protectedSurfaceTargetCount);
+  const supported = hasStructuralSupport(params.verificationCase, context);
+  const reason = supported ? null : buildStructuralFailureReason(params.verificationCase, context);
 
   return {
     ...params.verificationCase,
@@ -307,9 +288,6 @@ export function buildVerifyStructuralExecution(params: {
   model: VerifyVerificationModel;
 }): VerifyStructuralExecutionResult {
   const targetById = new Map(params.model.targets.map((target) => [target.id, target] as const));
-  const protectedSurfaceTargetCount = params.model.targets.filter(
-    (target) => target.candidateLanes.includes("structural") && requiresSurfaceProtection(target.category),
-  ).length;
   const structuralCaseIds = new Set(
     params.model.cases
       .filter((verificationCase) => verificationCase.lanes.includes("structural"))
@@ -325,7 +303,6 @@ export function buildVerifyStructuralExecution(params: {
       foundation: params.foundation,
       verificationCase,
       target: targetById.get(verificationCase.verificationTargetId) ?? null,
-      protectedSurfaceTargetCount,
     });
   });
 

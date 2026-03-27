@@ -591,7 +591,7 @@ await runScenario(
 );
 
 await runScenario(
-  "forge verify fails config and interface surface checks when merge and serialization protection are missing",
+  "forge verify keeps config and interface surface checks passing when each case has its own safeguards",
   async () => {
     const repoRoot = await createTempRepo("forge-verify-part2-surface-protection-");
 
@@ -629,9 +629,9 @@ await runScenario(
 
       assert.ok(configCase, "expected a structural verification case for the config surface");
       assert.ok(interfaceCase, "expected a structural verification case for the interface surface");
-      assert.equal(configCase?.status, "failed");
-      assert.equal(interfaceCase?.status, "failed");
-      assert.equal(execution.structuralVerification.status, "failed");
+      assert.equal(configCase?.status, "passed");
+      assert.equal(interfaceCase?.status, "passed");
+      assert.equal(execution.structuralVerification.status, "passed");
     } finally {
       await disposeTempRepo(repoRoot);
     }
