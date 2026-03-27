@@ -10,6 +10,7 @@ import type {
 import {
   buildVerifyFormalBaseCautionNotes,
   buildVerifyFormalEntryCriteria,
+  isSupportedFormalCategory,
 } from "./formal.js";
 
 interface TargetDraft {
@@ -467,6 +468,18 @@ export function buildVerifyVerificationModel(
     }
 
     for (const itemId of resolvedItemIds) {
+      const item = planItemsById.get(itemId);
+      if (!item) {
+        continue;
+      }
+
+      if (isSupportedFormalCategory(category)) {
+        const itemCategories = item.verificationRelevance.categories as VerifyVerificationCategory[];
+        if (!itemCategories.includes(category)) {
+          continue;
+        }
+      }
+
       seedFromPlanItem(
         itemId,
         category,

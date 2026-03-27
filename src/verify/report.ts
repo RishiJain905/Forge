@@ -145,6 +145,7 @@ function renderFormalVerification(artifact: VerifyArtifact): string {
             `  - States: ${stateModel.states.join(", ") || "none"}`,
             `  - Transitions: ${stateModel.transitions.join("; ") || "none"}`,
             `  - Unsafe States: ${stateModel.unsafe_states.join(", ") || "none"}`,
+            `  - Unsafe Conditions: ${stateModel.unsafe_conditions?.join("; ") || "none"}`,
             `  - Invariants: ${stateModel.invariants.join("; ") || "none"}`,
             `  - Initial Conditions: ${stateModel.initial_conditions.join("; ") || "none"}`,
           ].join("\n"))

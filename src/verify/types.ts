@@ -20,6 +20,12 @@ export type VerifyTargetRequiredField = typeof VERIFY_TARGET_REQUIRED_FIELDS[num
 export type VerifyTargetRiskSource = typeof VERIFY_TARGET_RISK_SOURCES[number];
 export type VerifyStructuralFocusArea = typeof VERIFY_STRUCTURAL_FOCUS_AREAS[number];
 export type VerifyFormalFocusArea = typeof VERIFY_FORMAL_FOCUS_AREAS[number];
+export type VerifyFormalSupportedCategory =
+  | "retry_logic"
+  | "ownership"
+  | "parallel_overlap"
+  | "stale_write"
+  | "migration_order";
 export type VerifyFormalEntryCriterion = typeof VERIFY_FORMAL_ENTRY_CRITERIA[number];
 export type VerifyFormalTooling = typeof VERIFY_FORMAL_TOOLING[number];
 export type VerifyStateModelField = typeof VERIFY_STATE_MODEL_REQUIRED_FIELDS[number];
@@ -189,6 +195,7 @@ export interface VerifyStateModel {
   states: string[];
   transitions: string[];
   unsafe_states: string[];
+  unsafe_conditions: string[];
   invariants: string[];
   initial_conditions: string[];
 }

@@ -326,6 +326,18 @@
   - Kept the public `forge verify` CLI surface and the top-level `verify.json` / `verify-report.md` contracts stable while letting the stronger boundary wording flow through the existing policy surfaces.
   - Tightened `tests/verify.goal-and-boundaries.test.ts` so the stronger Batch 2 mission and guardrails are locked by direct Step 3 boundary coverage.
   - Updated `README.md`, `progress.md`, and `S3-B2-Done/p1-done-summary.md` so Step 3 Batch 2 Part 1 is documented and traceable.
+- Batch 2.02: `part-2-stage-1-and-2-plan-consumption-verification-targets-and-structural-lane.md` (Step 3)
+  - Preserved broad unmatched initial verification target traceability by attaching unmatched carry-forward targets through real conflict-zone plan-item linkage instead of emitting source-less targets that would violate the frozen public schema.
+  - Tightened `src/verify/model.ts` so initial verification target intake still respects the structured-only contract while retaining the traceability metadata needed for broad conflict-zone scenarios.
+  - Replaced the shallow structural lane support check in `src/verify/structural.ts` with deterministic category-aware rule evaluation, so missing sequencing, contradictory parallelization, and surface-protection gaps now fail for the right reasons.
+  - Kept the public CLI, report, and artifact contract stable while making failed structural verification block `forge verify` as intended.
+  - Updated `progress.md` and `S3-B2-Done/p2-done-summary.md` so Step 3 Batch 2 Part 2 is documented and traceable.
+- Batch 2.03: `part-3-stage-3-formal-lane-state-models-tla-generation-and-tlc-execution.md` (Step 3)
+  - Tightened the Step 3 formal subset so only retry/reassign, ownership, parallel overlap, stale write, and ordering/serialization through `migration_order` participate in the real Batch 2 formal lane.
+  - Reworked `src/verify/formal.ts` so formal state models now persist explicit `unsafe_conditions` and generated TLA+ specs expose category-specific action labels instead of one generic action shape.
+  - Tightened `src/verify/model.ts` so stale carry-forward initial verification targets do not mint unsupported formal cases when the current Step 2 plan item no longer supports that formal category.
+  - Expanded nested verify schema/report support and added `tests/verify.batch2-part3-formal-lane.test.ts`, then wired the new suite into `npm.cmd test` so the stronger formal-lane path stays under the default verification gate.
+  - Updated `progress.md` and `S3-B2-Done/p3-done-summary.md` so Step 3 Batch 2 Part 3 is documented and traceable.
 
 ## Current Branch State
 - `dev` includes the completed Step 1 work through Batch 4.05, including the frozen Step 2 handoff contract from Intake.
@@ -343,6 +355,7 @@
 - `dev` now includes Step 3 Batch 1 Part 5, including executable structural verification, Step 3-owned readiness resolution from structural plus formal outcomes, explicit later-step blocking rules, and dedicated Batch 1 acceptance gates for the shipped build order.
 - `dev` now includes Step 3 Batch 2 Part 1, including the explicit Batch 2 verify mission, ordered implementation priorities, strengthened do-not-touch boundary policy, and tighter goal-and-boundaries coverage while keeping the public verify surface stable.
 - `dev` now includes Step 3 Batch 2 Part 2, including broad unmatched initial verification target traceability, deterministic structural lane rule evaluation, and blocked CLI/report coherence for structural failures while keeping the public verify surface stable.
+- `dev` now includes Step 3 Batch 2 Part 3, including explicit supported formal-category gating, richer `unsafe_conditions` state-model output, category-specific TLA+ action labels, and structural-only handling for unsupported formal categories while keeping the public verify surface stable.
 - `dev` now treats Step 3 Batch 1 as complete for V1 while still deferring any optional verify debug artifacts and any later Step 3 batches that are not yet specified in-repo.
 
 ## Verification
@@ -360,4 +373,5 @@
 - Step 3 Batch 1 is complete.
 - Step 3 Batch 2 Part 1 is complete.
 - Step 3 Batch 2 Part 2 is complete.
-- Next implementation work should move to `forge_step3_batch2/part-3-stage-3-formal-lane-state-models-tla-generation-and-tlc-execution.md`.
+- Step 3 Batch 2 Part 3 is complete.
+- Next implementation work should move to `forge_step3_batch2/part-4-stage-4-artifacts-report-debug-outputs-and-findings.md`.
