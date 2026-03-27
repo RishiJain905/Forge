@@ -35,19 +35,6 @@ function buildCandidateTarget(
   };
 }
 
-function pushCandidateTarget(targets: CandidateTarget[], target: CandidateTarget): void {
-  if (!hasCandidateTarget(targets, target.path, target.kind)) {
-    targets.push(target);
-  }
-}
-
-function hasCandidateTarget(
-  targets: CandidateTarget[],
-  pathValue: string,
-  kind: CandidateTarget["kind"],
-): boolean {
-  return targets.some((target) => target.path === pathValue && target.kind === kind);
-}
 
 function normalizeFileStem(filePath: string): string {
   const baseName = path.posix.basename(normalizePathForComparison(filePath));
@@ -153,14 +140,22 @@ function resolveExplicitCandidateTargets(
     [taskInput.normalizedTaskText, taskInput.parserInputText].filter(Boolean).join("\n"),
   );
   const explicitTargets: CandidateTarget[] = [];
+  const seenKeys = new Set<string>();
+
+  const pushTarget = (target: CandidateTarget) => {
+    const key = `${target.path}:${target.kind}`;
+    if (!seenKeys.has(key)) {
+      seenKeys.add(key);
+      explicitTargets.push(target);
+    }
+  };
 
   for (const sourceFile of repoContext.sourceFiles) {
     const matchedByPathText = textMentionsPath(text, sourceFile);
     const matchedByModule = !matchedByPathText && matchesModuleSignal(sourceFile, moduleSignals);
 
     if (matchedByPathText || matchedByModule) {
-      pushCandidateTarget(
-        explicitTargets,
+      pushTarget(
         buildCandidateTarget(
           sourceFile,
           "source",
@@ -183,8 +178,7 @@ function resolveExplicitCandidateTargets(
     const matchedByModule = !matchedByPathText && matchesModuleSignal(testFile, moduleSignals);
 
     if (matchedByPathText || matchedByModule) {
-      pushCandidateTarget(
-        explicitTargets,
+      pushTarget(
         buildCandidateTarget(
           testFile,
           "test",
@@ -204,8 +198,7 @@ function resolveExplicitCandidateTargets(
 
   for (const manifestFile of repoContext.manifestFiles) {
     if (textMentionsManifest(text, manifestFile)) {
-      pushCandidateTarget(
-        explicitTargets,
+      pushTarget(
         buildCandidateTarget(
           manifestFile,
           "manifest",
@@ -228,7 +221,9 @@ function resolveExplicitCandidateTargets(
 
   for (const sourceTarget of explicitTargets.filter((target) => target.kind === "source")) {
     for (const siblingTest of resolveSiblingTestTargets(sourceTarget, repoContext)) {
-      if (!hasCandidateTarget(enrichedTargets, siblingTest.path, siblingTest.kind)) {
+      const key = `${siblingTest.path}:${siblingTest.kind}`;
+      if (!seenKeys.has(key)) {
+        seenKeys.add(key);
         enrichedTargets.push(siblingTest);
       }
     }
