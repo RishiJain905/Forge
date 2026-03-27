@@ -132,6 +132,7 @@ export const VERIFY_STATE_MODEL_REQUIRED_FIELDS = [
   "states",
   "transitions",
   "unsafe_states",
+  "unsafe_conditions",
   "invariants",
   "initial_conditions",
 ] as const;

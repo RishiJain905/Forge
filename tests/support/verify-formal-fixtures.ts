@@ -55,6 +55,7 @@ function buildFormalStateModel(params: {
   states: string[];
   transitions: string[];
   unsafeStates: string[];
+  unsafeConditions: string[];
   invariants: string[];
   initialConditions: string[];
 }): Record<string, unknown> {
@@ -69,6 +70,7 @@ function buildFormalStateModel(params: {
     states: params.states,
     transitions: params.transitions,
     unsafe_states: params.unsafeStates,
+    unsafe_conditions: params.unsafeConditions,
     invariants: params.invariants,
     initial_conditions: params.initialConditions,
   };
@@ -333,6 +335,10 @@ export function buildFormalVerifyArtifactFixture(params: {
             "complete",
           ],
           unsafeStates: ["duplicate_owner", "stale_owner"],
+          unsafeConditions: [
+            "Two owners hold the resource at the same time.",
+            "A stale owner keeps mutating the release path.",
+          ],
           invariants: [
             "At most one owner may be active at a time.",
             "Released work must not remain owned.",
@@ -416,6 +422,152 @@ export function buildFormalVerifyArtifactFixture(params: {
       partial_output: params.planArtifact.planning_readiness.partial_output,
       constraining_concern_ids: params.planArtifact.planning_readiness.constraining_concern_ids,
       recommended_user_actions: params.planArtifact.planning_readiness.recommended_user_actions,
+    },
+    failure: null,
+  };
+}
+
+export function buildBatch2Part3FormalPlanArtifact(params: {
+  planArtifact: PlanArtifact;
+}): PlanArtifact {
+  return {
+    ...params.planArtifact,
+    plan_items: [
+      {
+        id: "plan-item-workflow",
+        title: "Stabilize the shared workflow surface",
+        description:
+          "Keep retry/reassign, ownership transitions, duplicate execution, stale writes, and migration order aligned on one shared workflow area.",
+        category: "implementation",
+        sourceRequirements: [
+          "Preserve retry/reassign behavior while the workflow surface changes.",
+          "Preserve ownership handoff, duplicate execution safety, stale write safety, and migration ordering together.",
+        ],
+        likelyAffectedPaths: ["src/worker.ts", "src/runtime.ts", "package.json"],
+        dependencies: [],
+        riskLevel: "high",
+        testObligations: [
+          {
+            category: "contract_validation",
+            reason: "The shared workflow surface needs formal contract coverage.",
+          },
+          {
+            category: "migration_validation",
+            reason: "Ordering and serialization need explicit validation.",
+          },
+          {
+            category: "integration",
+            reason: "Cross-file workflow changes need end-to-end coverage.",
+          },
+        ],
+        verificationRelevance: {
+          relevant: true,
+          categories: [
+            "retry_logic",
+            "ownership",
+            "parallel_overlap",
+            "stale_write",
+            "migration_order",
+          ],
+          notes: ["All initial Batch 2 formal categories share this workflow surface."],
+        },
+        parallelization: {
+          signal: "risky_shared",
+          reason:
+            "Retries, ownership handoff, duplicate execution, stale writes, and migration ordering all touch one shared workflow area.",
+        },
+      },
+    ],
+    dependency_graph: [],
+    conflict_zones: [
+      {
+        id: "conflict-zone-workflow",
+        title: "Shared workflow coordination surface",
+        reason:
+          "Retries, ownership handoff, duplicate execution, stale writes, and migration order all touch the same workflow area.",
+        paths: ["src/worker.ts", "src/runtime.ts", "package.json"],
+        planItemIds: ["plan-item-workflow"],
+        riskLevel: "high",
+      },
+    ],
+    test_obligations: [
+      {
+        planItemId: "plan-item-workflow",
+        category: "contract_validation",
+        reason: "The shared workflow surface needs formal contract coverage.",
+      },
+      {
+        planItemId: "plan-item-workflow",
+        category: "migration_validation",
+        reason: "Ordering and serialization need explicit validation.",
+      },
+      {
+        planItemId: "plan-item-workflow",
+        category: "integration",
+        reason: "Cross-file workflow changes need end-to-end coverage.",
+      },
+    ],
+    parallelization_signals: [
+      {
+        planItemId: "plan-item-workflow",
+        signal: "risky_shared",
+        reason:
+          "Retries, ownership handoff, duplicate execution, stale writes, and migration ordering all touch one shared workflow area.",
+      },
+    ],
+    carry_forward: {
+      ...params.planArtifact.carry_forward,
+      confidence: {
+        ...params.planArtifact.carry_forward.confidence,
+        level: "low",
+      },
+      initial_verification_targets: [
+        {
+          path: "src/worker.ts",
+          kind: "source",
+          category: "ownership",
+          reason: "The shared workflow surface needs formal coverage.",
+        },
+      ],
+      concerns: [
+        {
+          id: "formal-caution-note",
+          source: "low_confidence",
+          code: "FORMAL_CAUTION",
+          message: "Formal verification should preserve caution for the shared workflow surface.",
+          planItemIds: ["plan-item-workflow"],
+          effects: ["planning_readiness"],
+          status: "carried_forward",
+        },
+      ],
+    },
+    planning_diagnostics: {
+      ...params.planArtifact.planning_diagnostics,
+      usability_status: "actionable",
+      warning_items: [
+        {
+          code: "PLAN_WARNING_CONTEXT_PRESENT",
+          message: "Formal verification should preserve low-confidence caution.",
+        },
+      ],
+      blocking_items: [],
+      partial_output: null,
+    },
+    planning_readiness: {
+      ...params.planArtifact.planning_readiness,
+      ready: true,
+      status: "ready_with_warnings",
+      summary: "`forge verify` can proceed with caution.",
+      warning_items: [
+        {
+          code: "PLAN_WARNING_CONTEXT_PRESENT",
+          message: "Formal verification should preserve low-confidence caution.",
+        },
+      ],
+      blocking_issues: [],
+      partial_output: null,
+      constraining_concern_ids: ["formal-caution-note"],
+      recommended_user_actions: [],
     },
     failure: null,
   };

@@ -190,6 +190,7 @@ const verifyStateModelSchema = z.object({
   states: z.array(z.string().min(1)),
   transitions: z.array(z.string().min(1)),
   unsafe_states: z.array(z.string().min(1)),
+  unsafe_conditions: z.array(z.string().min(1)),
   invariants: z.array(z.string().min(1)),
   initial_conditions: z.array(z.string().min(1)),
 }).strict();

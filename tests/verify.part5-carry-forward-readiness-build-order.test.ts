@@ -317,6 +317,7 @@ function assertPart5Contract(artifact: VerifyArtifact): void {
     "states",
     "transitions",
     "unsafe_states",
+    "unsafe_conditions",
     "invariants",
     "initial_conditions",
   ]);
