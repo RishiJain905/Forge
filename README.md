@@ -523,7 +523,7 @@ Step 2 also now emits stronger dependency, conflict-zone, test-obligation, and p
 
 Batch 3 Part 5 makes that handoff explicit for `forge verify` by naming the verification gate directly in readiness/report wording, adding a dedicated Step 3 handoff-contract suite, and freezing Step 2 as the planning foundation that Step 3 should consume instead of re-planning from prose.
 
-Step 3: Verify now has Batch 1 Part 1 through Part 5 implemented.
+Step 3: Verify now has Batch 1 Part 1 through Part 5 and Batch 2 Part 1 through Part 5 implemented.
 
 Part 1 adds `src/verify` foundation modules that consume the persisted Step 2 `plan.json` handoff, normalize verify-input usability, preserve Step 2 uncertainty/readiness context, and freeze the structural lane, formal lane, and TLA+/TLC entry contract for V1.
 
@@ -534,6 +534,16 @@ Part 3 adds explicit verification target and case construction so Step 3 can det
 Part 4 makes the formal lane real in V1 by turning formal-case selection into explicit entry criteria, deterministic state-model generation, generated `.tla` / `.cfg` artifacts under the verify output root, TLC execution via `FORGE_TLC_JAR_PATH` when configured, and populated formal findings, traces, errors, and caution notes in the verification artifact/report.
 
 Part 5 makes the structural lane executable in V1, resolves `verification_readiness` from actual structural plus formal outcomes instead of Step 2 input state alone, blocks later steps on structural or formal failures, keeps TLC `not_run` warning-grade, and locks the shipped behavior with a dedicated Batch 1 Part 5 acceptance-gates suite.
+
+Batch 2 Part 1 is a narrow alignment pass over that already real Step 3 runtime. It hardens the explicit Batch 2 mission, ordered implementation priorities, and do-not-touch guardrails in the Step 3 boundary contract so later Batch 2 work stays inside real verify behavior and does not drift into Step 4+ flow, interactive shell behavior, memory backends, execution-packet generation, code editing, unrelated repo cleanup, fuzzy verification reasoning, or fake TLA+/TLC participation.
+
+Batch 2 Part 2 preserves unmatched verification-target traceability and makes the structural lane enforce deterministic category-aware verification rules instead of placeholder support checks.
+
+Batch 2 Part 3 narrows the real formal subset to supported risky workflow categories, adds richer `unsafe_conditions` state-model output, and makes generated TLA+ modules category-specific.
+
+Batch 2 Part 4 keeps the frozen public `forge verify` CLI and top-level `verify.json` / `verify-report.md` contract stable while upgrading nested output quality: top-level findings and constraints are now machine-readable structured records, the report groups findings/constraints by lane, and optional internal verify debug artifacts can be emitted behind `FORGE_VERIFY_DEBUG=1`. Those debug files remain secondary to `verify.json` and `verify-report.md`.
+
+Batch 2 Part 5 closes the runnable milestone and default verification gate without reopening the verify surface. `forge verify` already ran the real Step 3 flow, so Part 5 hardens the shipped milestone by wiring the previously omitted Step 3 Batch 2 suites into `npm.cmd test`, adding a dedicated runnable-milestone regression that proves the packaged CLI can consume persisted Step 2 output, execute structural verification, generate state models and TLA+ specs, run TLC through the external seam for the initial high-value subset, and persist honest on-disk outputs. Batch 2 is now complete for Step 3, with later work reserved for hardening and freeze follow-up rather than first-time milestone wiring.
 
 ---
 

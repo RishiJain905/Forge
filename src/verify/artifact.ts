@@ -12,9 +12,12 @@ import type {
   VerifyArtifact,
   VerifyCommandFailure,
   VerifyCommandResult,
+  VerifyConstraint,
+  VerifyFinding,
   VerifyFoundationResult,
   VerifyReadinessResolution,
   VerifyStructuralExecutionResult,
+  VerifyVerificationCase,
   VerifyVerificationModel,
   VerifyResolvedOutputPaths,
 } from "./types.js";
@@ -56,6 +59,66 @@ function dedupeStable(values: string[]): string[] {
   return result;
 }
 
+function selectFindingLane(verificationCase: VerifyVerificationCase): VerifyFinding["lane"] {
+  return verificationCase.lanes.includes("formal") ? "formal" : "structural";
+}
+
+function sortVerificationCasesForTopLevelOutputs(
+  verificationCases: VerifyVerificationCase[],
+): VerifyVerificationCase[] {
+  return [...verificationCases].sort((left, right) => {
+    const leftLane = selectFindingLane(left);
+    const rightLane = selectFindingLane(right);
+
+    if (leftLane !== rightLane) {
+      return leftLane === "formal" ? -1 : 1;
+    }
+
+    return left.id.localeCompare(right.id);
+  });
+}
+
+function buildTopLevelFindings(verificationCases: VerifyVerificationCase[]): VerifyFinding[] {
+  return sortVerificationCasesForTopLevelOutputs(verificationCases)
+    .filter((verificationCase) => verificationCase.lanes.length > 0)
+    .map((verificationCase, index) => {
+      const lane = selectFindingLane(verificationCase);
+      const formalDetails = lane === "formal" ? verificationCase.formalDetails : null;
+
+      return {
+        id: `verify-finding-${String(index + 1).padStart(3, "0")}`,
+        lane,
+        verification_case_id: verificationCase.id,
+        verification_target_id: verificationCase.verificationTargetId,
+        status: verificationCase.status,
+        summary: verificationCase.summary,
+        tla_spec_id: formalDetails?.tlaSpecId ?? null,
+        tlc_result_id: formalDetails?.tlcResultId ?? null,
+        trace: formalDetails?.trace ?? null,
+        errors: [...(formalDetails?.errors ?? [])],
+      };
+    });
+}
+
+function buildTopLevelConstraints(verificationCases: VerifyVerificationCase[]): VerifyConstraint[] {
+  const constraints: VerifyConstraint[] = [];
+
+  for (const verificationCase of sortVerificationCasesForTopLevelOutputs(verificationCases)) {
+    const lane = selectFindingLane(verificationCase);
+    for (const summary of dedupeStable(verificationCase.constraints)) {
+      constraints.push({
+        id: `verify-constraint-${String(constraints.length + 1).padStart(3, "0")}`,
+        lane,
+        verification_case_id: verificationCase.id,
+        verification_target_id: verificationCase.verificationTargetId,
+        summary,
+      });
+    }
+  }
+
+  return constraints;
+}
+
 function buildVerifySummary(params: {
   readinessSummary: string;
   failure: VerifyCommandFailure | null;
@@ -83,14 +146,8 @@ export function createVerifyArtifact(params: {
   finishedAt: string;
 }): VerifyArtifact {
   const verificationCases = params.formalExecution.cases;
-  const findings = dedupeStable([
-    ...params.structuralExecution.findings,
-    ...params.formalExecution.findings,
-  ]);
-  const constraints = dedupeStable([
-    ...params.structuralExecution.constraints,
-    ...params.formalExecution.constraints,
-  ]);
+  const findings = buildTopLevelFindings(verificationCases);
+  const constraints = buildTopLevelConstraints(verificationCases);
 
   return validateVerifyArtifact({
     schemaVersion: FORGE_SCHEMA_VERSION,
@@ -112,6 +169,12 @@ export function createVerifyArtifact(params: {
     files: {
       artifactPath: params.paths.verifyArtifactPath,
       reportPath: params.paths.verifyReportPath,
+      debugArtifactPath: params.paths.debugArtifactPath,
+      debugVerificationCasesPath: params.paths.debugVerificationCasesPath,
+      debugStructuralFindingsPath: params.paths.debugStructuralFindingsPath,
+      debugStateModelsPath: params.paths.debugStateModelsPath,
+      debugTlaSpecsPath: params.paths.debugTlaSpecsPath,
+      debugTlcResultsPath: params.paths.debugTlcResultsPath,
     },
     startedAt: params.startedAt,
     finishedAt: params.finishedAt,

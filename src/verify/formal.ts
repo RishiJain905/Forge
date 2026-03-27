@@ -14,6 +14,7 @@ import type {
   VerifyFormalEntryCriterion,
   VerifyFormalVerification,
   VerifyFoundationResult,
+  VerifyFormalSupportedCategory,
   VerifyStateModel,
   VerifyTargetRiskSource,
   VerifyTlaSpec,
@@ -27,11 +28,13 @@ import type {
 } from "./types.js";
 
 type FormalTemplate = {
+  actionLabel: string;
   actors: string[];
   entities: string[];
   states: string[];
   transitions: Array<[string, string]>;
   unsafeStates: string[];
+  unsafeConditions: string[];
   invariants: string[];
   initialConditions: string[];
   initialState: string;
@@ -60,6 +63,132 @@ export interface VerifyFormalExecutionResult {
   constraints: string[];
 }
 
+export const VERIFY_SUPPORTED_FORMAL_CATEGORIES = [
+  "retry_logic",
+  "ownership",
+  "parallel_overlap",
+  "stale_write",
+  "migration_order",
+] as const satisfies readonly VerifyFormalSupportedCategory[];
+
+const FORMAL_TEMPLATE_BY_CATEGORY: Record<VerifyFormalSupportedCategory, Omit<FormalTemplate, "unsupportedReason">> = {
+  retry_logic: {
+    actionLabel: "RetryOrReassign",
+    actors: ["worker", "scheduler"],
+    entities: ["job", "retry budget"],
+    states: ["pending", "claimed", "retry_queued", "completed", "failed"],
+    transitions: [
+      ["pending", "claimed"],
+      ["claimed", "retry_queued"],
+      ["retry_queued", "claimed"],
+      ["claimed", "completed"],
+      ["claimed", "failed"],
+    ],
+    unsafeStates: ["completed_after_failed_retry"],
+    unsafeConditions: [
+      "A retry reaches completed without re-entering claimed.",
+      "A failed retry completes after the retry budget is exhausted.",
+    ],
+    invariants: [
+      "A job cannot complete twice.",
+      "A retry must re-enter claimed before the next completion attempt.",
+    ],
+    initialConditions: ["The job starts pending with zero retries consumed."],
+    initialState: "pending",
+  },
+  ownership: {
+    actionLabel: "OwnershipTransition",
+    actors: ["owner", "handoff_receiver"],
+    entities: ["resource", "lease"],
+    states: ["unowned", "owned", "handoff_pending", "released", "completed"],
+    transitions: [
+      ["unowned", "owned"],
+      ["owned", "handoff_pending"],
+      ["handoff_pending", "released"],
+      ["released", "completed"],
+    ],
+    unsafeStates: ["dual_ownership"],
+    unsafeConditions: [
+      "A resource has two active owners at the same time.",
+      "A handoff completes without first releasing ownership.",
+    ],
+    invariants: [
+      "At most one owner is active at a time.",
+      "A handoff must release before the next owner can complete.",
+    ],
+    initialConditions: ["The resource starts unowned."],
+    initialState: "unowned",
+  },
+  parallel_overlap: {
+    actionLabel: "DuplicateExecution",
+    actors: ["executor_a", "executor_b", "coordinator"],
+    entities: ["shared work item", "execution slot"],
+    states: ["idle", "running", "duplicate_running", "completed", "cancelled"],
+    transitions: [
+      ["idle", "running"],
+      ["running", "duplicate_running"],
+      ["running", "completed"],
+      ["duplicate_running", "cancelled"],
+    ],
+    unsafeStates: ["duplicate_completion"],
+    unsafeConditions: [
+      "Two executors complete the same work item.",
+      "Duplicate active execution is not cancelled or prevented.",
+    ],
+    invariants: [
+      "Only one execution may complete successfully for a shared work item.",
+      "Duplicate active execution must be cancelled or prevented.",
+    ],
+    initialConditions: ["The shared work item starts idle."],
+    initialState: "idle",
+  },
+  stale_write: {
+    actionLabel: "StaleWriteValidity",
+    actors: ["reader", "writer", "store"],
+    entities: ["versioned record", "read version", "write version"],
+    states: ["fresh_read", "stale_read", "write_attempted", "committed", "rejected"],
+    transitions: [
+      ["fresh_read", "write_attempted"],
+      ["stale_read", "rejected"],
+      ["write_attempted", "committed"],
+      ["write_attempted", "rejected"],
+    ],
+    unsafeStates: ["stale_commit"],
+    unsafeConditions: [
+      "A stale read reaches committed.",
+      "A rejected write mutates the committed version.",
+    ],
+    invariants: [
+      "A stale read cannot reach committed.",
+      "Rejected writes preserve the last committed version.",
+    ],
+    initialConditions: ["The record starts at a fresh read."],
+    initialState: "fresh_read",
+  },
+  migration_order: {
+    actionLabel: "OrderingSerialization",
+    actors: ["migrator", "gate"],
+    entities: ["phase", "dependency"],
+    states: ["not_started", "phase_1", "phase_2", "completed"],
+    transitions: [
+      ["not_started", "phase_1"],
+      ["phase_1", "phase_2"],
+      ["phase_2", "completed"],
+    ],
+    unsafeStates: ["phase_2_before_phase_1"],
+    unsafeConditions: [
+      "Phase 2 begins before phase 1 completes.",
+      "Serialization fails to preserve the migration order.",
+    ],
+    invariants: [
+      "Phase 2 cannot precede Phase 1.",
+      "Completion requires both migration phases.",
+    ],
+    initialConditions: ["The migration starts not_started."],
+    initialState: "not_started",
+  },
+};
+
 function dedupeStable(values: string[]): string[] {
   const seen = new Set<string>();
   const result: string[] = [];
@@ -78,6 +207,12 @@ function normalizeFragment(value: string): string {
     .replace(/^_+|_+$/g, "")
     .replace(/_+/g, "_");
   return normalized || "case";
+}
+
+export function isSupportedFormalCategory(
+  category: VerifyVerificationCategory,
+): category is VerifyFormalSupportedCategory {
+  return (VERIFY_SUPPORTED_FORMAL_CATEGORIES as readonly string[]).includes(category);
 }
 
 export function buildVerifyFormalArtifactNames(caseId: string): VerifyFormalArtifactNames {
@@ -166,123 +301,29 @@ export function buildVerifyFormalBaseCautionNotes(
 }
 
 function buildTemplate(category: VerifyVerificationCategory): FormalTemplate {
-  switch (category) {
-    case "retry_logic":
-      return {
-        actors: ["worker", "scheduler"],
-        entities: ["job", "retry budget"],
-        states: ["pending", "claimed", "retry_queued", "completed", "failed"],
-        transitions: [
-          ["pending", "claimed"],
-          ["claimed", "retry_queued"],
-          ["retry_queued", "claimed"],
-          ["claimed", "completed"],
-          ["claimed", "failed"],
-        ],
-        unsafeStates: ["completed_after_failed_retry"],
-        invariants: [
-          "A job cannot complete twice.",
-          "A retry must re-enter claimed before the next completion attempt.",
-        ],
-        initialConditions: ["The job starts pending with zero retries consumed."],
-        initialState: "pending",
-        unsupportedReason: null,
-      };
-    case "ownership":
-      return {
-        actors: ["owner", "handoff_receiver"],
-        entities: ["resource", "lease"],
-        states: ["unowned", "owned", "handoff_pending", "released", "completed"],
-        transitions: [
-          ["unowned", "owned"],
-          ["owned", "handoff_pending"],
-          ["handoff_pending", "released"],
-          ["released", "completed"],
-        ],
-        unsafeStates: ["dual_ownership"],
-        invariants: [
-          "At most one owner is active at a time.",
-          "A handoff must release before the next owner can complete.",
-        ],
-        initialConditions: ["The resource starts unowned."],
-        initialState: "unowned",
-        unsupportedReason: null,
-      };
-    case "stale_write":
-      return {
-        actors: ["reader", "writer", "store"],
-        entities: ["versioned record", "read version", "write version"],
-        states: ["fresh_read", "stale_read", "write_attempted", "committed", "rejected"],
-        transitions: [
-          ["fresh_read", "write_attempted"],
-          ["stale_read", "rejected"],
-          ["write_attempted", "committed"],
-          ["write_attempted", "rejected"],
-        ],
-        unsafeStates: ["stale_commit"],
-        invariants: [
-          "A stale read cannot reach committed.",
-          "Rejected writes preserve the last committed version.",
-        ],
-        initialConditions: ["The record starts at a fresh read."],
-        initialState: "fresh_read",
-        unsupportedReason: null,
-      };
-    case "migration_order":
-      return {
-        actors: ["migrator", "gate"],
-        entities: ["phase", "dependency"],
-        states: ["not_started", "phase_1", "phase_2", "completed"],
-        transitions: [
-          ["not_started", "phase_1"],
-          ["phase_1", "phase_2"],
-          ["phase_2", "completed"],
-        ],
-        unsafeStates: ["phase_2_before_phase_1"],
-        invariants: [
-          "Phase 2 cannot precede Phase 1.",
-          "Completion requires both migration phases.",
-        ],
-        initialConditions: ["The migration starts not_started."],
-        initialState: "not_started",
-        unsupportedReason: null,
-      };
-    case "parallel_overlap":
-      return {
-        actors: ["executor_a", "executor_b", "coordinator"],
-        entities: ["shared work item", "execution slot"],
-        states: ["idle", "running", "duplicate_running", "completed", "cancelled"],
-        transitions: [
-          ["idle", "running"],
-          ["running", "duplicate_running"],
-          ["running", "completed"],
-          ["duplicate_running", "cancelled"],
-        ],
-        unsafeStates: ["duplicate_completion"],
-        invariants: [
-          "Only one execution may complete successfully for a shared work item.",
-          "Duplicate active execution must be cancelled or prevented.",
-        ],
-        initialConditions: ["The shared work item starts idle."],
-        initialState: "idle",
-        unsupportedReason: null,
-      };
-    default:
-      return {
-        actors: ["actor"],
-        entities: ["state machine"],
-        states: ["initial", "running", "completed"],
-        transitions: [
-          ["initial", "running"],
-          ["running", "completed"],
-        ],
-        unsafeStates: ["unsupported_formal_case"],
-        invariants: ["The fallback formal model must remain bounded and conservative."],
-        initialConditions: ["The fallback formal case starts initial."],
-        initialState: "initial",
-        unsupportedReason: `Unsupported formal verification category: ${category}.`,
-      };
+  if (isSupportedFormalCategory(category)) {
+    return {
+      ...FORMAL_TEMPLATE_BY_CATEGORY[category],
+      unsupportedReason: null,
+    };
   }
+
+  return {
+    actionLabel: "UnsupportedFormalCase",
+    actors: ["actor"],
+    entities: ["state machine"],
+    states: ["initial", "running", "completed"],
+    transitions: [
+      ["initial", "running"],
+      ["running", "completed"],
+    ],
+    unsafeStates: ["unsupported_formal_case"],
+    unsafeConditions: [`Unsupported formal verification category: ${category}.`],
+    invariants: ["The fallback formal model must remain bounded and conservative."],
+    initialConditions: ["The fallback formal case starts initial."],
+    initialState: "initial",
+    unsupportedReason: `Unsupported formal verification category: ${category}.`,
+  };
 }
 
 function buildFormalStateModel(params: {
@@ -306,6 +347,7 @@ function buildFormalStateModel(params: {
       states: [...template.states],
       transitions: template.transitions.map(([from, to]) => `${from} -> ${to}`),
       unsafe_states: [...template.unsafeStates],
+      unsafe_conditions: [...template.unsafeConditions],
       invariants: [...template.invariants],
       initial_conditions: [...template.initialConditions],
     },
@@ -338,6 +380,7 @@ function renderTlaModule(params: {
     `\\* Entities: ${params.stateModel.entities.join(", ")}`,
     `\\* States: ${params.stateModel.states.join(", ")}`,
     `\\* Unsafe states: ${params.stateModel.unsafe_states.join(", ")}`,
+    `\\* Unsafe conditions: ${params.stateModel.unsafe_conditions.join(" | ")}`,
     `\\* Invariants: ${params.stateModel.invariants.join(" | ")}`,
     `\\* Initial conditions: ${params.stateModel.initial_conditions.join(" | ")}`,
     "",
@@ -347,8 +390,11 @@ function renderTlaModule(params: {
     "",
     `Init == state = "${params.template.initialState}"`,
     "",
-    "Next ==",
+    `\\* Action label: ${params.template.actionLabel}`,
+    `${params.template.actionLabel} ==`,
     transitions,
+    "",
+    `Next == ${params.template.actionLabel}`,
     "",
     "Spec == Init /\\ [][Next]_state",
     "",
@@ -493,6 +539,7 @@ function buildCaseConstraints(stateModel: VerifyStateModel, status: VerifyTlcSta
   const constraints = [
     ...stateModel.invariants,
     ...stateModel.initial_conditions.map((condition) => `Initial condition: ${condition}`),
+    ...stateModel.unsafe_conditions.map((condition) => `Unsafe condition: ${condition}`),
   ];
 
   if (status === "failed") {
@@ -678,8 +725,10 @@ async function buildCaseExecution(params: {
     trace: tlcStatus === "passed" || tlcStatus === "not_run" ? null : (combinedOutput.trim() || null),
     errors: processResult?.error
       ? [processResult.error.message]
-      : tlcStatus === "passed" || tlcStatus === "not_run"
+      : tlcStatus === "passed"
         ? []
+        : tlcStatus === "not_run"
+          ? [tlcSummary]
         : splitOutputLines(combinedOutput).slice(0, 3),
   };
   const tlaSpec: VerifyTlaSpec = {

@@ -140,8 +140,25 @@ type VerifyArtifact = {
     findings: string[];
     constraints: string[];
   };
-  findings: string[];
-  constraints: string[];
+  findings: Array<{
+    id: string;
+    lane: "structural" | "formal";
+    verification_case_id: string;
+    verification_target_id: string;
+    status: string;
+    summary: string;
+    tla_spec_id: string | null;
+    tlc_result_id: string | null;
+    trace: string | null;
+    errors: string[];
+  }>;
+  constraints: Array<{
+    id: string;
+    lane: "structural" | "formal";
+    verification_case_id: string;
+    verification_target_id: string;
+    summary: string;
+  }>;
   failure: { code: string; message: string; fallbackReason?: string } | null;
 };
 
@@ -317,6 +334,7 @@ function assertPart5Contract(artifact: VerifyArtifact): void {
     "states",
     "transitions",
     "unsafe_states",
+    "unsafe_conditions",
     "invariants",
     "initial_conditions",
   ]);
@@ -758,7 +776,8 @@ await runScenario(
       assert.equal(artifact.formal_verification.tlc_results[0]?.status, "failed");
       assert.ok(artifact.formal_verification.tlc_results[0]?.trace);
       assert.ok(artifact.formal_verification.constraints.length > 0);
-      assert.ok(artifact.constraints.length > 0);
+      assert.equal(artifact.constraints[0]?.lane, "formal");
+      assert.equal(artifact.constraints[0]?.verification_case_id, artifact.formal_verification.tlc_results[0]?.verification_case_id);
       assert.equal(artifact.verification_readiness.ready, false);
       assert.equal(artifact.verification_readiness.status, "blocked");
       assert.ok(
@@ -767,7 +786,11 @@ await runScenario(
       assert.match(sectionBody(report, "Verification Readiness").join("\n"), /blocked/i);
       assert.match(sectionBody(report, "Constraints").join("\n"), /FORMAL_TLC_FAILED|TLC|counterexample/i);
       assert.match(sectionBody(report, "Formal Verification").join("\n"), /failed/i);
-      assert.ok(artifact.findings.length > 0);
+      assert.equal(artifact.findings[0]?.lane, "formal");
+      assert.equal(artifact.findings[0]?.verification_case_id, artifact.formal_verification.tlc_results[0]?.verification_case_id);
+      assert.ok(
+        artifact.findings.some((finding) => finding.trace !== null || finding.errors.length > 0),
+      );
     } finally {
       await disposeTempRepo(repoRoot);
     }

@@ -45,6 +45,43 @@ function renderIssueList(items: Array<{ code: string; message: string }>): strin
     : "- none";
 }
 
+function renderStructuredFindings(artifact: VerifyArtifact, lane: "structural" | "formal"): string {
+  const findings = artifact.findings.filter((finding) => finding.lane === lane);
+
+  if (findings.length === 0) {
+    return "- none";
+  }
+
+  return findings
+    .map((finding) => [
+      `- ${finding.id}: ${finding.summary}`,
+      `  - Case ID: ${finding.verification_case_id}`,
+      `  - Target ID: ${finding.verification_target_id}`,
+      `  - Status: ${finding.status}`,
+      `  - TLA Spec ID: ${finding.tla_spec_id ?? "none"}`,
+      `  - TLC Result ID: ${finding.tlc_result_id ?? "none"}`,
+      `  - Trace: ${finding.trace ?? "none"}`,
+      `  - Errors: ${finding.errors.length > 0 ? finding.errors.join("; ") : "none"}`,
+    ].join("\n"))
+    .join("\n");
+}
+
+function renderStructuredConstraints(artifact: VerifyArtifact, lane: "structural" | "formal"): string {
+  const constraints = artifact.constraints.filter((constraint) => constraint.lane === lane);
+
+  if (constraints.length === 0) {
+    return "- none";
+  }
+
+  return constraints
+    .map((constraint) => [
+      `- ${constraint.id}: ${constraint.summary}`,
+      `  - Case ID: ${constraint.verification_case_id}`,
+      `  - Target ID: ${constraint.verification_target_id}`,
+    ].join("\n"))
+    .join("\n");
+}
+
 function renderVerificationTargetList(artifact: VerifyArtifact): string {
   if (artifact.verification_targets.length === 0) {
     return "- none";
@@ -145,6 +182,7 @@ function renderFormalVerification(artifact: VerifyArtifact): string {
             `  - States: ${stateModel.states.join(", ") || "none"}`,
             `  - Transitions: ${stateModel.transitions.join("; ") || "none"}`,
             `  - Unsafe States: ${stateModel.unsafe_states.join(", ") || "none"}`,
+            `  - Unsafe Conditions: ${stateModel.unsafe_conditions?.join("; ") || "none"}`,
             `  - Invariants: ${stateModel.invariants.join("; ") || "none"}`,
             `  - Initial Conditions: ${stateModel.initial_conditions.join("; ") || "none"}`,
           ].join("\n"))
@@ -425,9 +463,25 @@ export function createVerifyReport(artifact: VerifyArtifact): string {
     "",
     renderFormalVerification(artifact),
     "",
-    renderSection("Findings", [renderList(artifact.findings)]),
+    renderSection("Findings", [
+      "### Structural Findings",
+      "",
+      renderStructuredFindings(artifact, "structural"),
+      "",
+      "### Formal Findings",
+      "",
+      renderStructuredFindings(artifact, "formal"),
+    ]),
     "",
-    renderSection("Constraints", [renderList(artifact.constraints)]),
+    renderSection("Constraints", [
+      "### Structural Constraints",
+      "",
+      renderStructuredConstraints(artifact, "structural"),
+      "",
+      "### Formal Constraints",
+      "",
+      renderStructuredConstraints(artifact, "formal"),
+    ]),
     "",
     renderCarryForwardContext(artifact),
     "",
@@ -448,6 +502,12 @@ export function createVerifyReport(artifact: VerifyArtifact): string {
         ["Allowed Root", artifact.writePolicy.allowedRoot],
         ["Artifact Path", artifact.files.artifactPath],
         ["Report Path", artifact.files.reportPath],
+        ["Debug Artifact Path", artifact.files.debugArtifactPath],
+        ["Debug Verification Cases Path", artifact.files.debugVerificationCasesPath],
+        ["Debug Structural Findings Path", artifact.files.debugStructuralFindingsPath],
+        ["Debug State Models Path", artifact.files.debugStateModelsPath],
+        ["Debug TLA Specs Path", artifact.files.debugTlaSpecsPath],
+        ["Debug TLC Results Path", artifact.files.debugTlcResultsPath],
       ]),
     ]),
     "",

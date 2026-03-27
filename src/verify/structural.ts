@@ -27,9 +27,10 @@ function dedupeStable(values: string[]): string[] {
 type StructuralContext = {
   dependencyReasons: string[];
   obligationReasons: string[];
-  parallelizationReasons: string[];
+  parallelizationSignals: Array<{ signal: string; reason: string }>;
   conflictZoneReasons: string[];
   concernMessages: string[];
+  concernEffects: Set<string>;
 };
 
 function buildStructuralContext(
@@ -45,62 +46,152 @@ function buildStructuralContext(
     obligationReasons: foundation.verificationInput.context.testObligations
       .filter((entry) => planItemIds.has(entry.planItemId))
       .map((entry) => entry.reason),
-    parallelizationReasons: foundation.verificationInput.context.parallelizationSignals
+    parallelizationSignals: foundation.verificationInput.context.parallelizationSignals
       .filter((entry) => planItemIds.has(entry.planItemId))
-      .map((entry) => `${entry.signal}: ${entry.reason}`),
+      .map((entry) => ({ signal: entry.signal, reason: entry.reason })),
     conflictZoneReasons: foundation.verificationInput.context.conflictZones
       .filter((zone) => zone.planItemIds.some((planItemId) => planItemIds.has(planItemId)))
       .map((zone) => `${zone.id}: ${zone.reason}`),
     concernMessages: foundation.carryForward.carryForward.concerns
       .filter((concern) => concern.planItemIds.some((planItemId) => planItemIds.has(planItemId)))
       .map((concern) => concern.message),
+    concernEffects: new Set(
+      foundation.carryForward.carryForward.concerns
+        .filter((concern) => concern.planItemIds.some((planItemId) => planItemIds.has(planItemId)))
+        .flatMap((concern) => concern.effects),
+    ),
   };
 }
 
-function requiresDependencyEvidence(category: VerifyVerificationCategory): boolean {
-  return category === "dependency_contradiction"
-    || category === "unsafe_sequencing"
-    || category === "migration_order";
+function hasSignal(
+  context: StructuralContext,
+  wantedSignals: readonly string[],
+): boolean {
+  return context.parallelizationSignals.some((entry) => wantedSignals.includes(entry.signal));
 }
 
-function requiresOverlapEvidence(category: VerifyVerificationCategory): boolean {
-  return category === "unsafe_parallelization"
-    || category === "parallel_overlap"
-    || category === "conflict_zone_hazard";
+function hasSafeParallel(context: StructuralContext): boolean {
+  return hasSignal(context, ["safe_parallel"]);
 }
 
-function requiresSurfaceEvidence(category: VerifyVerificationCategory): boolean {
-  return category === "merge_or_serialization_contradiction"
-    || category === "config_surface"
-    || category === "api_contract"
-    || category === "code_surface"
-    || category === "test_surface";
+function hasOrderingSafeguard(context: StructuralContext): boolean {
+  return context.dependencyReasons.length > 0
+    || hasSignal(context, ["serial_only", "parallel_after_dependency", "protected_merge_order"])
+    || context.concernEffects.has("dependency_caution")
+    || context.concernEffects.has("planning_readiness");
+}
+
+function orderingConcernSurvives(context: StructuralContext): boolean {
+  return context.concernEffects.has("dependency_caution") || context.concernEffects.has("planning_readiness");
+}
+
+function hasOverlapSafeguard(context: StructuralContext): boolean {
+  return context.conflictZoneReasons.length > 0
+    || hasSignal(context, ["risky_shared", "parallel_after_dependency", "serial_only", "protected_merge_order"])
+    || context.concernEffects.has("parallelization_caution");
+}
+
+function hasSurfaceSafeguard(context: StructuralContext): boolean {
+  return context.obligationReasons.length > 0
+    || hasSurfaceProtection(context);
+}
+
+function hasSurfaceProtection(context: StructuralContext): boolean {
+  return context.conflictZoneReasons.length > 0
+    || hasSignal(context, ["protected_merge_order", "serial_only", "parallel_after_dependency"])
+    || context.concernEffects.has("test_strategy")
+    || context.concernEffects.has("planning_readiness");
+}
+
+function buildStructuralFailureReason(
+  verificationCase: VerifyVerificationCase,
+  context: StructuralContext,
+): string {
+  if (
+    verificationCase.category === "dependency_contradiction"
+    || verificationCase.category === "unsafe_sequencing"
+    || verificationCase.category === "migration_order"
+  ) {
+    if (hasSafeParallel(context) && !orderingConcernSurvives(context)) {
+      return "The case still carries safe_parallel without a stronger ordering safeguard.";
+    }
+
+    return "The case lacks a concrete ordering safeguard.";
+  }
+
+  if (
+    verificationCase.category === "retry_logic"
+    || verificationCase.category === "ownership"
+    || verificationCase.category === "stale_write"
+  ) {
+    return "The case lacks enough ownership or version-validity evidence to justify structural verification.";
+  }
+
+  if (
+    verificationCase.category === "unsafe_parallelization"
+    || verificationCase.category === "parallel_overlap"
+    || verificationCase.category === "conflict_zone_hazard"
+  ) {
+    if (hasSafeParallel(context)) {
+      return "The case still carries safe_parallel alongside shared-risk evidence.";
+    }
+
+    return "The case lacks shared-risk safeguards for the selected structural case.";
+  }
+
+  if (
+    verificationCase.category === "merge_or_serialization_contradiction"
+    || verificationCase.category === "config_surface"
+    || verificationCase.category === "api_contract"
+    || verificationCase.category === "code_surface"
+    || verificationCase.category === "test_surface"
+  ) {
+    if (verificationCase.category === "merge_or_serialization_contradiction") {
+      return hasSurfaceProtection(context)
+        ? "The case lacks structural validation or protection."
+        : "The case lacks merge or serialization protection.";
+    }
+
+    if (hasSafeParallel(context) && !hasSurfaceSafeguard(context)) {
+      return "The case still carries safe_parallel without surface safeguards.";
+    }
+
+    return "The case lacks structural validation or protection.";
+  }
+
+  return "The selected verification case does not preserve enough structural safeguard evidence.";
 }
 
 function hasStructuralSupport(
   verificationCase: VerifyVerificationCase,
-  target: VerifyVerificationTarget | null,
   context: StructuralContext,
 ): boolean {
-  if (requiresDependencyEvidence(verificationCase.category)) {
-    return context.dependencyReasons.length > 0
-      || context.parallelizationReasons.length > 0
-      || context.concernMessages.length > 0;
+  switch (verificationCase.category) {
+    case "dependency_contradiction":
+    case "unsafe_sequencing":
+    case "migration_order":
+      return hasOrderingSafeguard(context) && (!hasSafeParallel(context) || orderingConcernSurvives(context));
+    case "retry_logic":
+    case "ownership":
+    case "stale_write":
+      return context.obligationReasons.length > 0
+        || orderingConcernSurvives(context)
+        || context.dependencyReasons.length > 0
+        || hasSignal(context, ["serial_only", "parallel_after_dependency", "protected_merge_order"]);
+    case "unsafe_parallelization":
+    case "parallel_overlap":
+    case "conflict_zone_hazard":
+      return hasOverlapSafeguard(context) && !hasSafeParallel(context);
+    case "merge_or_serialization_contradiction":
+      return hasSurfaceProtection(context);
+    case "config_surface":
+    case "api_contract":
+    case "code_surface":
+    case "test_surface":
+      return hasSurfaceSafeguard(context);
+    default:
+      return false;
   }
-
-  if (requiresOverlapEvidence(verificationCase.category)) {
-    return context.conflictZoneReasons.length > 0
-      || context.parallelizationReasons.length > 0
-      || context.concernMessages.length > 0;
-  }
-
-  if (requiresSurfaceEvidence(verificationCase.category)) {
-    return context.obligationReasons.length > 0
-      || context.parallelizationReasons.length > 0
-      || context.concernMessages.length > 0;
-  }
-
-  return Boolean(target && target.sourceRiskSources.length > 0);
 }
 
 function buildStructuralConstraints(
@@ -110,7 +201,7 @@ function buildStructuralConstraints(
   const constraints = [
     ...context.dependencyReasons.map((reason) => `Preserve dependency ordering: ${reason}`),
     ...context.obligationReasons.map((reason) => `Keep validation visible: ${reason}`),
-    ...context.parallelizationReasons.map((reason) => `Respect Step 2 parallelization guidance: ${reason}`),
+    ...context.parallelizationSignals.map((entry) => `Respect Step 2 parallelization guidance: ${entry.signal}: ${entry.reason}`),
     ...context.conflictZoneReasons.map((reason) => `Keep conflict-zone safeguards in force: ${reason}`),
     ...context.concernMessages.map((message) => `Carry this concern forward: ${message}`),
   ];
@@ -130,18 +221,20 @@ function buildStructuralConstraints(
 function buildStructuralSummary(
   verificationCase: VerifyVerificationCase,
   supported: boolean,
+  reason: string | null,
 ): string {
   return supported
     ? `Structural verification passed for ${verificationCase.category}.`
-    : `Structural verification failed for ${verificationCase.category} because the plan does not preserve enough structural safeguard evidence.`;
+    : `Structural verification failed for ${verificationCase.category} because ${reason ?? "the plan does not preserve enough structural safeguard evidence"}.`;
 }
 
 function buildStructuralFindings(
   verificationCase: VerifyVerificationCase,
   supported: boolean,
   target: VerifyVerificationTarget | null,
+  reason: string | null,
 ): string[] {
-  const findings = [buildStructuralSummary(verificationCase, supported)];
+  const findings = [buildStructuralSummary(verificationCase, supported, reason)];
 
   if (supported) {
     findings.push(
@@ -150,7 +243,7 @@ function buildStructuralFindings(
         : "Structural evidence remained traceable to the selected verification case.",
     );
   } else {
-    findings.push("Later steps should not proceed until Step 2 preserves the missing structural safeguard.");
+    findings.push(reason ? `Later steps should not proceed until Step 2 restores ${reason.toLowerCase()}.` : "Later steps should not proceed until Step 2 preserves the missing structural safeguard.");
   }
 
   return dedupeStable(findings);
@@ -162,13 +255,14 @@ function buildCaseExecution(params: {
   target: VerifyVerificationTarget | null;
 }): VerifyVerificationCase {
   const context = buildStructuralContext(params.foundation, params.verificationCase);
-  const supported = hasStructuralSupport(params.verificationCase, params.target, context);
+  const supported = hasStructuralSupport(params.verificationCase, context);
+  const reason = supported ? null : buildStructuralFailureReason(params.verificationCase, context);
 
   return {
     ...params.verificationCase,
     status: supported ? "passed" : "failed",
-    summary: buildStructuralSummary(params.verificationCase, supported),
-    findings: buildStructuralFindings(params.verificationCase, supported, params.target),
+    summary: buildStructuralSummary(params.verificationCase, supported, reason),
+    findings: buildStructuralFindings(params.verificationCase, supported, params.target, reason),
     mitigations: supported
       ? ["Carry the structural safeguards forward into later steps."]
       : ["Add or preserve the missing structural safeguard in the Step 2 plan before proceeding."],
@@ -183,7 +277,7 @@ function buildStructuralVerificationSummary(cases: VerifyVerificationCase[]): st
 
   const failedCount = cases.filter((verificationCase) => verificationCase.status === "failed").length;
   if (failedCount > 0) {
-    return `${cases.length} structural verification case(s) ran; ${failedCount} case(s) found unresolved structural issues.`;
+    return `${cases.length} structural verification case(s) ran; ${failedCount} case(s) failed with unresolved structural issues.`;
   }
 
   return `${cases.length} structural verification case(s) passed deterministic structural verification.`;

@@ -468,12 +468,44 @@ await runScenario(
 await runScenario(
   "step 3 boundary policy explicitly prohibits later-step drift and makes TLA+/TLC part of V1",
   async () => {
-    assert.match(STEP3_BOUNDARY_POLICY.purpose, /verified or constrained planning output/i);
+    assert.match(STEP3_BOUNDARY_POLICY.purpose, /real step 3 pipeline/i);
+    assert.match(STEP3_BOUNDARY_POLICY.purpose, /usable verification outputs/i);
     assert.ok(STEP3_BOUNDARY_POLICY.authoritativeInputs.includes(".forge/plan.json"));
+    assert.deepEqual(STEP3_BOUNDARY_POLICY.implementationPriorities, [
+      "verification target/case construction",
+      "structural verification lane",
+      "formal lane foundations",
+      "real TLA+ generation",
+      "real TLC execution for the selected high-value subset",
+      "machine-readable artifact generation",
+      "human-readable verification report",
+      "stable verification orchestration",
+      "real tests for implemented behavior",
+      "optional lightweight debug artifacts",
+      "safe cleanup inside Step 3",
+      "broad polish for every edge case",
+      "freeze-quality hardening",
+      "expanding formal coverage too widely before the first subset is stable",
+    ]);
+    assert.ok(
+      STEP3_BOUNDARY_POLICY.allowedSideEffects.some(
+        (entry) => entry.includes("FORGE_VERIFY_DEBUG=1") && entry.includes("debug artifacts"),
+      ),
+    );
+    assert.ok(STEP3_BOUNDARY_POLICY.deferredCapabilities.includes("forge split"));
+    assert.ok(STEP3_BOUNDARY_POLICY.deferredCapabilities.includes("forge execute"));
+    assert.ok(STEP3_BOUNDARY_POLICY.deferredCapabilities.includes("forge integrate"));
+    assert.ok(STEP3_BOUNDARY_POLICY.deferredCapabilities.includes("interactive shell mode"));
+    assert.ok(STEP3_BOUNDARY_POLICY.deferredCapabilities.includes("memory backends"));
     assert.ok(STEP3_BOUNDARY_POLICY.disallowedCapabilities.includes("re-plan the task from prose"));
     assert.ok(STEP3_BOUNDARY_POLICY.disallowedCapabilities.includes("modify code"));
+    assert.ok(STEP3_BOUNDARY_POLICY.disallowedCapabilities.includes("edit source files directly"));
     assert.ok(STEP3_BOUNDARY_POLICY.disallowedCapabilities.includes("split into workstreams"));
     assert.ok(STEP3_BOUNDARY_POLICY.disallowedCapabilities.includes("generate execution packets"));
+    assert.ok(STEP3_BOUNDARY_POLICY.disallowedCapabilities.includes("broad repo cleanup unrelated to Step 3"));
+    assert.ok(STEP3_BOUNDARY_POLICY.disallowedCapabilities.includes("make verification depend on fuzzy reasoning"));
+    assert.ok(STEP3_BOUNDARY_POLICY.disallowedCapabilities.includes("pretend TLA+/TLC ran when they did not"));
+    assert.ok(STEP3_BOUNDARY_POLICY.disallowedCapabilities.includes("redesign Step 3 architecture without strong reason"));
     assert.deepEqual(STEP3_BOUNDARY_POLICY.supportedLanes, ["structural", "formal"]);
     assert.ok(STEP3_BOUNDARY_POLICY.formalLane.tooling.includes("TLA+"));
     assert.ok(STEP3_BOUNDARY_POLICY.formalLane.tooling.includes("TLC"));

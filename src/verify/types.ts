@@ -20,6 +20,12 @@ export type VerifyTargetRequiredField = typeof VERIFY_TARGET_REQUIRED_FIELDS[num
 export type VerifyTargetRiskSource = typeof VERIFY_TARGET_RISK_SOURCES[number];
 export type VerifyStructuralFocusArea = typeof VERIFY_STRUCTURAL_FOCUS_AREAS[number];
 export type VerifyFormalFocusArea = typeof VERIFY_FORMAL_FOCUS_AREAS[number];
+export type VerifyFormalSupportedCategory =
+  | "retry_logic"
+  | "ownership"
+  | "parallel_overlap"
+  | "stale_write"
+  | "migration_order";
 export type VerifyFormalEntryCriterion = typeof VERIFY_FORMAL_ENTRY_CRITERIA[number];
 export type VerifyFormalTooling = typeof VERIFY_FORMAL_TOOLING[number];
 export type VerifyStateModelField = typeof VERIFY_STATE_MODEL_REQUIRED_FIELDS[number];
@@ -48,6 +54,12 @@ export interface VerifyResolvedOutputPaths {
   planArtifactPath: string;
   verifyArtifactPath: string;
   verifyReportPath: string;
+  debugArtifactPath: string;
+  debugVerificationCasesPath: string;
+  debugStructuralFindingsPath: string;
+  debugStateModelsPath: string;
+  debugTlaSpecsPath: string;
+  debugTlcResultsPath: string;
 }
 
 export interface VerifyFoundationResolvedPaths {
@@ -189,6 +201,7 @@ export interface VerifyStateModel {
   states: string[];
   transitions: string[];
   unsafe_states: string[];
+  unsafe_conditions: string[];
   invariants: string[];
   initial_conditions: string[];
 }
@@ -268,6 +281,33 @@ export interface VerifyWritePolicy {
 export interface VerifyArtifactFiles {
   artifactPath: string | null;
   reportPath: string | null;
+  debugArtifactPath: string;
+  debugVerificationCasesPath: string;
+  debugStructuralFindingsPath: string;
+  debugStateModelsPath: string;
+  debugTlaSpecsPath: string;
+  debugTlcResultsPath: string;
+}
+
+export interface VerifyFinding {
+  id: string;
+  lane: VerifyLane;
+  verification_case_id: string;
+  verification_target_id: string;
+  status: VerifyCaseStatus;
+  summary: string;
+  tla_spec_id: string | null;
+  tlc_result_id: string | null;
+  trace: string | null;
+  errors: string[];
+}
+
+export interface VerifyConstraint {
+  id: string;
+  lane: VerifyLane;
+  verification_case_id: string;
+  verification_target_id: string;
+  summary: string;
 }
 
 export interface VerifyArtifact {
@@ -292,8 +332,8 @@ export interface VerifyArtifact {
   verification_cases: VerifyVerificationCase[];
   structural_verification: VerifyStructuralVerification;
   formal_verification: VerifyFormalVerification;
-  findings: string[];
-  constraints: string[];
+  findings: VerifyFinding[];
+  constraints: VerifyConstraint[];
   carry_forward: PlanArtifact["carry_forward"];
   verification_diagnostics: VerifyVerificationDiagnostics;
   verification_readiness: VerifyVerificationReadiness;
@@ -351,4 +391,32 @@ export interface VerifyCommandResult {
   outputRoot: string | null;
   summary: string;
   failure: VerifyCommandFailure | null;
+}
+
+export interface VerifyDebugArtifact {
+  command: VerifyArtifact["command"];
+  stage: VerifyArtifact["stage"];
+  status: VerifyArtifact["status"];
+  purpose: VerifyArtifact["purpose"];
+  repoRoot: VerifyArtifact["repoRoot"];
+  outputRoot: VerifyArtifact["outputRoot"];
+  summary: VerifyArtifact["summary"];
+  files: Pick<
+    VerifyArtifactFiles,
+    | "debugArtifactPath"
+    | "debugVerificationCasesPath"
+    | "debugStructuralFindingsPath"
+    | "debugStateModelsPath"
+    | "debugTlaSpecsPath"
+    | "debugTlcResultsPath"
+  >;
+  verification_cases: VerifyArtifact["verification_cases"];
+  structural_verification: {
+    findings: VerifyFinding[];
+  };
+  formal_verification: Pick<
+    VerifyArtifact["formal_verification"],
+    "state_models" | "tla_specs" | "tlc_results"
+  >;
+  failure: VerifyArtifact["failure"];
 }

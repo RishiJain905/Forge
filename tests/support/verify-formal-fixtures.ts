@@ -24,6 +24,38 @@ import { verifyArtifactPath, verifyReportPath } from "./forge-cli.js";
 
 type FormalCaseStatus = "not_run" | "passed" | "failed" | "errored" | "invalid_spec";
 
+type VerifyFinding = {
+  id: string;
+  lane: "structural" | "formal";
+  verification_case_id: string;
+  verification_target_id: string;
+  status: FormalCaseStatus | "passed";
+  summary: string;
+  tla_spec_id: string | null;
+  tlc_result_id: string | null;
+  trace: string | null;
+  errors: string[];
+};
+
+type VerifyConstraint = {
+  id: string;
+  lane: "structural" | "formal";
+  verification_case_id: string;
+  verification_target_id: string;
+  summary: string;
+};
+
+type FormalCaseDetails = {
+  enteredFormalLane: boolean;
+  entryCriteria: string[];
+  stateModelId: string;
+  tlaSpecId: string;
+  tlcResultId: string;
+  trace: string | null;
+  errors: string[];
+  cautionNotes: string[];
+};
+
 function buildFormalDetail(params: {
   entryCriteria: string[];
   stateModelId: string;
@@ -32,7 +64,7 @@ function buildFormalDetail(params: {
   trace: string | null;
   errors: string[];
   cautionNotes: string[];
-}): Record<string, unknown> {
+}): FormalCaseDetails {
   return {
     enteredFormalLane: true,
     entryCriteria: params.entryCriteria,
@@ -55,6 +87,7 @@ function buildFormalStateModel(params: {
   states: string[];
   transitions: string[];
   unsafeStates: string[];
+  unsafeConditions: string[];
   invariants: string[];
   initialConditions: string[];
 }): Record<string, unknown> {
@@ -69,6 +102,7 @@ function buildFormalStateModel(params: {
     states: params.states,
     transitions: params.transitions,
     unsafe_states: params.unsafeStates,
+    unsafe_conditions: params.unsafeConditions,
     invariants: params.invariants,
     initial_conditions: params.initialConditions,
   };
@@ -112,6 +146,48 @@ function buildFormalTlcResult(params: {
     summary: params.summary,
     trace: params.trace,
     errors: params.errors,
+  };
+}
+
+function buildFinding(params: {
+  id: string;
+  lane: "structural" | "formal";
+  verificationCaseId: string;
+  verificationTargetId: string;
+  status: FormalCaseStatus | "passed";
+  summary: string;
+  tlaSpecId: string | null;
+  tlcResultId: string | null;
+  trace: string | null;
+  errors: string[];
+}): VerifyFinding {
+  return {
+    id: params.id,
+    lane: params.lane,
+    verification_case_id: params.verificationCaseId,
+    verification_target_id: params.verificationTargetId,
+    status: params.status,
+    summary: params.summary,
+    tla_spec_id: params.tlaSpecId,
+    tlc_result_id: params.tlcResultId,
+    trace: params.trace,
+    errors: params.errors,
+  };
+}
+
+function buildConstraint(params: {
+  id: string;
+  lane: "structural" | "formal";
+  verificationCaseId: string;
+  verificationTargetId: string;
+  summary: string;
+}): VerifyConstraint {
+  return {
+    id: params.id,
+    lane: params.lane,
+    verification_case_id: params.verificationCaseId,
+    verification_target_id: params.verificationTargetId,
+    summary: params.summary,
   };
 }
 
@@ -233,6 +309,107 @@ export function buildFormalVerifyArtifactFixture(params: {
     formalDetails: null,
   };
 
+  const findings: VerifyFinding[] = [
+    buildFinding({
+      id: "verify-finding-001",
+      lane: "formal",
+      verificationCaseId: formalCases[0]!.id,
+      verificationTargetId: targetOne.id,
+      status: formalCases[0]!.tlcStatus,
+      summary: "Formal verification passed for the ownership case.",
+      tlaSpecId: formalCases[0]!.formalDetails.tlaSpecId,
+      tlcResultId: formalCases[0]!.formalDetails.tlcResultId,
+      trace: formalCases[0]!.formalDetails.trace,
+      errors: formalCases[0]!.formalDetails.errors,
+    }),
+    buildFinding({
+      id: "verify-finding-002",
+      lane: "formal",
+      verificationCaseId: formalCases[1]!.id,
+      verificationTargetId: targetOne.id,
+      status: formalCases[1]!.tlcStatus,
+      summary: "Formal verification failed for the ownership case.",
+      tlaSpecId: formalCases[1]!.formalDetails.tlaSpecId,
+      tlcResultId: formalCases[1]!.formalDetails.tlcResultId,
+      trace: formalCases[1]!.formalDetails.trace,
+      errors: formalCases[1]!.formalDetails.errors,
+    }),
+    buildFinding({
+      id: "verify-finding-003",
+      lane: "formal",
+      verificationCaseId: formalCases[2]!.id,
+      verificationTargetId: targetOne.id,
+      status: formalCases[2]!.tlcStatus,
+      summary: "Formal verification errored for the ownership case.",
+      tlaSpecId: formalCases[2]!.formalDetails.tlaSpecId,
+      tlcResultId: formalCases[2]!.formalDetails.tlcResultId,
+      trace: formalCases[2]!.formalDetails.trace,
+      errors: formalCases[2]!.formalDetails.errors,
+    }),
+    buildFinding({
+      id: "verify-finding-004",
+      lane: "formal",
+      verificationCaseId: formalCases[3]!.id,
+      verificationTargetId: targetOne.id,
+      status: formalCases[3]!.tlcStatus,
+      summary: "Formal verification remained invalid_spec for the ownership case.",
+      tlaSpecId: formalCases[3]!.formalDetails.tlaSpecId,
+      tlcResultId: formalCases[3]!.formalDetails.tlcResultId,
+      trace: formalCases[3]!.formalDetails.trace,
+      errors: formalCases[3]!.formalDetails.errors,
+    }),
+    buildFinding({
+      id: "verify-finding-005",
+      lane: "structural",
+      verificationCaseId: structuralCase.id,
+      verificationTargetId: targetTwo.id,
+      status: "passed",
+      summary: "Structural verification passed for config_surface.",
+      tlaSpecId: null,
+      tlcResultId: null,
+      trace: null,
+      errors: [],
+    }),
+  ];
+
+  const constraints: VerifyConstraint[] = [
+    buildConstraint({
+      id: "verify-constraint-001",
+      lane: "structural",
+      verificationCaseId: structuralCase.id,
+      verificationTargetId: targetTwo.id,
+      summary: "Keep validation visible: Config changes should keep contract validation visible.",
+    }),
+    buildConstraint({
+      id: "verify-constraint-002",
+      lane: "formal",
+      verificationCaseId: formalCases[0]!.id,
+      verificationTargetId: targetOne.id,
+      summary: "Trace details must remain attached to failed formal cases.",
+    }),
+    buildConstraint({
+      id: "verify-constraint-003",
+      lane: "formal",
+      verificationCaseId: formalCases[1]!.id,
+      verificationTargetId: targetOne.id,
+      summary: "Formal failure cases must keep counterexamples visible.",
+    }),
+    buildConstraint({
+      id: "verify-constraint-004",
+      lane: "formal",
+      verificationCaseId: formalCases[2]!.id,
+      verificationTargetId: targetOne.id,
+      summary: "Formal error cases must keep TLC error details visible.",
+    }),
+    buildConstraint({
+      id: "verify-constraint-005",
+      lane: "formal",
+      verificationCaseId: formalCases[3]!.id,
+      verificationTargetId: targetOne.id,
+      summary: "Invalid formal specs must stay explicit in the artifact.",
+    }),
+  ];
+
   return {
     schemaVersion: FORGE_SCHEMA_VERSION,
     command: FORGE_VERIFY_FULL_COMMAND,
@@ -253,6 +430,12 @@ export function buildFormalVerifyArtifactFixture(params: {
     files: {
       artifactPath,
       reportPath,
+      debugArtifactPath: join(outputRoot, "debug", "verify-debug.json"),
+      debugVerificationCasesPath: join(outputRoot, "debug", "verification-cases.json"),
+      debugStructuralFindingsPath: join(outputRoot, "debug", "structural-findings.json"),
+      debugStateModelsPath: join(outputRoot, "debug", "state-models.json"),
+      debugTlaSpecsPath: join(outputRoot, "debug", "tla-specs.json"),
+      debugTlcResultsPath: join(outputRoot, "debug", "tlc-results.json"),
     },
     startedAt: "2026-03-25T00:00:00.000Z",
     finishedAt: "2026-03-25T00:01:00.000Z",
@@ -333,6 +516,10 @@ export function buildFormalVerifyArtifactFixture(params: {
             "complete",
           ],
           unsafeStates: ["duplicate_owner", "stale_owner"],
+          unsafeConditions: [
+            "Two owners hold the resource at the same time.",
+            "A stale owner keeps mutating the release path.",
+          ],
           invariants: [
             "At most one owner may be active at a time.",
             "Released work must not remain owned.",
@@ -390,16 +577,8 @@ export function buildFormalVerifyArtifactFixture(params: {
         "Invalid formal specs must stay explicit in the artifact.",
       ],
     },
-    findings: [
-      "Formal verification passed for one ownership case.",
-      "Formal verification failed for one ownership case.",
-      "Formal verification errored for one ownership case.",
-      "Formal verification remained invalid_spec for one ownership case.",
-    ],
-    constraints: [
-      "Keep formal results separate from structural-only findings.",
-      "Preserve caution notes when formal execution is incomplete.",
-    ],
+    findings,
+    constraints,
     carry_forward: params.planArtifact.carry_forward,
     verification_diagnostics: {
       usability_status: params.planArtifact.planning_diagnostics.usability_status,
@@ -416,6 +595,152 @@ export function buildFormalVerifyArtifactFixture(params: {
       partial_output: params.planArtifact.planning_readiness.partial_output,
       constraining_concern_ids: params.planArtifact.planning_readiness.constraining_concern_ids,
       recommended_user_actions: params.planArtifact.planning_readiness.recommended_user_actions,
+    },
+    failure: null,
+  };
+}
+
+export function buildBatch2Part3FormalPlanArtifact(params: {
+  planArtifact: PlanArtifact;
+}): PlanArtifact {
+  return {
+    ...params.planArtifact,
+    plan_items: [
+      {
+        id: "plan-item-workflow",
+        title: "Stabilize the shared workflow surface",
+        description:
+          "Keep retry/reassign, ownership transitions, duplicate execution, stale writes, and migration order aligned on one shared workflow area.",
+        category: "implementation",
+        sourceRequirements: [
+          "Preserve retry/reassign behavior while the workflow surface changes.",
+          "Preserve ownership handoff, duplicate execution safety, stale write safety, and migration ordering together.",
+        ],
+        likelyAffectedPaths: ["src/worker.ts", "src/runtime.ts", "package.json"],
+        dependencies: [],
+        riskLevel: "high",
+        testObligations: [
+          {
+            category: "contract_validation",
+            reason: "The shared workflow surface needs formal contract coverage.",
+          },
+          {
+            category: "migration_validation",
+            reason: "Ordering and serialization need explicit validation.",
+          },
+          {
+            category: "integration",
+            reason: "Cross-file workflow changes need end-to-end coverage.",
+          },
+        ],
+        verificationRelevance: {
+          relevant: true,
+          categories: [
+            "retry_logic",
+            "ownership",
+            "parallel_overlap",
+            "stale_write",
+            "migration_order",
+          ],
+          notes: ["All initial Batch 2 formal categories share this workflow surface."],
+        },
+        parallelization: {
+          signal: "risky_shared",
+          reason:
+            "Retries, ownership handoff, duplicate execution, stale writes, and migration ordering all touch one shared workflow area.",
+        },
+      },
+    ],
+    dependency_graph: [],
+    conflict_zones: [
+      {
+        id: "conflict-zone-workflow",
+        title: "Shared workflow coordination surface",
+        reason:
+          "Retries, ownership handoff, duplicate execution, stale writes, and migration order all touch the same workflow area.",
+        paths: ["src/worker.ts", "src/runtime.ts", "package.json"],
+        planItemIds: ["plan-item-workflow"],
+        riskLevel: "high",
+      },
+    ],
+    test_obligations: [
+      {
+        planItemId: "plan-item-workflow",
+        category: "contract_validation",
+        reason: "The shared workflow surface needs formal contract coverage.",
+      },
+      {
+        planItemId: "plan-item-workflow",
+        category: "migration_validation",
+        reason: "Ordering and serialization need explicit validation.",
+      },
+      {
+        planItemId: "plan-item-workflow",
+        category: "integration",
+        reason: "Cross-file workflow changes need end-to-end coverage.",
+      },
+    ],
+    parallelization_signals: [
+      {
+        planItemId: "plan-item-workflow",
+        signal: "risky_shared",
+        reason:
+          "Retries, ownership handoff, duplicate execution, stale writes, and migration ordering all touch one shared workflow area.",
+      },
+    ],
+    carry_forward: {
+      ...params.planArtifact.carry_forward,
+      confidence: {
+        ...params.planArtifact.carry_forward.confidence,
+        level: "low",
+      },
+      initial_verification_targets: [
+        {
+          path: "src/worker.ts",
+          kind: "source",
+          category: "ownership",
+          reason: "The shared workflow surface needs formal coverage.",
+        },
+      ],
+      concerns: [
+        {
+          id: "formal-caution-note",
+          source: "low_confidence",
+          code: "FORMAL_CAUTION",
+          message: "Formal verification should preserve caution for the shared workflow surface.",
+          planItemIds: ["plan-item-workflow"],
+          effects: ["planning_readiness"],
+          status: "carried_forward",
+        },
+      ],
+    },
+    planning_diagnostics: {
+      ...params.planArtifact.planning_diagnostics,
+      usability_status: "actionable",
+      warning_items: [
+        {
+          code: "PLAN_WARNING_CONTEXT_PRESENT",
+          message: "Formal verification should preserve low-confidence caution.",
+        },
+      ],
+      blocking_items: [],
+      partial_output: null,
+    },
+    planning_readiness: {
+      ...params.planArtifact.planning_readiness,
+      ready: true,
+      status: "ready_with_warnings",
+      summary: "`forge verify` can proceed with caution.",
+      warning_items: [
+        {
+          code: "PLAN_WARNING_CONTEXT_PRESENT",
+          message: "Formal verification should preserve low-confidence caution.",
+        },
+      ],
+      blocking_issues: [],
+      partial_output: null,
+      constraining_concern_ids: ["formal-caution-note"],
+      recommended_user_actions: [],
     },
     failure: null,
   };
