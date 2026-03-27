@@ -342,6 +342,7 @@
 - `dev` now includes Step 3 Batch 1 Part 4, including explicit formal-lane entry criteria, deterministic state-model generation, generated TLA+ / TLC config artifacts, TLC execution and status classification via `FORGE_TLC_JAR_PATH`, and populated formal findings/traces/errors/caution output in `verify.json` and `verify-report.md`.
 - `dev` now includes Step 3 Batch 1 Part 5, including executable structural verification, Step 3-owned readiness resolution from structural plus formal outcomes, explicit later-step blocking rules, and dedicated Batch 1 acceptance gates for the shipped build order.
 - `dev` now includes Step 3 Batch 2 Part 1, including the explicit Batch 2 verify mission, ordered implementation priorities, strengthened do-not-touch boundary policy, and tighter goal-and-boundaries coverage while keeping the public verify surface stable.
+- `dev` now includes Step 3 Batch 2 Part 2, including broad unmatched initial verification target traceability, deterministic structural lane rule evaluation, and blocked CLI/report coherence for structural failures while keeping the public verify surface stable.
 - `dev` now treats Step 3 Batch 1 as complete for V1 while still deferring any optional verify debug artifacts and any later Step 3 batches that are not yet specified in-repo.
 
 ## Verification
@@ -358,4 +359,5 @@
 - Step 3 Batch 1 Part 5 is complete.
 - Step 3 Batch 1 is complete.
 - Step 3 Batch 2 Part 1 is complete.
-- Next implementation work should move to `forge_step3_batch2/part-2-stage-1-and-2-plan-consumption-verification-targets-and-structural-lane.md`.
+- Step 3 Batch 2 Part 2 is complete.
+- Next implementation work should move to `forge_step3_batch2/part-3-stage-3-formal-lane-state-models-tla-generation-and-tlc-execution.md`.

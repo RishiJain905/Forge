@@ -446,6 +446,11 @@ export function buildVerifyVerificationModel(
 
   for (const target of foundation.carryForward.carryForward.initial_verification_targets) {
     const matchedItemIds = [...(pathToPlanItemIds.get(normalizePath(target.path)) ?? new Set<string>())];
+    const conflictZoneItemIds = sortedPlanItemIds(
+      foundation.verificationInput.context.conflictZones
+        .filter((zone) => zone.paths.some((pathValue) => normalizePath(pathValue) === normalizePath(target.path)))
+        .flatMap((zone) => zone.planItemIds),
+    );
     const category = (target.category ?? (
       target.kind === "test"
         ? "test_surface"
@@ -453,18 +458,15 @@ export function buildVerifyVerificationModel(
           ? "config_surface"
           : "code_surface"
     )) as VerifyVerificationCategory;
+    const resolvedItemIds = matchedItemIds.length > 0
+      ? matchedItemIds
+      : conflictZoneItemIds;
 
-    if (matchedItemIds.length === 0) {
-      const key = buildKey(category, null, [target.path]);
-      const draft = ensureTargetDraft(drafts, key, category);
-      draft.anchorPaths.add(target.path);
-      draft.sourceRiskSources.add("initial_verification_target");
-      draft.traceabilityNotes.add(`Step 1 carried ${target.path} forward as an initial verification target.`);
-      addLaneFindingKinds(draft, determineLanes(category, draft.sourceRiskSources));
+    if (resolvedItemIds.length === 0) {
       continue;
     }
 
-    for (const itemId of matchedItemIds) {
+    for (const itemId of resolvedItemIds) {
       seedFromPlanItem(
         itemId,
         category,
