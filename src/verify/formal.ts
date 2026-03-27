@@ -725,8 +725,10 @@ async function buildCaseExecution(params: {
     trace: tlcStatus === "passed" || tlcStatus === "not_run" ? null : (combinedOutput.trim() || null),
     errors: processResult?.error
       ? [processResult.error.message]
-      : tlcStatus === "passed" || tlcStatus === "not_run"
+      : tlcStatus === "passed"
         ? []
+        : tlcStatus === "not_run"
+          ? [tlcSummary]
         : splitOutputLines(combinedOutput).slice(0, 3),
   };
   const tlaSpec: VerifyTlaSpec = {

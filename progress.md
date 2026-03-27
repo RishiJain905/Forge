@@ -338,6 +338,12 @@
   - Tightened `src/verify/model.ts` so stale carry-forward initial verification targets do not mint unsupported formal cases when the current Step 2 plan item no longer supports that formal category.
   - Expanded nested verify schema/report support and added `tests/verify.batch2-part3-formal-lane.test.ts`, then wired the new suite into `npm.cmd test` so the stronger formal-lane path stays under the default verification gate.
   - Updated `progress.md` and `S3-B2-Done/p3-done-summary.md` so Step 3 Batch 2 Part 3 is documented and traceable.
+- Batch 2.04: `part-4-stage-4-artifacts-report-debug-outputs-and-findings.md` (Step 3)
+  - Reworked `verify.json` so the frozen top-level key set stays stable while top-level `findings` and `constraints` now persist machine-readable structured records with lane, verification-case, verification-target, TLC/spec provenance, trace, and error details.
+  - Added env-gated internal verify debug output support behind `FORGE_VERIFY_DEBUG=1`, including `verify-debug.json`, `verification-cases.json`, `structural-findings.json`, `state-models.json`, `tla-specs.json`, and `tlc-results.json` under the resolved output root.
+  - Reworked `verify-report.md` to group findings and constraints by structural versus formal lanes and to surface the optional debug artifact paths without changing the frozen Step 3 report `##` heading order.
+  - Expanded Part 4 coverage with dedicated artifact/report/debug regression suites and updated existing schema, goal-and-boundaries, command-contract, and readiness/build-order tests to lock the structured-output contract.
+  - Updated `README.md`, `progress.md`, and `S3-B2-Done/p4-done-summary.md` so Step 3 Batch 2 Part 4 is documented and traceable.
 
 ## Current Branch State
 - `dev` includes the completed Step 1 work through Batch 4.05, including the frozen Step 2 handoff contract from Intake.
@@ -356,7 +362,8 @@
 - `dev` now includes Step 3 Batch 2 Part 1, including the explicit Batch 2 verify mission, ordered implementation priorities, strengthened do-not-touch boundary policy, and tighter goal-and-boundaries coverage while keeping the public verify surface stable.
 - `dev` now includes Step 3 Batch 2 Part 2, including broad unmatched initial verification target traceability, deterministic structural lane rule evaluation, and blocked CLI/report coherence for structural failures while keeping the public verify surface stable.
 - `dev` now includes Step 3 Batch 2 Part 3, including explicit supported formal-category gating, richer `unsafe_conditions` state-model output, category-specific TLA+ action labels, and structural-only handling for unsupported formal categories while keeping the public verify surface stable.
-- `dev` now treats Step 3 Batch 1 as complete for V1 while still deferring any optional verify debug artifacts and any later Step 3 batches that are not yet specified in-repo.
+- `dev` now includes Step 3 Batch 2 Part 4, including structured top-level findings/constraints, lane-grouped verify report sections, and env-gated internal verify debug outputs that remain secondary to `verify.json` and `verify-report.md`.
+- `dev` now treats Step 3 Batch 1 as complete for V1 while keeping optional verify debug artifacts internal and gated behind `FORGE_VERIFY_DEBUG=1`.
 
 ## Verification
 - `npm.cmd test`
@@ -374,4 +381,5 @@
 - Step 3 Batch 2 Part 1 is complete.
 - Step 3 Batch 2 Part 2 is complete.
 - Step 3 Batch 2 Part 3 is complete.
-- Next implementation work should move to `forge_step3_batch2/part-4-stage-4-artifacts-report-debug-outputs-and-findings.md`.
+- Step 3 Batch 2 Part 4 is complete.
+- Next implementation work should move to `forge_step3_batch2/part-5-stage-5-cli-wiring-tests-and-runnable-milestone.md`.

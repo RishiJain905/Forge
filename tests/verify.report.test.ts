@@ -124,6 +124,14 @@ await runScenario(
       assert.match(report, /Risk Sources:/);
       assert.match(report, /Target ID:/);
       assert.match(report, /Lanes:\s+structural|Lanes:\s+formal/i);
+      assert.match(report, /### Structural Findings/);
+      assert.match(report, /### Formal Findings/);
+      assert.match(report, /verify-debug\.json/);
+      assert.match(report, /verification-cases\.json/);
+      assert.match(report, /structural-findings\.json/);
+      assert.match(report, /state-models\.json/);
+      assert.match(report, /tla-specs\.json/);
+      assert.match(report, /tlc-results\.json/);
       assert.doesNotMatch(report, /deferred in Part 2/i);
       assert.doesNotMatch(report, /in Part 2/i);
     } finally {
@@ -225,6 +233,14 @@ await runScenario(
       assert.match(report, /passed/);
       assert.match(report, /failed/);
       assert.match(report, /errored/);
+      assert.match(report, /### Structural Findings/);
+      assert.match(report, /### Formal Findings/);
+      assert.match(report, /verify-debug\.json/);
+      assert.match(report, /verification-cases\.json/);
+      assert.match(report, /structural-findings\.json/);
+      assert.match(report, /state-models\.json/);
+      assert.match(report, /tla-specs\.json/);
+      assert.match(report, /tlc-results\.json/);
     } finally {
       await disposeTempRepo(repoRoot);
     }

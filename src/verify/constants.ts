@@ -3,6 +3,13 @@ export const FORGE_VERIFY_STAGE = "step3" as const;
 export const FORGE_VERIFY_FULL_COMMAND = `forge ${FORGE_VERIFY_COMMAND}` as const;
 export const VERIFY_ARTIFACT_NAME = "verify.json" as const;
 export const VERIFY_REPORT_NAME = "verify-report.md" as const;
+export const VERIFY_DEBUG_ENV_VAR = "FORGE_VERIFY_DEBUG" as const;
+export const VERIFY_DEBUG_ARTIFACT_NAME = "verify-debug.json" as const;
+export const VERIFY_DEBUG_VERIFICATION_CASES_NAME = "verification-cases.json" as const;
+export const VERIFY_DEBUG_STRUCTURAL_FINDINGS_NAME = "structural-findings.json" as const;
+export const VERIFY_DEBUG_STATE_MODELS_NAME = "state-models.json" as const;
+export const VERIFY_DEBUG_TLA_SPECS_NAME = "tla-specs.json" as const;
+export const VERIFY_DEBUG_TLC_RESULTS_NAME = "tlc-results.json" as const;
 export const VERIFY_FORMAL_DIRECTORY_NAME = "formal" as const;
 export const VERIFY_FORMAL_MODULE_PREFIX = "ForgeVerify" as const;
 export const VERIFY_TLC_JAR_PATH_ENV_VAR = "FORGE_TLC_JAR_PATH" as const;
@@ -44,6 +51,7 @@ export const STEP3_ALLOWED_SIDE_EFFECTS = [
   "read the Step 2 plan artifact",
   "validate the Step 2 verification handoff contract before verification continues",
   "write verification outputs inside the resolved output root",
+  `optionally write internal debug artifacts inside the resolved output root when ${VERIFY_DEBUG_ENV_VAR}=1`,
   "generate formal TLA+ and TLC artifacts inside the resolved output root",
   `invoke local TLC when ${VERIFY_TLC_JAR_PATH_ENV_VAR} is set`,
 ] as const;

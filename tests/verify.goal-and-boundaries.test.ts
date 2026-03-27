@@ -487,6 +487,11 @@ await runScenario(
       "freeze-quality hardening",
       "expanding formal coverage too widely before the first subset is stable",
     ]);
+    assert.ok(
+      STEP3_BOUNDARY_POLICY.allowedSideEffects.some(
+        (entry) => entry.includes("FORGE_VERIFY_DEBUG=1") && entry.includes("debug artifacts"),
+      ),
+    );
     assert.ok(STEP3_BOUNDARY_POLICY.deferredCapabilities.includes("forge split"));
     assert.ok(STEP3_BOUNDARY_POLICY.deferredCapabilities.includes("forge execute"));
     assert.ok(STEP3_BOUNDARY_POLICY.deferredCapabilities.includes("forge integrate"));
