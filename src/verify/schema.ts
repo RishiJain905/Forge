@@ -131,6 +131,12 @@ const verifyWritePolicySchema = z.object({
 const verifyFilesSchema = z.object({
   artifactPath: z.string().min(1),
   reportPath: z.string().min(1),
+  debugArtifactPath: z.string().min(1),
+  debugVerificationCasesPath: z.string().min(1),
+  debugStructuralFindingsPath: z.string().min(1),
+  debugStateModelsPath: z.string().min(1),
+  debugTlaSpecsPath: z.string().min(1),
+  debugTlcResultsPath: z.string().min(1),
 }).strict();
 
 const verifyVerificationTargetSchema = z.object({
@@ -226,6 +232,27 @@ const verifyFormalVerificationSchema = z.object({
   tlc_results: z.array(verifyTlcResultSchema),
   findings: z.array(z.string().min(1)),
   constraints: z.array(z.string().min(1)),
+}).strict();
+
+const verifyFindingSchema = z.object({
+  id: z.string().min(1),
+  lane: z.enum(VERIFY_SUPPORTED_LANES),
+  verification_case_id: z.string().min(1),
+  verification_target_id: z.string().min(1),
+  status: z.enum(VERIFY_CASE_STATUSES),
+  summary: z.string().min(1),
+  tla_spec_id: z.string().min(1).nullable(),
+  tlc_result_id: z.string().min(1).nullable(),
+  trace: z.string().min(1).nullable(),
+  errors: z.array(z.string().min(1)),
+}).strict();
+
+const verifyConstraintSchema = z.object({
+  id: z.string().min(1),
+  lane: z.enum(VERIFY_SUPPORTED_LANES),
+  verification_case_id: z.string().min(1),
+  verification_target_id: z.string().min(1),
+  summary: z.string().min(1),
 }).strict();
 
 const verifyVerificationDiagnosticsSchema = z.object({
@@ -371,8 +398,8 @@ export const verifyArtifactSchema = z.object({
   verification_cases: z.array(verifyVerificationCaseSchema),
   structural_verification: verifyStructuralVerificationSchema,
   formal_verification: verifyFormalVerificationSchema,
-  findings: z.array(z.string().min(1)),
-  constraints: z.array(z.string().min(1)),
+  findings: z.array(verifyFindingSchema),
+  constraints: z.array(verifyConstraintSchema),
   carry_forward: planArtifactSchema.shape.carry_forward,
   verification_diagnostics: verifyVerificationDiagnosticsSchema,
   verification_readiness: verifyVerificationReadinessSchema,
@@ -573,6 +600,14 @@ export const verifyArtifactSchema = z.object({
   const stateModelById = new Map(value.formal_verification.state_models.map((stateModel) => [stateModel.id, stateModel] as const));
   const tlaSpecById = new Map(value.formal_verification.tla_specs.map((spec) => [spec.id, spec] as const));
   const tlcResultById = new Map(value.formal_verification.tlc_results.map((result) => [result.id, result] as const));
+  const findingIdCounts = new Map<string, number>();
+  const constraintIdCounts = new Map<string, number>();
+  for (const finding of value.findings) {
+    findingIdCounts.set(finding.id, (findingIdCounts.get(finding.id) ?? 0) + 1);
+  }
+  for (const constraint of value.constraints) {
+    constraintIdCounts.set(constraint.id, (constraintIdCounts.get(constraint.id) ?? 0) + 1);
+  }
 
   function buildWorstStructuralStatus(
     cases: Array<{ status: typeof VERIFY_CASE_STATUSES[number] }>,
@@ -649,6 +684,136 @@ export const verifyArtifactSchema = z.object({
       }
     }
     return "not_run";
+  }
+
+  for (const [index, finding] of value.findings.entries()) {
+    if ((findingIdCounts.get(finding.id) ?? 0) > 1) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Verify finding ids must be unique.",
+        path: ["findings", index, "id"],
+      });
+    }
+
+    const owningCase = value.verification_cases.find(
+      (verificationCase) => verificationCase.id === finding.verification_case_id,
+    );
+    if (!owningCase) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Verify findings must point at an existing verification case.",
+        path: ["findings", index, "verification_case_id"],
+      });
+      continue;
+    }
+
+    if (owningCase.verificationTargetId !== finding.verification_target_id) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Verify findings must point at the owning verification target.",
+        path: ["findings", index, "verification_target_id"],
+      });
+    }
+
+    if (!owningCase.lanes.includes(finding.lane)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Verify finding lane must match one of the owning case lanes.",
+        path: ["findings", index, "lane"],
+      });
+    }
+
+    if (finding.lane === "formal") {
+      if (!owningCase.formalDetails) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Formal verify findings must point at a case with formalDetails.",
+          path: ["findings", index, "verification_case_id"],
+        });
+      } else {
+        if (finding.tla_spec_id !== owningCase.formalDetails.tlaSpecId) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Formal verify findings must mirror the owning case tlaSpecId.",
+            path: ["findings", index, "tla_spec_id"],
+          });
+        }
+        if (finding.tlc_result_id !== owningCase.formalDetails.tlcResultId) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Formal verify findings must mirror the owning case tlcResultId.",
+            path: ["findings", index, "tlc_result_id"],
+          });
+        }
+      }
+
+      if (finding.tla_spec_id !== null) {
+        const spec = tlaSpecById.get(finding.tla_spec_id);
+        if (!spec || spec.verification_case_id !== finding.verification_case_id) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Formal verify findings must point at an emitted TLA spec for the same case.",
+            path: ["findings", index, "tla_spec_id"],
+          });
+        }
+      }
+      if (finding.tlc_result_id !== null) {
+        const result = tlcResultById.get(finding.tlc_result_id);
+        if (!result || result.verification_case_id !== finding.verification_case_id) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Formal verify findings must point at an emitted TLC result for the same case.",
+            path: ["findings", index, "tlc_result_id"],
+          });
+        }
+      }
+    } else {
+      if (finding.tla_spec_id !== null || finding.tlc_result_id !== null) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Structural verify findings must not point at formal artifacts.",
+          path: ["findings", index, "lane"],
+        });
+      }
+    }
+  }
+
+  for (const [index, constraint] of value.constraints.entries()) {
+    if ((constraintIdCounts.get(constraint.id) ?? 0) > 1) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Verify constraint ids must be unique.",
+        path: ["constraints", index, "id"],
+      });
+    }
+
+    const owningCase = value.verification_cases.find(
+      (verificationCase) => verificationCase.id === constraint.verification_case_id,
+    );
+    if (!owningCase) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Verify constraints must point at an existing verification case.",
+        path: ["constraints", index, "verification_case_id"],
+      });
+      continue;
+    }
+
+    if (owningCase.verificationTargetId !== constraint.verification_target_id) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Verify constraints must point at the owning verification target.",
+        path: ["constraints", index, "verification_target_id"],
+      });
+    }
+
+    if (!owningCase.lanes.includes(constraint.lane)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Verify constraint lane must match one of the owning case lanes.",
+        path: ["constraints", index, "lane"],
+      });
+    }
   }
 
   for (const [index, verificationCase] of value.verification_cases.entries()) {

@@ -55,6 +55,27 @@ type VerifyReadiness = {
   recommended_user_actions: string[];
 };
 
+type VerifyFinding = {
+  id: string;
+  lane: "structural" | "formal";
+  verification_case_id: string;
+  verification_target_id: string;
+  status: "passed" | "failed" | "errored" | "invalid_spec" | "not_run";
+  summary: string;
+  tla_spec_id: string | null;
+  tlc_result_id: string | null;
+  trace: string | null;
+  errors: string[];
+};
+
+type VerifyConstraint = {
+  id: string;
+  lane: "structural" | "formal";
+  verification_case_id: string;
+  verification_target_id: string;
+  summary: string;
+};
+
 type VerifyArtifact = {
   schemaVersion: string;
   command: string;
@@ -75,6 +96,12 @@ type VerifyArtifact = {
   files: {
     artifactPath: string | null;
     reportPath: string | null;
+    debugArtifactPath: string;
+    debugVerificationCasesPath: string;
+    debugStructuralFindingsPath: string;
+    debugStateModelsPath: string;
+    debugTlaSpecsPath: string;
+    debugTlcResultsPath: string;
   };
   startedAt: string;
   finishedAt: string;
@@ -136,8 +163,8 @@ type VerifyArtifact = {
     findings: unknown[];
     constraints: unknown[];
   };
-  findings: unknown[];
-  constraints: unknown[];
+  findings: VerifyFinding[];
+  constraints: VerifyConstraint[];
   carry_forward: PlanArtifact["carry_forward"];
   verification_diagnostics: VerifyDiagnostics;
   verification_readiness: VerifyReadiness;
@@ -222,6 +249,12 @@ function createVerifyArtifactFixture(repoRoot: string, planArtifact: PlanArtifac
     files: {
       artifactPath: verifyArtifactPath(repoRoot),
       reportPath: verifyReportPath(repoRoot),
+      debugArtifactPath: join(outputRoot, "debug", "verify-debug.json"),
+      debugVerificationCasesPath: join(outputRoot, "debug", "verification-cases.json"),
+      debugStructuralFindingsPath: join(outputRoot, "debug", "structural-findings.json"),
+      debugStateModelsPath: join(outputRoot, "debug", "state-models.json"),
+      debugTlaSpecsPath: join(outputRoot, "debug", "tla-specs.json"),
+      debugTlcResultsPath: join(outputRoot, "debug", "tlc-results.json"),
     },
     startedAt: "2026-03-17T00:00:00.000Z",
     finishedAt: "2026-03-17T00:01:00.000Z",
@@ -298,8 +331,29 @@ function createVerifyArtifactFixture(repoRoot: string, planArtifact: PlanArtifac
       findings: [],
       constraints: [],
     },
-    findings: [],
-    constraints: [],
+    findings: [
+      {
+        id: "verify-finding-001",
+        lane: "structural",
+        verification_case_id: "verify-case-001",
+        verification_target_id: "verify-target-001",
+        status: "passed",
+        summary: "Structural verification passed for config_surface.",
+        tla_spec_id: null,
+        tlc_result_id: null,
+        trace: null,
+        errors: [],
+      },
+    ],
+    constraints: [
+      {
+        id: "verify-constraint-001",
+        lane: "structural",
+        verification_case_id: "verify-case-001",
+        verification_target_id: "verify-target-001",
+        summary: "Keep validation visible: Config changes should keep contract validation visible.",
+      },
+    ],
     carry_forward: planArtifact.carry_forward,
     verification_diagnostics: {
       usability_status: planArtifact.planning_diagnostics.usability_status,
@@ -357,6 +411,18 @@ await runScenario(
       assert.deepEqual(parsed.writePolicy.disallowedCapabilities, [...STEP3_DISALLOWED_CAPABILITIES]);
       assert.equal(parsed.files.artifactPath, verifyArtifactPath(repoRoot));
       assert.equal(parsed.files.reportPath, verifyReportPath(repoRoot));
+      assert.equal(parsed.files.debugArtifactPath, join(repoRoot, ".forge", "debug", "verify-debug.json"));
+      assert.equal(
+        parsed.files.debugVerificationCasesPath,
+        join(repoRoot, ".forge", "debug", "verification-cases.json"),
+      );
+      assert.equal(
+        parsed.files.debugStructuralFindingsPath,
+        join(repoRoot, ".forge", "debug", "structural-findings.json"),
+      );
+      assert.equal(parsed.files.debugStateModelsPath, join(repoRoot, ".forge", "debug", "state-models.json"));
+      assert.equal(parsed.files.debugTlaSpecsPath, join(repoRoot, ".forge", "debug", "tla-specs.json"));
+      assert.equal(parsed.files.debugTlcResultsPath, join(repoRoot, ".forge", "debug", "tlc-results.json"));
       assert.equal(parsed.startedAt, "2026-03-17T00:00:00.000Z");
       assert.equal(parsed.finishedAt, "2026-03-17T00:01:00.000Z");
       assert.equal(parsed.summary, planArtifact.planning_readiness.summary);
@@ -387,8 +453,24 @@ await runScenario(
       assert.equal(parsed.formal_verification.status, "not_run");
       assert.match(parsed.formal_verification.summary, /No formal verification cases/i);
       assert.deepEqual(parsed.formal_verification.caution_notes, []);
-      assert.equal(parsed.findings.length, 0);
-      assert.equal(parsed.constraints.length, 0);
+      assert.equal(parsed.findings.length, 1);
+      assert.equal(parsed.findings[0]?.lane, "structural");
+      assert.equal(parsed.findings[0]?.verification_case_id, "verify-case-001");
+      assert.equal(parsed.findings[0]?.verification_target_id, "verify-target-001");
+      assert.equal(parsed.findings[0]?.status, "passed");
+      assert.equal(parsed.findings[0]?.summary, "Structural verification passed for config_surface.");
+      assert.equal(parsed.findings[0]?.tla_spec_id, null);
+      assert.equal(parsed.findings[0]?.tlc_result_id, null);
+      assert.equal(parsed.findings[0]?.trace, null);
+      assert.deepEqual(parsed.findings[0]?.errors, []);
+      assert.equal(parsed.constraints.length, 1);
+      assert.equal(parsed.constraints[0]?.lane, "structural");
+      assert.equal(parsed.constraints[0]?.verification_case_id, "verify-case-001");
+      assert.equal(parsed.constraints[0]?.verification_target_id, "verify-target-001");
+      assert.equal(
+        parsed.constraints[0]?.summary,
+        "Keep validation visible: Config changes should keep contract validation visible.",
+      );
       assert.deepEqual(parsed.carry_forward, planArtifact.carry_forward);
       assert.equal(parsed.verification_diagnostics.usability_status, planArtifact.planning_diagnostics.usability_status);
       assert.deepEqual(parsed.verification_diagnostics.warning_items, planArtifact.planning_diagnostics.warning_items);
@@ -551,7 +633,7 @@ await runScenario(
 
       assert.deepEqual(Object.keys(artifact).sort(), [...REQUIRED_TOP_LEVEL_KEYS].sort());
 
-      const parsed = validateVerifyArtifact!(artifact) as Record<string, unknown>;
+      const parsed = validateVerifyArtifact!(artifact);
       const verificationCases = parsed.verification_cases as Array<Record<string, unknown>>;
       const formalVerification = parsed.formal_verification as Record<string, unknown>;
 
@@ -579,6 +661,26 @@ await runScenario(
         ["passed", "failed", "errored", "invalid_spec"],
       );
       assert.ok((formalVerification.caution_notes as string[]).length > 0);
+      assert.equal(parsed.files.debugArtifactPath, join(repoRoot, ".forge", "debug", "verify-debug.json"));
+      assert.equal(
+        parsed.files.debugVerificationCasesPath,
+        join(repoRoot, ".forge", "debug", "verification-cases.json"),
+      );
+      assert.equal(
+        parsed.files.debugStructuralFindingsPath,
+        join(repoRoot, ".forge", "debug", "structural-findings.json"),
+      );
+      assert.equal(parsed.files.debugStateModelsPath, join(repoRoot, ".forge", "debug", "state-models.json"));
+      assert.equal(parsed.files.debugTlaSpecsPath, join(repoRoot, ".forge", "debug", "tla-specs.json"));
+      assert.equal(parsed.files.debugTlcResultsPath, join(repoRoot, ".forge", "debug", "tlc-results.json"));
+      assert.ok(Array.isArray(parsed.findings));
+      assert.equal(parsed.findings[0]?.lane, "formal");
+      assert.equal(parsed.findings[1]?.lane, "formal");
+      assert.equal(parsed.findings[4]?.lane, "structural");
+      assert.ok(parsed.findings.some((finding) => finding.trace !== null));
+      assert.ok(parsed.findings.some((finding) => finding.errors.length > 0));
+      assert.ok(Array.isArray(parsed.constraints));
+      assert.equal(parsed.constraints[0]?.lane, "structural");
       assert.equal(
         verificationCases.filter((verificationCase) => verificationCase.formalDetails !== null).length,
         4,

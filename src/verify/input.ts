@@ -1,12 +1,22 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-import { REPORTS_DIRECTORY } from "../intake/constants.js";
+import { DEBUG_DIRECTORY, REPORTS_DIRECTORY } from "../intake/constants.js";
 import { resolveFilesystemRepoRoot, resolveOutputFilePath, resolveOutputRoot } from "../intake/path-policy.js";
 import { validatePlanArtifact } from "../plan/schema.js";
 import { PLAN_ARTIFACT_NAME } from "../plan/constants.js";
 import type { PlanArtifact } from "../plan/types.js";
-import { VERIFY_INPUT_TOO_WEAK, VERIFY_ARTIFACT_NAME, VERIFY_REPORT_NAME } from "./constants.js";
+import {
+  VERIFY_ARTIFACT_NAME,
+  VERIFY_DEBUG_ARTIFACT_NAME,
+  VERIFY_DEBUG_STATE_MODELS_NAME,
+  VERIFY_DEBUG_STRUCTURAL_FINDINGS_NAME,
+  VERIFY_DEBUG_TLA_SPECS_NAME,
+  VERIFY_DEBUG_TLC_RESULTS_NAME,
+  VERIFY_DEBUG_VERIFICATION_CASES_NAME,
+  VERIFY_INPUT_TOO_WEAK,
+  VERIFY_REPORT_NAME,
+} from "./constants.js";
 import type {
   LoadedVerifyFoundationInput,
   VerifyFoundationOptions,
@@ -170,6 +180,20 @@ export async function resolveVerifyOutputPaths(
     planArtifactPath: resolveOutputFilePath(outputRoot.outputRoot, PLAN_ARTIFACT_NAME),
     verifyArtifactPath: resolveOutputFilePath(outputRoot.outputRoot, VERIFY_ARTIFACT_NAME),
     verifyReportPath: resolveOutputFilePath(outputRoot.outputRoot, REPORTS_DIRECTORY, VERIFY_REPORT_NAME),
+    debugArtifactPath: resolveOutputFilePath(outputRoot.outputRoot, DEBUG_DIRECTORY, VERIFY_DEBUG_ARTIFACT_NAME),
+    debugVerificationCasesPath: resolveOutputFilePath(
+      outputRoot.outputRoot,
+      DEBUG_DIRECTORY,
+      VERIFY_DEBUG_VERIFICATION_CASES_NAME,
+    ),
+    debugStructuralFindingsPath: resolveOutputFilePath(
+      outputRoot.outputRoot,
+      DEBUG_DIRECTORY,
+      VERIFY_DEBUG_STRUCTURAL_FINDINGS_NAME,
+    ),
+    debugStateModelsPath: resolveOutputFilePath(outputRoot.outputRoot, DEBUG_DIRECTORY, VERIFY_DEBUG_STATE_MODELS_NAME),
+    debugTlaSpecsPath: resolveOutputFilePath(outputRoot.outputRoot, DEBUG_DIRECTORY, VERIFY_DEBUG_TLA_SPECS_NAME),
+    debugTlcResultsPath: resolveOutputFilePath(outputRoot.outputRoot, DEBUG_DIRECTORY, VERIFY_DEBUG_TLC_RESULTS_NAME),
   };
 }
 

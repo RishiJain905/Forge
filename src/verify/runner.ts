@@ -18,6 +18,7 @@ import {
   createVerifyArtifact,
   toVerifyArtifactJson,
 } from "./artifact.js";
+import { createVerifyDebugWrites, isVerifyDebugEnabled } from "./debug.js";
 import { buildVerifyFormalExecution } from "./formal.js";
 import { buildVerifyVerificationModel } from "./model.js";
 import { resolveVerifyReadiness } from "./readiness.js";
@@ -157,6 +158,7 @@ async function persistVerifyCommandOutputs(params: {
   reportPath: string;
   artifact: string;
   report: string;
+  debugWrites?: Array<{ filePath: string; contents: string }>;
 }): Promise<void> {
   await persistIntakeOutputs({
     criticalWrites: [
@@ -169,6 +171,7 @@ async function persistVerifyCommandOutputs(params: {
         contents: params.report,
       },
     ],
+    debugWrites: params.debugWrites,
   });
 }
 
@@ -230,11 +233,19 @@ export async function runVerifyCommand(
     const report = createVerifyReport(artifact);
 
     try {
+      const debugWrites = isVerifyDebugEnabled()
+        ? createVerifyDebugWrites({
+            artifact,
+            paths,
+          })
+        : undefined;
+
       await persistVerifyCommandOutputs({
         artifactPath: paths.verifyArtifactPath,
         reportPath: paths.verifyReportPath,
         artifact: toVerifyArtifactJson(artifact),
         report,
+        debugWrites,
       });
     } catch (error) {
       return {
