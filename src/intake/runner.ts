@@ -303,7 +303,6 @@ export async function runIntakeCommand(
       validationRecommendedUserActions,
     });
     const assembledResult = assembleIntakeResult({
-      taskInput,
       taskParserResult,
       repoScanResult,
       inferenceResult,

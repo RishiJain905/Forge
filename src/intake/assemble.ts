@@ -2,7 +2,6 @@ import type {
   AmbiguityAnalysisResult,
   AssembledIntakeResult,
   InferenceResult,
-  NormalizedTaskInput,
   RepoScanResult,
   TaskParserResult,
 } from "./types.js";
@@ -10,7 +9,6 @@ import { buildRiskAnalysisResult } from "./analysis.js";
 import { buildVerificationTargets } from "./verification-targets.js";
 
 export function assembleIntakeResult(params: {
-  taskInput: NormalizedTaskInput | null;
   taskParserResult: TaskParserResult;
   repoScanResult: RepoScanResult;
   inferenceResult: InferenceResult;

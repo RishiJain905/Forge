@@ -83,7 +83,6 @@ await runScenario(
     );
 
     const assembled = assembleIntakeResult({
-      taskInput,
       taskParserResult: {
         taskSpec: {
           goal: "Revise src/app.ts and tests/app.test.ts.",
