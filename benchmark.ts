@@ -1,46 +1,59 @@
-import { performance } from 'perf_hooks';
+import { rm, writeFile, mkdir } from "node:fs/promises";
+import * as path from "node:path";
 
-function addIfMissingOld(values: string[], value: string): void {
-  if (!values.includes(value)) {
-    values.push(value);
+async function cleanupPartialWritesBaseline(filePaths: string[]): Promise<void> {
+  for (const filePath of filePaths) {
+    await rm(filePath, { force: true });
   }
 }
 
-function addIfMissingNew(values: Set<string>, value: string): void {
-  values.add(value);
+async function cleanupPartialWritesOptimized(filePaths: string[]): Promise<void> {
+  await Promise.all(filePaths.map((filePath) => rm(filePath, { force: true })));
 }
 
-function runBenchmark() {
-  const iterations = 10000;
-  const numItems = 10000;
+async function runBenchmark() {
+  const NUM_FILES = 100;
+  const testDir = path.join(process.cwd(), "benchmark-tmp");
 
-  // Baseline (Array)
-  let start = performance.now();
-  let valuesOld: string[] = [];
-  for (let i = 0; i < numItems; i++) {
-    addIfMissingOld(valuesOld, `item${i}`);
-  }
-  for (let i = 0; i < iterations; i++) {
-    addIfMissingOld(valuesOld, `item${i}`); // Should be missing? No, should be duplicates to trigger includes O(N) worst case
-  }
-  let end = performance.now();
-  const oldTime = end - start;
+  await mkdir(testDir, { recursive: true });
 
-  // New (Set)
-  start = performance.now();
-  let valuesNew = new Set<string>();
-  for (let i = 0; i < numItems; i++) {
-    addIfMissingNew(valuesNew, `item${i}`);
-  }
-  for (let i = 0; i < iterations; i++) {
-    addIfMissingNew(valuesNew, `item${i}`);
-  }
-  end = performance.now();
-  const newTime = end - start;
+  // Create dummy files
+  const createFiles = async () => {
+    const files: string[] = [];
+    for (let i = 0; i < NUM_FILES; i++) {
+      const filePath = path.join(testDir, `file-${i}.txt`);
+      await writeFile(filePath, "test data");
+      files.push(filePath);
+    }
+    return files;
+  };
 
-  console.log(`Array includes: ${oldTime.toFixed(2)} ms`);
-  console.log(`Set add: ${newTime.toFixed(2)} ms`);
-  console.log(`Improvement: ${((oldTime - newTime) / oldTime * 100).toFixed(2)}%`);
+  // Run Baseline
+  let baselineTime = 0;
+  for (let iter = 0; iter < 5; iter++) {
+    const files = await createFiles();
+    const start = performance.now();
+    await cleanupPartialWritesBaseline(files);
+    const end = performance.now();
+    baselineTime += (end - start);
+  }
+  baselineTime /= 5;
+
+  // Run Optimized
+  let optimizedTime = 0;
+  for (let iter = 0; iter < 5; iter++) {
+    const files = await createFiles();
+    const start = performance.now();
+    await cleanupPartialWritesOptimized(files);
+    const end = performance.now();
+    optimizedTime += (end - start);
+  }
+  optimizedTime /= 5;
+
+  console.log(`Baseline (Sequential): ${baselineTime.toFixed(2)}ms`);
+  console.log(`Optimized (Concurrent): ${optimizedTime.toFixed(2)}ms`);
+
+  await rm(testDir, { recursive: true, force: true });
 }
 
-runBenchmark();
+runBenchmark().catch(console.error);
