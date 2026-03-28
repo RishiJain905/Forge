@@ -12,7 +12,7 @@ import type {
   IntakeFailureDetails,
   NormalizedTaskInput,
   RepoScanResult,
-  RiskAnalysis,
+
   RiskZone,
   ResolvedRuntimeOptions,
   TaskParserResult,
