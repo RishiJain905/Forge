@@ -366,7 +366,7 @@ function spawnProcess(command: string, args: string[], cwd: string): Promise<Pro
   return new Promise((resolve) => {
     const child = spawn(command, args, {
       cwd,
-      shell: process.platform === "win32",
+      shell: false, // Security: Disable shell execution to prevent command injection
       windowsHide: true,
       stdio: ["ignore", "pipe", "pipe"],
     });
