@@ -61,12 +61,14 @@ export async function persistIntakeOutputs(params: {
     return;
   }
 
-  for (const debugWrite of params.debugWrites) {
-    try {
-      await ensureParentDirectory(debugWrite.filePath);
-      await writeFile(debugWrite.filePath, debugWrite.contents, "utf8");
-    } catch {
-      // Internal debug output is best-effort and must not change the run result.
-    }
-  }
+  await Promise.all(
+    params.debugWrites.map(async (debugWrite) => {
+      try {
+        await ensureParentDirectory(debugWrite.filePath);
+        await writeFile(debugWrite.filePath, debugWrite.contents, "utf8");
+      } catch {
+        // Internal debug output is best-effort and must not change the run result.
+      }
+    }),
+  );
 }
