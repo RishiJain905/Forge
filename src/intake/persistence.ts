@@ -21,9 +21,7 @@ async function bootstrapDirectories(filePaths: string[]): Promise<void> {
 }
 
 async function cleanupPartialWrites(filePaths: string[]): Promise<void> {
-  for (const filePath of filePaths) {
-    await rm(filePath, { force: true });
-  }
+  await Promise.all(filePaths.map((filePath) => rm(filePath, { force: true })));
 }
 
 function normalizePersistenceError(error: unknown): PersistenceError {
