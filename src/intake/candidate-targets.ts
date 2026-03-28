@@ -225,11 +225,16 @@ function resolveExplicitCandidateTargets(
   }
 
   const enrichedTargets = [...explicitTargets];
+  const seenTargets = new Set<string>(
+    enrichedTargets.map((target) => `${target.path}:${target.kind}`)
+  );
 
   for (const sourceTarget of explicitTargets.filter((target) => target.kind === "source")) {
     for (const siblingTest of resolveSiblingTestTargets(sourceTarget, repoContext)) {
-      if (!hasCandidateTarget(enrichedTargets, siblingTest.path, siblingTest.kind)) {
+      const key = `${siblingTest.path}:${siblingTest.kind}`;
+      if (!seenTargets.has(key)) {
         enrichedTargets.push(siblingTest);
+        seenTargets.add(key);
       }
     }
   }
