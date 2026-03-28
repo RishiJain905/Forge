@@ -226,6 +226,9 @@ function resolveExplicitCandidateTargets(
   }
 
   const enrichedTargets = [...explicitTargets];
+  const seenTargets = new Set<string>(
+    enrichedTargets.map((target) => `${target.path}:${target.kind}`)
+  );
 
   const testsByStem = new Map<string, string[]>();
   for (const testFile of repoContext.testFiles) {
@@ -253,6 +256,7 @@ function resolveExplicitCandidateTargets(
       if (!seenTargets.has(key)) {
         seenTargets.add(key);
         enrichedTargets.push(siblingTest);
+        seenTargets.add(key);
       }
     }
   }
