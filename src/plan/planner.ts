@@ -158,16 +158,6 @@ function isManifestLikePath(filePath: string): boolean {
   );
 }
 
-function isTestLikePath(filePath: string): boolean {
-  const normalized = normalizePath(filePath);
-  return (
-    normalized.includes("/tests/") ||
-    normalized.includes("/__tests__/") ||
-    /\.test\./i.test(normalized) ||
-    /\.spec\./i.test(normalized)
-  );
-}
-
 function isSharedRiskPath(filePath: string): boolean {
   if (isManifestLikePath(filePath)) {
     return true;

@@ -232,8 +232,6 @@ export async function runIntakeCommand(
     let taskInput: NormalizedTaskInput | null = null;
     let failure: IntakeFailureDetails | null = null;
     let runtimeBlockingIssues = [...runtimeOptions.blockingIssues];
-    let runtimeWarnings = [...runtimeOptions.warnings];
-    let runtimeRecommendedUserActions = [...runtimeOptions.recommendedUserActions];
     let validationBlockingIssues: NextStepReadiness["blockingIssues"] = [];
     let validationWarnings: string[] = [];
     let validationRecommendedUserActions: string[] = [];

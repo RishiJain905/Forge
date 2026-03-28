@@ -6,7 +6,6 @@ import type { PlanArtifact } from "../src/plan/types.js";
 import {
   createTempRepo,
   disposeTempRepo,
-  fileExists,
   readJsonFile,
   readTextFile,
   runForgeBinary,

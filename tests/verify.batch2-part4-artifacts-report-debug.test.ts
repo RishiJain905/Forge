@@ -8,12 +8,10 @@ import {
   createTempRepo,
   disposeTempRepo,
   readJsonFile,
-  readTextFile,
   runForgeBinary,
   runForgePlanBinary,
   runForgeVerifyBinary,
   verifyArtifactPath,
-  verifyReportPath,
   writeRepoFile,
 } from "./support/forge-cli.js";
 import { buildFormalVerifyArtifactFixture } from "./support/verify-formal-fixtures.js";

@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
 
-import type { IntakeArtifact } from "../src/intake/types.js";
 import {
   createTempRepo,
   disposeTempRepo,

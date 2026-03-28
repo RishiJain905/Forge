@@ -2,7 +2,6 @@ import type {
   VerifyFoundationResult,
   VerifyStructuralExecutionResult,
   VerifyVerificationCase,
-  VerifyVerificationCategory,
   VerifyVerificationModel,
   VerifyVerificationTarget,
 } from "./types.js";

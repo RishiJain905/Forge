@@ -16,7 +16,6 @@ import {
   verifyReportPath,
   writeRepoFile,
 } from "./support/forge-cli.js";
-import { buildFormalVerifyArtifactFixture } from "./support/verify-formal-fixtures.js";
 
 type FormalVerifyArtifact = {
   status: "ready" | "blocked" | "failed";

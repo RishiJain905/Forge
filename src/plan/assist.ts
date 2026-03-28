@@ -3,7 +3,6 @@ import type {
   PlanAssistConflictZoneEdit,
   PlanAssistPlanItemEdit,
   PlanAssistResolution,
-  PlanAssistSuggestion,
   PlanFoundationResult,
   PlanModel,
   PlanningAssistHook,
