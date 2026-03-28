@@ -542,18 +542,16 @@ async function buildRepoSignals(
   const languages = detectLanguages(files);
   const manifestTexts = new Map<string, string | null>();
 
-  // Optimization: Read all manifest files concurrently instead of sequentially
-  // This reduces the I/O bottleneck when analyzing repositories with multiple manifest files
-  const manifestFilePromises = manifestFiles
+  const manifestReadPromises = manifestFiles
     .filter(shouldReadManifestText)
     .map(async (manifestFile) => {
       const text = await readManifestText(repoRoot, manifestFile);
       return { manifestFile, text };
     });
 
-  const resolvedManifestTexts = await Promise.all(manifestFilePromises);
+  const manifestResults = await Promise.all(manifestReadPromises);
 
-  for (const { manifestFile, text } of resolvedManifestTexts) {
+  for (const { manifestFile, text } of manifestResults) {
     manifestTexts.set(manifestFile, text);
   }
 

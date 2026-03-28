@@ -15,15 +15,17 @@ async function ensureParentDirectory(filePath: string): Promise<void> {
 async function bootstrapDirectories(filePaths: string[]): Promise<void> {
   const directories = [...new Set(filePaths.map((filePath) => path.dirname(filePath)))];
 
-  for (const directory of directories) {
-    await mkdir(directory, { recursive: true });
-  }
+  // Optimization: Parallelize directory creation to reduce I/O waiting time.
+  // Using Promise.all with { recursive: true } is safe since Node.js handles
+  // concurrent creations of identical paths correctly with this flag.
+  // Expected impact: Faster initial setup when multiple output directories are needed.
+  await Promise.all(
+    directories.map((directory) => mkdir(directory, { recursive: true }))
+  );
 }
 
 async function cleanupPartialWrites(filePaths: string[]): Promise<void> {
-  for (const filePath of filePaths) {
-    await rm(filePath, { force: true });
-  }
+  await Promise.all(filePaths.map((filePath) => rm(filePath, { force: true })));
 }
 
 function normalizePersistenceError(error: unknown): PersistenceError {
@@ -59,12 +61,14 @@ export async function persistIntakeOutputs(params: {
     return;
   }
 
-  for (const debugWrite of params.debugWrites) {
-    try {
-      await ensureParentDirectory(debugWrite.filePath);
-      await writeFile(debugWrite.filePath, debugWrite.contents, "utf8");
-    } catch {
-      // Internal debug output is best-effort and must not change the run result.
-    }
-  }
+  await Promise.all(
+    params.debugWrites.map(async (debugWrite) => {
+      try {
+        await ensureParentDirectory(debugWrite.filePath);
+        await writeFile(debugWrite.filePath, debugWrite.contents, "utf8");
+      } catch {
+        // Internal debug output is best-effort and must not change the run result.
+      }
+    }),
+  );
 }
