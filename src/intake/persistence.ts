@@ -15,9 +15,13 @@ async function ensureParentDirectory(filePath: string): Promise<void> {
 async function bootstrapDirectories(filePaths: string[]): Promise<void> {
   const directories = [...new Set(filePaths.map((filePath) => path.dirname(filePath)))];
 
-  for (const directory of directories) {
-    await mkdir(directory, { recursive: true });
-  }
+  // Optimization: Parallelize directory creation to reduce I/O waiting time.
+  // Using Promise.all with { recursive: true } is safe since Node.js handles
+  // concurrent creations of identical paths correctly with this flag.
+  // Expected impact: Faster initial setup when multiple output directories are needed.
+  await Promise.all(
+    directories.map((directory) => mkdir(directory, { recursive: true }))
+  );
 }
 
 async function cleanupPartialWrites(filePaths: string[]): Promise<void> {
