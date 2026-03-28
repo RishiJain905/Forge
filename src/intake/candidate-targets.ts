@@ -123,13 +123,14 @@ function textMentionsManifest(text: string, filePath: string): boolean {
 function resolveSiblingTestTargets(
   sourceTarget: CandidateTarget,
   repoContext: RepoContext,
+  testsByStem?: Map<string, string[]>,
 ): CandidateTarget[] {
   const sourceStem = normalizeFileStem(sourceTarget.path);
-  const siblingTests = repoContext.testFiles.filter(
-    (testFile) => normalizeFileStem(testFile) === sourceStem,
-  );
+  const siblingTestPaths = testsByStem
+    ? (testsByStem.get(sourceStem) || [])
+    : repoContext.testFiles.filter((testFile) => normalizeFileStem(testFile) === sourceStem);
 
-  return siblingTests.map((testFile) =>
+  return siblingTestPaths.map((testFile) =>
     buildCandidateTarget(
       testFile,
       "test",
@@ -229,10 +230,31 @@ function resolveExplicitCandidateTargets(
     enrichedTargets.map((target) => `${target.path}:${target.kind}`)
   );
 
-  for (const sourceTarget of explicitTargets.filter((target) => target.kind === "source")) {
-    for (const siblingTest of resolveSiblingTestTargets(sourceTarget, repoContext)) {
+  const testsByStem = new Map<string, string[]>();
+  for (const testFile of repoContext.testFiles) {
+    const stem = normalizeFileStem(testFile);
+    let tests = testsByStem.get(stem);
+    if (!tests) {
+      tests = [];
+      testsByStem.set(stem, tests);
+    }
+    tests.push(testFile);
+  }
+
+  const seenTargets = new Set<string>();
+  for (const t of enrichedTargets) {
+    seenTargets.add(`${t.path}:${t.kind}`);
+  }
+
+  for (const sourceTarget of explicitTargets) {
+    if (sourceTarget.kind !== "source") {
+      continue;
+    }
+
+    for (const siblingTest of resolveSiblingTestTargets(sourceTarget, repoContext, testsByStem)) {
       const key = `${siblingTest.path}:${siblingTest.kind}`;
       if (!seenTargets.has(key)) {
+        seenTargets.add(key);
         enrichedTargets.push(siblingTest);
         seenTargets.add(key);
       }

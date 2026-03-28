@@ -382,14 +382,8 @@ function extractRiskyPhrases(taskSpec: IntakeTaskSpec): string[] {
   return dedupeStable(riskyPhrases);
 }
 
-function addIfMissing(values: string[], value: string): void {
-  if (!values.includes(value)) {
-    values.push(value);
-  }
-}
-
 function buildImplementationNecessities(taskSpec: IntakeTaskSpec): string[] {
-  const necessities: string[] = [];
+  const necessities = new Set<string>();
   const analysisText = buildAnalysisText(taskSpec);
   const riskyPhrases = new Set(taskSpec.riskyPhrases ?? []);
   const referencedPaths = taskSpec.mentionedPaths ?? [];
@@ -401,19 +395,19 @@ function buildImplementationNecessities(taskSpec: IntakeTaskSpec): string[] {
     analysisText.includes(".spec.") ||
     (taskSpec.acceptanceCriteria ?? []).some((criterion) => /\btest(s|ing)?\b/i.test(criterion))
   ) {
-    addIfMissing(necessities, "Update or add tests for the impacted behavior.");
+    necessities.add("Update or add tests for the impacted behavior.");
   }
 
   if (/package\.json|tsconfig|config|manifest/i.test(analysisText)) {
-    addIfMissing(necessities, "Review manifest or configuration impact before implementation.");
+    necessities.add("Review manifest or configuration impact before implementation.");
   }
 
   if (riskyPhrases.has("migration") || /\bmigrat(?:e|ion)\b/i.test(analysisText)) {
-    addIfMissing(necessities, "Plan migration sequencing before implementation.");
+    necessities.add("Plan migration sequencing before implementation.");
   }
 
   if (riskyPhrases.has("ownership") || riskyPhrases.has("parallel") || /\bownership\b|\bparallel(?:ize|ization)?\b/i.test(analysisText)) {
-    addIfMissing(necessities, "Coordinate ownership and parallelization before implementation.");
+    necessities.add("Coordinate ownership and parallelization before implementation.");
   }
 
   if (
@@ -421,22 +415,22 @@ function buildImplementationNecessities(taskSpec: IntakeTaskSpec): string[] {
     /\bkeep\b.*\balign(?:ed|ment)?\b/i.test(analysisText) ||
     (referencedPaths.length > 1 && testPaths.length > 0)
   ) {
-    addIfMissing(necessities, "Coordinate ownership and parallelization before implementation.");
+    necessities.add("Coordinate ownership and parallelization before implementation.");
   }
 
   if (riskyPhrases.has("retry") || /\bretry\b/i.test(analysisText)) {
-    addIfMissing(necessities, "Verify retry behavior before implementation.");
+    necessities.add("Verify retry behavior before implementation.");
   }
 
   if (riskyPhrases.has("stale write") || /\bstale write\b/i.test(analysisText)) {
-    addIfMissing(necessities, "Verify stale write handling before implementation.");
+    necessities.add("Verify stale write handling before implementation.");
   }
 
   if (riskyPhrases.has("api contract") || /\bapi contract\b/i.test(analysisText)) {
-    addIfMissing(necessities, "Verify API contract impact before implementation.");
+    necessities.add("Verify API contract impact before implementation.");
   }
 
-  return necessities;
+  return Array.from(necessities);
 }
 
 function detectConstraintConflictItems(taskSpec: IntakeTaskSpec): {
@@ -714,8 +708,8 @@ export function buildTaskParserResult(
   });
   const ambiguityItems = toAmbiguityItems(openQuestions);
   const warningItems = toWarningItems(openQuestions);
-  const parserWarnings: string[] = [];
-  const recommendedUserActions = [...taskInput.recommendedUserActions];
+  const parserWarnings = new Set<string>();
+  const recommendedUserActions = new Set<string>(taskInput.recommendedUserActions);
   const constraintConflictItems = detectConstraintConflictItems(taskSpec);
   const parserAmbiguities = dedupeStable([
     ...taskInput.ambiguities,
@@ -723,12 +717,10 @@ export function buildTaskParserResult(
   ]);
 
   if (promptIsThin) {
-    addIfMissing(
-      parserWarnings,
+    parserWarnings.add(
       "Prompt mode input is too short to be actionable without follow-up. Clarify the goal, relevant files, or acceptance criteria.",
     );
-    addIfMissing(
-    recommendedUserActions,
+    recommendedUserActions.add(
       "Expand the prompt with the intended files, behavior changes, or acceptance criteria before planning.",
     );
   }
@@ -742,7 +734,7 @@ export function buildTaskParserResult(
   }
 
   for (const action of constraintConflictItems.recommendedUserActions) {
-    addIfMissing(recommendedUserActions, action);
+    recommendedUserActions.add(action);
   }
 
   return {
@@ -762,6 +754,6 @@ export function buildTaskParserResult(
     warningItems,
     ambiguities: parserAmbiguities,
     warnings: dedupeStable([...parserWarnings]),
-    recommendedUserActions,
+    recommendedUserActions: Array.from(recommendedUserActions),
   };
 }
