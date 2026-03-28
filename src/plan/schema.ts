@@ -6,16 +6,15 @@ import type { PlanArtifact, PlanFoundationResult, PlanItem } from "./types.js";
 import {
   FORGE_PLAN_FULL_COMMAND,
   FORGE_PLAN_STAGE,
-  FORGE_PLAN_COMMAND,
   PLAN_CARRY_FORWARD_CONCERN_EFFECTS,
   PLAN_CARRY_FORWARD_CONCERN_SOURCES,
   PLAN_DEPENDENCY_TYPES,
   PLAN_ITEM_CATEGORIES,
   PLAN_ITEM_REQUIRED_FIELDS,
   PLAN_PARALLELIZATION_SIGNALS,
-  PLAN_RISK_LEVELS,
   PLAN_READINESS_CONSTRAINING_EFFECTS,
   PLAN_READINESS_STATUSES,
+  PLAN_RISK_LEVELS,
   PLAN_TEST_OBLIGATION_CATEGORIES,
   PLAN_VERIFICATION_TARGET_CATEGORIES,
   STEP2_BOUNDARY_POLICY,
@@ -105,7 +104,7 @@ export const planItemSchema = z.object({
 }).strict();
 
 const planBoundaryPolicySchema = z.object({
-  command: z.literal(`forge ${FORGE_PLAN_COMMAND}`),
+  command: z.literal(FORGE_PLAN_FULL_COMMAND),
   stage: z.literal(FORGE_PLAN_STAGE),
   purpose: z.string().min(1),
   authoritativeInputs: z.array(z.string().min(1)).min(1),
@@ -332,7 +331,7 @@ export const PLAN_ARTIFACT_TOP_LEVEL_KEYS = [
 ] as const satisfies readonly (keyof PlanArtifact)[];
 
 export const planFoundationSchema = z.object({
-  command: z.literal(`forge ${FORGE_PLAN_COMMAND}`),
+  command: z.literal(FORGE_PLAN_FULL_COMMAND),
   stage: z.literal(FORGE_PLAN_STAGE),
   purpose: z.string().min(1),
   deterministicFirst: z.object({
