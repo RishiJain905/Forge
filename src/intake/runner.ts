@@ -297,7 +297,6 @@ export async function runIntakeCommand(
       inferenceResult,
       runtimeOptions,
       optionalReasoningResult,
-      failure,
       validationBlockingIssues: [...runtimeBlockingIssues, ...validationBlockingIssues],
       validationWarnings,
       validationRecommendedUserActions,

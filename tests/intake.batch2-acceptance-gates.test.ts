@@ -436,7 +436,6 @@ await runScenario(
         repoScanResult,
         inferenceResult,
         runtimeOptions: resolveRuntimeOptions({}),
-        failure: null,
         validationBlockingIssues: [],
         validationWarnings: [],
         validationRecommendedUserActions: [],

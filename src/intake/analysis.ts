@@ -9,7 +9,6 @@ import type {
   AmbiguityAnalysisResult,
   BlockingIssue,
   InferenceResult,
-  IntakeFailureDetails,
   NormalizedTaskInput,
   RepoScanResult,
   RiskAnalysis,
@@ -440,7 +439,6 @@ export function buildAmbiguityAnalysisResult(params: {
   inferenceResult: InferenceResult;
   runtimeOptions: ResolvedRuntimeOptions;
   optionalReasoningResult?: OptionalReasoningResolution;
-  failure: IntakeFailureDetails | null;
   validationBlockingIssues: BlockingIssue[];
   validationWarnings: string[];
   validationRecommendedUserActions: string[];
