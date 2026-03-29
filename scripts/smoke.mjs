@@ -437,6 +437,39 @@ async function main() {
     assert.match(warningPlanReport, /`forge verify` gate:/);
     assert.match(warningPlanReport, /Planning Assist:\s+not_attempted/);
 
+    const warningVerifyResult = spawnSync(process.execPath, [
+      entryPointPath,
+      "verify",
+      "--repo",
+      tempRepo,
+    ], {
+      cwd: tempRepo,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+      },
+    });
+
+    if (warningVerifyResult.error) {
+      throw warningVerifyResult.error;
+    }
+
+    assert.equal(warningVerifyResult.status, 0);
+    assert.match(warningVerifyResult.stdout, /Status: ready/);
+    assertNoVerifyReportHeadings(warningVerifyResult.stdout);
+    assertNoVerifyReportHeadings(warningVerifyResult.stderr);
+
+    const warningVerifyArtifact = JSON.parse(await readFile(verifyArtifactPath, "utf8"));
+    const warningVerifyReport = await readFile(verifyReportPath, "utf8");
+
+    assert.equal(warningVerifyArtifact.status, "ready");
+    assert.equal(warningVerifyArtifact.verification_readiness.ready, true);
+    assert.equal(warningVerifyArtifact.verification_readiness.status, "ready_with_warnings");
+    assert.ok(warningVerifyArtifact.verification_readiness.warning_items.length > 0);
+    assert.ok(warningVerifyArtifact.verification_diagnostics.warning_items.length > 0);
+    assert.match(warningVerifyReport, /## Carry-Forward Context/);
+    assert.match(warningVerifyReport, /## Verification Readiness/);
+
     const assistFallbackResult = spawnSync(process.execPath, [
       entryPointPath,
       "intake",

@@ -350,6 +350,12 @@
   - Wired the previously omitted Step 3 suites `verify.part2-plan-consumption-structural-lane`, `verify.debug-output`, and `verify.batch2-part4-artifacts-report-debug` plus the new Part 5 runnable-milestone suite into the default `npm.cmd test` gate.
   - Kept `scripts/smoke.mjs` environment-neutral while moving TLC-passed milestone proof into the dedicated Stage 5 regression instead of requiring TLC configuration for smoke runs.
   - Updated `README.md`, `progress.md`, and `S3-B2-Done/p5-done-summary.md` so Step 3 Batch 2 Part 5 and the full Batch 2 milestone are documented and traceable.
+- Batch 3.01: `part-1-batch3-goal-finish-line-and-do-not-touch.md` (Step 3)
+  - Treated Step 3 Batch 3 Part 1 as the umbrella finish-and-freeze pass over the existing `forge verify` runtime instead of reopening the orchestrator or pulling Part 2-5 hardening work forward.
+  - Expanded the Step 3 boundary contract with an explicit freeze goal, finish-line bullets, the Part 1 required implementation-task list, and the remaining do-not-touch guardrails for future-platform drift, aesthetic refactors, large abstractions, and non-verification execution platforms.
+  - Added `tests/verify.batch3-freeze-criteria.test.ts`, tightened `tests/verify.goal-and-boundaries.test.ts`, and extended `scripts/smoke.mjs` so grounded, warning-heavy, repeated-run, and debug-output verify behavior now anchor the Batch 3 Part 1 finish line.
+  - Kept the public `forge verify` CLI surface and the top-level `verify.json` / `verify-report.md` contracts stable while letting the stronger finish-and-freeze wording flow through the existing verify purpose and boundary surfaces.
+  - Updated `README.md`, `progress.md`, and `S3-B3-Done/p1-done-summary.md` so Step 3 Batch 3 Part 1 is documented and traceable.
 
 ## Current Branch State
 - `dev` includes the completed Step 1 work through Batch 4.05, including the frozen Step 2 handoff contract from Intake.
@@ -372,6 +378,7 @@
 - `dev` now includes Step 3 Batch 2 Part 5, including full default test-gate coverage for the shipped Step 3 Batch 2 suites and a dedicated runnable-milestone regression that proves the packaged `forge verify` path can reach TLC-passed end-to-end verification for the initial high-value formal subset.
 - `dev` now treats Step 3 Batch 1 as complete for V1 while keeping optional verify debug artifacts internal and gated behind `FORGE_VERIFY_DEBUG=1`.
 - `dev` now treats Step 3 Batch 2 as complete for V1 milestone purposes, with later Step 3 work reserved for hardening and freeze follow-up rather than first-time CLI wiring or runnable-milestone delivery.
+- `dev` now includes Step 3 Batch 3 Part 1, including the explicit finish-and-freeze mission, dedicated freeze metadata in the Step 3 boundary contract, Batch 3 Part 1 freeze coverage, and stronger warning-grade verify smoke coverage while keeping the public verify surface stable.
 
 ## Verification
 - `npm.cmd test`
@@ -392,4 +399,5 @@
 - Step 3 Batch 2 Part 4 is complete.
 - Step 3 Batch 2 Part 5 is complete.
 - Step 3 Batch 2 is complete.
-- Next implementation work should move to later Step 3 hardening and freeze follow-up once that spec is written.
+- Step 3 Batch 3 Part 1 is complete.
+- Next implementation work should move to Step 3 Batch 3 Part 2: `part-2-tier2-formal-case-expansion-and-tlc-hardening.md`.

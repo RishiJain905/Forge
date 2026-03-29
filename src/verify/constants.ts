@@ -21,23 +21,34 @@ export const VERIFY_TLA_SPEC_GENERATION_STATUSES = [
 ] as const;
 
 export const STEP3_VERIFY_PURPOSE =
-  "Make forge verify run through the real Step 3 pipeline and produce usable verification outputs by consuming Step 2 planning output through structural verification and selective formal TLA+/TLC-backed verification for risky coordination and workflow logic." as const;
+  "Finish forge verify as a V1-complete verification stage and freeze it except for future bug fixes by producing stable verification outputs from persisted Step 2 planning output through deterministic structural verification and selective formal TLA+/TLC-backed verification for risky coordination and workflow logic." as const;
+
+export const STEP3_BATCH3_FREEZE_GOAL =
+  "Finish Step 3 as a V1-complete verification stage and freeze it except for future bug fixes." as const;
+
+export const STEP3_BATCH3_FINISH_LINE = [
+  "`forge verify` works reliably",
+  "`.forge/verify.json` is contract-stable",
+  "`.forge/reports/verify-report.md` is useful and consistent",
+  "optional debug verification artifacts can be emitted in a stable way",
+  "warning/failure/readiness behavior is predictable",
+  "TLC pass/fail/error/partial semantics are stable",
+  "Tier 1 and Tier 2 formal cases give meaningful V1 coverage",
+  "tests are strong enough that only bug-fix work should remain",
+  "Step 4 can consume Step 3 output without guessing",
+] as const;
+
+export const STEP3_BATCH3_REQUIRED_IMPLEMENTATION_TASKS = [
+  "close remaining Step 3 gaps",
+  "harden warnings, failures, readiness, and debug visibility",
+  "harden TLC semantics and trace handling",
+  "implement Tier 2 formal coverage",
+  "align outputs for clean Step 4 consumption",
+  "harden tests and freeze criteria",
+] as const;
 
 export const STEP3_IMPLEMENTATION_PRIORITIES = [
-  "verification target/case construction",
-  "structural verification lane",
-  "formal lane foundations",
-  "real TLA+ generation",
-  "real TLC execution for the selected high-value subset",
-  "machine-readable artifact generation",
-  "human-readable verification report",
-  "stable verification orchestration",
-  "real tests for implemented behavior",
-  "optional lightweight debug artifacts",
-  "safe cleanup inside Step 3",
-  "broad polish for every edge case",
-  "freeze-quality hardening",
-  "expanding formal coverage too widely before the first subset is stable",
+  ...STEP3_BATCH3_REQUIRED_IMPLEMENTATION_TASKS,
 ] as const;
 
 export const STEP3_DETERMINISTIC_FIRST_NOTES = [
@@ -45,6 +56,7 @@ export const STEP3_DETERMINISTIC_FIRST_NOTES = [
   "Treat Step 2 plan structure, carried-forward uncertainty, and planning readiness as authoritative verification inputs.",
   "Keep target selection, lane assignment, and formal-lane entry deterministic-first so optional explanation can remain bounded later.",
   "Keep one real orchestration path from persisted Step 2 output to persisted verify outputs.",
+  "Treat Batch 3 as the finish-and-freeze pass over the existing Step 3 runtime instead of a reason to start Step 4 behavior early.",
 ] as const;
 
 export const STEP3_ALLOWED_SIDE_EFFECTS = [
@@ -62,6 +74,7 @@ export const STEP3_DEFERRED_CAPABILITIES = [
   "forge integrate",
   "interactive shell mode",
   "memory backends",
+  "provider-specific execution platforms unrelated to verification",
   "universal business-logic verification",
   "freeform LLM verification orchestration",
 ] as const;
@@ -78,6 +91,8 @@ export const STEP3_DISALLOWED_CAPABILITIES = [
   "claim proofs where TLC did not validate the case",
   "pretend TLA+/TLC ran when they did not",
   "treat all plan work as equally worthy of formal modeling",
+  "rename files for aesthetics only",
+  "introduce large new abstractions",
   "redesign Step 3 architecture without strong reason",
 ] as const;
 
@@ -178,7 +193,10 @@ export interface Step3BoundaryPolicy {
   command: string;
   stage: string;
   purpose: string;
+  freezeGoal: string;
+  finishLine: readonly string[];
   implementationPriorities: readonly string[];
+  requiredImplementationTasks: readonly string[];
   authoritativeInputs: readonly string[];
   deterministicFirst: true;
   allowedSideEffects: readonly string[];
@@ -192,7 +210,10 @@ export const STEP3_BOUNDARY_POLICY: Step3BoundaryPolicy = {
   command: FORGE_VERIFY_FULL_COMMAND,
   stage: FORGE_VERIFY_STAGE,
   purpose: STEP3_VERIFY_PURPOSE,
+  freezeGoal: STEP3_BATCH3_FREEZE_GOAL,
+  finishLine: STEP3_BATCH3_FINISH_LINE,
   implementationPriorities: STEP3_IMPLEMENTATION_PRIORITIES,
+  requiredImplementationTasks: STEP3_BATCH3_REQUIRED_IMPLEMENTATION_TASKS,
   authoritativeInputs: [
     ".forge/plan.json",
     "source_intake",
