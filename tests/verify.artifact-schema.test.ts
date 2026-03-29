@@ -13,6 +13,7 @@ import {
   STEP3_VERIFY_PURPOSE,
   VERIFY_FORMAL_ENTRY_CRITERIA,
   VERIFY_FORMAL_FOCUS_AREAS,
+  VERIFY_FORMAL_SCENARIO_KINDS,
   VERIFY_FORMAL_TOOLING,
   VERIFY_STATE_MODEL_REQUIRED_FIELDS,
   VERIFY_STRUCTURAL_FOCUS_AREAS,
@@ -279,6 +280,7 @@ function createVerifyArtifactFixture(repoRoot: string, planArtifact: PlanArtifac
     },
     formal_lane_contract: {
       tooling: [...VERIFY_FORMAL_TOOLING],
+      scenarioKinds: [...VERIFY_FORMAL_SCENARIO_KINDS],
       entryCriteria: [...VERIFY_FORMAL_ENTRY_CRITERIA],
       stateModelRequiredFields: [...VERIFY_STATE_MODEL_REQUIRED_FIELDS],
       tlcStatuses: [...VERIFY_TLC_STATUSES],
@@ -439,6 +441,7 @@ await runScenario(
       assert.deepEqual(parsed.verification_target_contract.formalFocusAreas, [...VERIFY_FORMAL_FOCUS_AREAS]);
       assert.deepEqual(parsed.verification_target_contract.supportedLanes, [...VERIFY_SUPPORTED_LANES]);
       assert.deepEqual(parsed.formal_lane_contract.tooling, [...VERIFY_FORMAL_TOOLING]);
+      assert.deepEqual(parsed.formal_lane_contract.scenarioKinds, [...VERIFY_FORMAL_SCENARIO_KINDS]);
       assert.deepEqual(parsed.formal_lane_contract.entryCriteria, [...VERIFY_FORMAL_ENTRY_CRITERIA]);
       assert.deepEqual(parsed.formal_lane_contract.stateModelRequiredFields, [...VERIFY_STATE_MODEL_REQUIRED_FIELDS]);
       assert.deepEqual(parsed.formal_lane_contract.tlcStatuses, [...VERIFY_TLC_STATUSES]);

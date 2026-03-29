@@ -356,6 +356,12 @@
   - Added `tests/verify.batch3-freeze-criteria.test.ts`, tightened `tests/verify.goal-and-boundaries.test.ts`, and extended `scripts/smoke.mjs` so grounded, warning-heavy, repeated-run, and debug-output verify behavior now anchor the Batch 3 Part 1 finish line.
   - Kept the public `forge verify` CLI surface and the top-level `verify.json` / `verify-report.md` contracts stable while letting the stronger finish-and-freeze wording flow through the existing verify purpose and boundary surfaces.
   - Updated `README.md`, `progress.md`, and `S3-B3-Done/p1-done-summary.md` so Step 3 Batch 3 Part 1 is documented and traceable.
+- Batch 3.02: `part-2-tier2-formal-case-expansion-and-tlc-hardening.md` (Step 3)
+  - Expanded the Step 3 formal lane from one formal case per supported category into deterministic scenario-specific Tier 1 plus Tier 2 formal cases, while keeping the public `forge verify` CLI surface and the top-level `verify.json` / `verify-report.md` contracts stable.
+  - Added stable nested formal `scenario_kind` metadata across the formal lane contract, verification cases, state models, generated TLA specs, and TLC results so Tier 2 case coverage is machine-readable instead of title-only.
+  - Hardened TLC classification and readiness handling with explicit `inconclusive` support, while keeping `failed`, `errored`, and `invalid_spec` blocking and keeping `not_run` plus `inconclusive` warning-grade and explicitly unresolved.
+  - Extended verify fixtures and regression coverage so Step 3 now proves deterministic multi-case formal fan-out, scenario-specific Tier 2 model semantics, and honest trace/caution behavior without changing the frozen top-level contract.
+  - Updated `README.md`, `progress.md`, and `S3-B3-Done/p2-done-summary.md` so Step 3 Batch 3 Part 2 is documented and traceable.
 
 ## Current Branch State
 - `dev` includes the completed Step 1 work through Batch 4.05, including the frozen Step 2 handoff contract from Intake.
@@ -379,6 +385,7 @@
 - `dev` now treats Step 3 Batch 1 as complete for V1 while keeping optional verify debug artifacts internal and gated behind `FORGE_VERIFY_DEBUG=1`.
 - `dev` now treats Step 3 Batch 2 as complete for V1 milestone purposes, with later Step 3 work reserved for hardening and freeze follow-up rather than first-time CLI wiring or runnable-milestone delivery.
 - `dev` now includes Step 3 Batch 3 Part 1, including the explicit finish-and-freeze mission, dedicated freeze metadata in the Step 3 boundary contract, Batch 3 Part 1 freeze coverage, and stronger warning-grade verify smoke coverage while keeping the public verify surface stable.
+- `dev` now includes Step 3 Batch 3 Part 2, including deterministic scenario-specific Tier 1 plus Tier 2 formal-case fan-out, nested `scenario_kind` metadata across formal outputs, explicit `inconclusive` TLC handling, and stronger formal-lane regression coverage while keeping the public verify surface stable.
 
 ## Verification
 - `npm.cmd test`
@@ -400,4 +407,5 @@
 - Step 3 Batch 2 Part 5 is complete.
 - Step 3 Batch 2 is complete.
 - Step 3 Batch 3 Part 1 is complete.
-- Next implementation work should move to Step 3 Batch 3 Part 2: `part-2-tier2-formal-case-expansion-and-tlc-hardening.md`.
+- Step 3 Batch 3 Part 2 is complete.
+- Next implementation work should move to Step 3 Batch 3 Part 3: `part-3-artifact-report-debug-output-and-readiness-hardening.md`.

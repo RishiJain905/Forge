@@ -1,6 +1,7 @@
 import type {
   VerifyFoundationResult,
   VerifyLane,
+  VerifyFormalScenarioKind,
   VerifyTargetRiskSource,
   VerifyVerificationCase,
   VerifyVerificationCategory,
@@ -10,6 +11,7 @@ import type {
 import {
   buildVerifyFormalBaseCautionNotes,
   buildVerifyFormalEntryCriteria,
+  getVerifyFormalScenarioKinds,
   isSupportedFormalCategory,
 } from "./formal.js";
 
@@ -297,7 +299,19 @@ function buildCaseGoal(target: VerifyVerificationTarget, lane: VerifyLane): stri
   return `Check ${target.category} structurally against the Step 2 dependency, conflict, and parallelization signals.`;
 }
 
-function buildCaseSummary(target: VerifyVerificationTarget, lane: VerifyLane): string {
+function buildFormalCaseTitle(target: VerifyVerificationTarget, scenarioKind: VerifyFormalScenarioKind): string {
+  return `${target.title} (${scenarioKind})`;
+}
+
+function buildCaseSummary(
+  target: VerifyVerificationTarget,
+  lane: VerifyLane,
+  scenarioKind?: VerifyFormalScenarioKind,
+): string {
+  if (lane === "formal" && scenarioKind) {
+    return `Selected for formal verification in Part 3; execution has not run yet for ${target.category} scenario ${scenarioKind}.`;
+  }
+
   return `Selected for ${lane} verification in Part 3; execution has not run yet for ${target.category}.`;
 }
 
@@ -633,6 +647,44 @@ export function buildVerifyVerificationModel(
     const targetCaseIds: string[] = [];
 
     for (const lane of [...target.candidateLanes].sort((left, right) => structuralLaneOrder[left] - structuralLaneOrder[right])) {
+      if (lane === "formal") {
+        for (const scenarioKind of getVerifyFormalScenarioKinds(target.category)) {
+          const caseId = `verify-case-${(cases.length + 1).toString().padStart(3, "0")}`;
+          targetCaseIds.push(caseId);
+          cases.push({
+            id: caseId,
+            verificationTargetId: target.id,
+            title: buildFormalCaseTitle(target, scenarioKind),
+            category: target.category,
+            sourcePlanItemIds: [...target.sourcePlanItemIds],
+            lanes: [lane],
+            goal: `Model ${target.category} scenario ${scenarioKind} formally and preserve traceability to the originating Step 2 plan items.`,
+            status: "not_run",
+            summary: buildCaseSummary(target, lane, scenarioKind),
+            findings: [],
+            mitigations: [],
+            constraints: [],
+            traceabilityNotes: [...target.traceabilityNotes],
+            formalDetails: {
+              enteredFormalLane: true,
+              entryCriteria: buildVerifyFormalEntryCriteria(
+                target.category,
+                target.sourceRiskSources,
+                target.sourcePlanItemIds,
+              ),
+              stateModelId: null,
+              tlaSpecId: null,
+              tlcResultId: null,
+              scenarioKind,
+              cautionNotes: [...baseFormalCautionNotes],
+              trace: null,
+              errors: [],
+            },
+          });
+        }
+        continue;
+      }
+
       const caseId = `verify-case-${(cases.length + 1).toString().padStart(3, "0")}`;
       targetCaseIds.push(caseId);
       cases.push({
@@ -649,22 +701,7 @@ export function buildVerifyVerificationModel(
         mitigations: [],
         constraints: [],
         traceabilityNotes: [...target.traceabilityNotes],
-        formalDetails: lane === "formal"
-          ? {
-              enteredFormalLane: true,
-              entryCriteria: buildVerifyFormalEntryCriteria(
-                target.category,
-                target.sourceRiskSources,
-                target.sourcePlanItemIds,
-              ),
-              stateModelId: null,
-              tlaSpecId: null,
-              tlcResultId: null,
-              cautionNotes: [...baseFormalCautionNotes],
-              trace: null,
-              errors: [],
-            }
-          : null,
+        formalDetails: null,
       });
     }
 

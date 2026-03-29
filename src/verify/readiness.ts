@@ -108,6 +108,12 @@ function buildExecutionIssues(params: {
         });
       }
       break;
+    case "inconclusive":
+      warningItems.push({
+        code: "FORMAL_TLC_INCONCLUSIVE",
+        message: "Formal verification ran, but TLC returned an inconclusive verdict and the result remains unresolved.",
+      });
+      break;
     case "failed":
       blockingItems.push({
         code: "FORMAL_TLC_FAILED",
@@ -187,6 +193,15 @@ function buildSummary(params: {
       `and ${params.structuralExecution.structuralVerification.constraints.length} structural constraint(s) still need to be carried forward.`,
     ].join(" ");
   }
+  if (formalCaseCount > 0 && params.formalExecution.formalVerification.status === "inconclusive") {
+    return [
+      "`forge verify` can proceed with caution:",
+      `${laneCoverageSummary},`,
+      `formal cases were modeled for ${formalCaseCount} target(s),`,
+      "TLC returned an inconclusive verdict,",
+      "so the unresolved formal uncertainty must be carried forward.",
+    ].join(" ");
+  }
   if (formalCaseCount > 0 && params.formalExecution.formalVerification.status === "not_run") {
     return [
       "`forge verify` can proceed with caution:",
@@ -248,6 +263,9 @@ function buildRecommendedUserActions(params: {
   }
   if (params.formalExecution.formalVerification.status === "failed") {
     actions.push("Review the TLC counterexample and update the plan before proceeding to later workflow steps.");
+  }
+  if (params.formalExecution.formalVerification.status === "inconclusive") {
+    actions.push("Review the partial TLC evidence and tighten the formal model or input before relying on the result.");
   }
   if (params.formalExecution.formalVerification.status === "invalid_spec") {
     actions.push("Repair the generated TLA+ spec or config and rerun forge verify before proceeding.");

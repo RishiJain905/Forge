@@ -149,6 +149,19 @@ export const VERIFY_FORMAL_ENTRY_CRITERIA = [
   "structural_check_insufficient",
 ] as const;
 
+export const VERIFY_FORMAL_SCENARIO_KINDS = [
+  "ordering_serialization",
+  "shared_artifact_merge_order",
+  "ownership_transition",
+  "multi_agent_handoff_chain",
+  "duplicate_execution",
+  "shared_resource_mutation_overlap",
+  "retry_reassignment",
+  "queue_claim_release_lifecycle",
+  "failure_recovery_loop",
+  "stale_write_validity",
+] as const;
+
 export const VERIFY_STATE_MODEL_REQUIRED_FIELDS = [
   "actors",
   "entities",
@@ -171,6 +184,7 @@ export const VERIFY_TLC_STATUSES = [
   "failed",
   "errored",
   "invalid_spec",
+  "inconclusive",
 ] as const;
 
 export const VERIFY_CASE_STATUSES = [
@@ -179,10 +193,12 @@ export const VERIFY_CASE_STATUSES = [
   "failed",
   "errored",
   "invalid_spec",
+  "inconclusive",
 ] as const;
 
 export interface VerifyFormalLanePolicy {
   tooling: readonly string[];
+  scenarioKinds: readonly string[];
   focusAreas: readonly string[];
   entryCriteria: readonly string[];
   stateModelRequiredFields: readonly string[];
@@ -234,6 +250,7 @@ export const STEP3_BOUNDARY_POLICY: Step3BoundaryPolicy = {
   supportedLanes: VERIFY_SUPPORTED_LANES,
   formalLane: {
     tooling: VERIFY_FORMAL_TOOLING,
+    scenarioKinds: VERIFY_FORMAL_SCENARIO_KINDS,
     focusAreas: VERIFY_FORMAL_FOCUS_AREAS,
     entryCriteria: VERIFY_FORMAL_ENTRY_CRITERIA,
     stateModelRequiredFields: VERIFY_STATE_MODEL_REQUIRED_FIELDS,

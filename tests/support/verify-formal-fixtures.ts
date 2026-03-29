@@ -12,6 +12,7 @@ import {
   STEP3_VERIFY_PURPOSE,
   VERIFY_FORMAL_ENTRY_CRITERIA,
   VERIFY_FORMAL_FOCUS_AREAS,
+  VERIFY_FORMAL_SCENARIO_KINDS,
   VERIFY_FORMAL_TOOLING,
   VERIFY_STATE_MODEL_REQUIRED_FIELDS,
   VERIFY_STRUCTURAL_FOCUS_AREAS,
@@ -51,6 +52,7 @@ type FormalCaseDetails = {
   stateModelId: string;
   tlaSpecId: string;
   tlcResultId: string;
+  scenarioKind: string;
   trace: string | null;
   errors: string[];
   cautionNotes: string[];
@@ -61,6 +63,7 @@ function buildFormalDetail(params: {
   stateModelId: string;
   tlaSpecId: string;
   tlcResultId: string;
+  scenarioKind: string;
   trace: string | null;
   errors: string[];
   cautionNotes: string[];
@@ -71,6 +74,7 @@ function buildFormalDetail(params: {
     stateModelId: params.stateModelId,
     tlaSpecId: params.tlaSpecId,
     tlcResultId: params.tlcResultId,
+    scenarioKind: params.scenarioKind,
     trace: params.trace,
     errors: params.errors,
     cautionNotes: params.cautionNotes,
@@ -81,6 +85,7 @@ function buildFormalStateModel(params: {
   id: string;
   verificationCaseId: string;
   verificationTargetId: string;
+  scenarioKind: string;
   summary: string;
   actors: string[];
   entities: string[];
@@ -95,6 +100,7 @@ function buildFormalStateModel(params: {
     id: params.id,
     verification_case_id: params.verificationCaseId,
     verification_target_id: params.verificationTargetId,
+    scenario_kind: params.scenarioKind,
     name: params.id.replace(/-/g, " "),
     summary: params.summary,
     actors: params.actors,
@@ -112,6 +118,7 @@ function buildFormalSpec(params: {
   id: string;
   verificationCaseId: string;
   stateModelId: string;
+  scenarioKind: string;
   moduleName: string;
   specPath: string;
   configPath: string;
@@ -120,6 +127,7 @@ function buildFormalSpec(params: {
     id: params.id,
     verification_case_id: params.verificationCaseId,
     state_model_id: params.stateModelId,
+    scenario_kind: params.scenarioKind,
     name: `${params.moduleName} TLA+ spec`,
     module_name: params.moduleName,
     summary: `${params.moduleName} generated from ${params.stateModelId}.`,
@@ -133,6 +141,7 @@ function buildFormalTlcResult(params: {
   id: string;
   verificationCaseId: string;
   tlaSpecId: string;
+  scenarioKind: string;
   status: FormalCaseStatus;
   summary: string;
   trace: string | null;
@@ -142,6 +151,7 @@ function buildFormalTlcResult(params: {
     id: params.id,
     verification_case_id: params.verificationCaseId,
     tla_spec_id: params.tlaSpecId,
+    scenario_kind: params.scenarioKind,
     status: params.status,
     summary: params.summary,
     trace: params.trace,
@@ -233,12 +243,19 @@ export function buildFormalVerifyArtifactFixture(params: {
   };
 
   const formalCaseStatuses: FormalCaseStatus[] = ["passed", "failed", "errored", "invalid_spec"];
+  const formalScenarioKinds = [
+    "ownership_transition",
+    "multi_agent_handoff_chain",
+    "ownership_transition",
+    "multi_agent_handoff_chain",
+  ];
   const formalCases = formalCaseStatuses.map((status, index) => {
     const caseNumber = index + 1;
     const caseId = `verify-case-00${caseNumber}`;
     const stateModelId = `verify-state-model-00${caseNumber}`;
     const tlaSpecId = `verify-tla-spec-00${caseNumber}`;
     const tlcResultId = `verify-tlc-result-00${caseNumber}`;
+    const scenarioKind = formalScenarioKinds[index]!;
     const entryCriteria = index === 0
       ? ["state_machine_like", "ownership_or_version_validity"]
       : index === 1
@@ -264,7 +281,7 @@ export function buildFormalVerifyArtifactFixture(params: {
       lanes: ["formal"],
       goal: "Model ownership transitions formally and preserve traceability to the originating Step 2 plan items.",
       status: "not_run",
-      summary: `Selected for formal verification in Part 4; execution has not run yet for ownership (${status}).`,
+      summary: `Selected for formal verification in Part 4; execution has not run yet for ownership (${status}) scenario ${scenarioKind}.`,
       findings: [],
       mitigations: [],
       constraints: [],
@@ -278,6 +295,7 @@ export function buildFormalVerifyArtifactFixture(params: {
         stateModelId,
         tlaSpecId,
         tlcResultId,
+        scenarioKind,
         trace,
         errors,
         cautionNotes: [
@@ -460,6 +478,7 @@ export function buildFormalVerifyArtifactFixture(params: {
     },
     formal_lane_contract: {
       tooling: [...VERIFY_FORMAL_TOOLING],
+      scenarioKinds: [...VERIFY_FORMAL_SCENARIO_KINDS],
       entryCriteria: [...VERIFY_FORMAL_ENTRY_CRITERIA],
       stateModelRequiredFields: [...VERIFY_STATE_MODEL_REQUIRED_FIELDS],
       tlcStatuses: [...VERIFY_TLC_STATUSES],
@@ -505,7 +524,8 @@ export function buildFormalVerifyArtifactFixture(params: {
           id: `verify-state-model-00${index + 1}`,
           verificationCaseId: entry.id,
           verificationTargetId: targetOne.id,
-          summary: `State model for ownership formal case ${index + 1}.`,
+          scenarioKind: entry.formalDetails.scenarioKind,
+          summary: `State model for ownership formal case ${index + 1} (${entry.formalDetails.scenarioKind}).`,
           actors: ["developer", "runtime"],
           entities: ["work item", "owner", "lease"],
           states: ["unowned", "owned", "handoff_pending", "released", "completed"],
@@ -535,6 +555,7 @@ export function buildFormalVerifyArtifactFixture(params: {
           id: `verify-tla-spec-00${index + 1}`,
           verificationCaseId: entry.id,
           stateModelId: `verify-state-model-00${index + 1}`,
+          scenarioKind: entry.formalDetails.scenarioKind,
           moduleName: `ForgeVerifyOwnership${index + 1}`,
           specPath: join(formalRoot, `ForgeVerifyOwnership${index + 1}.tla`),
           configPath: join(formalRoot, `ForgeVerifyOwnership${index + 1}.cfg`),
@@ -545,6 +566,7 @@ export function buildFormalVerifyArtifactFixture(params: {
           id: `verify-tlc-result-00${index + 1}`,
           verificationCaseId: entry.id,
           tlaSpecId: `verify-tla-spec-00${index + 1}`,
+          scenarioKind: entry.formalDetails.scenarioKind,
           status: entry.tlcStatus,
           summary:
             index === 0

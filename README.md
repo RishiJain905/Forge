@@ -523,7 +523,7 @@ Step 2 also now emits stronger dependency, conflict-zone, test-obligation, and p
 
 Batch 3 Part 5 makes that handoff explicit for `forge verify` by naming the verification gate directly in readiness/report wording, adding a dedicated Step 3 handoff-contract suite, and freezing Step 2 as the planning foundation that Step 3 should consume instead of re-planning from prose.
 
-Step 3: Verify now has Batch 1 Part 1 through Part 5, Batch 2 Part 1 through Part 5, and Batch 3 Part 1 implemented.
+Step 3: Verify now has Batch 1 Part 1 through Part 5, Batch 2 Part 1 through Part 5, and Batch 3 Part 1 through Part 2 implemented.
 
 Part 1 adds `src/verify` foundation modules that consume the persisted Step 2 `plan.json` handoff, normalize verify-input usability, preserve Step 2 uncertainty/readiness context, and freeze the structural lane, formal lane, and TLA+/TLC entry contract for V1.
 
@@ -547,7 +547,9 @@ Batch 2 Part 5 closes the runnable milestone and default verification gate witho
 
 Batch 3 Part 1 is the finish-and-freeze pass over that already real verify runtime. It makes the Step 3 freeze goal explicit in code, adds explicit finish-line and do-not-touch boundary metadata to the Step 3 boundary contract, adds dedicated Batch 3 Part 1 freeze coverage for grounded, warning-heavy, repeated-run, and debug-output verify runs, and keeps the public `forge verify` CLI plus top-level `verify.json` / `verify-report.md` contracts stable.
 
-Step 3 is not fully frozen yet because Batch 3 Parts 2 through 5 still need to harden TLC semantics, Tier 2 formal coverage, artifact/report/readiness polish, freeze criteria, and the Step 4 split handoff. The Step 3 mission is now explicitly finish-and-freeze, and the intended end state is a Step 3 runtime frozen for V1 except for future bug fixes.
+Batch 3 Part 2 expands the formal lane from one-case-per-category coverage into deterministic scenario-specific Tier 1 plus Tier 2 formal cases, adds stable nested `scenario_kind` metadata throughout the formal artifact surfaces, hardens TLC status handling with explicit `inconclusive` support, and keeps weak-input caution visible without changing the top-level `verify.json` or `verify-report.md` contract.
+
+Step 3 is not fully frozen yet because Batch 3 Parts 3 through 5 still need to harden artifact/report/readiness polish, freeze criteria, and the Step 4 split handoff. The Step 3 mission is now explicitly finish-and-freeze, and the intended end state is a Step 3 runtime frozen for V1 except for future bug fixes.
 
 ---
 

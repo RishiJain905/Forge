@@ -282,12 +282,14 @@ await runScenario(
           "test_obligation",
         ].sort(),
       );
-      assert.equal(migrationTarget.verificationCaseIds.length, 2);
+      assert.equal(migrationTarget.verificationCaseIds.length, 3);
 
       const targetCases = artifact.verification_cases.filter((item) => item.verificationTargetId === migrationTarget.id);
-      assert.equal(targetCases.length, 2);
+      assert.equal(targetCases.length, 3);
+      assert.equal(targetCases.filter((item) => item.lanes.includes("structural")).length, 1);
+      assert.equal(targetCases.filter((item) => item.lanes.includes("formal")).length, 2);
       assert.ok(targetCases.some((item) => item.lanes.length === 1 && item.lanes[0] === "structural" && item.status === "passed"));
-      assert.ok(targetCases.some((item) => item.lanes.length === 1 && item.lanes[0] === "formal" && item.status === "not_run"));
+      assert.ok(targetCases.filter((item) => item.lanes.includes("formal")).every((item) => item.status === "not_run"));
       assert.ok(
         targetCases.every((item) =>
           item.sourcePlanItemIds.includes("plan-item-config") &&
@@ -491,13 +493,13 @@ await runScenario(
 
       assert.equal(artifact.status, "ready");
       assert.equal(artifact.verification_targets.length, 1);
-      assert.equal(artifact.verification_cases.length, 1);
+      assert.equal(artifact.verification_cases.length, 2);
       assert.equal(artifact.verification_targets[0]?.category, "ownership");
       assert.deepEqual(artifact.verification_targets[0]?.candidateLanes, ["formal"]);
       assert.deepEqual(artifact.verification_targets[0]?.sourceRiskSources, ["test_obligation"]);
       assert.deepEqual(artifact.verification_cases[0]?.lanes, ["formal"]);
       assert.equal(artifact.verification_cases[0]?.verificationTargetId, artifact.verification_targets[0]?.id);
-      assert.match(artifact.formal_verification.summary, /1 formal verification case/i);
+      assert.match(artifact.formal_verification.summary, /2 formal verification case/i);
       assert.match(artifact.structural_verification.summary, /No structural verification cases/i);
     } finally {
       await disposeTempRepo(repoRoot);
