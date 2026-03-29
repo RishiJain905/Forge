@@ -48,6 +48,12 @@ type ProcessResult = {
   error: Error | null;
 };
 
+type ProcessInvocation = {
+  command: string;
+  args: string[];
+  windowsVerbatimArguments?: boolean;
+};
+
 export interface VerifyFormalArtifactNames {
   stateModelId: string;
   tlaSpecId: string;
@@ -408,12 +414,88 @@ function renderTlcConfig(): string {
   return ["SPECIFICATION Spec", "INVARIANT Safety", ""].join("\n");
 }
 
-function spawnProcess(command: string, args: string[], cwd: string): Promise<ProcessResult> {
+function quoteWindowsCmdArg(value: string): string {
+  return `"${value.replace(/"/g, '""').replace(/%/g, "%%")}"`;
+}
+
+async function resolveWindowsCommand(command: string): Promise<string | null> {
+  if (path.isAbsolute(command) || command.includes("\\") || command.includes("/")) {
+    try {
+      await access(command);
+      return command;
+    } catch {
+      return null;
+    }
+  }
+
+  const pathEntries = (process.env.PATH ?? process.env.Path ?? "")
+    .split(path.delimiter)
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+  const pathExts = (process.env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD")
+    .split(";")
+    .map((extension) => extension.trim().toLowerCase())
+    .filter((extension) => extension.length > 0);
+  const commandHasExtension = path.extname(command).length > 0;
+
+  for (const entry of pathEntries) {
+    const baseCandidate = path.join(entry, command);
+    const candidates = commandHasExtension
+      ? [baseCandidate]
+      : pathExts.map((extension) => `${baseCandidate}${extension}`);
+
+    for (const candidate of candidates) {
+      try {
+        await access(candidate);
+        return candidate;
+      } catch {
+        // Keep scanning PATH candidates until one exists.
+      }
+    }
+  }
+
+  return null;
+}
+
+async function resolveProcessInvocation(
+  command: string,
+  args: string[],
+): Promise<ProcessInvocation> {
+  if (process.platform !== "win32") {
+    return { command, args };
+  }
+
+  const resolvedCommand = await resolveWindowsCommand(command);
+  if (!resolvedCommand) {
+    return { command, args };
+  }
+
+  if (/\.(cmd|bat)$/i.test(resolvedCommand)) {
+    const quotedArgs = args.map(quoteWindowsCmdArg).join(" ");
+    const shellCommand = `""${resolvedCommand}"${quotedArgs ? ` ${quotedArgs}` : ""}"`;
+
+    return {
+      command: process.env.ComSpec ?? "cmd.exe",
+      args: ["/d", "/s", "/c", shellCommand],
+      windowsVerbatimArguments: true,
+    };
+  }
+
+  return {
+    command: resolvedCommand,
+    args,
+  };
+}
+
+async function spawnProcess(command: string, args: string[], cwd: string): Promise<ProcessResult> {
+  const invocation = await resolveProcessInvocation(command, args);
+
   return new Promise((resolve) => {
-    const child = spawn(command, args, {
+    const child = spawn(invocation.command, invocation.args, {
       cwd,
       shell: false, // Security: Disable shell execution to prevent command injection
       windowsHide: true,
+      windowsVerbatimArguments: invocation.windowsVerbatimArguments ?? false,
       stdio: ["ignore", "pipe", "pipe"],
     });
 
