@@ -1,0 +1,4 @@
+## 2025-03-27 - [Fix Command Injection Risk in spawnProcess]
+**Vulnerability:** The `spawnProcess` utility in `src/verify/formal.ts` explicitly enabled `shell: process.platform === "win32"` when spawning `java`. If user-influenced arguments like TLC configurations or module names contained shell metacharacters (e.g., `&`, `|`), they could be executed by the Windows command shell (`cmd.exe`).
+**Learning:** `shell: true` is rarely necessary for well-known executables like `java` that don't rely on batch wrappers (`.bat` or `.cmd`). Relying on the shell for argument parsing introduces unnecessary and severe command injection risks.
+**Prevention:** Always default to `shell: false` when using `spawn`. Only enable it if absolutely necessary (e.g., executing a `.bat` file on Windows), and in those cases, rigorously sanitize all inputs.
