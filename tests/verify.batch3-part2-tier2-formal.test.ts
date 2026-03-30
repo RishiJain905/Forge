@@ -441,6 +441,17 @@ function assertStableShell(artifact: Tier2VerifyArtifact, report: string): void 
   assert.deepEqual(extractReportHeadings(report), [...EXPECTED_REPORT_HEADINGS]);
 }
 
+function assertAllTlcResultsStatus(
+  artifact: Tier2VerifyArtifact,
+  expectedStatus: Tier2VerifyArtifact["formal_verification"]["status"],
+): void {
+  assert.equal(artifact.formal_verification.status, expectedStatus);
+  assert.ok(
+    artifact.formal_verification.tlc_results.every((entry) => entry.status === expectedStatus),
+    `expected every TLC result to report ${expectedStatus}`,
+  );
+}
+
 await runScenario(
   "forge verify expands Tier 2 formal scenarios into deterministic multi-case coverage",
   async () => {
@@ -544,6 +555,119 @@ await runScenario(
       );
       assert.match(artifact.formal_verification.summary, /inconclusive/i);
       assert.match(report, /inconclusive/i);
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "forge verify surfaces failed TLC verdicts with blocking readiness and trace visibility",
+  async () => {
+    const repoRoot = await createTempRepo("forge-verify-b3-p2-failed-");
+
+    try {
+      await prepareTier2PlanArtifact(repoRoot);
+      const env = await createTlcStubEnv(repoRoot, "failed");
+
+      const verifyResult = runForgeVerifyBinary(["--repo", repoRoot], repoRoot, env);
+      assert.notEqual(verifyResult.code, 0);
+
+      const artifact = await readJsonFile<Tier2VerifyArtifact>(verifyArtifactPath(repoRoot));
+      const report = await readTextFile(verifyReportPath(repoRoot));
+
+      assertStableShell(artifact, report);
+      assertAllTlcResultsStatus(artifact, "failed");
+      assert.equal(artifact.verification_readiness.ready, false);
+      assert.equal(artifact.verification_readiness.status, "blocked");
+      assert.ok(
+        artifact.verification_readiness.blocking_issues.some((issue) => /formal|tlc/i.test(issue.message)),
+      );
+      assert.ok(artifact.formal_verification.tlc_results.every((entry) => entry.trace !== null));
+      assert.ok(
+        artifact.formal_verification.tlc_results.every((entry) =>
+          entry.errors.some((error) => /invariant violation/i.test(error)),
+        ),
+      );
+      assert.match(artifact.formal_verification.summary, /fail/i);
+      assert.match(report, /Formal Verification Status:\s+failed/i);
+      assert.match(report, /Verification Readiness Status:\s+blocked/i);
+      assert.match(report, /Trace:/i);
+      assert.match(report, /Invariant violation/i);
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "forge verify surfaces errored TLC verdicts with blocking readiness and error visibility",
+  async () => {
+    const repoRoot = await createTempRepo("forge-verify-b3-p2-errored-");
+
+    try {
+      await prepareTier2PlanArtifact(repoRoot);
+      const env = await createTlcStubEnv(repoRoot, "errored");
+
+      const verifyResult = runForgeVerifyBinary(["--repo", repoRoot], repoRoot, env);
+      assert.notEqual(verifyResult.code, 0);
+
+      const artifact = await readJsonFile<Tier2VerifyArtifact>(verifyArtifactPath(repoRoot));
+      const report = await readTextFile(verifyReportPath(repoRoot));
+
+      assertStableShell(artifact, report);
+      assertAllTlcResultsStatus(artifact, "errored");
+      assert.equal(artifact.verification_readiness.ready, false);
+      assert.equal(artifact.verification_readiness.status, "blocked");
+      assert.ok(
+        artifact.verification_readiness.blocking_issues.some((issue) => /formal|tlc/i.test(issue.message)),
+      );
+      assert.ok(
+        artifact.formal_verification.tlc_results.every((entry) =>
+          entry.errors.some((error) => /runtimeexception|crashed/i.test(error)),
+        ),
+      );
+      assert.match(artifact.formal_verification.summary, /errored/i);
+      assert.match(report, /Formal Verification Status:\s+errored/i);
+      assert.match(report, /Verification Readiness Status:\s+blocked/i);
+      assert.match(report, /RuntimeException|crashed/i);
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "forge verify surfaces invalid-spec TLC verdicts with blocking readiness and spec errors",
+  async () => {
+    const repoRoot = await createTempRepo("forge-verify-b3-p2-invalid-spec-");
+
+    try {
+      await prepareTier2PlanArtifact(repoRoot);
+      const env = await createTlcStubEnv(repoRoot, "invalid_spec");
+
+      const verifyResult = runForgeVerifyBinary(["--repo", repoRoot], repoRoot, env);
+      assert.notEqual(verifyResult.code, 0);
+
+      const artifact = await readJsonFile<Tier2VerifyArtifact>(verifyArtifactPath(repoRoot));
+      const report = await readTextFile(verifyReportPath(repoRoot));
+
+      assertStableShell(artifact, report);
+      assertAllTlcResultsStatus(artifact, "invalid_spec");
+      assert.equal(artifact.verification_readiness.ready, false);
+      assert.equal(artifact.verification_readiness.status, "blocked");
+      assert.ok(
+        artifact.verification_readiness.blocking_issues.some((issue) => /formal|spec/i.test(issue.message)),
+      );
+      assert.ok(
+        artifact.formal_verification.tlc_results.every((entry) =>
+          entry.errors.some((error) => /invalid_spec|could not be run/i.test(error)),
+        ),
+      );
+      assert.match(artifact.formal_verification.summary, /invalid|not runnable/i);
+      assert.match(report, /Formal Verification Status:\s+invalid_spec/i);
+      assert.match(report, /Verification Readiness Status:\s+blocked/i);
+      assert.match(report, /INVALID_SPEC|could not be run/i);
     } finally {
       await disposeTempRepo(repoRoot);
     }

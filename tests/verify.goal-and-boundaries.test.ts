@@ -378,6 +378,8 @@ await runScenario(
           summary: planArtifact.summary,
           readyForVerification: planArtifact.planning_readiness.ready,
           planningReadinessStatus: planArtifact.planning_readiness.status,
+          planning_diagnostics: planArtifact.planning_diagnostics,
+          planning_readiness: planArtifact.planning_readiness,
           failure: planArtifact.failure,
         },
         sourceIntake: planArtifact.source_intake,

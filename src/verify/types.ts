@@ -59,6 +59,7 @@ export interface VerifyResolvedOutputPaths {
   debugArtifactPath: string;
   debugVerificationCasesPath: string;
   debugStructuralFindingsPath: string;
+  debugVerificationReadinessPath: string;
   debugStateModelsPath: string;
   debugTlaSpecsPath: string;
   debugTlcResultsPath: string;
@@ -80,6 +81,8 @@ export interface VerifyPlanReference {
   summary: PlanArtifact["summary"];
   readyForVerification: PlanArtifact["planning_readiness"]["ready"];
   planningReadinessStatus: PlanArtifact["planning_readiness"]["status"];
+  planning_diagnostics: PlanArtifact["planning_diagnostics"];
+  planning_readiness: PlanArtifact["planning_readiness"];
   failure: PlanArtifact["failure"];
 }
 
@@ -291,6 +294,7 @@ export interface VerifyArtifactFiles {
   debugArtifactPath: string;
   debugVerificationCasesPath: string;
   debugStructuralFindingsPath: string;
+  debugVerificationReadinessPath: string;
   debugStateModelsPath: string;
   debugTlaSpecsPath: string;
   debugTlcResultsPath: string;
@@ -413,6 +417,7 @@ export interface VerifyDebugArtifact {
     | "debugArtifactPath"
     | "debugVerificationCasesPath"
     | "debugStructuralFindingsPath"
+    | "debugVerificationReadinessPath"
     | "debugStateModelsPath"
     | "debugTlaSpecsPath"
     | "debugTlcResultsPath"
@@ -425,5 +430,7 @@ export interface VerifyDebugArtifact {
     VerifyArtifact["formal_verification"],
     "state_models" | "tla_specs" | "tlc_results"
   >;
+  verification_diagnostics: VerifyVerificationDiagnostics;
+  verification_readiness: VerifyVerificationReadiness;
   failure: VerifyArtifact["failure"];
 }

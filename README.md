@@ -523,7 +523,7 @@ Step 2 also now emits stronger dependency, conflict-zone, test-obligation, and p
 
 Batch 3 Part 5 makes that handoff explicit for `forge verify` by naming the verification gate directly in readiness/report wording, adding a dedicated Step 3 handoff-contract suite, and freezing Step 2 as the planning foundation that Step 3 should consume instead of re-planning from prose.
 
-Step 3: Verify now has Batch 1 Part 1 through Part 5, Batch 2 Part 1 through Part 5, and Batch 3 Part 1 through Part 2 implemented.
+Step 3: Verify now has Batch 1 Part 1 through Part 5, Batch 2 Part 1 through Part 5, and Batch 3 Part 1 through Part 4 implemented.
 
 Part 1 adds `src/verify` foundation modules that consume the persisted Step 2 `plan.json` handoff, normalize verify-input usability, preserve Step 2 uncertainty/readiness context, and freeze the structural lane, formal lane, and TLA+/TLC entry contract for V1.
 
@@ -549,7 +549,11 @@ Batch 3 Part 1 is the finish-and-freeze pass over that already real verify runti
 
 Batch 3 Part 2 expands the formal lane from one-case-per-category coverage into deterministic scenario-specific Tier 1 plus Tier 2 formal cases, adds stable nested `scenario_kind` metadata throughout the formal artifact surfaces, hardens TLC status handling with explicit `inconclusive` support, and keeps weak-input caution visible without changing the top-level `verify.json` or `verify-report.md` contract.
 
-Step 3 is not fully frozen yet because Batch 3 Parts 3 through 5 still need to harden artifact/report/readiness polish, freeze criteria, and the Step 4 split handoff. The Step 3 mission is now explicitly finish-and-freeze, and the intended end state is a Step 3 runtime frozen for V1 except for future bug fixes.
+Batch 3 Part 3 hardens the shipped verify outputs without reopening the public surface. `verify.json` now keeps carried-forward Step 2 planning diagnostics/readiness under `source_plan`, `verify-report.md` now answers the `forge split` gate directly with recommended actions and constraining concerns while keeping Step 2 versus Step 3 state labeled honestly, and `FORGE_VERIFY_DEBUG=1` now emits `verification-readiness.json` alongside the existing internal debug outputs so Step 4 does not need to reinterpret verification quality from scratch.
+
+Batch 3 Part 4 is the final polish-and-freeze pass for the shipped Step 3 runtime. It keeps the public `forge verify` CLI and the frozen top-level `verify.json` / `verify-report.md` contracts stable while tightening report/status clarity for ready, warning-heavy, blocked, fallback-output, and debug-enabled runs, extending freeze-era coverage for Tier 2 TLC outcomes, and marking the Step 3 runtime frozen for V1 except future bug fixes.
+
+Step 3 is now frozen for V1 except for future bug fixes. Batch 3 Part 5 remains as the explicit Step 4 `forge split` handoff-contract lock and should not reopen the Step 3 runtime surface.
 
 ---
 

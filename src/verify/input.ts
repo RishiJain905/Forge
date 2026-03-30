@@ -14,6 +14,7 @@ import {
   VERIFY_DEBUG_TLA_SPECS_NAME,
   VERIFY_DEBUG_TLC_RESULTS_NAME,
   VERIFY_DEBUG_VERIFICATION_CASES_NAME,
+  VERIFY_DEBUG_VERIFICATION_READINESS_NAME,
   VERIFY_INPUT_TOO_WEAK,
   VERIFY_REPORT_NAME,
 } from "./constants.js";
@@ -67,6 +68,8 @@ function buildVerifyPlanReference(
     summary: artifact.summary,
     readyForVerification: artifact.planning_readiness.ready,
     planningReadinessStatus: artifact.planning_readiness.status,
+    planning_diagnostics: artifact.planning_diagnostics,
+    planning_readiness: artifact.planning_readiness,
     failure: artifact.failure,
   };
 }
@@ -190,6 +193,11 @@ export async function resolveVerifyOutputPaths(
       outputRoot.outputRoot,
       DEBUG_DIRECTORY,
       VERIFY_DEBUG_STRUCTURAL_FINDINGS_NAME,
+    ),
+    debugVerificationReadinessPath: resolveOutputFilePath(
+      outputRoot.outputRoot,
+      DEBUG_DIRECTORY,
+      VERIFY_DEBUG_VERIFICATION_READINESS_NAME,
     ),
     debugStateModelsPath: resolveOutputFilePath(outputRoot.outputRoot, DEBUG_DIRECTORY, VERIFY_DEBUG_STATE_MODELS_NAME),
     debugTlaSpecsPath: resolveOutputFilePath(outputRoot.outputRoot, DEBUG_DIRECTORY, VERIFY_DEBUG_TLA_SPECS_NAME),

@@ -39,10 +39,26 @@ function renderKeyValueLines(entries: Array<[string, string | number | boolean |
   return entries.map(([key, value]) => `- ${key}: ${value === null ? "none" : value}`);
 }
 
+function countVerificationWarnings(artifact: VerifyArtifact): number {
+  return artifact.verification_readiness.warning_items.length;
+}
+
+function countVerificationBlockingIssues(artifact: VerifyArtifact): number {
+  return artifact.verification_readiness.blocking_issues.length;
+}
+
 function renderIssueList(items: Array<{ code: string; message: string }>): string {
   return items.length > 0
     ? items.map((item) => `- [${item.code}] ${item.message}`).join("\n")
     : "- none";
+}
+
+function renderForgeSplitGateValue(readiness: Pick<VerifyArtifact["verification_readiness"], "ready" | "status">): string {
+  if (!readiness.ready) {
+    return "blocked";
+  }
+
+  return readiness.status === "ready_with_warnings" ? "can proceed with warnings" : "can proceed";
 }
 
 function renderStructuredFindings(artifact: VerifyArtifact, lane: "structural" | "formal"): string {
@@ -238,8 +254,8 @@ function renderCarryForwardContext(artifact: VerifyArtifact): string {
   const carryForward = artifact.carry_forward;
   const sourcePlan = artifact.source_plan;
   const repoContext = carryForward.repo_context;
-  const planningDiagnostics = artifact.verification_diagnostics;
-  const planningReadiness = artifact.verification_readiness;
+  const planningDiagnostics = sourcePlan.planning_diagnostics;
+  const planningReadiness = sourcePlan.planning_readiness;
 
   return renderSection("Carry-Forward Context", [
     "This section preserves the Step 2 handoff so `forge verify` can stay artifact-derived.",
@@ -305,7 +321,7 @@ function renderCarryForwardContext(artifact: VerifyArtifact): string {
     "",
     renderList(carryForward.warnings),
     "",
-    "### Planning Diagnostics",
+    "### Step 2 Planning Diagnostics",
     "",
     ...renderKeyValueLines([
       ["Usability Status", planningDiagnostics.usability_status],
@@ -314,7 +330,7 @@ function renderCarryForwardContext(artifact: VerifyArtifact): string {
       ["Partial Output", planningDiagnostics.partial_output ? planningDiagnostics.partial_output.code : null],
     ]),
     "",
-    "### Planning Readiness",
+    "### Step 2 Planning Readiness",
     "",
     ...renderKeyValueLines([
       ["Ready", planningReadiness.ready],
@@ -323,7 +339,7 @@ function renderCarryForwardContext(artifact: VerifyArtifact): string {
       ["Warning Items", planningReadiness.warning_items.length],
       ["Blocking Issues", planningReadiness.blocking_issues.length],
       ["Partial Output", planningReadiness.partial_output ? planningReadiness.partial_output.code : null],
-      ["Concerning IDs", planningReadiness.constraining_concern_ids.join(", ") || null],
+      ["Constraining Concerns", planningReadiness.constraining_concern_ids.join(", ") || null],
       ["Recommended Actions", planningReadiness.recommended_user_actions.join("; ") || null],
     ]),
     "",
@@ -342,12 +358,15 @@ function renderVerificationReadiness(artifact: VerifyArtifact): string {
   const readiness = artifact.verification_readiness;
 
   return renderSection("Verification Readiness", [
+    "This section answers the `forge split` gate from the Step 3 outputs.",
+    "",
     ...renderKeyValueLines([
+      ["Forge Split Gate", renderForgeSplitGateValue(readiness)],
       ["Ready", readiness.ready],
       ["Status", readiness.status],
       ["Summary", readiness.summary],
       ["Partial Output", readiness.partial_output ? readiness.partial_output.code : null],
-      ["Concerning IDs", readiness.constraining_concern_ids.join(", ") || null],
+      ["Constraining Concerns", readiness.constraining_concern_ids.join(", ") || null],
       ["Recommended Actions", readiness.recommended_user_actions.join("; ") || null],
     ]),
     "",
@@ -375,21 +394,54 @@ function renderFailure(artifact: VerifyArtifact): string {
   ]);
 }
 
+function renderOverview(artifact: VerifyArtifact): string {
+  return renderSection("Overview", [
+    ...renderKeyValueLines([
+      ["Command", artifact.command],
+      ["Stage", artifact.stage],
+      ["Status", artifact.status],
+      ["Repo Root", artifact.repoRoot],
+      ["Requested Output Root", artifact.requestedOutputRoot],
+      ["Output Root", artifact.outputRoot],
+      ["Artifact Path", artifact.files.artifactPath],
+      ["Report Path", artifact.files.reportPath],
+      ["Verification Readiness Status", artifact.verification_readiness.status],
+      ["Structural Verification Status", artifact.structural_verification.status],
+      ["Formal Verification Status", artifact.formal_verification.status],
+      ["Verification Warning Items", countVerificationWarnings(artifact)],
+      ["Verification Blocking Issues", countVerificationBlockingIssues(artifact)],
+      ["Failure Code", artifact.failure?.code ?? null],
+      ["Summary", artifact.summary],
+    ]),
+  ]);
+}
+
+function renderOutputFiles(artifact: VerifyArtifact): string {
+  return renderSection("Output Files", [
+    "These are the durable files produced for this verify run.",
+    "verify.json and verify-report.md remain the durable Step 3 outputs.",
+    "Debug files are optional internal mirrors and are only written when FORGE_VERIFY_DEBUG=1.",
+    "",
+    ...renderKeyValueLines([
+      ["Requested Output Root", artifact.requestedOutputRoot],
+      ["Output Root", artifact.outputRoot],
+      ["Allowed Root", artifact.writePolicy.allowedRoot],
+      ["Artifact Path", artifact.files.artifactPath],
+      ["Report Path", artifact.files.reportPath],
+      ["Debug Artifact Path", artifact.files.debugArtifactPath],
+      ["Debug Verification Cases Path", artifact.files.debugVerificationCasesPath],
+      ["Debug Structural Findings Path", artifact.files.debugStructuralFindingsPath],
+      ["Debug Verification Readiness Path", artifact.files.debugVerificationReadinessPath],
+      ["Debug State Models Path", artifact.files.debugStateModelsPath],
+      ["Debug TLA Specs Path", artifact.files.debugTlaSpecsPath],
+      ["Debug TLC Results Path", artifact.files.debugTlcResultsPath],
+    ]),
+  ]);
+}
+
 export function createVerifyReport(artifact: VerifyArtifact): string {
   const sections = [
-    renderSection("Overview", [
-      ...renderKeyValueLines([
-        ["Command", artifact.command],
-        ["Stage", artifact.stage],
-        ["Status", artifact.status],
-        ["Repo Root", artifact.repoRoot],
-        ["Requested Output Root", artifact.requestedOutputRoot],
-        ["Output Root", artifact.outputRoot],
-        ["Artifact Path", artifact.files.artifactPath],
-        ["Report Path", artifact.files.reportPath],
-        ["Summary", artifact.summary],
-      ]),
-    ]),
+    renderOverview(artifact),
     "",
     renderSection("Purpose", [`- ${artifact.purpose}`]),
     "",
@@ -503,21 +555,7 @@ export function createVerifyReport(artifact: VerifyArtifact): string {
     "",
     renderSection("Disallowed Capabilities", [renderList([...artifact.writePolicy.disallowedCapabilities])]),
     "",
-    renderSection("Output Files", [
-      ...renderKeyValueLines([
-        ["Requested Output Root", artifact.requestedOutputRoot],
-        ["Output Root", artifact.outputRoot],
-        ["Allowed Root", artifact.writePolicy.allowedRoot],
-        ["Artifact Path", artifact.files.artifactPath],
-        ["Report Path", artifact.files.reportPath],
-        ["Debug Artifact Path", artifact.files.debugArtifactPath],
-        ["Debug Verification Cases Path", artifact.files.debugVerificationCasesPath],
-        ["Debug Structural Findings Path", artifact.files.debugStructuralFindingsPath],
-        ["Debug State Models Path", artifact.files.debugStateModelsPath],
-        ["Debug TLA Specs Path", artifact.files.debugTlaSpecsPath],
-        ["Debug TLC Results Path", artifact.files.debugTlcResultsPath],
-      ]),
-    ]),
+    renderOutputFiles(artifact),
     "",
     renderFailure(artifact),
     "",

@@ -22,9 +22,26 @@ type VerifyDebugArtifact = {
     debugArtifactPath: string;
     debugVerificationCasesPath: string;
     debugStructuralFindingsPath: string;
+    debugVerificationReadinessPath: string;
     debugStateModelsPath: string;
     debugTlaSpecsPath: string;
     debugTlcResultsPath: string;
+  };
+  verification_diagnostics: {
+    usability_status: "actionable" | "non_actionable" | "upstream_blocked";
+    warning_items: Array<{ code: string; message: string }>;
+    blocking_items: Array<{ code: string; message: string }>;
+    partial_output: { code: string; message: string; fallbackReason?: string } | null;
+  };
+  verification_readiness: {
+    ready: boolean;
+    status: "ready" | "ready_with_warnings" | "blocked";
+    summary: string;
+    warning_items: Array<{ code: string; message: string }>;
+    blocking_issues: Array<{ code: string; message: string }>;
+    partial_output: { code: string; message: string; fallbackReason?: string } | null;
+    constraining_concern_ids: string[];
+    recommended_user_actions: string[];
   };
   verification_cases: Array<{ id: string; lanes: string[] }>;
   structural_verification: {
@@ -41,6 +58,11 @@ type VerifyDebugArtifact = {
     tla_specs: Array<{ id: string }>;
     tlc_results: Array<{ id: string }>;
   };
+  failure: { code: string; message: string; fallbackReason?: string } | null;
+};
+
+type VerifyReadinessDebugArtifact = {
+  verification_readiness: VerifyDebugArtifact["verification_readiness"];
 };
 
 async function runScenario(name: string, scenario: () => Promise<void>): Promise<void> {
@@ -103,6 +125,43 @@ async function prepareReadyVerifyRun(repoRoot: string, outputDir?: string): Prom
   await removePlanningInputs(repoRoot);
 }
 
+async function prepareWarningHeavyVerifyRun(repoRoot: string): Promise<void> {
+  const intakeResult = runForgeBinary(["intake", "--repo", repoRoot, "--prompt", "fix"], repoRoot);
+  assert.equal(intakeResult.code, 0, intakeResult.stderr);
+
+  const planResult = runForgePlanBinary(["--repo", repoRoot], repoRoot);
+  assert.equal(planResult.code, 0, planResult.stderr);
+
+  await removePlanningInputs(repoRoot);
+}
+
+async function prepareBlockedVerifyRun(repoRoot: string): Promise<void> {
+  const intakeResult = runForgeBinary(
+    ["intake", "--repo", repoRoot, "--prompt", "fix", "--fail-on-low-confidence"],
+    repoRoot,
+  );
+  assert.equal(intakeResult.code, 1);
+
+  const planResult = runForgePlanBinary(["--repo", repoRoot], repoRoot);
+  assert.notEqual(planResult.code, 0);
+}
+
+async function assertDebugReadinessMirror(repoRoot: string, outputDir = ".forge"): Promise<void> {
+  const artifactPath = verifyArtifactPath(repoRoot, outputDir);
+  const artifact = await readJsonFile<VerifyDebugArtifact>(artifactPath);
+  const readinessPath = join(repoRoot, outputDir, "debug", "verification-readiness.json");
+
+  assert.equal(artifact.files.debugVerificationReadinessPath, readinessPath);
+  assert.equal(await fileExists(readinessPath), true);
+
+  const readinessArtifact = await readJsonFile<VerifyReadinessDebugArtifact>(readinessPath);
+  assert.deepEqual(readinessArtifact, { verification_readiness: artifact.verification_readiness });
+
+  const debugArtifact = await readJsonFile<VerifyDebugArtifact>(artifact.files.debugArtifactPath);
+  assert.deepEqual(debugArtifact.verification_diagnostics, artifact.verification_diagnostics);
+  assert.deepEqual(debugArtifact.verification_readiness, artifact.verification_readiness);
+}
+
 await runScenario(
   "forge verify writes optional debug artifacts when FORGE_VERIFY_DEBUG=1 is set",
   async () => {
@@ -132,6 +191,10 @@ await runScenario(
         verifyDebugPath(repoRoot, "structural-findings.json"),
       );
       assert.equal(
+        artifact.files.debugVerificationReadinessPath,
+        verifyDebugPath(repoRoot, "verification-readiness.json"),
+      );
+      assert.equal(
         artifact.files.debugStateModelsPath,
         verifyDebugPath(repoRoot, "state-models.json"),
       );
@@ -146,9 +209,14 @@ await runScenario(
       assert.equal(await fileExists(artifact.files.debugArtifactPath), true);
       assert.equal(await fileExists(artifact.files.debugVerificationCasesPath), true);
       assert.equal(await fileExists(artifact.files.debugStructuralFindingsPath), true);
+      assert.equal(await fileExists(artifact.files.debugVerificationReadinessPath), true);
       assert.equal(await fileExists(artifact.files.debugStateModelsPath), true);
       assert.equal(await fileExists(artifact.files.debugTlaSpecsPath), true);
       assert.equal(await fileExists(artifact.files.debugTlcResultsPath), true);
+      const readinessArtifact = await readJsonFile<VerifyReadinessDebugArtifact>(
+        artifact.files.debugVerificationReadinessPath,
+      );
+      assert.deepEqual(readinessArtifact, { verification_readiness: artifact.verification_readiness });
       assert.ok(artifact.verification_cases.length > 0);
       assert.ok(artifact.structural_verification.findings.length > 0);
       assert.ok(artifact.formal_verification.state_models.length > 0);
@@ -190,6 +258,10 @@ await runScenario(
         verifyDebugPath(repoRoot, "structural-findings.json", outputDir),
       );
       assert.equal(
+        artifact.files.debugVerificationReadinessPath,
+        verifyDebugPath(repoRoot, "verification-readiness.json", outputDir),
+      );
+      assert.equal(
         artifact.files.debugStateModelsPath,
         verifyDebugPath(repoRoot, "state-models.json", outputDir),
       );
@@ -204,10 +276,15 @@ await runScenario(
       assert.equal(await fileExists(artifact.files.debugArtifactPath), true);
       assert.equal(await fileExists(artifact.files.debugVerificationCasesPath), true);
       assert.equal(await fileExists(artifact.files.debugStructuralFindingsPath), true);
+      assert.equal(await fileExists(artifact.files.debugVerificationReadinessPath), true);
       assert.equal(await fileExists(artifact.files.debugStateModelsPath), true);
       assert.equal(await fileExists(artifact.files.debugTlaSpecsPath), true);
       assert.equal(await fileExists(artifact.files.debugTlcResultsPath), true);
       assert.equal(await fileExists(verifyDebugPath(repoRoot, "verify-debug.json")), false);
+      const readinessArtifact = await readJsonFile<VerifyReadinessDebugArtifact>(
+        artifact.files.debugVerificationReadinessPath,
+      );
+      assert.deepEqual(readinessArtifact, { verification_readiness: artifact.verification_readiness });
     } finally {
       await disposeTempRepo(repoRoot);
     }
@@ -244,9 +321,62 @@ await runScenario(
       assert.equal(await fileExists(artifact.files.debugArtifactPath), true);
       assert.equal(await fileExists(artifact.files.debugVerificationCasesPath), true);
       assert.equal(await fileExists(artifact.files.debugStructuralFindingsPath), true);
+      assert.equal(await fileExists(artifact.files.debugVerificationReadinessPath), true);
       assert.equal(await fileExists(artifact.files.debugStateModelsPath), true);
       assert.equal(await fileExists(artifact.files.debugTlaSpecsPath), true);
       assert.equal(await fileExists(artifact.files.debugTlcResultsPath), true);
+      const debugArtifact = await readJsonFile<VerifyDebugArtifact>(artifact.files.debugArtifactPath);
+      assert.deepEqual(debugArtifact.verification_diagnostics, artifact.verification_diagnostics);
+      assert.deepEqual(debugArtifact.verification_readiness, artifact.verification_readiness);
+      const readinessArtifact = await readJsonFile<VerifyReadinessDebugArtifact>(
+        artifact.files.debugVerificationReadinessPath,
+      );
+      assert.deepEqual(readinessArtifact, { verification_readiness: artifact.verification_readiness });
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "forge verify keeps blocked fallback runs debuggable when FORGE_VERIFY_DEBUG=1 is set",
+  async () => {
+    const repoRoot = await createTempRepo("forge-verify-debug-fallback-");
+    const blockedOutputDir = join("..", "forge-verify-debug-fallback-output");
+
+    try {
+      await prepareReadyVerifyRun(repoRoot);
+
+      const result = runForgeVerifyBinary(
+        ["--repo", repoRoot, "--output-dir", blockedOutputDir],
+        repoRoot,
+        {
+          FORGE_VERIFY_DEBUG: "1",
+        },
+      );
+
+      assert.notEqual(result.code, 0);
+
+      const artifact = await readJsonFile<VerifyDebugArtifact>(verifyArtifactPath(repoRoot));
+
+      assert.equal(
+        artifact.files.debugArtifactPath,
+        verifyDebugPath(repoRoot, "verify-debug.json"),
+      );
+      assert.equal(await fileExists(artifact.files.debugArtifactPath), true);
+      assert.equal(await fileExists(artifact.files.debugVerificationCasesPath), true);
+      assert.equal(await fileExists(artifact.files.debugStructuralFindingsPath), true);
+      assert.equal(await fileExists(artifact.files.debugVerificationReadinessPath), true);
+      assert.equal(await fileExists(artifact.files.debugStateModelsPath), true);
+      assert.equal(await fileExists(artifact.files.debugTlaSpecsPath), true);
+      assert.equal(await fileExists(artifact.files.debugTlcResultsPath), true);
+      const debugArtifact = await readJsonFile<VerifyDebugArtifact>(artifact.files.debugArtifactPath);
+      assert.deepEqual(debugArtifact.verification_diagnostics, artifact.verification_diagnostics);
+      assert.deepEqual(debugArtifact.verification_readiness, artifact.verification_readiness);
+      const readinessArtifact = await readJsonFile<VerifyReadinessDebugArtifact>(
+        artifact.files.debugVerificationReadinessPath,
+      );
+      assert.deepEqual(readinessArtifact, { verification_readiness: artifact.verification_readiness });
     } finally {
       await disposeTempRepo(repoRoot);
     }

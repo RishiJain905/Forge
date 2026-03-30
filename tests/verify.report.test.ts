@@ -115,6 +115,11 @@ await runScenario(
       assert.equal(report.includes(String(artifact.summary)), true);
       assert.equal(report.includes(String(artifact.source_plan.command)), true);
       assert.equal(report.includes(String(artifact.verification_readiness.status)), true);
+      assert.match(report, /Verification Readiness Status:\s+ready_with_warnings|Verification Readiness Status:\s+ready/i);
+      assert.match(report, /Structural Verification Status:\s+passed/i);
+      assert.match(report, /Formal Verification Status:\s+not_run|Formal Verification Status:\s+passed/i);
+      assert.match(report, /Verification Warning Items:\s+\d+/i);
+      assert.match(report, /Verification Blocking Issues:\s+\d+/i);
       assert.equal(report.includes("Verification Readiness"), true);
       assert.equal(report.includes("Verification Cases"), true);
       assert.ok(Array.isArray(artifact.verification_targets));
@@ -132,6 +137,12 @@ await runScenario(
       assert.match(report, /state-models\.json/);
       assert.match(report, /tla-specs\.json/);
       assert.match(report, /tlc-results\.json/);
+      assert.match(report, /verify\.json and verify-report\.md remain the durable Step 3 outputs/i);
+      assert.match(report, /Debug files are optional internal mirrors and are only written when FORGE_VERIFY_DEBUG=1/i);
+      assert.match(report, /forge split/i);
+      assert.match(report, /Constraining Concerns/i);
+      assert.doesNotMatch(report, /### Planning Diagnostics/);
+      assert.doesNotMatch(report, /### Planning Readiness/);
       assert.doesNotMatch(report, /deferred in Part 2/i);
       assert.doesNotMatch(report, /in Part 2/i);
     } finally {
@@ -185,11 +196,20 @@ await runScenario(
 
       assert.equal(artifact.status, "failed");
       assert.equal(artifact.failure?.code, "OUTPUT_ROOT_FALLBACK");
+      assert.match(report, /Verification Readiness Status:\s+blocked/i);
+      assert.match(report, /Failure Code:\s+OUTPUT_ROOT_FALLBACK/i);
+      assert.match(report, /Verification Blocking Issues:\s+1/i);
       assert.match(report, /Verification Readiness/);
+      assert.match(report, /forge split/i);
+      assert.match(report, /Constraining Concerns/i);
+      assert.doesNotMatch(report, /### Planning Diagnostics/);
+      assert.doesNotMatch(report, /### Planning Readiness/);
       assert.match(report, /Failure/);
       assert.match(report, /Summary/);
       assert.match(report, /OUTPUT_ROOT_FALLBACK/);
       assert.match(report, /default \.forge output root|unsafe/i);
+      assert.match(report, /verify\.json and verify-report\.md remain the durable Step 3 outputs/i);
+      assert.match(report, /Debug files are optional internal mirrors and are only written when FORGE_VERIFY_DEBUG=1/i);
       assert.match(report, new RegExp(artifact.verification_readiness.summary.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     } finally {
       await disposeTempRepo(repoRoot);
@@ -222,6 +242,11 @@ await runScenario(
       );
 
       assert.equal(extractLevelTwoHeadings(report).join("|"), [...REQUIRED_HEADINGS].join("|"));
+      assert.match(report, /Verification Readiness Status:\s+blocked/i);
+      assert.match(report, /Structural Verification Status:\s+passed/i);
+      assert.match(report, /Formal Verification Status:\s+failed/i);
+      assert.match(report, /verify\.json and verify-report\.md remain the durable Step 3 outputs/i);
+      assert.match(report, /Debug files are optional internal mirrors and are only written when FORGE_VERIFY_DEBUG=1/i);
       assert.match(report, /Entry Criteria:/);
       assert.match(report, /State Model ID:/);
       assert.match(report, /TLA Spec ID:/);
@@ -241,6 +266,10 @@ await runScenario(
       assert.match(report, /state-models\.json/);
       assert.match(report, /tla-specs\.json/);
       assert.match(report, /tlc-results\.json/);
+      assert.match(report, /forge split/i);
+      assert.match(report, /Constraining Concerns/i);
+      assert.doesNotMatch(report, /### Planning Diagnostics/);
+      assert.doesNotMatch(report, /### Planning Readiness/);
     } finally {
       await disposeTempRepo(repoRoot);
     }

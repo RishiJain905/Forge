@@ -41,6 +41,8 @@ const verifyPlanReferenceSchema = z.object({
   summary: planArtifactSchema.shape.summary,
   readyForVerification: planArtifactSchema.shape.planning_readiness.shape.ready,
   planningReadinessStatus: planArtifactSchema.shape.planning_readiness.shape.status,
+  planning_diagnostics: planArtifactSchema.shape.planning_diagnostics,
+  planning_readiness: planArtifactSchema.shape.planning_readiness,
   failure: planArtifactSchema.shape.failure,
 }).strict();
 
@@ -140,6 +142,7 @@ const verifyFilesSchema = z.object({
   debugArtifactPath: z.string().min(1),
   debugVerificationCasesPath: z.string().min(1),
   debugStructuralFindingsPath: z.string().min(1),
+  debugVerificationReadinessPath: z.string().min(1),
   debugStateModelsPath: z.string().min(1),
   debugTlaSpecsPath: z.string().min(1),
   debugTlcResultsPath: z.string().min(1),

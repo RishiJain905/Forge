@@ -362,6 +362,18 @@
   - Hardened TLC classification and readiness handling with explicit `inconclusive` support, while keeping `failed`, `errored`, and `invalid_spec` blocking and keeping `not_run` plus `inconclusive` warning-grade and explicitly unresolved.
   - Extended verify fixtures and regression coverage so Step 3 now proves deterministic multi-case formal fan-out, scenario-specific Tier 2 model semantics, and honest trace/caution behavior without changing the frozen top-level contract.
   - Updated `README.md`, `progress.md`, and `S3-B3-Done/p2-done-summary.md` so Step 3 Batch 3 Part 2 is documented and traceable.
+- Batch 3.03: `part-3-artifact-report-debug-output-and-readiness-hardening.md` (Step 3)
+  - Hardened the Step 3 verify artifact without changing the frozen top-level `verify.json` key set by adding the carried-forward Step 2 `planning_diagnostics` and `planning_readiness` under `source_plan`, plus the new debug readiness path `verification-readiness.json` under `files`.
+  - Reworked verify debug output so `FORGE_VERIFY_DEBUG=1` now emits `.forge/debug/verification-readiness.json` and keeps `verify-debug.json` aligned with the main artifact for `verification_diagnostics` and `verification_readiness` on ready, warning-heavy, blocked, and fallback-output runs.
+  - Reworked `verify-report.md` so it now answers the explicit `forge split` gate, renders recommended actions and constraining concerns, keeps Step 2 planning context separate from Step 3 verification state, and preserves understandable TLC trace/error narratives without changing the frozen `##` heading order.
+  - Added `tests/verify.batch3-part3-output-readiness-hardening.test.ts`, expanded verify debug/report/schema/command-contract/freeze coverage, and wired the new suite into `npm.cmd test` so the hardened output/readiness contract stays under the default gate.
+  - Updated `README.md`, `progress.md`, and `S3-B3-Done/p3-done-summary.md` so Step 3 Batch 3 Part 3 is documented and traceable.
+- Batch 3.04: `part-4-step3-polish-test-hardening-and-freeze-criteria.md` (Step 3)
+  - Polished `verify-report.md` so its overview now keeps readiness status, structural/formal lane status, warning/blocking counts, and failure visibility coherent across ready, warning-heavy, blocked, fallback-output, and debug-enabled runs without changing the frozen heading order.
+  - Clarified the output-file story so `verify.json` plus `verify-report.md` remain the durable Step 3 outputs and debug files stay explicitly optional internal mirrors behind `FORGE_VERIFY_DEBUG=1`.
+  - Hardened the Batch 3 freeze coverage with repeated warning-path determinism checks, report freeze wording assertions, Step 3 runtime/test marker sweeps, and stronger freeze-state documentation assertions.
+  - Updated `README.md`, `progress.md`, and `S3-B3-Done/p4-done-summary.md` so Step 3 is documented through Batch 3 Part 4 and marked frozen for V1 except future bug fixes while leaving Part 5 as the explicit Step 4 handoff-contract closeout.
+  - Re-verified the full Step 3 gate with fresh `npm.cmd test`, `npm.cmd run typecheck`, `npm.cmd run build`, and `npm.cmd run smoke`.
 
 ## Current Branch State
 - `dev` includes the completed Step 1 work through Batch 4.05, including the frozen Step 2 handoff contract from Intake.
@@ -386,6 +398,9 @@
 - `dev` now treats Step 3 Batch 2 as complete for V1 milestone purposes, with later Step 3 work reserved for hardening and freeze follow-up rather than first-time CLI wiring or runnable-milestone delivery.
 - `dev` now includes Step 3 Batch 3 Part 1, including the explicit finish-and-freeze mission, dedicated freeze metadata in the Step 3 boundary contract, Batch 3 Part 1 freeze coverage, and stronger warning-grade verify smoke coverage while keeping the public verify surface stable.
 - `dev` now includes Step 3 Batch 3 Part 2, including deterministic scenario-specific Tier 1 plus Tier 2 formal-case fan-out, nested `scenario_kind` metadata across formal outputs, explicit `inconclusive` TLC handling, and stronger formal-lane regression coverage while keeping the public verify surface stable.
+- `dev` now includes Step 3 Batch 3 Part 3, including source-plan planning diagnostics/readiness carry-forward in `verify.json`, explicit `forge split` gate wording in `verify-report.md`, and the new `verification-readiness.json` debug artifact while keeping the public verify surface stable.
+- `dev` now includes Step 3 Batch 3 Part 4, including freeze-era verify report overview polish, explicit durable-versus-optional output wording, repeated warning-path determinism coverage, and frozen-runtime documentation while keeping the public verify surface stable.
+- `dev` now treats the Step 3 verification runtime surface as frozen for V1 except future bug fixes, with Batch 3 Part 5 reserved for the explicit Step 4 split handoff contract rather than more Step 3 runtime feature work.
 
 ## Verification
 - `npm.cmd test`
@@ -408,4 +423,6 @@
 - Step 3 Batch 2 is complete.
 - Step 3 Batch 3 Part 1 is complete.
 - Step 3 Batch 3 Part 2 is complete.
-- Next implementation work should move to Step 3 Batch 3 Part 3: `part-3-artifact-report-debug-output-and-readiness-hardening.md`.
+- Step 3 Batch 3 Part 3 is complete.
+- Step 3 Batch 3 Part 4 is complete.
+- Next implementation work should move to Step 3 Batch 3 Part 5: `part-5-step4-handoff-contract-for-split.md`.

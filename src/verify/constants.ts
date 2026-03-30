@@ -7,6 +7,7 @@ export const VERIFY_DEBUG_ENV_VAR = "FORGE_VERIFY_DEBUG" as const;
 export const VERIFY_DEBUG_ARTIFACT_NAME = "verify-debug.json" as const;
 export const VERIFY_DEBUG_VERIFICATION_CASES_NAME = "verification-cases.json" as const;
 export const VERIFY_DEBUG_STRUCTURAL_FINDINGS_NAME = "structural-findings.json" as const;
+export const VERIFY_DEBUG_VERIFICATION_READINESS_NAME = "verification-readiness.json" as const;
 export const VERIFY_DEBUG_STATE_MODELS_NAME = "state-models.json" as const;
 export const VERIFY_DEBUG_TLA_SPECS_NAME = "tla-specs.json" as const;
 export const VERIFY_DEBUG_TLC_RESULTS_NAME = "tlc-results.json" as const;

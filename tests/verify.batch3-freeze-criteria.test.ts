@@ -142,12 +142,17 @@ await runScenario(
       assert.equal(artifact.verification_readiness.ready, true);
       assert.ok(artifact.verification_targets.length > 0);
       assert.ok(artifact.verification_cases.length > 0);
+      assert.match(report, /Verification Readiness Status:\s+ready/i);
+      assert.match(report, /Structural Verification Status:\s+passed/i);
+      assert.match(report, /verify\.json and verify-report\.md remain the durable Step 3 outputs/i);
       assert.doesNotMatch(report, /Batch 2/i);
       assert.doesNotMatch(report, /later Step 3/i);
 
       const readme = await readTextFile(join(process.cwd(), "README.md"));
-      assert.match(readme, /Batch 3 Part 1/i);
-      assert.match(readme, /finish-and-freeze/i);
+      const progress = await readTextFile(join(process.cwd(), "progress.md"));
+      assert.match(readme, /Batch 3 Part 4/i);
+      assert.match(readme, /frozen for V1 except for future bug fixes/i);
+      assert.match(progress, /Batch 3\.04: `part-4-step3-polish-test-hardening-and-freeze-criteria\.md`/i);
     } finally {
       await disposeTempRepo(repoRoot);
     }
@@ -178,6 +183,8 @@ await runScenario(
       assert.equal(artifact.verification_readiness.status, "ready_with_warnings");
       assert.ok(artifact.verification_readiness.warning_items.length > 0);
       assert.ok(artifact.verification_diagnostics.warning_items.length > 0);
+      assert.match(report, /Verification Readiness Status:\s+ready_with_warnings/i);
+      assert.match(report, /Verification Warning Items:\s+\d+/i);
       assert.match(report, /## Carry-Forward Context/);
       assert.match(report, /## Verification Readiness/);
     } finally {
@@ -215,7 +222,9 @@ await runScenario(
       await assertNoStep3Markers();
 
       const readme = await readTextFile(join(process.cwd(), "README.md"));
+      const progress = await readTextFile(join(process.cwd(), "progress.md"));
       assert.match(readme, /frozen for V1 except for future bug fixes/i);
+      assert.match(progress, /Step 3 Batch 3 Part 4 is complete/i);
     } finally {
       await disposeTempRepo(repoRoot);
     }
@@ -254,6 +263,8 @@ await runScenario(
       assert.equal(await fileExists(verifyDebugPath(repoRoot, "state-models.json")), true);
       assert.equal(await fileExists(verifyDebugPath(repoRoot, "tla-specs.json")), true);
       assert.equal(await fileExists(verifyDebugPath(repoRoot, "tlc-results.json")), true);
+      assert.equal(await fileExists(verifyDebugPath(repoRoot, "verification-readiness.json")), true);
+      assert.match(report, /Debug files are optional internal mirrors and are only written when FORGE_VERIFY_DEBUG=1/i);
       assert.match(report, new RegExp(artifact.files.debugArtifactPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
       assert.match(report, /verify-debug\.json/);
     } finally {
