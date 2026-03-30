@@ -70,10 +70,11 @@ function buildExecutionIssues(params: {
   structuralExecution: VerifyStructuralExecutionResult;
   formalExecution: VerifyFormalExecutionResult;
 }): { warningItems: VerifyInputIssue[]; blockingItems: VerifyInputIssue[] } {
+  const modelCases = params.model.cases ?? [];
   const warningItems: VerifyInputIssue[] = [];
   const blockingItems: VerifyInputIssue[] = [];
-  const formalCaseCount = params.model.cases.filter((verificationCase) => verificationCase.lanes.includes("formal")).length;
-  const structuralCaseCount = params.model.cases.filter((verificationCase) => verificationCase.lanes.includes("structural")).length;
+  const formalCaseCount = modelCases.filter((verificationCase) => verificationCase.lanes.includes("formal")).length;
+  const structuralCaseCount = modelCases.filter((verificationCase) => verificationCase.lanes.includes("structural")).length;
 
   if (structuralCaseCount > 0 && formalCaseCount === 0) {
     warningItems.push({
@@ -161,9 +162,11 @@ function buildSummary(params: {
   structuralExecution: VerifyStructuralExecutionResult;
   formalExecution: VerifyFormalExecutionResult;
 }): string {
-  const formalCaseCount = params.model.cases.filter((verificationCase) => verificationCase.lanes.includes("formal")).length;
-  const formalTargetCount = params.model.targets.filter((verificationTarget) => verificationTarget.candidateLanes.includes("formal")).length;
-  const structuralCaseCount = params.model.cases.filter((verificationCase) => verificationCase.lanes.includes("structural")).length;
+  const modelCases = params.model.cases ?? [];
+  const modelTargets = params.model.targets ?? [];
+  const formalCaseCount = modelCases.filter((verificationCase) => verificationCase.lanes.includes("formal")).length;
+  const formalTargetCount = modelTargets.filter((verificationTarget) => verificationTarget.candidateLanes.includes("formal")).length;
+  const structuralCaseCount = modelCases.filter((verificationCase) => verificationCase.lanes.includes("structural")).length;
   const laneCoverageSummary = structuralCaseCount > 0
     ? "structural checks ran"
     : formalCaseCount > 0
@@ -253,8 +256,9 @@ function buildRecommendedUserActions(params: {
   structuralExecution: VerifyStructuralExecutionResult;
   formalExecution: VerifyFormalExecutionResult;
 }): string[] {
+  const modelCases = params.model.cases ?? [];
   const actions = [...params.foundation.verificationInput.uncertainty.planningReadiness.recommended_user_actions];
-  const formalCaseCount = params.model.cases.filter((verificationCase) => verificationCase.lanes.includes("formal")).length;
+  const formalCaseCount = modelCases.filter((verificationCase) => verificationCase.lanes.includes("formal")).length;
 
   if (params.blockingItems.some((issue) => issue.code === VERIFY_INPUT_TOO_WEAK)) {
     actions.push("Strengthen the Step 2 plan with clearer verification-relevant risk, conflict, or ordering signals before attempting forge split again.");
@@ -280,7 +284,7 @@ function buildRecommendedUserActions(params: {
   if (params.blockingItems.some((issue) => issue.code === "OUTPUT_ROOT_FALLBACK")) {
     actions.push("Rerun forge verify with a repo-safe output root before attempting forge split.");
   }
-  if (params.model.cases.filter((verificationCase) => verificationCase.lanes.includes("structural")).length > 0 && formalCaseCount === 0) {
+  if (modelCases.filter((verificationCase) => verificationCase.lanes.includes("structural")).length > 0 && formalCaseCount === 0) {
     actions.push("Carry the structural verification constraints forward into later steps because this run only executed structural checks and did not produce formal validation for forge split.");
   }
 
