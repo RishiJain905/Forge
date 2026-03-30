@@ -162,6 +162,7 @@ function buildSummary(params: {
   formalExecution: VerifyFormalExecutionResult;
 }): string {
   const formalCaseCount = params.model.cases.filter((verificationCase) => verificationCase.lanes.includes("formal")).length;
+  const formalTargetCount = params.model.targets.filter((verificationTarget) => verificationTarget.candidateLanes.includes("formal")).length;
   const structuralCaseCount = params.model.cases.filter((verificationCase) => verificationCase.lanes.includes("structural")).length;
   const laneCoverageSummary = structuralCaseCount > 0
     ? "structural checks ran"
@@ -200,7 +201,7 @@ function buildSummary(params: {
     return [
       "`forge split` can proceed with caution:",
       `${laneCoverageSummary},`,
-      `formal cases were modeled for ${formalCaseCount} target(s),`,
+      `formal cases were modeled for ${formalTargetCount} target(s),`,
       "TLC returned an inconclusive verdict,",
       "so the unresolved formal uncertainty must be carried forward.",
     ].join(" ");
@@ -209,7 +210,7 @@ function buildSummary(params: {
     return [
       "`forge split` can proceed with caution:",
       `${laneCoverageSummary},`,
-      `formal cases were modeled for ${formalCaseCount} target(s),`,
+      `formal cases were modeled for ${formalTargetCount} target(s),`,
       structuralCaseCount > 0
         ? "but TLC was not run,"
         : "no structural cases were modeled for this plan, and TLC was not run,",
@@ -224,7 +225,7 @@ function buildSummary(params: {
       "`forge split` can proceed,",
       `${laneCoverageSummary},`,
       formalCaseCount > 0
-        ? `formal cases were modeled for ${formalCaseCount} target(s),`
+        ? `formal cases were modeled for ${formalTargetCount} target(s),`
         : "no formal cases were modeled,",
       params.formalExecution.formalVerification.status === "passed"
         ? "and TLC validated the modeled formal cases,"
@@ -237,7 +238,7 @@ function buildSummary(params: {
     "`forge split` can proceed.",
     `${laneCoverageSummary.charAt(0).toUpperCase()}${laneCoverageSummary.slice(1)},`,
     formalCaseCount > 0
-      ? `formal cases were modeled for ${formalCaseCount} target(s),`
+      ? `formal cases were modeled for ${formalTargetCount} target(s),`
       : "no formal cases were modeled,",
     params.formalExecution.formalVerification.status === "passed"
       ? "and TLC validated the modeled formal cases."
