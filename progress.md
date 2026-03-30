@@ -374,6 +374,12 @@
   - Hardened the Batch 3 freeze coverage with repeated warning-path determinism checks, report freeze wording assertions, Step 3 runtime/test marker sweeps, and stronger freeze-state documentation assertions.
   - Updated `README.md`, `progress.md`, and `S3-B3-Done/p4-done-summary.md` so Step 3 is documented through Batch 3 Part 4 and marked frozen for V1 except future bug fixes while leaving Part 5 as the explicit Step 4 handoff-contract closeout.
   - Re-verified the full Step 3 gate with fresh `npm.cmd test`, `npm.cmd run typecheck`, `npm.cmd run build`, and `npm.cmd run smoke`.
+- Batch 3.05: `part-5-step4-handoff-contract-for-split.md` (Step 3)
+  - Kept the Step 3 verify runtime surface unchanged and treated Part 5 as a narrow contract-proof pass over the existing `verify.json`, `verify-report.md`, and `verification_readiness` handoff surfaces instead of adding Step 4 behavior or a new handoff block.
+  - Added `tests/verify.step4-handoff-contract.test.ts` covering grounded ready runs, warning-heavy ready-with-warnings runs, blocked persisted handoffs, failed fallback-output runs, and mixed formal-result fixtures so Step 4 can trust the existing verify artifact without guessing.
+  - Wired the new Step 4 handoff-contract suite into the default `npm.cmd test` gate and kept the public verify artifact/report contract stable.
+  - Updated `README.md`, `progress.md`, and `S3-B3-Done/p5-done-summary.md` so Step 3 Batch 3 Part 5 and the full Step 3 Batch 3 closeout are documented and traceable.
+  - Re-verified the full Step 3 gate with fresh `npm.cmd test`, `npm.cmd run typecheck`, `npm.cmd run build`, and `npm.cmd run smoke`.
 
 ## Current Branch State
 - `dev` includes the completed Step 1 work through Batch 4.05, including the frozen Step 2 handoff contract from Intake.
@@ -400,7 +406,8 @@
 - `dev` now includes Step 3 Batch 3 Part 2, including deterministic scenario-specific Tier 1 plus Tier 2 formal-case fan-out, nested `scenario_kind` metadata across formal outputs, explicit `inconclusive` TLC handling, and stronger formal-lane regression coverage while keeping the public verify surface stable.
 - `dev` now includes Step 3 Batch 3 Part 3, including source-plan planning diagnostics/readiness carry-forward in `verify.json`, explicit `forge split` gate wording in `verify-report.md`, and the new `verification-readiness.json` debug artifact while keeping the public verify surface stable.
 - `dev` now includes Step 3 Batch 3 Part 4, including freeze-era verify report overview polish, explicit durable-versus-optional output wording, repeated warning-path determinism coverage, and frozen-runtime documentation while keeping the public verify surface stable.
-- `dev` now treats the Step 3 verification runtime surface as frozen for V1 except future bug fixes, with Batch 3 Part 5 reserved for the explicit Step 4 split handoff contract rather than more Step 3 runtime feature work.
+- `dev` now includes Step 3 Batch 3 Part 5, including the explicit `forge split` handoff-contract proof, dedicated Step 4 handoff coverage, and confirmation that the existing verify artifact/report/readiness surfaces are the frozen Step 4 inputs without reopening the Step 3 runtime.
+- `dev` now treats Step 3 Batch 3 as complete and the Step 3 verification runtime surface as frozen for V1 except future bug fixes, with Step 4 expected to consume persisted Step 3 outputs rather than re-running broad verification logic.
 
 ## Verification
 - `npm.cmd test`
@@ -425,4 +432,6 @@
 - Step 3 Batch 3 Part 2 is complete.
 - Step 3 Batch 3 Part 3 is complete.
 - Step 3 Batch 3 Part 4 is complete.
-- Next implementation work should move to Step 3 Batch 3 Part 5: `part-5-step4-handoff-contract-for-split.md`.
+- Step 3 Batch 3 Part 5 is complete.
+- Step 3 Batch 3 is complete.
+- Next implementation work should move to Step 4 Split.
