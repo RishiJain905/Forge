@@ -380,6 +380,11 @@
   - Wired the new Step 4 handoff-contract suite into the default `npm.cmd test` gate and kept the public verify artifact/report contract stable.
   - Updated `README.md`, `progress.md`, and `S3-B3-Done/p5-done-summary.md` so Step 3 Batch 3 Part 5 and the full Step 3 Batch 3 closeout are documented and traceable.
   - Re-verified the full Step 3 gate with fresh `npm.cmd test`, `npm.cmd run typecheck`, `npm.cmd run build`, and `npm.cmd run smoke`.
+- Batch 1.01: `part-1-step4-goal-and-boundaries.md` (Step 4)
+  - Added a new internal `src/split` foundation that freezes the Step 4 mission, deterministic-first policy, conservative-regrouping guardrails, and minimum workstream contract without introducing public `forge split` CLI wiring yet.
+  - Added a deterministic Step 4 input seam that reads `.forge/verify.json`, validates it through the frozen Step 3 artifact schema, then loads the referenced Step 2 `plan.json` as supporting structure instead of re-planning or re-verifying from prose.
+  - Locked explicit Step 4 boundary-policy and workstream-contract structures so Split now treats safety-constrained work partitioning as a first-class internal stage instead of a vague future placeholder.
+  - Added `tests/split.goal-and-boundaries.test.ts`, wired it into the default `npm.cmd test` gate, and updated `README.md`, `progress.md`, and `S4-B1-Done/p1-done-summary.md` so the Step 4 Part 1 milestone is documented and traceable.
 
 ## Current Branch State
 - `dev` includes the completed Step 1 work through Batch 4.05, including the frozen Step 2 handoff contract from Intake.
@@ -408,6 +413,7 @@
 - `dev` now includes Step 3 Batch 3 Part 4, including freeze-era verify report overview polish, explicit durable-versus-optional output wording, repeated warning-path determinism coverage, and frozen-runtime documentation while keeping the public verify surface stable.
 - `dev` now includes Step 3 Batch 3 Part 5, including the explicit `forge split` handoff-contract proof, dedicated Step 4 handoff coverage, and confirmation that the existing verify artifact/report/readiness surfaces are the frozen Step 4 inputs without reopening the Step 3 runtime.
 - `dev` now treats Step 3 Batch 3 as complete and the Step 3 verification runtime surface as frozen for V1 except future bug fixes, with Step 4 expected to consume persisted Step 3 outputs rather than re-running broad verification logic.
+- `dev` now includes Step 4 Batch 1 Part 1, including the internal `src/split` foundation, deterministic `verify.json` consumption plus referenced `plan.json` loading, explicit Step 4 boundary/workstream contracts, and dedicated goal-and-boundaries coverage while keeping Step 4 internal-only for now.
 
 ## Verification
 - `npm.cmd test`
@@ -434,4 +440,5 @@
 - Step 3 Batch 3 Part 4 is complete.
 - Step 3 Batch 3 Part 5 is complete.
 - Step 3 Batch 3 is complete.
-- Next implementation work should move to Step 4 Split.
+- Step 4 Batch 1 Part 1 is complete.
+- Next implementation work should move to Step 4 Batch 1 Part 2.

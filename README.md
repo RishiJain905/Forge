@@ -275,14 +275,17 @@ V1 verification is selective and bounded. It uses a deterministic structural lan
 
 ## 4. Split
 Purpose:
-Convert the approved plan into bounded execution streams.
+Convert verified planning output into safe execution-ready workstreams without drifting into actual implementation.
 
 Outputs include:
 - workstreams
+- stream categories
 - ownership boundaries
-- allowed/blocked paths
-- execution packets
 - merge ordering guidance
+- blocked-work visibility
+- machine-readable and human-readable split outputs
+
+Batch 1 keeps Split deterministic-first and conservative about regrouping. Execution-packet generation remains deferred to later Step 4 and Step 5 work.
 
 ## 5. Execute
 Purpose:
@@ -556,6 +559,8 @@ Batch 3 Part 4 is the final polish-and-freeze pass for the shipped Step 3 runtim
 Batch 3 Part 5 closes Step 3 by proving the existing `verify.json`, `verify-report.md`, and `verification_readiness` surfaces are the durable Step 4 inputs for `forge split`, adding a dedicated Step 4 handoff-contract regression suite, and keeping the Step 3 runtime surface unchanged.
 
 Step 3 Batch 3 is complete, and Step 3 is now frozen for V1 except for future bug fixes. Step 4 should consume the persisted Step 3 outputs instead of re-verifying broad planning logic from scratch.
+
+Step 4 Batch 1 Part 1 is now implemented as an internal `src/split` foundation. It treats `verify.json` as the primary Step 4 gate, loads the referenced `plan.json` as supporting structure, freezes the Step 4 mission and boundary policy, and keeps Split internal-only for now without public CLI wiring or split artifact/report persistence yet.
 
 ---
 
