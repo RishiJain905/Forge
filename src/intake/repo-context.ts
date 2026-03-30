@@ -542,12 +542,17 @@ async function buildRepoSignals(
   const languages = detectLanguages(files);
   const manifestTexts = new Map<string, string | null>();
 
-  for (const manifestFile of manifestFiles) {
-    if (!shouldReadManifestText(manifestFile)) {
-      continue;
-    }
+  const manifestReadPromises = manifestFiles
+    .filter(shouldReadManifestText)
+    .map(async (manifestFile) => {
+      const text = await readManifestText(repoRoot, manifestFile);
+      return { manifestFile, text };
+    });
 
-    manifestTexts.set(manifestFile, await readManifestText(repoRoot, manifestFile));
+  const manifestResults = await Promise.all(manifestReadPromises);
+
+  for (const { manifestFile, text } of manifestResults) {
+    manifestTexts.set(manifestFile, text);
   }
 
   const packageManagerDetection = detectPackageManager({
