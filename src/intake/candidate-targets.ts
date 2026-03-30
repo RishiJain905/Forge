@@ -35,18 +35,18 @@ function buildCandidateTarget(
   };
 }
 
-function pushCandidateTarget(targets: CandidateTarget[], target: CandidateTarget): void {
-  if (!hasCandidateTarget(targets, target.path, target.kind)) {
-    targets.push(target);
-  }
-}
-
 function hasCandidateTarget(
   targets: CandidateTarget[],
   pathValue: string,
   kind: CandidateTarget["kind"],
 ): boolean {
   return targets.some((target) => target.path === pathValue && target.kind === kind);
+}
+
+function pushCandidateTarget(targets: CandidateTarget[], target: CandidateTarget): void {
+  if (!hasCandidateTarget(targets, target.path, target.kind)) {
+    targets.push(target);
+  }
 }
 
 function normalizeFileStem(filePath: string): string {
@@ -226,10 +226,6 @@ function resolveExplicitCandidateTargets(
   }
 
   const enrichedTargets = [...explicitTargets];
-  const seenTargets = new Set<string>(
-    enrichedTargets.map((target) => `${target.path}:${target.kind}`)
-  );
-
   const testsByStem = new Map<string, string[]>();
   for (const testFile of repoContext.testFiles) {
     const stem = normalizeFileStem(testFile);
@@ -241,22 +237,16 @@ function resolveExplicitCandidateTargets(
     tests.push(testFile);
   }
 
-  const seenTargets = new Set<string>();
-  for (const t of enrichedTargets) {
-    seenTargets.add(`${t.path}:${t.kind}`);
-  }
+  const seenTargets = new Set<string>(
+    enrichedTargets.map((target) => `${target.path}:${target.kind}`),
+  );
 
-  for (const sourceTarget of explicitTargets) {
-    if (sourceTarget.kind !== "source") {
-      continue;
-    }
-
+  for (const sourceTarget of explicitTargets.filter((target) => target.kind === "source")) {
     for (const siblingTest of resolveSiblingTestTargets(sourceTarget, repoContext, testsByStem)) {
       const key = `${siblingTest.path}:${siblingTest.kind}`;
       if (!seenTargets.has(key)) {
         seenTargets.add(key);
         enrichedTargets.push(siblingTest);
-        seenTargets.add(key);
       }
     }
   }

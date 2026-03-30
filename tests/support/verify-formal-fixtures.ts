@@ -12,6 +12,7 @@ import {
   STEP3_VERIFY_PURPOSE,
   VERIFY_FORMAL_ENTRY_CRITERIA,
   VERIFY_FORMAL_FOCUS_AREAS,
+  VERIFY_FORMAL_SCENARIO_KINDS,
   VERIFY_FORMAL_TOOLING,
   VERIFY_STATE_MODEL_REQUIRED_FIELDS,
   VERIFY_STRUCTURAL_FOCUS_AREAS,
@@ -51,6 +52,7 @@ type FormalCaseDetails = {
   stateModelId: string;
   tlaSpecId: string;
   tlcResultId: string;
+  scenarioKind: string;
   trace: string | null;
   errors: string[];
   cautionNotes: string[];
@@ -61,6 +63,7 @@ function buildFormalDetail(params: {
   stateModelId: string;
   tlaSpecId: string;
   tlcResultId: string;
+  scenarioKind: string;
   trace: string | null;
   errors: string[];
   cautionNotes: string[];
@@ -71,6 +74,7 @@ function buildFormalDetail(params: {
     stateModelId: params.stateModelId,
     tlaSpecId: params.tlaSpecId,
     tlcResultId: params.tlcResultId,
+    scenarioKind: params.scenarioKind,
     trace: params.trace,
     errors: params.errors,
     cautionNotes: params.cautionNotes,
@@ -81,6 +85,7 @@ function buildFormalStateModel(params: {
   id: string;
   verificationCaseId: string;
   verificationTargetId: string;
+  scenarioKind: string;
   summary: string;
   actors: string[];
   entities: string[];
@@ -95,6 +100,7 @@ function buildFormalStateModel(params: {
     id: params.id,
     verification_case_id: params.verificationCaseId,
     verification_target_id: params.verificationTargetId,
+    scenario_kind: params.scenarioKind,
     name: params.id.replace(/-/g, " "),
     summary: params.summary,
     actors: params.actors,
@@ -112,6 +118,7 @@ function buildFormalSpec(params: {
   id: string;
   verificationCaseId: string;
   stateModelId: string;
+  scenarioKind: string;
   moduleName: string;
   specPath: string;
   configPath: string;
@@ -120,6 +127,7 @@ function buildFormalSpec(params: {
     id: params.id,
     verification_case_id: params.verificationCaseId,
     state_model_id: params.stateModelId,
+    scenario_kind: params.scenarioKind,
     name: `${params.moduleName} TLA+ spec`,
     module_name: params.moduleName,
     summary: `${params.moduleName} generated from ${params.stateModelId}.`,
@@ -133,6 +141,7 @@ function buildFormalTlcResult(params: {
   id: string;
   verificationCaseId: string;
   tlaSpecId: string;
+  scenarioKind: string;
   status: FormalCaseStatus;
   summary: string;
   trace: string | null;
@@ -142,6 +151,7 @@ function buildFormalTlcResult(params: {
     id: params.id,
     verification_case_id: params.verificationCaseId,
     tla_spec_id: params.tlaSpecId,
+    scenario_kind: params.scenarioKind,
     status: params.status,
     summary: params.summary,
     trace: params.trace,
@@ -200,6 +210,11 @@ export function buildFormalVerifyArtifactFixture(params: {
   const formalRoot = join(outputRoot, "formal");
   const artifactPath = verifyArtifactPath(params.repoRoot);
   const reportPath = verifyReportPath(params.repoRoot);
+  const mixedFormalFailureSummary = "`forge split` is blocked because a formal verification case failed TLC.";
+  const mixedFormalBlockingIssue = {
+    code: "FORMAL_TLC_FAILED",
+    message: "4 formal verification case(s) were selected in Part 4; execution has produced mixed TLC outcomes.",
+  };
 
   const targetOne = {
     id: "verify-target-001",
@@ -233,12 +248,19 @@ export function buildFormalVerifyArtifactFixture(params: {
   };
 
   const formalCaseStatuses: FormalCaseStatus[] = ["passed", "failed", "errored", "invalid_spec"];
+  const formalScenarioKinds = [
+    "ownership_transition",
+    "multi_agent_handoff_chain",
+    "ownership_transition",
+    "multi_agent_handoff_chain",
+  ];
   const formalCases = formalCaseStatuses.map((status, index) => {
     const caseNumber = index + 1;
     const caseId = `verify-case-00${caseNumber}`;
     const stateModelId = `verify-state-model-00${caseNumber}`;
     const tlaSpecId = `verify-tla-spec-00${caseNumber}`;
     const tlcResultId = `verify-tlc-result-00${caseNumber}`;
+    const scenarioKind = formalScenarioKinds[index]!;
     const entryCriteria = index === 0
       ? ["state_machine_like", "ownership_or_version_validity"]
       : index === 1
@@ -263,11 +285,39 @@ export function buildFormalVerifyArtifactFixture(params: {
       sourcePlanItemIds: ["plan-item-ownership"],
       lanes: ["formal"],
       goal: "Model ownership transitions formally and preserve traceability to the originating Step 2 plan items.",
-      status: "not_run",
-      summary: `Selected for formal verification in Part 4; execution has not run yet for ownership (${status}).`,
-      findings: [],
-      mitigations: [],
-      constraints: [],
+      status,
+      summary:
+        status === "passed"
+          ? `Formal verification passed for ownership scenario ${scenarioKind}.`
+          : status === "failed"
+            ? `Formal verification failed for ownership scenario ${scenarioKind}.`
+            : status === "errored"
+              ? `Formal verification errored for ownership scenario ${scenarioKind}.`
+              : `Formal verification produced an invalid spec for ownership scenario ${scenarioKind}.`,
+      findings:
+        status === "passed"
+          ? ["Formal verification passed for the ownership case."]
+          : status === "failed"
+            ? ["Formal verification failed for the ownership case."]
+            : status === "errored"
+              ? ["Formal verification errored for the ownership case."]
+              : ["Formal verification remained invalid_spec for the ownership case."],
+      mitigations:
+        status === "passed"
+          ? ["Carry the validated ownership invariant forward into later steps."]
+          : status === "failed"
+            ? ["Review the TLC counterexample before relying on forge split."]
+            : status === "errored"
+              ? ["Repair the TLC execution problem before relying on forge split."]
+              : ["Repair the generated TLA+ spec before relying on forge split."],
+      constraints:
+        status === "failed"
+          ? ["Formal failure cases must keep counterexamples visible."]
+          : status === "errored"
+            ? ["Formal error cases must keep TLC error details visible."]
+            : status === "invalid_spec"
+              ? ["Invalid formal specs must stay explicit in the artifact."]
+              : [],
       tlcStatus: status,
       traceabilityNotes: [
         "Step 2 marked plan-item-ownership as verification-relevant for ownership.",
@@ -278,6 +328,7 @@ export function buildFormalVerifyArtifactFixture(params: {
         stateModelId,
         tlaSpecId,
         tlcResultId,
+        scenarioKind,
         trace,
         errors,
         cautionNotes: [
@@ -414,7 +465,7 @@ export function buildFormalVerifyArtifactFixture(params: {
     schemaVersion: FORGE_SCHEMA_VERSION,
     command: FORGE_VERIFY_FULL_COMMAND,
     stage: FORGE_VERIFY_STAGE,
-    status: "ready",
+    status: "blocked",
     purpose: STEP3_VERIFY_PURPOSE,
     repoRoot: params.repoRoot,
     requestedOutputRoot: null,
@@ -433,13 +484,14 @@ export function buildFormalVerifyArtifactFixture(params: {
       debugArtifactPath: join(outputRoot, "debug", "verify-debug.json"),
       debugVerificationCasesPath: join(outputRoot, "debug", "verification-cases.json"),
       debugStructuralFindingsPath: join(outputRoot, "debug", "structural-findings.json"),
+      debugVerificationReadinessPath: join(outputRoot, "debug", "verification-readiness.json"),
       debugStateModelsPath: join(outputRoot, "debug", "state-models.json"),
       debugTlaSpecsPath: join(outputRoot, "debug", "tla-specs.json"),
       debugTlcResultsPath: join(outputRoot, "debug", "tlc-results.json"),
     },
     startedAt: "2026-03-25T00:00:00.000Z",
     finishedAt: "2026-03-25T00:01:00.000Z",
-    summary: params.planArtifact.planning_readiness.summary,
+    summary: mixedFormalFailureSummary,
     boundaryNotes: [...STEP3_DETERMINISTIC_FIRST_NOTES],
     source_plan: {
       artifactPath: join(params.repoRoot, ".forge", "plan.json"),
@@ -449,6 +501,12 @@ export function buildFormalVerifyArtifactFixture(params: {
       summary: params.planArtifact.summary,
       readyForVerification: params.planArtifact.planning_readiness.ready,
       planningReadinessStatus: params.planArtifact.planning_readiness.status,
+      planning_diagnostics: {
+        ...params.planArtifact.planning_diagnostics,
+      },
+      planning_readiness: {
+        ...params.planArtifact.planning_readiness,
+      },
       failure: params.planArtifact.failure,
     },
     verification_target_contract: {
@@ -460,6 +518,7 @@ export function buildFormalVerifyArtifactFixture(params: {
     },
     formal_lane_contract: {
       tooling: [...VERIFY_FORMAL_TOOLING],
+      scenarioKinds: [...VERIFY_FORMAL_SCENARIO_KINDS],
       entryCriteria: [...VERIFY_FORMAL_ENTRY_CRITERIA],
       stateModelRequiredFields: [...VERIFY_STATE_MODEL_REQUIRED_FIELDS],
       tlcStatuses: [...VERIFY_TLC_STATUSES],
@@ -505,7 +564,8 @@ export function buildFormalVerifyArtifactFixture(params: {
           id: `verify-state-model-00${index + 1}`,
           verificationCaseId: entry.id,
           verificationTargetId: targetOne.id,
-          summary: `State model for ownership formal case ${index + 1}.`,
+          scenarioKind: entry.formalDetails.scenarioKind,
+          summary: `State model for ownership formal case ${index + 1} (${entry.formalDetails.scenarioKind}).`,
           actors: ["developer", "runtime"],
           entities: ["work item", "owner", "lease"],
           states: ["unowned", "owned", "handoff_pending", "released", "completed"],
@@ -535,6 +595,7 @@ export function buildFormalVerifyArtifactFixture(params: {
           id: `verify-tla-spec-00${index + 1}`,
           verificationCaseId: entry.id,
           stateModelId: `verify-state-model-00${index + 1}`,
+          scenarioKind: entry.formalDetails.scenarioKind,
           moduleName: `ForgeVerifyOwnership${index + 1}`,
           specPath: join(formalRoot, `ForgeVerifyOwnership${index + 1}.tla`),
           configPath: join(formalRoot, `ForgeVerifyOwnership${index + 1}.cfg`),
@@ -545,6 +606,7 @@ export function buildFormalVerifyArtifactFixture(params: {
           id: `verify-tlc-result-00${index + 1}`,
           verificationCaseId: entry.id,
           tlaSpecId: `verify-tla-spec-00${index + 1}`,
+          scenarioKind: entry.formalDetails.scenarioKind,
           status: entry.tlcStatus,
           summary:
             index === 0
@@ -583,18 +645,21 @@ export function buildFormalVerifyArtifactFixture(params: {
     verification_diagnostics: {
       usability_status: params.planArtifact.planning_diagnostics.usability_status,
       warning_items: params.planArtifact.planning_diagnostics.warning_items,
-      blocking_items: [],
+      blocking_items: [mixedFormalBlockingIssue],
       partial_output: params.planArtifact.planning_diagnostics.partial_output,
     },
     verification_readiness: {
-      ready: params.planArtifact.planning_readiness.ready,
-      status: params.planArtifact.planning_readiness.status,
-      summary: params.planArtifact.planning_readiness.summary,
+      ready: false,
+      status: "blocked",
+      summary: mixedFormalFailureSummary,
       warning_items: params.planArtifact.planning_readiness.warning_items,
-      blocking_issues: params.planArtifact.planning_readiness.blocking_issues,
+      blocking_issues: [mixedFormalBlockingIssue],
       partial_output: params.planArtifact.planning_readiness.partial_output,
       constraining_concern_ids: params.planArtifact.planning_readiness.constraining_concern_ids,
-      recommended_user_actions: params.planArtifact.planning_readiness.recommended_user_actions,
+      recommended_user_actions: [
+        ...params.planArtifact.planning_readiness.recommended_user_actions,
+        "Review the TLC counterexample and update the plan before attempting `forge split`.",
+      ],
     },
     failure: null,
   };

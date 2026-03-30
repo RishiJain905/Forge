@@ -12,6 +12,7 @@ import {
 import type {
   VerifyCaseFormalDetails,
   VerifyFormalEntryCriterion,
+  VerifyFormalScenarioKind,
   VerifyFormalVerification,
   VerifyFoundationResult,
   VerifyFormalSupportedCategory,
@@ -29,6 +30,7 @@ import type {
 
 type FormalTemplate = {
   actionLabel: string;
+  scenarioActionLabel?: string;
   actors: string[];
   entities: string[];
   states: string[];
@@ -38,14 +40,23 @@ type FormalTemplate = {
   invariants: string[];
   initialConditions: string[];
   initialState: string;
+  summary: string;
   unsupportedReason: string | null;
 };
+
+type FormalTemplateOverlay = Partial<Omit<FormalTemplate, "unsupportedReason">>;
 
 type ProcessResult = {
   code: number | null;
   stdout: string;
   stderr: string;
   error: Error | null;
+};
+
+type ProcessInvocation = {
+  command: string;
+  args: string[];
+  windowsVerbatimArguments?: boolean;
 };
 
 export interface VerifyFormalArtifactNames {
@@ -71,6 +82,29 @@ export const VERIFY_SUPPORTED_FORMAL_CATEGORIES = [
   "migration_order",
 ] as const satisfies readonly VerifyFormalSupportedCategory[];
 
+export const VERIFY_FORMAL_SCENARIO_KINDS_BY_CATEGORY = {
+  migration_order: [
+    "ordering_serialization",
+    "shared_artifact_merge_order",
+  ],
+  ownership: [
+    "ownership_transition",
+    "multi_agent_handoff_chain",
+  ],
+  parallel_overlap: [
+    "duplicate_execution",
+    "shared_resource_mutation_overlap",
+  ],
+  retry_logic: [
+    "retry_reassignment",
+    "queue_claim_release_lifecycle",
+    "failure_recovery_loop",
+  ],
+  stale_write: [
+    "stale_write_validity",
+  ],
+} as const satisfies Record<VerifyFormalSupportedCategory, readonly VerifyFormalScenarioKind[]>;
+
 const FORMAL_TEMPLATE_BY_CATEGORY: Record<VerifyFormalSupportedCategory, Omit<FormalTemplate, "unsupportedReason">> = {
   retry_logic: {
     actionLabel: "RetryOrReassign",
@@ -95,6 +129,7 @@ const FORMAL_TEMPLATE_BY_CATEGORY: Record<VerifyFormalSupportedCategory, Omit<Fo
     ],
     initialConditions: ["The job starts pending with zero retries consumed."],
     initialState: "pending",
+    summary: "Retry reassignment loop with bounded retry budget and explicit reclaim.",
   },
   ownership: {
     actionLabel: "OwnershipTransition",
@@ -118,6 +153,7 @@ const FORMAL_TEMPLATE_BY_CATEGORY: Record<VerifyFormalSupportedCategory, Omit<Fo
     ],
     initialConditions: ["The resource starts unowned."],
     initialState: "unowned",
+    summary: "Ownership transition with a single active lease and explicit release.",
   },
   parallel_overlap: {
     actionLabel: "DuplicateExecution",
@@ -141,6 +177,7 @@ const FORMAL_TEMPLATE_BY_CATEGORY: Record<VerifyFormalSupportedCategory, Omit<Fo
     ],
     initialConditions: ["The shared work item starts idle."],
     initialState: "idle",
+    summary: "Duplicate execution with a single successful path and duplicate suppression.",
   },
   stale_write: {
     actionLabel: "StaleWriteValidity",
@@ -164,6 +201,7 @@ const FORMAL_TEMPLATE_BY_CATEGORY: Record<VerifyFormalSupportedCategory, Omit<Fo
     ],
     initialConditions: ["The record starts at a fresh read."],
     initialState: "fresh_read",
+    summary: "Stale write validity that rejects outdated commits and preserves the latest version.",
   },
   migration_order: {
     actionLabel: "OrderingSerialization",
@@ -186,6 +224,133 @@ const FORMAL_TEMPLATE_BY_CATEGORY: Record<VerifyFormalSupportedCategory, Omit<Fo
     ],
     initialConditions: ["The migration starts not_started."],
     initialState: "not_started",
+    summary: "Ordering serialization that preserves phased migration order.",
+  },
+};
+
+const FORMAL_TEMPLATE_BY_SCENARIO_KIND: Partial<Record<VerifyFormalScenarioKind, FormalTemplateOverlay>> = {
+  multi_agent_handoff_chain: {
+    actionLabel: "ChainedHandoffTransfer",
+    actors: ["origin_owner", "relay_agent", "receiver"],
+    entities: ["resource", "handoff chain", "ownership token"],
+    states: ["owned", "handoff_sent", "handoff_received", "dropped_ownership", "completed"],
+    transitions: [
+      ["owned", "handoff_sent"],
+      ["handoff_sent", "handoff_received"],
+      ["handoff_received", "completed"],
+      ["handoff_sent", "dropped_ownership"],
+    ],
+    unsafeStates: ["dropped_ownership"],
+    unsafeConditions: [
+      "A chained transfer drops ownership before the receiver accepts it.",
+      "Dropped ownership leaves the resource without a valid owner.",
+    ],
+    invariants: [
+      "A chained transfer must preserve ownership until the receiver accepts it.",
+      "Dropped ownership is not allowed during the handoff chain.",
+    ],
+    initialConditions: ["The chain starts with one owner and no pending transfer."],
+    initialState: "owned",
+    summary: "Chained transfer handoff chain with dropped ownership protection.",
+  },
+  queue_claim_release_lifecycle: {
+    actionLabel: "QueueClaimReleaseLifecycle",
+    actors: ["queue", "worker", "lease_manager"],
+    entities: ["queue item", "claim lease", "release record"],
+    states: ["queued", "claimed", "released", "reclaimed", "completed"],
+    transitions: [
+      ["queued", "claimed"],
+      ["claimed", "released"],
+      ["released", "reclaimed"],
+      ["reclaimed", "completed"],
+      ["claimed", "completed"],
+    ],
+    unsafeStates: ["double_claim", "lost_claim"],
+    unsafeConditions: [
+      "A double-claim occurs before the lease is released.",
+      "A lost-claim leaves the queue item unreachable after release.",
+    ],
+    invariants: [
+      "A claim must be released before the next claimant takes ownership.",
+      "A lost claim must be recovered before completion.",
+    ],
+    initialConditions: ["The item starts queued with no active claim."],
+    initialState: "queued",
+    summary: "Double-claim and lost-claim queue lifecycle with explicit release control.",
+  },
+  shared_artifact_merge_order: {
+    actionLabel: "SharedArtifactMergeOrder",
+    actors: ["branch_a", "branch_b", "merge_coordinator"],
+    entities: ["shared artifact", "merge order", "merge queue"],
+    states: ["base", "branch_a_ready", "branch_b_ready", "merge_ordered", "merged"],
+    transitions: [
+      ["base", "branch_a_ready"],
+      ["branch_a_ready", "branch_b_ready"],
+      ["branch_b_ready", "merge_ordered"],
+      ["merge_ordered", "merged"],
+    ],
+    unsafeStates: ["merge_order_violation"],
+    unsafeConditions: [
+      "A merge order violation applies branch B before branch A.",
+      "Shared artifact merge happens out of order.",
+    ],
+    invariants: [
+      "Merge order must keep branch updates serialized.",
+      "The shared artifact may only merge after both branches are ready.",
+    ],
+    initialConditions: ["The shared artifact starts at the base revision."],
+    initialState: "base",
+    summary: "Shared artifact merge order with serialized branch merging.",
+  },
+  shared_resource_mutation_overlap: {
+    actionLabel: "SharedResourceMutationOverlap",
+    actors: ["mutator_a", "mutator_b", "coordinator"],
+    entities: ["shared resource", "mutation window", "conflict detector"],
+    states: ["stable", "mutating_a", "mutating_b", "overlap_detected", "resolved"],
+    transitions: [
+      ["stable", "mutating_a"],
+      ["stable", "mutating_b"],
+      ["mutating_a", "overlap_detected"],
+      ["mutating_b", "overlap_detected"],
+      ["overlap_detected", "resolved"],
+    ],
+    unsafeStates: ["conflicting_update"],
+    unsafeConditions: [
+      "A shared resource mutation overlaps with another conflicting update.",
+      "Conflicting update windows are not serialized or rejected.",
+    ],
+    invariants: [
+      "Shared resource mutation must avoid conflicting update overlap.",
+      "At most one mutator may write at a time.",
+    ],
+    initialConditions: ["The resource starts stable before any mutation begins."],
+    initialState: "stable",
+    summary: "Shared resource mutation overlap with conflicting updates.",
+  },
+  failure_recovery_loop: {
+    actionLabel: "FailureRecoveryLoop",
+    actors: ["worker", "supervisor", "rollback_manager"],
+    entities: ["task", "rollback log", "reassignment loop"],
+    states: ["running", "failed", "rollback", "reassignment", "recovered"],
+    transitions: [
+      ["running", "failed"],
+      ["failed", "rollback"],
+      ["rollback", "reassignment"],
+      ["reassignment", "running"],
+      ["reassignment", "recovered"],
+    ],
+    unsafeStates: ["recovery_stall"],
+    unsafeConditions: [
+      "A rollback fails to advance the recovery loop.",
+      "The reassignment loop retries forever without recovery.",
+    ],
+    invariants: [
+      "A failure recovery loop must either rollback or reassign.",
+      "Rollback must eventually lead to recovery or a safe stop.",
+    ],
+    initialConditions: ["The task starts running with recovery available."],
+    initialState: "running",
+    summary: "Failure recovery loop with rollback and reassignment recovery.",
   },
 };
 
@@ -213,6 +378,14 @@ export function isSupportedFormalCategory(
   category: VerifyVerificationCategory,
 ): category is VerifyFormalSupportedCategory {
   return (VERIFY_SUPPORTED_FORMAL_CATEGORIES as readonly string[]).includes(category);
+}
+
+export function getVerifyFormalScenarioKinds(
+  category: VerifyVerificationCategory,
+): VerifyFormalScenarioKind[] {
+  return isSupportedFormalCategory(category)
+    ? [...VERIFY_FORMAL_SCENARIO_KINDS_BY_CATEGORY[category]]
+    : [];
 }
 
 export function buildVerifyFormalArtifactNames(caseId: string): VerifyFormalArtifactNames {
@@ -300,12 +473,12 @@ export function buildVerifyFormalBaseCautionNotes(
   return dedupeStable(notes);
 }
 
-function buildTemplate(category: VerifyVerificationCategory): FormalTemplate {
+function buildTemplate(
+  category: VerifyVerificationCategory,
+  scenarioKind?: VerifyFormalScenarioKind,
+): FormalTemplate {
   if (isSupportedFormalCategory(category)) {
-    return {
-      ...FORMAL_TEMPLATE_BY_CATEGORY[category],
-      unsupportedReason: null,
-    };
+    return buildScenarioTemplate(category, scenarioKind);
   }
 
   return {
@@ -322,7 +495,46 @@ function buildTemplate(category: VerifyVerificationCategory): FormalTemplate {
     invariants: ["The fallback formal model must remain bounded and conservative."],
     initialConditions: ["The fallback formal case starts initial."],
     initialState: "initial",
+    summary: "Fallback formal verification model remains bounded and conservative.",
     unsupportedReason: `Unsupported formal verification category: ${category}.`,
+  };
+}
+
+function buildScenarioTemplate(
+  category: VerifyFormalSupportedCategory,
+  scenarioKind: VerifyFormalScenarioKind | undefined,
+): FormalTemplate {
+  const base = FORMAL_TEMPLATE_BY_CATEGORY[category];
+  const overlay = scenarioKind ? FORMAL_TEMPLATE_BY_SCENARIO_KIND[scenarioKind] : undefined;
+  if (!overlay) {
+    return {
+      ...base,
+      actors: [...base.actors],
+      entities: [...base.entities],
+      states: [...base.states],
+      transitions: base.transitions.map(([from, to]) => [from, to] as [string, string]),
+      unsafeStates: [...base.unsafeStates],
+      unsafeConditions: [...base.unsafeConditions],
+      invariants: [...base.invariants],
+      initialConditions: [...base.initialConditions],
+      unsupportedReason: null,
+    };
+  }
+
+  return {
+    actionLabel: base.actionLabel,
+    scenarioActionLabel: overlay.actionLabel ?? base.actionLabel,
+    actors: [...(overlay.actors ?? base.actors)],
+    entities: [...(overlay.entities ?? base.entities)],
+    states: [...(overlay.states ?? base.states)],
+    transitions: (overlay.transitions ?? base.transitions).map(([from, to]) => [from, to] as [string, string]),
+    unsafeStates: [...(overlay.unsafeStates ?? base.unsafeStates)],
+    unsafeConditions: [...(overlay.unsafeConditions ?? base.unsafeConditions)],
+    invariants: [...(overlay.invariants ?? base.invariants)],
+    initialConditions: [...(overlay.initialConditions ?? base.initialConditions)],
+    initialState: overlay.initialState ?? base.initialState,
+    summary: overlay.summary ?? base.summary,
+    unsupportedReason: null,
   };
 }
 
@@ -330,18 +542,20 @@ function buildFormalStateModel(params: {
   case: VerifyVerificationCase;
   targetTitle: string;
   names: VerifyFormalArtifactNames;
+  scenarioKind: VerifyFormalScenarioKind;
 }): { stateModel: VerifyStateModel; template: FormalTemplate } {
-  const template = buildTemplate(params.case.category);
+  const template = buildTemplate(params.case.category, params.scenarioKind);
   return {
     template,
     stateModel: {
       id: params.names.stateModelId,
       verification_case_id: params.case.id,
       verification_target_id: params.case.verificationTargetId,
+      scenario_kind: params.scenarioKind,
       name: `${params.case.title} state model`,
       summary: template.unsupportedReason
-        ? `Fallback formal state model for ${params.case.category}.`
-        : `State model for ${params.case.category} case ${params.case.id} derived from Step 2 signals on ${params.targetTitle}.`,
+        ? `Fallback formal state model for ${params.case.category} scenario ${params.scenarioKind}. ${template.summary}`
+        : `State model for ${params.case.category} scenario ${params.scenarioKind} case ${params.case.id} derived from Step 2 signals on ${params.targetTitle}. ${template.summary}`,
       actors: [...template.actors],
       entities: [...template.entities],
       states: [...template.states],
@@ -375,6 +589,7 @@ function renderTlaModule(params: {
     `\\* Verification target: ${params.case.verificationTargetId}`,
     `\\* Target title: ${params.targetTitle}`,
     `\\* Category: ${params.case.category}`,
+    `\\* Scenario kind: ${params.stateModel.scenario_kind}`,
     `\\* Summary: ${params.stateModel.summary}`,
     `\\* Actors: ${params.stateModel.actors.join(", ")}`,
     `\\* Entities: ${params.stateModel.entities.join(", ")}`,
@@ -391,6 +606,9 @@ function renderTlaModule(params: {
     `Init == state = "${params.template.initialState}"`,
     "",
     `\\* Action label: ${params.template.actionLabel}`,
+    ...(params.template.scenarioActionLabel && params.template.scenarioActionLabel !== params.template.actionLabel
+      ? [`\\* Scenario action label: ${params.template.scenarioActionLabel}`]
+      : []),
     `${params.template.actionLabel} ==`,
     transitions,
     "",
@@ -408,12 +626,88 @@ function renderTlcConfig(): string {
   return ["SPECIFICATION Spec", "INVARIANT Safety", ""].join("\n");
 }
 
-function spawnProcess(command: string, args: string[], cwd: string): Promise<ProcessResult> {
+function quoteWindowsCmdArg(value: string): string {
+  return `"${value.replace(/"/g, '""').replace(/%/g, "%%")}"`;
+}
+
+async function resolveWindowsCommand(command: string): Promise<string | null> {
+  if (path.isAbsolute(command) || command.includes("\\") || command.includes("/")) {
+    try {
+      await access(command);
+      return command;
+    } catch {
+      return null;
+    }
+  }
+
+  const pathEntries = (process.env.PATH ?? process.env.Path ?? "")
+    .split(path.delimiter)
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+  const pathExts = (process.env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD")
+    .split(";")
+    .map((extension) => extension.trim().toLowerCase())
+    .filter((extension) => extension.length > 0);
+  const commandHasExtension = path.extname(command).length > 0;
+
+  for (const entry of pathEntries) {
+    const baseCandidate = path.join(entry, command);
+    const candidates = commandHasExtension
+      ? [baseCandidate]
+      : pathExts.map((extension) => `${baseCandidate}${extension}`);
+
+    for (const candidate of candidates) {
+      try {
+        await access(candidate);
+        return candidate;
+      } catch {
+        // Keep scanning PATH candidates until one exists.
+      }
+    }
+  }
+
+  return null;
+}
+
+async function resolveProcessInvocation(
+  command: string,
+  args: string[],
+): Promise<ProcessInvocation> {
+  if (process.platform !== "win32") {
+    return { command, args };
+  }
+
+  const resolvedCommand = await resolveWindowsCommand(command);
+  if (!resolvedCommand) {
+    return { command, args };
+  }
+
+  if (/\.(cmd|bat)$/i.test(resolvedCommand)) {
+    const quotedArgs = args.map(quoteWindowsCmdArg).join(" ");
+    const shellCommand = `""${resolvedCommand}"${quotedArgs ? ` ${quotedArgs}` : ""}"`;
+
+    return {
+      command: process.env.ComSpec ?? "cmd.exe",
+      args: ["/d", "/s", "/c", shellCommand],
+      windowsVerbatimArguments: true,
+    };
+  }
+
+  return {
+    command: resolvedCommand,
+    args,
+  };
+}
+
+async function spawnProcess(command: string, args: string[], cwd: string): Promise<ProcessResult> {
+  const invocation = await resolveProcessInvocation(command, args);
+
   return new Promise((resolve) => {
-    const child = spawn(command, args, {
+    const child = spawn(invocation.command, invocation.args, {
       cwd,
-      shell: process.platform === "win32",
+      shell: false, // Security: Disable shell execution to prevent command injection
       windowsHide: true,
+      windowsVerbatimArguments: invocation.windowsVerbatimArguments ?? false,
       stdio: ["ignore", "pipe", "pipe"],
     });
 
@@ -492,6 +786,14 @@ function classifyTlcStatus(params: {
     return "failed";
   }
   if (
+    /inconclusive/.test(output) ||
+    /partial evidence/.test(output) ||
+    /no trustworthy verdict/.test(output) ||
+    /partial verdict/.test(output)
+  ) {
+    return "inconclusive";
+  }
+  if (
     /parse error/.test(output) ||
     /syntax error/.test(output) ||
     /configuration file/.test(output) ||
@@ -523,6 +825,8 @@ function buildTlcSummary(
       return `TLC passed for ${caseId}.`;
     case "failed":
       return `TLC found a counterexample for ${caseId}.`;
+    case "inconclusive":
+      return `TLC returned an inconclusive verdict for ${caseId}.`;
     case "invalid_spec":
       return `The generated TLA+ artifacts for ${caseId} were not runnable.`;
     case "errored":
@@ -544,6 +848,8 @@ function buildCaseConstraints(stateModel: VerifyStateModel, status: VerifyTlcSta
 
   if (status === "failed") {
     constraints.push("TLC found a counterexample; later steps must not proceed until the violating trace is resolved.");
+  } else if (status === "inconclusive") {
+    constraints.push("TLC returned an inconclusive verdict; later steps must carry the unresolved formal uncertainty forward.");
   } else if (status === "invalid_spec") {
     constraints.push("The generated TLA+ spec is not runnable; later steps must treat the formal lane as unresolved.");
   } else if (status === "errored") {
@@ -559,6 +865,7 @@ function buildCaseFindings(caseId: string, summary: string, status: VerifyTlcSta
   const findings = [summary];
   if (status === "passed") findings.push(`Formal verification passed for ${caseId}.`);
   if (status === "failed") findings.push(`Formal verification failed for ${caseId}.`);
+  if (status === "inconclusive") findings.push(`Formal verification remained inconclusive for ${caseId}.`);
   if (status === "invalid_spec") findings.push(`Formal verification could not validate the generated spec for ${caseId}.`);
   if (status === "errored") findings.push(`Formal verification errored for ${caseId}.`);
   if (status === "not_run" && !configured) findings.push(`TLC is deferred until ${VERIFY_TLC_JAR_PATH_ENV_VAR} is configured.`);
@@ -566,7 +873,7 @@ function buildCaseFindings(caseId: string, summary: string, status: VerifyTlcSta
 }
 
 function buildFormalVerificationStatus(results: VerifyTlcResult[]): VerifyTlcStatus {
-  const precedence: VerifyTlcStatus[] = ["failed", "errored", "invalid_spec", "not_run", "passed"];
+  const precedence: VerifyTlcStatus[] = ["failed", "errored", "invalid_spec", "inconclusive", "not_run", "passed"];
   for (const status of precedence) {
     if (results.some((result) => result.status === status)) return status;
   }
@@ -585,7 +892,7 @@ function buildFormalVerificationSummary(
       accumulator[result.status] += 1;
       return accumulator;
     },
-    { passed: 0, failed: 0, errored: 0, invalid_spec: 0, not_run: 0 } satisfies Record<VerifyTlcStatus, number>,
+    { passed: 0, failed: 0, errored: 0, invalid_spec: 0, inconclusive: 0, not_run: 0 } satisfies Record<VerifyTlcStatus, number>,
   );
 
   if (counts.failed > 0) {
@@ -596,6 +903,9 @@ function buildFormalVerificationSummary(
   }
   if (counts.invalid_spec > 0) {
     return `${caseCount} formal verification case(s) were selected in Part 3; ${counts.invalid_spec} generated spec(s) were not runnable.`;
+  }
+  if (counts.inconclusive > 0) {
+    return `${caseCount} formal verification case(s) were selected in Part 3; TLC was inconclusive for ${counts.inconclusive} case(s).`;
   }
   if (counts.not_run > 0) {
     return configured
@@ -620,13 +930,18 @@ async function buildCaseExecution(params: {
   findings: string[];
   constraints: string[];
   cautionNotes: string[];
-}> {
+  }> {
   const names = buildVerifyFormalArtifactNames(params.verificationCase.id);
-  const template = buildTemplate(params.verificationCase.category);
+  const scenarioKind: VerifyFormalScenarioKind =
+    params.verificationCase.formalDetails?.scenarioKind ??
+    getVerifyFormalScenarioKinds(params.verificationCase.category)[0] ??
+    "stale_write_validity";
+  const template = buildTemplate(params.verificationCase.category, scenarioKind);
   const { stateModel } = buildFormalStateModel({
     case: params.verificationCase,
     targetTitle: params.targetTitle,
     names,
+    scenarioKind,
   });
   const entryCriteria = buildVerifyFormalEntryCriteria(
     params.verificationCase.category,
@@ -710,6 +1025,9 @@ async function buildCaseExecution(params: {
           ? "TLC was configured but not run for this formal case."
           : `TLC was not run because ${VERIFY_TLC_JAR_PATH_ENV_VAR} is not configured.`]
       : []),
+    ...(tlcStatus === "inconclusive"
+      ? ["TLC produced an inconclusive verdict; review the partial evidence before relying on it."]
+      : []),
     ...(tlcStatus === "failed" ? ["TLC found a counterexample; review the trace before proceeding."] : []),
     ...(tlcStatus === "invalid_spec" ? ["The generated TLA+ spec was not runnable and needs repair before TLC can validate it."] : []),
     ...(tlcStatus === "errored" ? ["TLC errored unexpectedly; the formal lane remains cautious."] : []),
@@ -721,11 +1039,12 @@ async function buildCaseExecution(params: {
     stateModelId: names.stateModelId,
     tlaSpecId: names.tlaSpecId,
     tlcResultId: names.tlcResultId,
+    scenarioKind,
     cautionNotes,
     trace: tlcStatus === "passed" || tlcStatus === "not_run" ? null : (combinedOutput.trim() || null),
     errors: processResult?.error
       ? [processResult.error.message]
-      : tlcStatus === "passed"
+      : tlcStatus === "passed" || tlcStatus === "inconclusive"
         ? []
         : tlcStatus === "not_run"
           ? [tlcSummary]
@@ -735,9 +1054,10 @@ async function buildCaseExecution(params: {
     id: names.tlaSpecId,
     verification_case_id: params.verificationCase.id,
     state_model_id: stateModel.id,
+    scenario_kind: scenarioKind,
     name: `${params.verificationCase.title} TLA+ spec`,
     summary: generationStatus === "generated"
-      ? `Generated TLA+ spec for ${params.verificationCase.id} using module ${names.moduleName}.`
+      ? `Generated TLA+ spec for ${params.verificationCase.id} (${scenarioKind}) using module ${names.moduleName}.`
       : `TLA+ spec for ${params.verificationCase.id} could not be generated cleanly.`,
     module_name: names.moduleName,
     spec_path: resolveOutputFilePath(resolveOutputFilePath(params.outputRoot, VERIFY_FORMAL_DIRECTORY_NAME), `${names.specBaseName}.tla`),
@@ -748,6 +1068,7 @@ async function buildCaseExecution(params: {
     id: names.tlcResultId,
     verification_case_id: params.verificationCase.id,
     tla_spec_id: names.tlaSpecId,
+    scenario_kind: scenarioKind,
     status: tlcStatus,
     summary: tlcSummary,
     trace: formalDetails.trace,
@@ -779,6 +1100,8 @@ function buildCaseMitigations(status: VerifyTlcStatus): string[] {
       return ["No immediate mitigation required from the formal lane."];
     case "failed":
       return ["Review the counterexample trace and tighten the plan before proceeding."];
+    case "inconclusive":
+      return ["Review the partial TLC evidence and tighten the model before relying on the result."];
     case "invalid_spec":
       return ["Repair the generated TLA+ spec or configuration before rerunning TLC."];
     case "errored":

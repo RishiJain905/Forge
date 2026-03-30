@@ -64,6 +64,10 @@ export function createVerifyDebugArtifact(
         paths.debugStructuralFindingsPath,
         "debugStructuralFindingsPath",
       ),
+      debugVerificationReadinessPath: requireDebugPath(
+        paths.debugVerificationReadinessPath,
+        "debugVerificationReadinessPath",
+      ),
       debugStateModelsPath: requireDebugPath(paths.debugStateModelsPath, "debugStateModelsPath"),
       debugTlaSpecsPath: requireDebugPath(paths.debugTlaSpecsPath, "debugTlaSpecsPath"),
       debugTlcResultsPath: requireDebugPath(paths.debugTlcResultsPath, "debugTlcResultsPath"),
@@ -77,6 +81,8 @@ export function createVerifyDebugArtifact(
       tla_specs: artifact.formal_verification.tla_specs,
       tlc_results: artifact.formal_verification.tlc_results,
     },
+    verification_diagnostics: artifact.verification_diagnostics,
+    verification_readiness: artifact.verification_readiness,
     failure: artifact.failure,
   };
 }
@@ -107,6 +113,15 @@ export function createVerifyDebugWrites(params: {
       contents: stringifyJson({
         findings: selectFindings(params.artifact, "structural"),
         constraints: selectConstraints(params.artifact, "structural"),
+      }),
+    },
+    {
+      filePath: requireDebugPath(
+        params.paths.debugVerificationReadinessPath,
+        "debugVerificationReadinessPath",
+      ),
+      contents: stringifyJson({
+        verification_readiness: params.artifact.verification_readiness,
       }),
     },
     {

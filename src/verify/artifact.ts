@@ -172,6 +172,7 @@ export function createVerifyArtifact(params: {
       debugArtifactPath: params.paths.debugArtifactPath,
       debugVerificationCasesPath: params.paths.debugVerificationCasesPath,
       debugStructuralFindingsPath: params.paths.debugStructuralFindingsPath,
+      debugVerificationReadinessPath: params.paths.debugVerificationReadinessPath,
       debugStateModelsPath: params.paths.debugStateModelsPath,
       debugTlaSpecsPath: params.paths.debugTlaSpecsPath,
       debugTlcResultsPath: params.paths.debugTlcResultsPath,

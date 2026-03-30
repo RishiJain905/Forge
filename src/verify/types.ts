@@ -7,6 +7,7 @@ import type {
   VERIFY_FORMAL_TOOLING,
   VERIFY_CASE_STATUSES,
   VERIFY_TLA_SPEC_GENERATION_STATUSES,
+  VERIFY_FORMAL_SCENARIO_KINDS,
   VERIFY_STATE_MODEL_REQUIRED_FIELDS,
   VERIFY_STRUCTURAL_FOCUS_AREAS,
   VERIFY_SUPPORTED_LANES,
@@ -28,6 +29,7 @@ export type VerifyFormalSupportedCategory =
   | "migration_order";
 export type VerifyFormalEntryCriterion = typeof VERIFY_FORMAL_ENTRY_CRITERIA[number];
 export type VerifyFormalTooling = typeof VERIFY_FORMAL_TOOLING[number];
+export type VerifyFormalScenarioKind = typeof VERIFY_FORMAL_SCENARIO_KINDS[number];
 export type VerifyStateModelField = typeof VERIFY_STATE_MODEL_REQUIRED_FIELDS[number];
 export type VerifyTlcStatus = typeof VERIFY_TLC_STATUSES[number];
 export type VerifyCaseStatus = typeof VERIFY_CASE_STATUSES[number];
@@ -57,6 +59,7 @@ export interface VerifyResolvedOutputPaths {
   debugArtifactPath: string;
   debugVerificationCasesPath: string;
   debugStructuralFindingsPath: string;
+  debugVerificationReadinessPath: string;
   debugStateModelsPath: string;
   debugTlaSpecsPath: string;
   debugTlcResultsPath: string;
@@ -78,6 +81,8 @@ export interface VerifyPlanReference {
   summary: PlanArtifact["summary"];
   readyForVerification: PlanArtifact["planning_readiness"]["ready"];
   planningReadinessStatus: PlanArtifact["planning_readiness"]["status"];
+  planning_diagnostics: PlanArtifact["planning_diagnostics"];
+  planning_readiness: PlanArtifact["planning_readiness"];
   failure: PlanArtifact["failure"];
 }
 
@@ -130,6 +135,7 @@ export interface VerifyTargetContract {
 
 export interface VerifyFormalLaneContract {
   tooling: readonly VerifyFormalTooling[];
+  scenarioKinds: readonly VerifyFormalScenarioKind[];
   entryCriteria: readonly VerifyFormalEntryCriterion[];
   stateModelRequiredFields: readonly VerifyStateModelField[];
   tlcStatuses: readonly VerifyTlcStatus[];
@@ -171,6 +177,7 @@ export interface VerifyCaseFormalDetails {
   stateModelId: string | null;
   tlaSpecId: string | null;
   tlcResultId: string | null;
+  scenarioKind: VerifyFormalScenarioKind;
   cautionNotes: string[];
   trace: string | null;
   errors: string[];
@@ -194,6 +201,7 @@ export interface VerifyStateModel {
   id: string;
   verification_case_id: string;
   verification_target_id: string;
+  scenario_kind: VerifyFormalScenarioKind;
   name: string;
   summary: string;
   actors: string[];
@@ -210,6 +218,7 @@ export interface VerifyTlaSpec {
   id: string;
   verification_case_id: string;
   state_model_id: string;
+  scenario_kind: VerifyFormalScenarioKind;
   name: string;
   summary: string;
   module_name: string;
@@ -222,6 +231,7 @@ export interface VerifyTlcResult {
   id: string;
   verification_case_id: string;
   tla_spec_id: string;
+  scenario_kind: VerifyFormalScenarioKind;
   status: VerifyTlcStatus;
   summary: string;
   trace: string | null;
@@ -284,6 +294,7 @@ export interface VerifyArtifactFiles {
   debugArtifactPath: string;
   debugVerificationCasesPath: string;
   debugStructuralFindingsPath: string;
+  debugVerificationReadinessPath: string;
   debugStateModelsPath: string;
   debugTlaSpecsPath: string;
   debugTlcResultsPath: string;
@@ -406,6 +417,7 @@ export interface VerifyDebugArtifact {
     | "debugArtifactPath"
     | "debugVerificationCasesPath"
     | "debugStructuralFindingsPath"
+    | "debugVerificationReadinessPath"
     | "debugStateModelsPath"
     | "debugTlaSpecsPath"
     | "debugTlcResultsPath"
@@ -418,5 +430,7 @@ export interface VerifyDebugArtifact {
     VerifyArtifact["formal_verification"],
     "state_models" | "tla_specs" | "tlc_results"
   >;
+  verification_diagnostics: VerifyVerificationDiagnostics;
+  verification_readiness: VerifyVerificationReadiness;
   failure: VerifyArtifact["failure"];
 }

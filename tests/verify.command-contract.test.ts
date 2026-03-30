@@ -25,6 +25,13 @@ interface VerifyArtifact {
   files: {
     artifactPath: string | null;
     reportPath: string | null;
+    debugArtifactPath: string;
+    debugVerificationCasesPath: string;
+    debugStructuralFindingsPath: string;
+    debugVerificationReadinessPath: string;
+    debugStateModelsPath: string;
+    debugTlaSpecsPath: string;
+    debugTlcResultsPath: string;
   };
   source_plan: {
     artifactPath: string;
@@ -32,6 +39,8 @@ interface VerifyArtifact {
     status: string;
     readyForVerification: boolean;
     planningReadinessStatus: string;
+    planning_diagnostics: Record<string, unknown>;
+    planning_readiness: Record<string, unknown>;
     failure: { code: string; message: string; fallbackReason?: string } | null;
   };
   verification_diagnostics: {
@@ -115,6 +124,10 @@ async function removePlanningInputs(repoRoot: string): Promise<void> {
 
 async function readVerifyArtifact(repoRoot: string, outputDir = ".forge"): Promise<VerifyArtifact> {
   return readJsonFile<VerifyArtifact>(verifyArtifactPath(repoRoot, outputDir));
+}
+
+function verifyDebugPath(repoRoot: string, fileName: string, outputDir = ".forge"): string {
+  return join(repoRoot, outputDir, "debug", fileName);
 }
 
 function makeNonActionablePlanArtifact(artifact: Record<string, unknown>): Record<string, unknown> {
@@ -247,6 +260,12 @@ await runScenario(
       assert.equal(artifact.source_plan.command, "forge plan");
       assert.equal(artifact.source_plan.readyForVerification, true);
       assert.equal(artifact.source_plan.planningReadinessStatus, "ready");
+      assert.ok(artifact.source_plan.planning_diagnostics);
+      assert.ok(artifact.source_plan.planning_readiness);
+      assert.equal(
+        artifact.files.debugVerificationReadinessPath,
+        verifyDebugPath(repoRoot, "verification-readiness.json"),
+      );
       assert.equal(artifact.verification_readiness.ready, true);
       assert.equal(artifact.verification_diagnostics.blocking_items.length, 0);
       assert.ok(artifact.verification_targets.length > 0);
@@ -454,6 +473,10 @@ await runScenario(
       assert.equal(safeArtifact.outputRoot, join(safeRepoRoot, customOutputDir));
       assert.equal(safeArtifact.requestedOutputRoot, join(safeRepoRoot, customOutputDir));
       assert.equal(safeArtifact.source_plan.artifactPath, join(safeRepoRoot, customOutputDir, "plan.json"));
+      assert.equal(
+        safeArtifact.files.debugVerificationReadinessPath,
+        verifyDebugPath(safeRepoRoot, "verification-readiness.json", customOutputDir),
+      );
 
       await seedSpecRepo(fallbackRepoRoot);
       const fallbackIntakeResult = runForgeBinary(

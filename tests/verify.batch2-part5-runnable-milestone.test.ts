@@ -296,6 +296,9 @@ await runScenario(
       assert.match(artifact.summary, /forge verify can proceed|TLC validated/i);
       assert.equal(planArtifact.planning_readiness.ready, true);
       assert.match(report, /Forge Verify Report/);
+      assert.match(report, /Verification Readiness Status:\s+ready/i);
+      assert.match(report, /Formal Verification Status:\s+passed/i);
+      assert.match(report, /verify\.json and verify-report\.md remain the durable Step 3 outputs/i);
       assert.match(report, /## Formal Verification/);
       assert.match(report, /passed/);
       assert.match(report, /TLC Results/);

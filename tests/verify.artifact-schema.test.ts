@@ -13,6 +13,7 @@ import {
   STEP3_VERIFY_PURPOSE,
   VERIFY_FORMAL_ENTRY_CRITERIA,
   VERIFY_FORMAL_FOCUS_AREAS,
+  VERIFY_FORMAL_SCENARIO_KINDS,
   VERIFY_FORMAL_TOOLING,
   VERIFY_STATE_MODEL_REQUIRED_FIELDS,
   VERIFY_STRUCTURAL_FOCUS_AREAS,
@@ -99,6 +100,7 @@ type VerifyArtifact = {
     debugArtifactPath: string;
     debugVerificationCasesPath: string;
     debugStructuralFindingsPath: string;
+    debugVerificationReadinessPath: string;
     debugStateModelsPath: string;
     debugTlaSpecsPath: string;
     debugTlcResultsPath: string;
@@ -107,7 +109,10 @@ type VerifyArtifact = {
   finishedAt: string;
   summary: string;
   boundaryNotes: readonly string[];
-  source_plan: VerifyPlanReference;
+  source_plan: VerifyPlanReference & {
+    planning_diagnostics: VerifyDiagnostics;
+    planning_readiness: VerifyReadiness;
+  };
   verification_target_contract: VerifyTargetContract;
   formal_lane_contract: VerifyFormalLaneContract;
   verification_targets: Array<{
@@ -252,6 +257,7 @@ function createVerifyArtifactFixture(repoRoot: string, planArtifact: PlanArtifac
       debugArtifactPath: join(outputRoot, "debug", "verify-debug.json"),
       debugVerificationCasesPath: join(outputRoot, "debug", "verification-cases.json"),
       debugStructuralFindingsPath: join(outputRoot, "debug", "structural-findings.json"),
+      debugVerificationReadinessPath: join(outputRoot, "debug", "verification-readiness.json"),
       debugStateModelsPath: join(outputRoot, "debug", "state-models.json"),
       debugTlaSpecsPath: join(outputRoot, "debug", "tla-specs.json"),
       debugTlcResultsPath: join(outputRoot, "debug", "tlc-results.json"),
@@ -268,6 +274,12 @@ function createVerifyArtifactFixture(repoRoot: string, planArtifact: PlanArtifac
       summary: planArtifact.summary,
       readyForVerification: planArtifact.planning_readiness.ready,
       planningReadinessStatus: planArtifact.planning_readiness.status,
+      planning_diagnostics: {
+        ...planArtifact.planning_diagnostics,
+      },
+      planning_readiness: {
+        ...planArtifact.planning_readiness,
+      },
       failure: planArtifact.failure,
     },
     verification_target_contract: {
@@ -279,6 +291,7 @@ function createVerifyArtifactFixture(repoRoot: string, planArtifact: PlanArtifac
     },
     formal_lane_contract: {
       tooling: [...VERIFY_FORMAL_TOOLING],
+      scenarioKinds: [...VERIFY_FORMAL_SCENARIO_KINDS],
       entryCriteria: [...VERIFY_FORMAL_ENTRY_CRITERIA],
       stateModelRequiredFields: [...VERIFY_STATE_MODEL_REQUIRED_FIELDS],
       tlcStatuses: [...VERIFY_TLC_STATUSES],
@@ -420,6 +433,10 @@ await runScenario(
         parsed.files.debugStructuralFindingsPath,
         join(repoRoot, ".forge", "debug", "structural-findings.json"),
       );
+      assert.equal(
+        parsed.files.debugVerificationReadinessPath,
+        join(repoRoot, ".forge", "debug", "verification-readiness.json"),
+      );
       assert.equal(parsed.files.debugStateModelsPath, join(repoRoot, ".forge", "debug", "state-models.json"));
       assert.equal(parsed.files.debugTlaSpecsPath, join(repoRoot, ".forge", "debug", "tla-specs.json"));
       assert.equal(parsed.files.debugTlcResultsPath, join(repoRoot, ".forge", "debug", "tlc-results.json"));
@@ -433,12 +450,15 @@ await runScenario(
       assert.equal(parsed.source_plan.readyForVerification, planArtifact.planning_readiness.ready);
       assert.equal(parsed.source_plan.planningReadinessStatus, planArtifact.planning_readiness.status);
       assert.equal(parsed.source_plan.failure, planArtifact.failure);
+      assert.deepEqual(parsed.source_plan.planning_diagnostics, planArtifact.planning_diagnostics);
+      assert.deepEqual(parsed.source_plan.planning_readiness, planArtifact.planning_readiness);
       assert.deepEqual(parsed.verification_target_contract.requiredFields, [...VERIFY_TARGET_REQUIRED_FIELDS]);
       assert.deepEqual(parsed.verification_target_contract.riskSources, [...VERIFY_TARGET_RISK_SOURCES]);
       assert.deepEqual(parsed.verification_target_contract.structuralFocusAreas, [...VERIFY_STRUCTURAL_FOCUS_AREAS]);
       assert.deepEqual(parsed.verification_target_contract.formalFocusAreas, [...VERIFY_FORMAL_FOCUS_AREAS]);
       assert.deepEqual(parsed.verification_target_contract.supportedLanes, [...VERIFY_SUPPORTED_LANES]);
       assert.deepEqual(parsed.formal_lane_contract.tooling, [...VERIFY_FORMAL_TOOLING]);
+      assert.deepEqual(parsed.formal_lane_contract.scenarioKinds, [...VERIFY_FORMAL_SCENARIO_KINDS]);
       assert.deepEqual(parsed.formal_lane_contract.entryCriteria, [...VERIFY_FORMAL_ENTRY_CRITERIA]);
       assert.deepEqual(parsed.formal_lane_contract.stateModelRequiredFields, [...VERIFY_STATE_MODEL_REQUIRED_FIELDS]);
       assert.deepEqual(parsed.formal_lane_contract.tlcStatuses, [...VERIFY_TLC_STATUSES]);

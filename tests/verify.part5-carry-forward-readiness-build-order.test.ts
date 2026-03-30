@@ -48,6 +48,7 @@ type VerifyArtifact = {
   };
   formal_lane_contract: {
     tooling: string[];
+    scenarioKinds: string[];
     entryCriteria: string[];
     stateModelRequiredFields: string[];
     tlcStatuses: string[];
@@ -320,6 +321,18 @@ function assertPart5Contract(artifact: VerifyArtifact): void {
     "ordering_constraint",
   ]);
   assert.deepEqual(artifact.formal_lane_contract.tooling, ["TLA+", "TLC"]);
+  assert.deepEqual(artifact.formal_lane_contract.scenarioKinds, [
+    "ordering_serialization",
+    "shared_artifact_merge_order",
+    "ownership_transition",
+    "multi_agent_handoff_chain",
+    "duplicate_execution",
+    "shared_resource_mutation_overlap",
+    "retry_reassignment",
+    "queue_claim_release_lifecycle",
+    "failure_recovery_loop",
+    "stale_write_validity",
+  ]);
   assert.deepEqual(artifact.formal_lane_contract.entryCriteria, [
     "state_machine_like",
     "multi_actor_or_interleaving",
@@ -344,6 +357,7 @@ function assertPart5Contract(artifact: VerifyArtifact): void {
     "failed",
     "errored",
     "invalid_spec",
+    "inconclusive",
   ]);
   assert.ok(artifact.verification_targets.some((target) => target.candidateLanes.includes("formal")));
   assert.ok(artifact.verification_cases.some((verificationCase) => verificationCase.lanes.includes("formal")));
@@ -414,35 +428,37 @@ function assertFormalTraceability(
   const target = artifact.verification_targets.find((entry) => entry.category === params.targetCategory);
   assert.ok(target, `expected a verification target for ${params.targetCategory}`);
   assert.deepEqual(target?.candidateLanes, ["structural", "formal"]);
-  assert.equal(target?.verificationCaseIds.length, 2);
+  assert.equal(target?.verificationCaseIds.length, 3);
 
   const structuralCase = artifact.verification_cases.find(
     (entry) => entry.verificationTargetId === target?.id && entry.lanes.includes("structural"),
   );
-  const formalCase = artifact.verification_cases.find(
+  const formalCases = artifact.verification_cases.filter(
     (entry) => entry.verificationTargetId === target?.id && entry.lanes.includes("formal"),
   );
 
   assert.ok(structuralCase, `expected a structural case for ${params.targetCategory}`);
-  assert.ok(formalCase, `expected a formal case for ${params.targetCategory}`);
-  assert.equal(formalCase?.formalDetails?.enteredFormalLane, true);
-  assert.deepEqual(formalCase?.formalDetails?.entryCriteria, [
+  assert.equal(formalCases.length, 2);
+  assert.ok(formalCases[0], `expected a formal case for ${params.targetCategory}`);
+  assert.ok(formalCases[1], `expected a second formal case for ${params.targetCategory}`);
+  assert.equal(formalCases[0]?.formalDetails?.enteredFormalLane, true);
+  assert.deepEqual(formalCases[0]?.formalDetails?.entryCriteria, [
     "state_machine_like",
     "multi_actor_or_interleaving",
     "structural_check_insufficient",
   ]);
-  assert.ok(formalCase?.formalDetails?.stateModelId);
-  assert.ok(formalCase?.formalDetails?.tlaSpecId);
-  assert.ok(formalCase?.formalDetails?.tlcResultId);
-  assert.equal(artifact.formal_verification.state_models.length, 1);
-  assert.equal(artifact.formal_verification.tla_specs.length, 1);
-  assert.equal(artifact.formal_verification.tlc_results.length, 1);
-  assert.equal(artifact.formal_verification.state_models[0]?.id, formalCase?.formalDetails?.stateModelId);
-  assert.equal(artifact.formal_verification.tla_specs[0]?.id, formalCase?.formalDetails?.tlaSpecId);
-  assert.equal(artifact.formal_verification.tlc_results[0]?.id, formalCase?.formalDetails?.tlcResultId);
-  assert.equal(artifact.formal_verification.state_models[0]?.verification_case_id, formalCase?.id);
-  assert.equal(artifact.formal_verification.tla_specs[0]?.verification_case_id, formalCase?.id);
-  assert.equal(artifact.formal_verification.tlc_results[0]?.verification_case_id, formalCase?.id);
+  assert.ok(formalCases[0]?.formalDetails?.stateModelId);
+  assert.ok(formalCases[0]?.formalDetails?.tlaSpecId);
+  assert.ok(formalCases[0]?.formalDetails?.tlcResultId);
+  assert.equal(artifact.formal_verification.state_models.length, 2);
+  assert.equal(artifact.formal_verification.tla_specs.length, 2);
+  assert.equal(artifact.formal_verification.tlc_results.length, 2);
+  assert.equal(artifact.formal_verification.state_models[0]?.id, formalCases[0]?.formalDetails?.stateModelId);
+  assert.equal(artifact.formal_verification.tla_specs[0]?.id, formalCases[0]?.formalDetails?.tlaSpecId);
+  assert.equal(artifact.formal_verification.tlc_results[0]?.id, formalCases[0]?.formalDetails?.tlcResultId);
+  assert.equal(artifact.formal_verification.state_models[0]?.verification_case_id, formalCases[0]?.id);
+  assert.equal(artifact.formal_verification.tla_specs[0]?.verification_case_id, formalCases[0]?.id);
+  assert.equal(artifact.formal_verification.tlc_results[0]?.verification_case_id, formalCases[0]?.id);
 }
 
 async function readVerifyArtifact(repoRoot: string): Promise<VerifyArtifact> {
@@ -561,7 +577,7 @@ await runScenario(
       const formalTarget = artifact.verification_targets.find((entry) => entry.category === "parallel_overlap");
       assert.ok(formalTarget, "expected a parallel_overlap verification target");
       assert.deepEqual(formalTarget?.candidateLanes, ["structural", "formal"]);
-      assert.equal(formalTarget?.verificationCaseIds.length, 2);
+      assert.equal(formalTarget?.verificationCaseIds.length, 3);
       const formalCase = artifact.verification_cases.find(
         (entry) => entry.verificationTargetId === formalTarget?.id && entry.lanes.includes("formal"),
       );
@@ -730,9 +746,9 @@ await runScenario(
       assert.equal(artifact.formal_verification.status, "not_run");
       assert.equal(artifact.formal_verification.tlc_results[0]?.status, "not_run");
       assert.equal(artifact.formal_verification.tlc_results[0]?.trace, null);
-      assert.equal(artifact.formal_verification.state_models.length, 1);
-      assert.equal(artifact.formal_verification.tla_specs.length, 1);
-      assert.equal(artifact.formal_verification.tlc_results.length, 1);
+      assert.equal(artifact.formal_verification.state_models.length, 2);
+      assert.equal(artifact.formal_verification.tla_specs.length, 2);
+      assert.equal(artifact.formal_verification.tlc_results.length, 2);
       assert.equal(artifact.verification_readiness.ready, true);
       assert.equal(artifact.verification_readiness.status, "ready_with_warnings");
       assert.match(artifact.verification_readiness.summary, /TLC was not run/i);

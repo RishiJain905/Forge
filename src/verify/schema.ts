@@ -16,6 +16,7 @@ import {
   VERIFY_FORMAL_ENTRY_CRITERIA,
   VERIFY_FORMAL_FOCUS_AREAS,
   VERIFY_FORMAL_TOOLING,
+  VERIFY_FORMAL_SCENARIO_KINDS,
   VERIFY_CASE_STATUSES,
   VERIFY_TLA_SPEC_GENERATION_STATUSES,
   VERIFY_STATE_MODEL_REQUIRED_FIELDS,
@@ -40,6 +41,8 @@ const verifyPlanReferenceSchema = z.object({
   summary: planArtifactSchema.shape.summary,
   readyForVerification: planArtifactSchema.shape.planning_readiness.shape.ready,
   planningReadinessStatus: planArtifactSchema.shape.planning_readiness.shape.status,
+  planning_diagnostics: planArtifactSchema.shape.planning_diagnostics,
+  planning_readiness: planArtifactSchema.shape.planning_readiness,
   failure: planArtifactSchema.shape.failure,
 }).strict();
 
@@ -73,6 +76,7 @@ const verifyCarryForwardContextSchema = z.object({
 
 const verifyFormalLanePolicySchema = z.object({
   tooling: z.array(z.enum(VERIFY_FORMAL_TOOLING)).min(1),
+  scenarioKinds: z.array(z.enum(VERIFY_FORMAL_SCENARIO_KINDS)).min(1),
   focusAreas: z.array(z.enum(VERIFY_FORMAL_FOCUS_AREAS)).min(1),
   entryCriteria: z.array(z.enum(VERIFY_FORMAL_ENTRY_CRITERIA)).min(1),
   stateModelRequiredFields: z.array(z.enum(VERIFY_STATE_MODEL_REQUIRED_FIELDS)).min(1),
@@ -83,7 +87,10 @@ const verifyBoundaryPolicySchema = z.object({
   command: z.literal(`forge ${FORGE_VERIFY_COMMAND}`),
   stage: z.literal(FORGE_VERIFY_STAGE),
   purpose: z.string().min(1),
+  freezeGoal: z.string().min(1),
+  finishLine: z.array(z.string().min(1)).min(1),
   implementationPriorities: z.array(z.string().min(1)).min(1),
+  requiredImplementationTasks: z.array(z.string().min(1)).min(1),
   authoritativeInputs: z.array(z.string().min(1)).min(1),
   deterministicFirst: z.literal(true),
   allowedSideEffects: z.array(z.string().min(1)).min(1),
@@ -103,6 +110,7 @@ const verifyTargetContractSchema = z.object({
 
 const verifyFormalLaneContractSchema = z.object({
   tooling: z.array(z.enum(VERIFY_FORMAL_TOOLING)).min(1),
+  scenarioKinds: z.array(z.enum(VERIFY_FORMAL_SCENARIO_KINDS)).min(1),
   entryCriteria: z.array(z.enum(VERIFY_FORMAL_ENTRY_CRITERIA)).min(1),
   stateModelRequiredFields: z.array(z.enum(VERIFY_STATE_MODEL_REQUIRED_FIELDS)).min(1),
   tlcStatuses: z.array(z.enum(VERIFY_TLC_STATUSES)).min(1),
@@ -134,6 +142,7 @@ const verifyFilesSchema = z.object({
   debugArtifactPath: z.string().min(1),
   debugVerificationCasesPath: z.string().min(1),
   debugStructuralFindingsPath: z.string().min(1),
+  debugVerificationReadinessPath: z.string().min(1),
   debugStateModelsPath: z.string().min(1),
   debugTlaSpecsPath: z.string().min(1),
   debugTlcResultsPath: z.string().min(1),
@@ -172,6 +181,7 @@ const verifyVerificationCaseSchema = z.object({
     stateModelId: z.string().min(1).nullable(),
     tlaSpecId: z.string().min(1).nullable(),
     tlcResultId: z.string().min(1).nullable(),
+    scenarioKind: z.enum(VERIFY_FORMAL_SCENARIO_KINDS),
     cautionNotes: z.array(z.string().min(1)),
     trace: z.string().min(1).nullable(),
     errors: z.array(z.string().min(1)),
@@ -189,6 +199,7 @@ const verifyStateModelSchema = z.object({
   id: z.string().min(1),
   verification_case_id: z.string().min(1),
   verification_target_id: z.string().min(1),
+  scenario_kind: z.enum(VERIFY_FORMAL_SCENARIO_KINDS),
   name: z.string().min(1),
   summary: z.string().min(1),
   actors: z.array(z.string().min(1)),
@@ -205,6 +216,7 @@ const verifyTlaSpecSchema = z.object({
   id: z.string().min(1),
   verification_case_id: z.string().min(1),
   state_model_id: z.string().min(1),
+  scenario_kind: z.enum(VERIFY_FORMAL_SCENARIO_KINDS),
   name: z.string().min(1),
   summary: z.string().min(1),
   module_name: z.string().min(1),
@@ -217,6 +229,7 @@ const verifyTlcResultSchema = z.object({
   id: z.string().min(1),
   verification_case_id: z.string().min(1),
   tla_spec_id: z.string().min(1),
+  scenario_kind: z.enum(VERIFY_FORMAL_SCENARIO_KINDS),
   status: z.enum(VERIFY_TLC_STATUSES),
   summary: z.string().min(1),
   trace: z.string().min(1).nullable(),
@@ -677,7 +690,7 @@ export const verifyArtifactSchema = z.object({
   }
 
   function buildWorstTlcStatus(results: Array<{ status: typeof VERIFY_TLC_STATUSES[number] }>): typeof VERIFY_TLC_STATUSES[number] {
-    const precedence: typeof VERIFY_TLC_STATUSES[number][] = ["failed", "errored", "invalid_spec", "not_run", "passed"];
+    const precedence: typeof VERIFY_TLC_STATUSES[number][] = ["failed", "errored", "invalid_spec", "inconclusive", "not_run", "passed"];
     for (const status of precedence) {
       if (results.some((result) => result.status === status)) {
         return status;
@@ -937,6 +950,14 @@ export const verifyArtifactSchema = z.object({
         path: ["formal_verification", "state_models", index, "id"],
       });
     }
+
+    if (owningCase.formalDetails?.scenarioKind !== stateModel.scenario_kind) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Formal state models must keep the owning case scenario kind in sync.",
+        path: ["formal_verification", "state_models", index, "scenario_kind"],
+      });
+    }
   }
 
   for (const [index, spec] of value.formal_verification.tla_specs.entries()) {
@@ -963,6 +984,14 @@ export const verifyArtifactSchema = z.object({
         code: z.ZodIssueCode.custom,
         message: "Formal TLA specs must be referenced by the owning case formalDetails.",
         path: ["formal_verification", "tla_specs", index, "id"],
+      });
+    }
+
+    if (owningCase.formalDetails?.scenarioKind !== spec.scenario_kind) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Formal TLA specs must keep the owning case scenario kind in sync.",
+        path: ["formal_verification", "tla_specs", index, "scenario_kind"],
       });
     }
 
@@ -1000,6 +1029,14 @@ export const verifyArtifactSchema = z.object({
         code: z.ZodIssueCode.custom,
         message: "Formal TLC results must be referenced by the owning case formalDetails.",
         path: ["formal_verification", "tlc_results", index, "id"],
+      });
+    }
+
+    if (owningCase.formalDetails?.scenarioKind !== result.scenario_kind) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Formal TLC results must keep the owning case scenario kind in sync.",
+        path: ["formal_verification", "tlc_results", index, "scenario_kind"],
       });
     }
 

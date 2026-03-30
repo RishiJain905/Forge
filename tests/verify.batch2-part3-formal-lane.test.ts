@@ -369,8 +369,8 @@ await runScenario(
       const formalCases = artifact.verification_cases.filter((entry) => entry.lanes.includes("formal"));
 
       assert.equal(artifact.formal_verification.status, "passed");
-      assert.equal(formalCases.length, 5);
-      assert.equal(artifact.formal_verification.state_models.length, 5);
+      assert.equal(formalCases.length, 10);
+      assert.equal(artifact.formal_verification.state_models.length, 10);
 
       for (const stateModel of artifact.formal_verification.state_models) {
         assert.ok(
@@ -444,7 +444,7 @@ await runScenario(
       const formalCases = artifact.verification_cases.filter((entry) => entry.lanes.includes("formal"));
 
       assert.equal(artifact.formal_verification.status, "passed");
-      assert.equal(formalCases.length, 5);
+      assert.equal(formalCases.length, 10);
       assert.ok(
         artifact.formal_verification.caution_notes.some((note) => /low-confidence/i.test(note)),
         "expected formal caution notes to retain the low-confidence warning",
