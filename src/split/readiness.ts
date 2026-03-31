@@ -5,6 +5,7 @@ import type {
   SplitReadinessResolution,
   SplitReadinessStatus,
 } from "./types.js";
+import { STEP4_HONOR_MERGE_ORDER_ACTION } from "./constants.js";
 
 function cloneIssue(issue: SplitInputIssue): SplitInputIssue {
   return {
@@ -108,6 +109,14 @@ function buildRecommendedUserActions(params: {
   return dedupeStrings(actions);
 }
 
+function hasBlockedStreams(warningItems: SplitInputIssue[]): boolean {
+  return warningItems.some((item) => item.code === "BLOCKED_WORKSTREAMS_PRESENT");
+}
+
+function hasMergeOrderConstraints(additionalRecommendedActions: string[] | undefined): boolean {
+  return additionalRecommendedActions?.includes(STEP4_HONOR_MERGE_ORDER_ACTION) ?? false;
+}
+
 function buildReadinessSummary(params: {
   ready: boolean;
   status: "ready" | "ready_with_warnings" | "blocked";
@@ -115,6 +124,7 @@ function buildReadinessSummary(params: {
   blockingItems: SplitInputIssue[];
   warningItems: SplitInputIssue[];
   partialOutput: SplitCommandFailure | null;
+  additionalRecommendedActions?: string[];
 }): string {
   if (!params.ready) {
     if (params.foundation.splitInput.usability.status === "upstream_blocked") {
@@ -128,15 +138,28 @@ function buildReadinessSummary(params: {
     return "Forge split should not proceed until the upstream blockers are resolved.";
   }
 
+  const blockedStreamsPresent = hasBlockedStreams(params.warningItems);
+  const mergeOrderConstraintsPresent = hasMergeOrderConstraints(params.additionalRecommendedActions);
+  const assignmentPhrase = blockedStreamsPresent
+    ? "Not all items were safely assigned"
+    : "All items were safely assigned";
+  const blockedStreamsPhrase = blockedStreamsPresent
+    ? "blocked streams remain visible"
+    : "no blocked streams remain";
+  const mergeOrderPhrase = mergeOrderConstraintsPresent
+    ? "merge-order constraints were imposed"
+    : "no merge-order constraints were needed";
+  const executionPhrase = "later execution must honor the carried-forward constraint detail";
+
   if (params.status === "ready_with_warnings") {
     if (params.partialOutput !== null && params.warningItems.length === 0) {
-      return "Forge split can proceed, but a partial output fallback remains visible.";
+      return `Forge split can proceed with warnings. ${assignmentPhrase}, ${blockedStreamsPhrase}, ${mergeOrderPhrase}, and ${executionPhrase}.`;
     }
 
-    return "Forge split can proceed, but carried-forward warnings still constrain regrouping.";
+    return `Forge split can proceed with warnings. ${assignmentPhrase}, ${blockedStreamsPhrase}, ${mergeOrderPhrase}, and ${executionPhrase}.`;
   }
 
-  return "Forge split can proceed.";
+  return `Forge split can proceed. ${assignmentPhrase}, ${blockedStreamsPhrase}, ${mergeOrderPhrase}, and ${executionPhrase}.`;
 }
 
 export function resolveSplitReadiness(params: {
@@ -180,6 +203,7 @@ export function resolveSplitReadiness(params: {
       blockingItems,
       warningItems,
       partialOutput,
+      additionalRecommendedActions: params.additionalRecommendedActions,
     }),
     warning_items: warningItems,
     blocking_issues: blockingItems,

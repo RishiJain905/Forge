@@ -64,6 +64,9 @@ export const STEP4_CONSERVATIVE_REGROUPING_NOTES = [
   "Keep blocked work explicit instead of burying it inside broad stream descriptions.",
 ] as const;
 
+export const STEP4_HONOR_MERGE_ORDER_ACTION =
+  "Honor the explicit merge_order rules before execution and integration." as const;
+
 export const STEP4_ALLOWED_SIDE_EFFECTS = [
   "read the Step 3 verify artifact",
   "read the Step 2 plan artifact referenced by Step 3",

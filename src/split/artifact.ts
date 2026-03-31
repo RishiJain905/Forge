@@ -5,6 +5,7 @@ import {
   STEP4_ALLOWED_SIDE_EFFECTS,
   STEP4_DEFERRED_CAPABILITIES,
   STEP4_DISALLOWED_CAPABILITIES,
+  STEP4_HONOR_MERGE_ORDER_ACTION,
 } from "./constants.js";
 import { validateSplitArtifact } from "./schema.js";
 import { resolveSplitReadiness } from "./readiness.js";
@@ -184,7 +185,7 @@ function buildSplitReadinessResolution(
     additionalWarningItems: workstreamBuild.warningItems,
     additionalRecommendedActions: dedupeStrings([
       workstreamBuild.mergeOrder.length > 0
-        ? "Honor the explicit merge_order rules before execution and integration."
+        ? STEP4_HONOR_MERGE_ORDER_ACTION
         : "",
       workstreamBuild.blockedItems.length > 0
         ? "Keep blocked_items out of active execution until their carried-forward blockers are resolved."

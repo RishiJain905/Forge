@@ -58,6 +58,22 @@ function renderFailureDetails(
   ]);
 }
 
+function renderReadinessLines(artifact: SplitArtifact): string[] {
+  const blockedWorkstreamCount = artifact.blocked_items.filter(
+    (item) => item.kind === "blocked_workstream",
+  ).length;
+  const mergeOrderCount = artifact.merge_order.length;
+  const laterExecutionMustHonor = artifact.split_readiness.recommended_user_actions;
+
+  return [
+    `- Can Proceed: ${artifact.split_readiness.ready ? "yes" : "no"}`,
+    `- All Items Safely Assigned: ${artifact.split_readiness.ready && blockedWorkstreamCount === 0 ? "yes" : "no"}`,
+    `- Blocked Streams: ${blockedWorkstreamCount > 0 ? blockedWorkstreamCount : "none"}`,
+    `- Merge-Order Constraints: ${mergeOrderCount > 0 ? mergeOrderCount : "none"}`,
+    `- Later Execution Must Honor: ${laterExecutionMustHonor.join("; ") || "none"}`,
+  ];
+}
+
 function renderWorkstreams(artifact: SplitArtifact): string {
   if (artifact.workstreams.length === 0) {
     return "- none";
@@ -289,8 +305,9 @@ export function createSplitReport(artifact: SplitArtifact): string {
         : "- none",
     ]),
     renderSection("Split Readiness", [
+      ...renderReadinessLines(artifact),
+      "",
       ...renderKeyValueLines([
-        ["Ready", artifact.split_readiness.ready],
         ["Status", artifact.split_readiness.status],
         ["Summary", artifact.split_readiness.summary],
         ["Partial Output", artifact.split_readiness.partial_output?.code ?? null],
