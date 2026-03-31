@@ -361,12 +361,27 @@ async function main() {
     assert.ok(Array.isArray(splitArtifact.dependency_edges));
     assert.ok(Array.isArray(splitArtifact.merge_order));
     assert.ok(Array.isArray(splitArtifact.blocked_items));
+    assert.ok(Array.isArray(splitArtifact.carried_forward_constraints.stream_constraint_details));
     assert.ok(splitArtifact.workstreams.length > 0);
     assert.ok(splitArtifact.dependency_edges.length > 0);
     assert.ok(splitArtifact.merge_order.length > 0);
+    assert.ok(splitArtifact.carried_forward_constraints.stream_constraint_details.length > 0);
     assert.ok(
       splitArtifact.workstreams.every(
         (workstream) => splitArtifact.workstream_contract.categories.includes(workstream.category),
+      ),
+    );
+    assert.ok(splitArtifact.merge_order.every((entry) => entry.id.length > 0));
+    assert.ok(splitArtifact.merge_order.every((entry) => entry.ruleType.length > 0));
+    assert.ok(splitArtifact.merge_order.every((entry) => Array.isArray(entry.mustMergeAfterWorkstreamIds)));
+    assert.ok(
+      splitArtifact.blocked_items.every((item) =>
+        item.id.length > 0 && item.kind.length > 0 && typeof item.partialMetadataAvailable === "boolean",
+      ),
+    );
+    assert.ok(
+      splitArtifact.carried_forward_constraints.stream_constraint_details.every((detail) =>
+        Array.isArray(detail.mergeOrderRuleIds) && Array.isArray(detail.blockedItemIds),
       ),
     );
     assert.equal(splitArtifact.split_readiness.ready, true);

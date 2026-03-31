@@ -10,6 +10,7 @@ import { validateSplitArtifact } from "./schema.js";
 import { resolveSplitReadiness } from "./readiness.js";
 import type {
   SplitArtifact,
+  SplitBlockedItem,
   SplitCommandFailure,
   SplitCommandResult,
   SplitFoundationResult,
@@ -24,6 +25,22 @@ function copyIssue(issue: SplitInputIssue): SplitInputIssue {
   return {
     code: issue.code,
     message: issue.message,
+  };
+}
+
+function copyBlockedItem(item: SplitBlockedItem): SplitBlockedItem {
+  return {
+    id: item.id,
+    kind: item.kind,
+    code: item.code,
+    message: item.message,
+    workstreamId: item.workstreamId,
+    sourcePlanItemIds: [...item.sourcePlanItemIds],
+    sourceVerificationCaseIds: [...item.sourceVerificationCaseIds],
+    sourceFindingIds: [...item.sourceFindingIds],
+    sourceConstraintIds: [...item.sourceConstraintIds],
+    sourceConcernIds: [...item.sourceConcernIds],
+    partialMetadataAvailable: item.partialMetadataAvailable,
   };
 }
 
@@ -126,6 +143,7 @@ function buildSplitDiagnostics(
 
 function buildSplitCarriedForwardConstraints(
   foundation: SplitFoundationResult,
+  workstreamBuild: SplitWorkstreamBuildResult,
 ): SplitArtifact["carried_forward_constraints"] {
   return {
     findings: foundation.splitInput.context.findings,
@@ -133,18 +151,45 @@ function buildSplitCarriedForwardConstraints(
     plan_concerns: foundation.carryForward.planCarryForward.concerns,
     planning_readiness: foundation.carryForward.planningReadiness,
     verification_readiness: foundation.carryForward.verificationReadiness,
+    stream_constraint_details: workstreamBuild.streamConstraintDetails,
   };
+}
+
+function buildInputBlockedItems(
+  foundation: SplitFoundationResult,
+): SplitBlockedItem[] {
+  return foundation.splitInput.usability.blockingItems.map((issue, index) => ({
+    id: `input-blocker:${index + 1}`,
+    kind: "input_blocker",
+    code: issue.code,
+    message: issue.message,
+    workstreamId: null,
+    sourcePlanItemIds: [],
+    sourceVerificationCaseIds: [],
+    sourceFindingIds: [],
+    sourceConstraintIds: [],
+    sourceConcernIds: [],
+    partialMetadataAvailable: false,
+  }));
 }
 
 function buildSplitReadinessResolution(
   foundation: SplitFoundationResult,
   failure: SplitCommandFailure | null,
-  additionalWarningItems: SplitInputIssue[],
+  workstreamBuild: SplitWorkstreamBuildResult,
 ): SplitReadinessResolution {
   return resolveSplitReadiness({
     foundation,
     failure,
-    additionalWarningItems,
+    additionalWarningItems: workstreamBuild.warningItems,
+    additionalRecommendedActions: dedupeStrings([
+      workstreamBuild.mergeOrder.length > 0
+        ? "Honor the explicit merge_order rules before execution and integration."
+        : "",
+      workstreamBuild.blockedItems.length > 0
+        ? "Keep blocked_items out of active execution until their carried-forward blockers are resolved."
+        : "",
+    ]),
   });
 }
 
@@ -159,15 +204,21 @@ export function createSplitArtifact(params: {
   const readinessResolution = buildSplitReadinessResolution(
     params.foundation,
     params.failure,
-    params.workstreamBuild.warningItems,
+    params.workstreamBuild,
   );
   const splitDiagnostics = buildSplitDiagnostics(
     params.foundation,
     params.failure,
     readinessResolution.splitReadiness.warning_items,
   );
-  const blockedItems = splitDiagnostics.blocking_items.map(copyIssue);
-  const carriedForwardConstraints = buildSplitCarriedForwardConstraints(params.foundation);
+  const blockedItems = [
+    ...buildInputBlockedItems(params.foundation),
+    ...params.workstreamBuild.blockedItems.map(copyBlockedItem),
+  ];
+  const carriedForwardConstraints = buildSplitCarriedForwardConstraints(
+    params.foundation,
+    params.workstreamBuild,
+  );
 
   return validateSplitArtifact({
     schemaVersion: FORGE_SCHEMA_VERSION,
@@ -194,7 +245,7 @@ export function createSplitArtifact(params: {
     workstreams: params.workstreamBuild.workstreams,
     dependency_edges: params.workstreamBuild.dependencyEdges,
     merge_order: params.workstreamBuild.mergeOrder,
-    blocked_items: blockedItems,
+    blocked_items: blockedItems.map(copyBlockedItem),
     carried_forward_constraints: carriedForwardConstraints,
     split_diagnostics: splitDiagnostics,
     split_readiness: readinessResolution.splitReadiness,

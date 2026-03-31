@@ -131,6 +131,11 @@ type SplitArtifact = {
     verification_readiness: {
       summary: string;
     };
+    stream_constraint_details: Array<{
+      workstreamId: string;
+      mergeOrderRuleIds: string[];
+      blockedItemIds: string[];
+    }>;
   };
 };
 
@@ -179,12 +184,26 @@ await runScenario(
       assert.ok(sectionBody(report, "Workstreams").join("\n").includes("Category:"));
       assert.ok(sectionBody(report, "Dependency Edges").length > 0);
       assert.ok(sectionBody(report, "Merge Order").length > 0);
+      assert.ok(sectionBody(report, "Merge Order").join("\n").includes("Rule Type:"));
       assert.doesNotMatch(report, /Part 2 keeps execution workstreams conservative/i);
       assert.doesNotMatch(report, /Part 2 keeps the actual regrouping output intentionally conservative/i);
       assert.ok(sectionBody(report, "Blocked Items").length > 0);
+      if (/Kind:/.test(sectionBody(report, "Blocked Items").join("\n"))) {
+        assert.ok(sectionBody(report, "Blocked Items").join("\n").includes("Kind:"));
+      } else {
+        assert.ok(sectionBody(report, "Blocked Items").join("\n").includes("- none"));
+      }
       assert.ok(
         sectionBody(report, "Carried-Forward Constraints").join("\n").includes(
           artifact.carried_forward_constraints.verification_readiness.summary,
+        ),
+      );
+      assert.ok(
+        sectionBody(report, "Carried-Forward Constraints").join("\n").includes("Stream Constraint Details"),
+      );
+      assert.ok(
+        artifact.carried_forward_constraints.stream_constraint_details.every((detail) =>
+          Array.isArray(detail.mergeOrderRuleIds) && Array.isArray(detail.blockedItemIds),
         ),
       );
       assert.ok(sectionBody(report, "Split Diagnostics").length > 0);

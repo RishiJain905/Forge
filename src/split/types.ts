@@ -156,19 +156,46 @@ export interface SplitDependencyEdge {
 }
 
 export interface SplitMergeOrderEntry {
+  id: string;
   workstreamId: string;
   order: number;
+  ruleType: "serial" | "dependency" | "protected_merge";
+  mustMergeAfterWorkstreamIds: string[];
   reason: string;
+  sourceDependencyIds: string[];
+  sourceConstraintIds: string[];
+  sourceConcernIds: string[];
+}
+
+export interface SplitBlockedItem {
+  id: string;
+  kind: "input_blocker" | "blocked_workstream";
+  code: string;
+  message: string;
+  workstreamId: string | null;
+  sourcePlanItemIds: string[];
+  sourceVerificationCaseIds: string[];
+  sourceFindingIds: string[];
+  sourceConstraintIds: string[];
+  sourceConcernIds: string[];
+  partialMetadataAvailable: boolean;
 }
 
 export interface SplitStreamConstraintDetail {
   workstreamId: string;
   category: SplitStreamCategory;
   appliedRules: string[];
+  sourceDependencyIds: string[];
+  sourceConflictZoneIds: string[];
+  sourceTestObligationIds: string[];
+  sourceVerificationTargetIds: string[];
   sourceVerificationCaseIds: string[];
   sourceFindingIds: string[];
   sourceConstraintIds: string[];
   sourceConcernIds: string[];
+  sourceReadinessIds: string[];
+  mergeOrderRuleIds: string[];
+  blockedItemIds: string[];
   mergeOrderRequirements: string[];
   blockedReason: string | null;
 }
@@ -177,6 +204,7 @@ export interface SplitWorkstreamBuildResult {
   workstreams: SplitWorkstream[];
   dependencyEdges: SplitDependencyEdge[];
   mergeOrder: SplitMergeOrderEntry[];
+  blockedItems: SplitBlockedItem[];
   warningItems: SplitInputIssue[];
   streamConstraintDetails: SplitStreamConstraintDetail[];
 }
@@ -203,6 +231,7 @@ export interface SplitCarriedForwardConstraints {
   plan_concerns: PlanArtifact["carry_forward"]["concerns"];
   planning_readiness: PlanArtifact["planning_readiness"];
   verification_readiness: VerifyArtifact["verification_readiness"];
+  stream_constraint_details: SplitStreamConstraintDetail[];
 }
 
 export interface SplitDiagnostics {
@@ -287,7 +316,7 @@ export interface SplitArtifact {
   workstreams: SplitWorkstream[];
   dependency_edges: SplitDependencyEdge[];
   merge_order: SplitMergeOrderEntry[];
-  blocked_items: SplitInputIssue[];
+  blocked_items: SplitBlockedItem[];
   carried_forward_constraints: SplitCarriedForwardConstraints;
   split_diagnostics: SplitDiagnostics;
   split_readiness: SplitReadiness;

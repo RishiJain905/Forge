@@ -85,10 +85,12 @@ function buildRecommendedUserActions(params: {
   foundation: SplitFoundationResult;
   blockingItems: SplitInputIssue[];
   warningItems: SplitInputIssue[];
+  additionalRecommendedActions?: string[];
 }): string[] {
   const actions = [
     ...params.foundation.sourcePlan.planningReadiness.recommended_user_actions,
     ...params.foundation.sourceVerify.verificationReadiness.recommended_user_actions,
+    ...(params.additionalRecommendedActions ?? []),
   ];
 
   if (params.blockingItems.length > 0) {
@@ -141,6 +143,7 @@ export function resolveSplitReadiness(params: {
   foundation: SplitFoundationResult;
   failure: SplitCommandFailure | null;
   additionalWarningItems?: SplitInputIssue[];
+  additionalRecommendedActions?: string[];
 }): SplitReadinessResolution {
   const warningItems = dedupeIssues([
     ...buildWarningItems(params.foundation),
@@ -186,6 +189,7 @@ export function resolveSplitReadiness(params: {
       foundation: params.foundation,
       blockingItems,
       warningItems,
+      additionalRecommendedActions: params.additionalRecommendedActions,
     }),
   };
 

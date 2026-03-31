@@ -44,6 +44,7 @@ export const SPLIT_CONSTRAINT_SOURCES = [
   "formal_finding",
   "verification_constraint",
   "carry_forward_concern",
+  "planning_readiness",
   "verification_readiness",
 ] as const;
 

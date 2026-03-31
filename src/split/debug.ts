@@ -1,8 +1,8 @@
 import { SPLIT_DEBUG_ENV_VAR } from "./constants.js";
 import type {
   SplitArtifact,
+  SplitBlockedItem,
   SplitCommandFailure,
-  SplitInputIssue,
   SplitResolvedOutputPaths,
   SplitStreamConstraintDetail,
 } from "./types.js";
@@ -47,10 +47,19 @@ function requireDebugPath(value: string | undefined, name: string): string {
   return value;
 }
 
-function copyIssue(issue: SplitInputIssue): SplitInputIssue {
+function copyBlockedItem(issue: SplitBlockedItem): SplitBlockedItem {
   return {
+    id: issue.id,
+    kind: issue.kind,
     code: issue.code,
     message: issue.message,
+    workstreamId: issue.workstreamId,
+    sourcePlanItemIds: [...issue.sourcePlanItemIds],
+    sourceVerificationCaseIds: [...issue.sourceVerificationCaseIds],
+    sourceFindingIds: [...issue.sourceFindingIds],
+    sourceConstraintIds: [...issue.sourceConstraintIds],
+    sourceConcernIds: [...issue.sourceConcernIds],
+    partialMetadataAvailable: issue.partialMetadataAvailable,
   };
 }
 
@@ -124,7 +133,7 @@ export function createSplitDebugWrites(params: {
     },
     {
       filePath: requireDebugPath(params.paths.debugBlockedItemsPath, "debugBlockedItemsPath"),
-      contents: stringifyJson({ blocked_items: params.artifact.blocked_items.map(copyIssue) }),
+      contents: stringifyJson({ blocked_items: params.artifact.blocked_items.map(copyBlockedItem) }),
     },
     {
       filePath: requireDebugPath(params.paths.debugStreamConstraintsPath, "debugStreamConstraintsPath"),

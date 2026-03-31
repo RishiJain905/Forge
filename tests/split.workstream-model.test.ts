@@ -801,6 +801,98 @@ await runScenario(
 );
 
 await runScenario(
+  "buildSplitWorkstreams emits explicit Part 4 merge-order rule objects and blocked-item records",
+  () => {
+    const result = buildSplitWorkstreams({ foundation: createFoundationFixture() }) as unknown as {
+      mergeOrder: Array<{
+        id: string;
+        workstreamId: string;
+        order: number;
+        ruleType: string;
+        mustMergeAfterWorkstreamIds: string[];
+        sourceConstraintIds: string[];
+      }>;
+      blockedItems: Array<{
+        id: string;
+        kind: string;
+        workstreamId: string | null;
+        partialMetadataAvailable: boolean;
+        sourceFindingIds: string[];
+        sourceConstraintIds: string[];
+      }>;
+      streamConstraintDetails: Array<{
+        workstreamId: string;
+        sourceDependencyIds: string[];
+        sourceConflictZoneIds: string[];
+        sourceTestObligationIds: string[];
+        sourceVerificationTargetIds: string[];
+        sourceReadinessIds: string[];
+        mergeOrderRuleIds: string[];
+        blockedItemIds: string[];
+      }>;
+    };
+
+    assert.ok(
+      result.mergeOrder.every((entry) => entry.id.length > 0),
+      "expected merge-order rules to have stable ids",
+    );
+    assert.ok(
+      result.mergeOrder.some((entry) =>
+        entry.workstreamId === "ws-plan-after" &&
+        entry.ruleType === "dependency" &&
+        entry.mustMergeAfterWorkstreamIds.includes("ws-plan-safe"),
+      ),
+      "expected dependency-driven merge order to be explicit",
+    );
+    assert.ok(
+      result.mergeOrder.some((entry) =>
+        entry.workstreamId === "ws-plan-protected" &&
+        entry.ruleType === "protected_merge" &&
+        entry.sourceConstraintIds.includes("constraint-protected"),
+      ),
+      "expected protected-merge rules to stay source-traceable",
+    );
+
+    assert.ok(
+      result.blockedItems.some((item) =>
+        item.kind === "blocked_workstream" &&
+        item.workstreamId === "ws-plan-blocked" &&
+        item.partialMetadataAvailable === true &&
+        item.sourceFindingIds.includes("finding-blocked") &&
+        item.sourceConstraintIds.includes("constraint-blocked"),
+      ),
+      "expected blocked workstreams to become explicit blocked-item records with partial metadata",
+    );
+
+    assert.ok(
+      result.streamConstraintDetails.some((detail) =>
+        detail.workstreamId === "ws-plan-after" &&
+        detail.sourceDependencyIds.length > 0 &&
+        detail.mergeOrderRuleIds.length > 0,
+      ),
+      "expected dependency-driven streams to keep dependency ids and merge-rule ids visible",
+    );
+    assert.ok(
+      result.streamConstraintDetails.some((detail) =>
+        detail.workstreamId === "ws-plan-protected" &&
+        detail.sourceConflictZoneIds.includes("zone-interface") &&
+        detail.sourceVerificationTargetIds.includes("target-protected"),
+      ),
+      "expected protected streams to retain conflict-zone and verification-target traceability",
+    );
+    assert.ok(
+      result.streamConstraintDetails.some((detail) =>
+        detail.workstreamId === "ws-plan-blocked" &&
+        detail.sourceTestObligationIds.includes("test:plan-blocked:integration") &&
+        detail.sourceReadinessIds.length === 0 &&
+        detail.blockedItemIds.length > 0,
+      ),
+      "expected blocked streams to retain test-obligation traceability and blocked-item linkage",
+    );
+  },
+);
+
+await runScenario(
   "buildSplitWorkstreams surfaces blocked-workstream warning context and stream-constraint detail on actionable input",
   () => {
     const result = buildSplitWorkstreams({ foundation: createFoundationFixture() });

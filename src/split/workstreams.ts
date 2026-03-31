@@ -1,6 +1,7 @@
 import type { PlanArtifact } from "../plan/types.js";
 import type { VerifyArtifact } from "../verify/types.js";
 import type {
+  SplitBlockedItem,
   SplitDependencyEdge,
   SplitFoundationResult,
   SplitInputIssue,
@@ -53,6 +54,22 @@ function dedupeIssues(items: SplitInputIssue[]): SplitInputIssue[] {
 
 function workstreamIdForPlanItem(planItemId: string): string {
   return `ws-${planItemId}`;
+}
+
+function dependencySourceId(entry: PlanArtifact["dependency_graph"][number]): string {
+  return `dependency:${entry.dependsOnPlanItemId}->${entry.planItemId}`;
+}
+
+function testObligationSourceId(entry: PlanArtifact["test_obligations"][number]): string {
+  return `test:${entry.planItemId}:${entry.category}`;
+}
+
+function mergeOrderRuleId(workstreamId: string): string {
+  return `merge:${workstreamId}`;
+}
+
+function blockedItemId(workstreamId: string): string {
+  return `blocked:${workstreamId}`;
 }
 
 function buildDescription(planItem: PlanItem): string {
@@ -302,6 +319,7 @@ function buildMergeOrder(params: {
   workstreams: SplitWorkstream[];
   dependencyEdges: SplitDependencyEdge[];
   workstreamOrder: string[];
+  streamConstraintDetails: SplitStreamConstraintDetail[];
 }): SplitMergeOrderEntry[] {
   const dependencyByDownstream = new Map<string, string[]>();
 
@@ -318,6 +336,9 @@ function buildMergeOrder(params: {
     workstream.category === "protected_merge" ||
     workstream.category === "parallel_after_dependency"
   );
+  const detailByWorkstreamId = new Map(
+    params.streamConstraintDetails.map((detail) => [detail.workstreamId, detail] as const),
+  );
 
   const indexById = new Map(params.workstreamOrder.map((workstreamId, index) => [workstreamId, index] as const));
 
@@ -332,14 +353,25 @@ function buildMergeOrder(params: {
   });
 
   return constrainedWorkstreams.map((workstream, index) => ({
+    id: mergeOrderRuleId(workstream.id),
     workstreamId: workstream.id,
     order: index + 1,
+    ruleType:
+      workstream.category === "serial"
+        ? "serial"
+        : workstream.category === "protected_merge"
+          ? "protected_merge"
+          : "dependency",
+    mustMergeAfterWorkstreamIds: [...workstream.streamDependencies],
     reason:
       workstream.category === "serial"
         ? "Serial-only stream requires isolated merge ordering."
         : workstream.category === "protected_merge"
           ? "Protected merge stream keeps shared-risk work under explicit ordering."
           : "Dependent stream must merge after its upstream work settles.",
+    sourceDependencyIds: detailByWorkstreamId.get(workstream.id)?.sourceDependencyIds ?? [],
+    sourceConstraintIds: detailByWorkstreamId.get(workstream.id)?.sourceConstraintIds ?? [],
+    sourceConcernIds: detailByWorkstreamId.get(workstream.id)?.sourceConcernIds ?? [],
   }));
 }
 
@@ -366,6 +398,22 @@ export function buildSplitWorkstreams(params: {
       verificationCaseIds,
     );
     const itemConcerns = findConcernsForPlanItem(concerns, planItem.id);
+    const sourceDependencyIds = params.foundation.splitInput.context.dependencyGraph
+      .filter((entry) => entry.planItemId === planItem.id)
+      .map(dependencySourceId);
+    const sourceConflictZoneIds = params.foundation.splitInput.context.conflictZones
+      .filter((zone) => zone.planItemIds.includes(planItem.id))
+      .map((zone) => zone.id);
+    const sourceTestObligationIds = params.foundation.splitInput.context.testObligations
+      .filter((entry) => entry.planItemId === planItem.id)
+      .map(testObligationSourceId);
+    const sourceVerificationTargetIds = dedupeStrings(
+      verificationCases.map((verificationCase) => verificationCase.verificationTargetId),
+    );
+    const sourceReadinessIds = dedupeStrings([
+      params.foundation.sourcePlan.planningReadiness.status === "ready" ? "" : "planning_readiness",
+      params.foundation.sourceVerify.verificationReadiness.status === "ready" ? "" : "verification_readiness",
+    ]);
     const appliedRules: string[] = [];
     const category = resolveCategory({
       foundation: params.foundation,
@@ -406,10 +454,17 @@ export function buildSplitWorkstreams(params: {
       workstreamId,
       category,
       appliedRules,
+      sourceDependencyIds,
+      sourceConflictZoneIds,
+      sourceTestObligationIds,
+      sourceVerificationTargetIds,
       sourceVerificationCaseIds: verificationCaseIds,
       sourceFindingIds: verificationFindings.map((finding) => finding.id),
       sourceConstraintIds: verificationConstraints.map((constraint) => constraint.id),
       sourceConcernIds: itemConcerns.map((concern) => concern.id),
+      sourceReadinessIds,
+      mergeOrderRuleIds: [],
+      blockedItemIds: [],
       mergeOrderRequirements,
       blockedReason,
     });
@@ -430,14 +485,61 @@ export function buildSplitWorkstreams(params: {
     } satisfies SplitWorkstream;
   });
 
+  const blockedItems: SplitBlockedItem[] = workstreams
+    .filter((workstream) => workstream.category === "blocked")
+    .map((workstream) => {
+      const detail = streamConstraintDetails.find((entry) => entry.workstreamId === workstream.id);
+
+      return {
+        id: blockedItemId(workstream.id),
+        kind: "blocked_workstream",
+        code: "BLOCKED_WORKSTREAM",
+        message: workstream.blockedReason ?? "Blocked workstream",
+        workstreamId: workstream.id,
+        sourcePlanItemIds: [...workstream.sourcePlanItemIds],
+        sourceVerificationCaseIds: detail?.sourceVerificationCaseIds ?? [],
+        sourceFindingIds: detail?.sourceFindingIds ?? [],
+        sourceConstraintIds: detail?.sourceConstraintIds ?? [],
+        sourceConcernIds: detail?.sourceConcernIds ?? [],
+        partialMetadataAvailable: true,
+      };
+    });
+
   const mergeOrder = buildMergeOrder({
     workstreams,
     dependencyEdges,
     workstreamOrder,
+    streamConstraintDetails,
   });
+  const mergeOrderIdsByWorkstream = new Map<string, string[]>();
+  const blockedItemIdsByWorkstream = new Map<string, string[]>();
+
+  for (const entry of mergeOrder) {
+    mergeOrderIdsByWorkstream.set(entry.workstreamId, [
+      ...(mergeOrderIdsByWorkstream.get(entry.workstreamId) ?? []),
+      entry.id,
+    ]);
+  }
+
+  for (const item of blockedItems) {
+    if (!item.workstreamId) {
+      continue;
+    }
+
+    blockedItemIdsByWorkstream.set(item.workstreamId, [
+      ...(blockedItemIdsByWorkstream.get(item.workstreamId) ?? []),
+      item.id,
+    ]);
+  }
+
+  const updatedStreamConstraintDetails = streamConstraintDetails.map((detail) => ({
+    ...detail,
+    mergeOrderRuleIds: mergeOrderIdsByWorkstream.get(detail.workstreamId) ?? [],
+    blockedItemIds: blockedItemIdsByWorkstream.get(detail.workstreamId) ?? [],
+  }));
 
   const warningItems: SplitInputIssue[] = [];
-  const hasBlockedWorkstreams = workstreams.some((workstream) => workstream.category === "blocked");
+  const hasBlockedWorkstreams = blockedItems.length > 0;
   if (params.foundation.splitInput.usability.status === "actionable" && hasBlockedWorkstreams) {
     warningItems.push({
       code: "BLOCKED_WORKSTREAMS_PRESENT",
@@ -450,7 +552,8 @@ export function buildSplitWorkstreams(params: {
     workstreams,
     dependencyEdges,
     mergeOrder,
+    blockedItems,
     warningItems: dedupeIssues(warningItems),
-    streamConstraintDetails,
+    streamConstraintDetails: updatedStreamConstraintDetails,
   };
 }

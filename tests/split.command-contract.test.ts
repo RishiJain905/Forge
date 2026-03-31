@@ -52,7 +52,19 @@ interface SplitArtifact {
   }>;
   dependency_edges: Array<Record<string, unknown>>;
   merge_order: Array<Record<string, unknown>>;
-  blocked_items: Array<Record<string, unknown>>;
+  blocked_items: Array<{
+    id: string;
+    kind: string;
+    workstreamId: string | null;
+    partialMetadataAvailable: boolean;
+  }>;
+  carried_forward_constraints?: {
+    stream_constraint_details: Array<{
+      workstreamId: string;
+      mergeOrderRuleIds: string[];
+      blockedItemIds: string[];
+    }>;
+  };
   split_diagnostics: {
     usability_status: "actionable" | "non_actionable" | "upstream_blocked";
     warning_items: Array<{ code: string; message: string }>;
@@ -193,6 +205,13 @@ await runScenario(
       assert.ok(artifact.merge_order.length > 0);
       assert.equal(artifact.split_diagnostics.usability_status, "actionable");
       assert.equal(artifact.split_readiness.ready, true);
+      assert.ok(Array.isArray(artifact.blocked_items));
+      assert.ok(
+        artifact.blocked_items.every((item) =>
+          item.id.length > 0 && item.kind.length > 0 && typeof item.partialMetadataAvailable === "boolean",
+        ),
+      );
+      assert.ok((artifact.carried_forward_constraints?.stream_constraint_details.length ?? 0) > 0);
       assert.equal(artifact.failure, null);
     } finally {
       await disposeTempRepo(repoRoot);
@@ -271,6 +290,8 @@ await runScenario(
       assert.ok(artifact.split_diagnostics.blocking_items.length > 0);
       assert.ok(artifact.split_readiness.blocking_issues.length > 0);
       assert.ok(artifact.blocked_items.length > 0);
+      assert.ok(artifact.blocked_items.some((item) => item.kind === "input_blocker"));
+      assert.ok(artifact.blocked_items.some((item) => item.kind === "blocked_workstream"));
     } finally {
       await disposeTempRepo(repoRoot);
     }

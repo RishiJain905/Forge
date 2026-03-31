@@ -74,9 +74,26 @@ interface SplitArtifact {
     downstreamWorkstreamId: string;
   }>;
   merge_order: Array<{
+    id: string;
     workstreamId: string;
     order: number;
+    ruleType: string;
+    mustMergeAfterWorkstreamIds: string[];
+    sourceConstraintIds: string[];
   }>;
+  blocked_items: Array<{
+    id: string;
+    kind: string;
+    workstreamId: string | null;
+    partialMetadataAvailable: boolean;
+  }>;
+  carried_forward_constraints: {
+    stream_constraint_details: Array<{
+      workstreamId: string;
+      mergeOrderRuleIds: string[];
+      blockedItemIds: string[];
+    }>;
+  };
   split_diagnostics: {
     usability_status: "actionable" | "non_actionable" | "upstream_blocked";
   };
@@ -160,6 +177,20 @@ await runScenario(
       assert.ok(artifact.workstreams.some((workstream) => workstream.blockedReason === null));
       assert.ok(artifact.dependency_edges.length > 0);
       assert.ok(artifact.merge_order.length > 0);
+      assert.ok(artifact.merge_order.every((entry) => entry.id.length > 0));
+      assert.ok(artifact.merge_order.every((entry) => entry.ruleType.length > 0));
+      assert.ok(artifact.merge_order.every((entry) => Array.isArray(entry.mustMergeAfterWorkstreamIds)));
+      assert.ok(artifact.merge_order.some((entry) => entry.sourceConstraintIds.length > 0));
+      assert.ok(Array.isArray(artifact.blocked_items));
+      assert.ok(
+        artifact.blocked_items.every((item) => item.id.length > 0 && typeof item.partialMetadataAvailable === "boolean"),
+      );
+      assert.ok(artifact.carried_forward_constraints.stream_constraint_details.length > 0);
+      assert.ok(
+        artifact.carried_forward_constraints.stream_constraint_details.every((detail) =>
+          Array.isArray(detail.mergeOrderRuleIds) && Array.isArray(detail.blockedItemIds),
+        ),
+      );
       assert.equal(artifact.split_diagnostics.usability_status, "actionable");
       assert.equal(artifact.split_readiness.status, "ready_with_warnings");
       assert.ok(artifact.files.debugArtifactPath.endsWith("split-debug.json"));

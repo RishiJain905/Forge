@@ -183,9 +183,48 @@ const splitDependencyEdgeSchema = z.object({
 }).strict();
 
 const splitMergeOrderEntrySchema = z.object({
+  id: z.string().min(1),
   workstreamId: z.string().min(1),
   order: z.number().int().positive(),
+  ruleType: z.enum(["serial", "dependency", "protected_merge"]),
+  mustMergeAfterWorkstreamIds: z.array(z.string().min(1)),
   reason: z.string().min(1),
+  sourceDependencyIds: z.array(z.string().min(1)),
+  sourceConstraintIds: z.array(z.string().min(1)),
+  sourceConcernIds: z.array(z.string().min(1)),
+}).strict();
+
+const splitBlockedItemSchema = z.object({
+  id: z.string().min(1),
+  kind: z.enum(["input_blocker", "blocked_workstream"]),
+  code: z.string().min(1),
+  message: z.string().min(1),
+  workstreamId: z.string().min(1).nullable(),
+  sourcePlanItemIds: z.array(z.string().min(1)),
+  sourceVerificationCaseIds: z.array(z.string().min(1)),
+  sourceFindingIds: z.array(z.string().min(1)),
+  sourceConstraintIds: z.array(z.string().min(1)),
+  sourceConcernIds: z.array(z.string().min(1)),
+  partialMetadataAvailable: z.boolean(),
+}).strict();
+
+const splitStreamConstraintDetailSchema = z.object({
+  workstreamId: z.string().min(1),
+  category: z.enum(SPLIT_STREAM_CATEGORIES),
+  appliedRules: z.array(z.string().min(1)),
+  sourceDependencyIds: z.array(z.string().min(1)),
+  sourceConflictZoneIds: z.array(z.string().min(1)),
+  sourceTestObligationIds: z.array(z.string().min(1)),
+  sourceVerificationTargetIds: z.array(z.string().min(1)),
+  sourceVerificationCaseIds: z.array(z.string().min(1)),
+  sourceFindingIds: z.array(z.string().min(1)),
+  sourceConstraintIds: z.array(z.string().min(1)),
+  sourceConcernIds: z.array(z.string().min(1)),
+  sourceReadinessIds: z.array(z.enum(["planning_readiness", "verification_readiness"])),
+  mergeOrderRuleIds: z.array(z.string().min(1)),
+  blockedItemIds: z.array(z.string().min(1)),
+  mergeOrderRequirements: z.array(z.string().min(1)),
+  blockedReason: z.string().min(1).nullable(),
 }).strict();
 
 const splitArtifactFilesSchema = z.object({
@@ -213,6 +252,7 @@ const splitCarriedForwardConstraintsSchema = z.object({
   plan_concerns: z.array(planArtifactSchema.shape.carry_forward.shape.concerns.element).min(0),
   planning_readiness: planArtifactSchema.shape.planning_readiness,
   verification_readiness: verifyArtifactSchema.shape.verification_readiness,
+  stream_constraint_details: z.array(splitStreamConstraintDetailSchema),
 }).strict();
 
 const splitDiagnosticsSchema = z.object({
@@ -302,7 +342,7 @@ export const splitArtifactSchema = z.object({
   workstreams: z.array(splitWorkstreamSchema),
   dependency_edges: z.array(splitDependencyEdgeSchema),
   merge_order: z.array(splitMergeOrderEntrySchema),
-  blocked_items: z.array(splitInputIssueSchema),
+  blocked_items: z.array(splitBlockedItemSchema),
   carried_forward_constraints: splitCarriedForwardConstraintsSchema,
   split_diagnostics: splitDiagnosticsSchema,
   split_readiness: splitReadinessSchema,
@@ -412,22 +452,9 @@ export const splitArtifactSchema = z.object({
     });
   }
 
-  if (
-    value.blocked_items.length !== value.split_diagnostics.blocking_items.length ||
-    value.blocked_items.some(
-      (item, index) =>
-        item.code !== value.split_diagnostics.blocking_items[index]?.code ||
-        item.message !== value.split_diagnostics.blocking_items[index]?.message,
-    )
-  ) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Blocked items must mirror the upstream split diagnostics blockers.",
-      path: ["blocked_items"],
-    });
-  }
-
   const workstreamIds = new Set(value.workstreams.map((workstream) => workstream.id));
+  const mergeOrderIds = new Set(value.merge_order.map((entry) => entry.id));
+  const blockedItemIds = new Set(value.blocked_items.map((item) => item.id));
   for (const [index, workstream] of value.workstreams.entries()) {
     if (workstream.category === "blocked" && workstream.blockedReason === null) {
       context.addIssue({
@@ -481,6 +508,100 @@ export const splitArtifactSchema = z.object({
         message: "Merge-order entries must reference real workstream ids.",
         path: ["merge_order", index, "workstreamId"],
       });
+    }
+
+    for (const [dependencyIndex, dependencyId] of entry.mustMergeAfterWorkstreamIds.entries()) {
+      if (!workstreamIds.has(dependencyId)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Merge-order dependencies must reference real workstream ids.",
+          path: ["merge_order", index, "mustMergeAfterWorkstreamIds", dependencyIndex],
+        });
+      }
+    }
+  }
+
+  const inputBlockingItems = value.blocked_items.filter((item) => item.kind === "input_blocker");
+  if (
+    inputBlockingItems.length !== value.split_diagnostics.blocking_items.length ||
+    inputBlockingItems.some(
+      (item, index) =>
+        item.code !== value.split_diagnostics.blocking_items[index]?.code ||
+        item.message !== value.split_diagnostics.blocking_items[index]?.message ||
+        item.workstreamId !== null ||
+        item.partialMetadataAvailable !== false,
+    )
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Input-blocker items must mirror the upstream split diagnostics blockers.",
+      path: ["blocked_items"],
+    });
+  }
+
+  for (const [index, item] of value.blocked_items.entries()) {
+    if (item.kind === "input_blocker") {
+      if (item.workstreamId !== null) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Input blockers must not reference a workstream id.",
+          path: ["blocked_items", index, "workstreamId"],
+        });
+      }
+    } else {
+      if (!item.workstreamId || !workstreamIds.has(item.workstreamId)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Blocked workstream items must reference a real blocked workstream id.",
+          path: ["blocked_items", index, "workstreamId"],
+        });
+      }
+      if (!item.partialMetadataAvailable) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Blocked workstream items must keep partial metadata available.",
+          path: ["blocked_items", index, "partialMetadataAvailable"],
+        });
+      }
+    }
+  }
+
+  const detailEntries = value.carried_forward_constraints.stream_constraint_details;
+  if (detailEntries.length !== value.workstreams.length) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Stream constraint details must exist for every workstream.",
+      path: ["carried_forward_constraints", "stream_constraint_details"],
+    });
+  }
+
+  for (const [index, detail] of detailEntries.entries()) {
+    if (!workstreamIds.has(detail.workstreamId)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Stream constraint details must reference real workstream ids.",
+        path: ["carried_forward_constraints", "stream_constraint_details", index, "workstreamId"],
+      });
+    }
+
+    for (const [ruleIndex, ruleId] of detail.mergeOrderRuleIds.entries()) {
+      if (!mergeOrderIds.has(ruleId)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Stream constraint details must reference real merge-order rule ids.",
+          path: ["carried_forward_constraints", "stream_constraint_details", index, "mergeOrderRuleIds", ruleIndex],
+        });
+      }
+    }
+
+    for (const [blockedIndex, blockedId] of detail.blockedItemIds.entries()) {
+      if (!blockedItemIds.has(blockedId)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Stream constraint details must reference real blocked-item ids.",
+          path: ["carried_forward_constraints", "stream_constraint_details", index, "blockedItemIds", blockedIndex],
+        });
+      }
     }
   }
 });

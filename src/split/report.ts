@@ -97,7 +97,36 @@ function renderMergeOrder(artifact: SplitArtifact): string {
   }
 
   return artifact.merge_order
-    .map((entry) => `- ${entry.order}: ${entry.workstreamId} - ${entry.reason}`)
+    .map((entry) => [
+      `- ${entry.order}: ${entry.workstreamId}`,
+      `  - Rule Type: ${entry.ruleType}`,
+      `  - Must Merge After: ${entry.mustMergeAfterWorkstreamIds.join(", ") || "none"}`,
+      `  - Source Dependency IDs: ${entry.sourceDependencyIds.join(", ") || "none"}`,
+      `  - Source Constraint IDs: ${entry.sourceConstraintIds.join(", ") || "none"}`,
+      `  - Source Concern IDs: ${entry.sourceConcernIds.join(", ") || "none"}`,
+      `  - Reason: ${entry.reason}`,
+    ].join("\n"))
+    .join("\n");
+}
+
+function renderBlockedItems(artifact: SplitArtifact): string {
+  if (artifact.blocked_items.length === 0) {
+    return "- none";
+  }
+
+  return artifact.blocked_items
+    .map((item) => [
+      `- ${item.id}: ${item.message}`,
+      `  - Kind: ${item.kind}`,
+      `  - Code: ${item.code}`,
+      `  - Workstream ID: ${item.workstreamId ?? "none"}`,
+      `  - Partial Metadata Available: ${item.partialMetadataAvailable}`,
+      `  - Source Plan Item IDs: ${item.sourcePlanItemIds.join(", ") || "none"}`,
+      `  - Source Verification Case IDs: ${item.sourceVerificationCaseIds.join(", ") || "none"}`,
+      `  - Source Finding IDs: ${item.sourceFindingIds.join(", ") || "none"}`,
+      `  - Source Constraint IDs: ${item.sourceConstraintIds.join(", ") || "none"}`,
+      `  - Source Concern IDs: ${item.sourceConcernIds.join(", ") || "none"}`,
+    ].join("\n"))
     .join("\n");
 }
 
@@ -170,9 +199,9 @@ export function createSplitReport(artifact: SplitArtifact): string {
     renderSection("Dependency Edges", [renderDependencyEdges(artifact)]),
     renderSection("Merge Order", [renderMergeOrder(artifact)]),
     renderSection("Blocked Items", [
-      "Blocked items mirror the upstream Step 3 blockers instead of re-deriving new Step 4 blockers.",
+      "Blocked items include both upstream blockers and blocked workstreams so later execution can distinguish input gating from stream-level blocking.",
       "",
-      renderIssueList(artifact.blocked_items),
+      renderBlockedItems(artifact),
     ]),
     renderSection("Carried-Forward Constraints", [
       "This section preserves the exact Step 2 and Step 3 safety context that later split work must continue honoring.",
@@ -210,6 +239,28 @@ export function createSplitReport(artifact: SplitArtifact): string {
         ["Status", artifact.carried_forward_constraints.verification_readiness.status],
         ["Summary", artifact.carried_forward_constraints.verification_readiness.summary],
       ]),
+      "",
+      "### Stream Constraint Details",
+      "",
+      artifact.carried_forward_constraints.stream_constraint_details.length > 0
+        ? artifact.carried_forward_constraints.stream_constraint_details.map((detail) => [
+            `- ${detail.workstreamId}`,
+            `  - Category: ${detail.category}`,
+            `  - Applied Rules: ${detail.appliedRules.join(", ") || "none"}`,
+            `  - Source Dependency IDs: ${detail.sourceDependencyIds.join(", ") || "none"}`,
+            `  - Source Conflict Zone IDs: ${detail.sourceConflictZoneIds.join(", ") || "none"}`,
+            `  - Source Test Obligation IDs: ${detail.sourceTestObligationIds.join(", ") || "none"}`,
+            `  - Source Verification Target IDs: ${detail.sourceVerificationTargetIds.join(", ") || "none"}`,
+            `  - Source Verification Case IDs: ${detail.sourceVerificationCaseIds.join(", ") || "none"}`,
+            `  - Source Finding IDs: ${detail.sourceFindingIds.join(", ") || "none"}`,
+            `  - Source Constraint IDs: ${detail.sourceConstraintIds.join(", ") || "none"}`,
+            `  - Source Concern IDs: ${detail.sourceConcernIds.join(", ") || "none"}`,
+            `  - Source Readiness IDs: ${detail.sourceReadinessIds.join(", ") || "none"}`,
+            `  - Merge Order Rule IDs: ${detail.mergeOrderRuleIds.join(", ") || "none"}`,
+            `  - Blocked Item IDs: ${detail.blockedItemIds.join(", ") || "none"}`,
+            `  - Blocked Reason: ${detail.blockedReason ?? "none"}`,
+          ].join("\n")).join("\n")
+        : "- none",
     ]),
     renderSection("Split Diagnostics", [
       ...renderKeyValueLines([

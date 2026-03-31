@@ -143,8 +143,19 @@ await runScenario(
       const workstreamsDebug = await readJsonFile<{ workstreams: Array<{ id: string; category: string }> }>(
         splitWorkstreamsPath(repoRoot),
       );
+      const mergeOrderDebug = await readJsonFile<{
+        merge_order: Array<{ id: string; ruleType: string; mustMergeAfterWorkstreamIds: string[] }>;
+      }>(splitMergeOrderPath(repoRoot));
+      const blockedItemsDebug = await readJsonFile<{
+        blocked_items: Array<{ id: string; kind: string; partialMetadataAvailable: boolean }>;
+      }>(splitBlockedItemsPath(repoRoot));
       const constraintsDebug = await readJsonFile<{
-        stream_constraint_details: Array<{ workstreamId: string; category: string }>;
+        stream_constraint_details: Array<{
+          workstreamId: string;
+          category: string;
+          mergeOrderRuleIds: string[];
+          blockedItemIds: string[];
+        }>;
       }>(splitStreamConstraintsPath(repoRoot));
 
       assert.ok(workstreamsDebug.workstreams.length > 0);
@@ -162,6 +173,21 @@ await runScenario(
       );
       assert.ok(
         constraintsDebug.stream_constraint_details.every((detail) => detail.category.length > 0),
+      );
+      assert.ok(mergeOrderDebug.merge_order.every((entry) => entry.id.length > 0));
+      assert.ok(mergeOrderDebug.merge_order.every((entry) => entry.ruleType.length > 0));
+      assert.ok(
+        mergeOrderDebug.merge_order.every((entry) => Array.isArray(entry.mustMergeAfterWorkstreamIds)),
+      );
+      assert.ok(
+        blockedItemsDebug.blocked_items.every((item) =>
+          item.id.length > 0 && item.kind.length > 0 && typeof item.partialMetadataAvailable === "boolean"
+        ),
+      );
+      assert.ok(
+        constraintsDebug.stream_constraint_details.every((detail) =>
+          Array.isArray(detail.mergeOrderRuleIds) && Array.isArray(detail.blockedItemIds),
+        ),
       );
     } finally {
       await disposeTempRepo(repoRoot);
