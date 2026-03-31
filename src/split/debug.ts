@@ -2,8 +2,9 @@ import { SPLIT_DEBUG_ENV_VAR } from "./constants.js";
 import type {
   SplitArtifact,
   SplitCommandFailure,
-  SplitResolvedOutputPaths,
   SplitInputIssue,
+  SplitResolvedOutputPaths,
+  SplitStreamConstraintDetail,
 } from "./types.js";
 
 interface PlannedWrite {
@@ -27,6 +28,7 @@ export interface SplitDebugArtifact {
   dependency_edges: SplitArtifact["dependency_edges"];
   merge_order: SplitArtifact["merge_order"];
   blocked_items: SplitArtifact["blocked_items"];
+  stream_constraint_details: SplitStreamConstraintDetail[];
   carried_forward_constraints: SplitArtifact["carried_forward_constraints"];
   split_diagnostics: SplitArtifact["split_diagnostics"];
   split_readiness: SplitArtifact["split_readiness"];
@@ -59,6 +61,7 @@ export function isSplitDebugEnabled(env: NodeJS.ProcessEnv = process.env): boole
 export function createSplitDebugArtifact(
   artifact: SplitArtifact,
   paths: SplitResolvedOutputPaths,
+  streamConstraintDetails: SplitStreamConstraintDetail[],
 ): SplitDebugArtifact {
   return {
     command: artifact.command,
@@ -87,6 +90,7 @@ export function createSplitDebugArtifact(
     dependency_edges: artifact.dependency_edges,
     merge_order: artifact.merge_order,
     blocked_items: artifact.blocked_items,
+    stream_constraint_details: streamConstraintDetails,
     carried_forward_constraints: artifact.carried_forward_constraints,
     split_diagnostics: artifact.split_diagnostics,
     split_readiness: artifact.split_readiness,
@@ -97,8 +101,13 @@ export function createSplitDebugArtifact(
 export function createSplitDebugWrites(params: {
   artifact: SplitArtifact;
   paths: SplitResolvedOutputPaths;
+  streamConstraintDetails: SplitStreamConstraintDetail[];
 }): PlannedWrite[] {
-  const debugArtifact = createSplitDebugArtifact(params.artifact, params.paths);
+  const debugArtifact = createSplitDebugArtifact(
+    params.artifact,
+    params.paths,
+    params.streamConstraintDetails,
+  );
 
   return [
     {
@@ -121,6 +130,7 @@ export function createSplitDebugWrites(params: {
       filePath: requireDebugPath(params.paths.debugStreamConstraintsPath, "debugStreamConstraintsPath"),
       contents: stringifyJson({
         workstream_contract: params.artifact.workstream_contract,
+        stream_constraint_details: params.streamConstraintDetails,
         dependency_edges: params.artifact.dependency_edges,
         carried_forward_constraints: params.artifact.carried_forward_constraints,
         split_diagnostics: params.artifact.split_diagnostics,

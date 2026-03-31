@@ -84,6 +84,7 @@ function buildConcerningIds(foundation: SplitFoundationResult): string[] {
 function buildRecommendedUserActions(params: {
   foundation: SplitFoundationResult;
   blockingItems: SplitInputIssue[];
+  warningItems: SplitInputIssue[];
 }): string[] {
   const actions = [
     ...params.foundation.sourcePlan.planningReadiness.recommended_user_actions,
@@ -96,6 +97,10 @@ function buildRecommendedUserActions(params: {
 
   if (params.foundation.splitInput.usability.warningItems.length > 0) {
     actions.push("Keep the carried-forward warnings visible when regrouping workstreams.");
+  }
+
+  if (params.warningItems.some((item) => item.code === "BLOCKED_WORKSTREAMS_PRESENT")) {
+    actions.push("Keep blocked workstreams out of active execution until their carried-forward evidence is resolved.");
   }
 
   return dedupeStrings(actions);
@@ -135,8 +140,12 @@ function buildReadinessSummary(params: {
 export function resolveSplitReadiness(params: {
   foundation: SplitFoundationResult;
   failure: SplitCommandFailure | null;
+  additionalWarningItems?: SplitInputIssue[];
 }): SplitReadinessResolution {
-  const warningItems = dedupeIssues(buildWarningItems(params.foundation));
+  const warningItems = dedupeIssues([
+    ...buildWarningItems(params.foundation),
+    ...(params.additionalWarningItems ?? []).map(cloneIssue),
+  ]);
   const blockingItems = dedupeIssues(buildBlockingItems(params.foundation));
   const partialOutput = buildPartialOutput(params.failure);
   const constrainingConcernIds = buildConcerningIds(params.foundation);
@@ -176,6 +185,7 @@ export function resolveSplitReadiness(params: {
     recommended_user_actions: buildRecommendedUserActions({
       foundation: params.foundation,
       blockingItems,
+      warningItems,
     }),
   };
 

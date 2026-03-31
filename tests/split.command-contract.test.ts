@@ -46,7 +46,10 @@ interface SplitArtifact {
     categories: string[];
     constraintSources: string[];
   };
-  workstreams: Array<Record<string, unknown>>;
+  workstreams: Array<{
+    id: string;
+    category: string;
+  }>;
   dependency_edges: Array<Record<string, unknown>>;
   merge_order: Array<Record<string, unknown>>;
   blocked_items: Array<Record<string, unknown>>;
@@ -180,6 +183,14 @@ await runScenario(
       assert.ok(artifact.workstream_contract.requiredFields.includes("blockedReason"));
       assert.ok(artifact.workstream_contract.categories.includes("blocked"));
       assert.ok(artifact.workstream_contract.constraintSources.includes("verification_readiness"));
+      assert.ok(artifact.workstreams.length > 0);
+      assert.ok(
+        artifact.workstreams.every((workstream) =>
+          artifact.workstream_contract.categories.includes(workstream.category),
+        ),
+      );
+      assert.ok(artifact.dependency_edges.length > 0);
+      assert.ok(artifact.merge_order.length > 0);
       assert.equal(artifact.split_diagnostics.usability_status, "actionable");
       assert.equal(artifact.split_readiness.ready, true);
       assert.equal(artifact.failure, null);
@@ -214,6 +225,7 @@ await runScenario(
 
       const artifact = await readSplitArtifact(repoRoot);
       assert.equal(artifact.status, "ready");
+      assert.ok(artifact.workstreams.length > 0);
       assert.equal(artifact.split_readiness.ready, true);
       assert.equal(artifact.split_readiness.status, "ready_with_warnings");
       assert.ok(artifact.split_diagnostics.warning_items.length > 0);
@@ -253,6 +265,8 @@ await runScenario(
       const artifact = await readSplitArtifact(repoRoot);
       assert.equal(artifact.status, "blocked");
       assert.equal(artifact.split_diagnostics.usability_status, "upstream_blocked");
+      assert.ok(artifact.workstreams.length > 0);
+      assert.ok(artifact.workstreams.every((workstream) => workstream.category === "blocked"));
       assert.equal(artifact.split_readiness.ready, false);
       assert.ok(artifact.split_diagnostics.blocking_items.length > 0);
       assert.ok(artifact.split_readiness.blocking_issues.length > 0);

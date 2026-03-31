@@ -361,6 +361,14 @@ async function main() {
     assert.ok(Array.isArray(splitArtifact.dependency_edges));
     assert.ok(Array.isArray(splitArtifact.merge_order));
     assert.ok(Array.isArray(splitArtifact.blocked_items));
+    assert.ok(splitArtifact.workstreams.length > 0);
+    assert.ok(splitArtifact.dependency_edges.length > 0);
+    assert.ok(splitArtifact.merge_order.length > 0);
+    assert.ok(
+      splitArtifact.workstreams.every(
+        (workstream) => splitArtifact.workstream_contract.categories.includes(workstream.category),
+      ),
+    );
     assert.equal(splitArtifact.split_readiness.ready, true);
     assert.match(splitArtifact.split_readiness.status, /^ready(?:_with_warnings)?$/);
     assert.ok(Array.isArray(splitArtifact.split_readiness.recommended_user_actions));
@@ -372,14 +380,8 @@ async function main() {
     assert.match(splitReport, /## Split Readiness/);
     assert.match(splitReport, /## Output Files/);
     assert.match(splitReport, /split\.json and reports\/split-report\.md are the durable Step 4 outputs\./);
-    assert.match(
-      splitReport,
-      /Part 2 keeps execution workstreams conservative and emits no regrouped workstreams yet\./,
-    );
-    assert.match(
-      splitReport,
-      /This section freezes the public Step 4 workstream contract while Part 2 keeps the actual regrouping output intentionally conservative\./,
-    );
+    assert.equal(/Part 2 keeps execution workstreams conservative/i.test(splitReport), false);
+    assert.equal(/Part 2 keeps the actual regrouping output intentionally conservative/i.test(splitReport), false);
 
     await writeFile(join(tempRepo, "src", "app.ts"), "export const smoke = true;\n", "utf8");
     await writeFile(

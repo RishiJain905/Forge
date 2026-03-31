@@ -16,6 +16,7 @@ import type {
   SplitInputIssue,
   SplitResolvedOutputPaths,
   SplitReadinessResolution,
+  SplitWorkstreamBuildResult,
   SplitWritePolicy,
 } from "./types.js";
 
@@ -55,7 +56,7 @@ function buildSplitBoundaryNotes(foundation: SplitFoundationResult): string[] {
   return dedupeStrings([
     ...foundation.boundaryPolicy.deterministicFirstNotes,
     ...foundation.boundaryPolicy.conservativeRegroupingNotes,
-    "Part 2 keeps workstream generation, dependency edges, and merge ordering as explicit placeholders until later split work hardens them.",
+    "Part 3 populates explicit workstreams, dependency edges, and merge ordering from persisted Step 2 and Step 3 safety inputs while keeping the Step 4 top-level contract stable.",
   ]);
 }
 
@@ -107,10 +108,11 @@ function buildSplitSummary(params: {
 function buildSplitDiagnostics(
   foundation: SplitFoundationResult,
   failure: SplitCommandFailure | null,
+  warningItems: SplitInputIssue[],
 ): SplitArtifact["split_diagnostics"] {
   return {
     usability_status: foundation.splitInput.usability.status,
-    warning_items: foundation.splitInput.usability.warningItems.map(copyIssue),
+    warning_items: warningItems.map(copyIssue),
     blocking_items: foundation.splitInput.usability.blockingItems.map(copyIssue),
     partial_output: failure
       ? {
@@ -137,10 +139,12 @@ function buildSplitCarriedForwardConstraints(
 function buildSplitReadinessResolution(
   foundation: SplitFoundationResult,
   failure: SplitCommandFailure | null,
+  additionalWarningItems: SplitInputIssue[],
 ): SplitReadinessResolution {
   return resolveSplitReadiness({
     foundation,
     failure,
+    additionalWarningItems,
   });
 }
 
@@ -150,13 +154,19 @@ export function createSplitArtifact(params: {
   startedAt: string;
   finishedAt: string;
   failure: SplitCommandFailure | null;
+  workstreamBuild: SplitWorkstreamBuildResult;
 }): SplitArtifact {
-  const readinessResolution = buildSplitReadinessResolution(params.foundation, params.failure);
-  const splitDiagnostics = readinessResolution.splitDiagnostics;
+  const readinessResolution = buildSplitReadinessResolution(
+    params.foundation,
+    params.failure,
+    params.workstreamBuild.warningItems,
+  );
+  const splitDiagnostics = buildSplitDiagnostics(
+    params.foundation,
+    params.failure,
+    readinessResolution.splitReadiness.warning_items,
+  );
   const blockedItems = splitDiagnostics.blocking_items.map(copyIssue);
-  const workstreams: SplitArtifact["workstreams"] = [];
-  const dependencyEdges: SplitArtifact["dependency_edges"] = [];
-  const mergeOrder: SplitArtifact["merge_order"] = [];
   const carriedForwardConstraints = buildSplitCarriedForwardConstraints(params.foundation);
 
   return validateSplitArtifact({
@@ -181,9 +191,9 @@ export function createSplitArtifact(params: {
     source_verify: params.foundation.sourceVerify,
     source_plan: params.foundation.sourcePlan,
     workstream_contract: params.foundation.workstreamContract,
-    workstreams,
-    dependency_edges: dependencyEdges,
-    merge_order: mergeOrder,
+    workstreams: params.workstreamBuild.workstreams,
+    dependency_edges: params.workstreamBuild.dependencyEdges,
+    merge_order: params.workstreamBuild.mergeOrder,
     blocked_items: blockedItems,
     carried_forward_constraints: carriedForwardConstraints,
     split_diagnostics: splitDiagnostics,

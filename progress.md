@@ -390,6 +390,11 @@
   - Locked the top-level Step 4 artifact/report contract around source verify/plan references, the frozen workstream contract, conservative placeholder workstream output, split diagnostics/readiness, and durable output-file metadata.
   - Added optional internal split debug output paths behind `FORGE_SPLIT_DEBUG=1`, keeping `split.json` and `split-report.md` primary while exposing `split-debug.json`, `workstreams.json`, `merge-order.json`, `blocked-items.json`, and `stream-constraints.json` as secondary mirrors.
   - Added `tests/split.command-contract.test.ts`, `tests/split.artifact-schema.test.ts`, `tests/split.report.test.ts`, `tests/split.debug-output.test.ts`, and `tests/split.cli-entrypoint.test.ts`, and extended `scripts/smoke.mjs` so the packaged smoke path now runs `forge intake` -> `forge plan` -> `forge verify` -> `forge split`.
+- Batch 1.03: `part-3-workstream-model-stream-categories-and-safety-rules.md` (Step 4)
+  - Added a real `src/split/workstreams.ts` builder so Step 4 now emits one structured workstream per Step 2 plan item with explicit category, dependency, merge-order, traceability, and blocked-state handling instead of placeholder empty arrays.
+  - Wired deterministic Part 3 category logic from Step 2 parallelization signals plus Step 3 verification evidence, conflict zones, and carried-forward concerns so `forge split` now distinguishes `serial`, `safe_parallel`, `parallel_after_dependency`, `protected_merge`, and `blocked` streams through real safety rules.
+  - Populated split readiness and debug outputs with stream-level warning details, blocked-workstream warnings, and inspectable `stream_constraint_details` so later consumers no longer need to reinvent grouping rationale or carry-forward safety context.
+  - Added `tests/split.workstream-model.test.ts`, expanded the split command/schema/report/debug coverage, updated smoke assertions for populated workstreams, and wired the new Part 3 suite into the default `npm.cmd test` gate.
 
 ## Current Branch State
 - `dev` includes the completed Step 1 work through Batch 4.05, including the frozen Step 2 handoff contract from Intake.
@@ -420,6 +425,7 @@
 - `dev` now treats Step 3 Batch 3 as complete and the Step 3 verification runtime surface as frozen for V1 except future bug fixes, with Step 4 expected to consume persisted Step 3 outputs rather than re-running broad verification logic.
 - `dev` now includes Step 4 Batch 1 Part 1, including the internal `src/split` foundation, deterministic `verify.json` consumption plus referenced `plan.json` loading, explicit Step 4 boundary/workstream contracts, and dedicated goal-and-boundaries coverage while keeping Step 4 internal-only for now.
 - `dev` now includes Step 4 Batch 1 Part 2, including the public `forge split` CLI, persisted `split.json` / `split-report.md` outputs, optional `FORGE_SPLIT_DEBUG=1` debug mirrors, and a runnable smoke path from `forge intake` through `forge split`.
+- `dev` now includes Step 4 Batch 1 Part 3, including the real workstream builder, explicit stream-category safety rules, populated dependency and merge-order output, blocked-workstream warning handling, and inspectable stream-constraint debug detail while keeping the frozen top-level split contract stable.
 
 ## Verification
 - `npm.cmd test`
@@ -448,4 +454,5 @@
 - Step 3 Batch 3 is complete.
 - Step 4 Batch 1 Part 1 is complete.
 - Step 4 Batch 1 Part 2 is complete.
-- Next implementation work should move to Step 4 Batch 1 Part 3.
+- Step 4 Batch 1 Part 3 is complete.
+- Next implementation work should move to Step 4 Batch 1 Part 4.

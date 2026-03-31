@@ -146,7 +146,7 @@ export interface SplitWorkstream {
   streamDependencies: string[];
   mergeOrderRequirements: string[];
   constraints: string[];
-  blockedReason: string;
+  blockedReason: string | null;
 }
 
 export interface SplitDependencyEdge {
@@ -159,6 +159,26 @@ export interface SplitMergeOrderEntry {
   workstreamId: string;
   order: number;
   reason: string;
+}
+
+export interface SplitStreamConstraintDetail {
+  workstreamId: string;
+  category: SplitStreamCategory;
+  appliedRules: string[];
+  sourceVerificationCaseIds: string[];
+  sourceFindingIds: string[];
+  sourceConstraintIds: string[];
+  sourceConcernIds: string[];
+  mergeOrderRequirements: string[];
+  blockedReason: string | null;
+}
+
+export interface SplitWorkstreamBuildResult {
+  workstreams: SplitWorkstream[];
+  dependencyEdges: SplitDependencyEdge[];
+  mergeOrder: SplitMergeOrderEntry[];
+  warningItems: SplitInputIssue[];
+  streamConstraintDetails: SplitStreamConstraintDetail[];
 }
 
 export interface SplitArtifactFiles {

@@ -176,8 +176,11 @@ await runScenario(
       assert.ok(sectionBody(report, "Workstream Contract").join("\n").includes("blockedReason"));
       assert.ok(sectionBody(report, "Workstream Contract").join("\n").includes(artifact.workstream_contract.requiredFields[0] ?? ""));
       assert.ok(sectionBody(report, "Workstreams").length > 0);
+      assert.ok(sectionBody(report, "Workstreams").join("\n").includes("Category:"));
       assert.ok(sectionBody(report, "Dependency Edges").length > 0);
       assert.ok(sectionBody(report, "Merge Order").length > 0);
+      assert.doesNotMatch(report, /Part 2 keeps execution workstreams conservative/i);
+      assert.doesNotMatch(report, /Part 2 keeps the actual regrouping output intentionally conservative/i);
       assert.ok(sectionBody(report, "Blocked Items").length > 0);
       assert.ok(
         sectionBody(report, "Carried-Forward Constraints").join("\n").includes(

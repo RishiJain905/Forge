@@ -7,6 +7,7 @@ import {
   createTempRepo,
   disposeTempRepo,
   fileExists,
+  readJsonFile,
   runForgeBinary,
   runForgeSplitBinary,
   splitArtifactPath,
@@ -133,6 +134,35 @@ await runScenario(
       assert.equal(await fileExists(splitMergeOrderPath(repoRoot)), true);
       assert.equal(await fileExists(splitBlockedItemsPath(repoRoot)), true);
       assert.equal(await fileExists(splitStreamConstraintsPath(repoRoot)), true);
+
+      const splitArtifact = await readJsonFile<{
+        workstream_contract: {
+          categories: string[];
+        };
+      }>(splitArtifactPath(repoRoot));
+      const workstreamsDebug = await readJsonFile<{ workstreams: Array<{ id: string; category: string }> }>(
+        splitWorkstreamsPath(repoRoot),
+      );
+      const constraintsDebug = await readJsonFile<{
+        stream_constraint_details: Array<{ workstreamId: string; category: string }>;
+      }>(splitStreamConstraintsPath(repoRoot));
+
+      assert.ok(workstreamsDebug.workstreams.length > 0);
+      assert.ok(
+        workstreamsDebug.workstreams.every((workstream) =>
+          splitArtifact.workstream_contract.categories.includes(workstream.category),
+        ),
+      );
+      assert.ok(workstreamsDebug.workstreams.some((workstream) => workstream.id.startsWith("ws-")));
+      assert.ok(constraintsDebug.stream_constraint_details.length > 0);
+      assert.ok(
+        constraintsDebug.stream_constraint_details.some(
+          (detail) => detail.workstreamId.startsWith("ws-"),
+        ),
+      );
+      assert.ok(
+        constraintsDebug.stream_constraint_details.every((detail) => detail.category.length > 0),
+      );
     } finally {
       await disposeTempRepo(repoRoot);
     }

@@ -20,6 +20,7 @@ import {
 } from "./input.js";
 import { createSplitReport } from "./report.js";
 import { validateSplitFoundationResult } from "./schema.js";
+import { buildSplitWorkstreams } from "./workstreams.js";
 import { extractErrorCode } from "../intake/errors.js";
 import { persistIntakeOutputs } from "../intake/persistence.js";
 import type {
@@ -158,18 +159,23 @@ export async function runSplitCommand(
         )
       : null;
     const finishedAt = new Date().toISOString();
+    const workstreamBuild = buildSplitWorkstreams({
+      foundation,
+    });
     const artifact = createSplitArtifact({
       foundation,
       paths: input.paths,
       startedAt,
       finishedAt,
       failure,
+      workstreamBuild,
     });
     const report = createSplitReport(artifact);
     const debugWrites = isSplitDebugEnabled()
       ? createSplitDebugWrites({
           artifact,
           paths: input.paths,
+          streamConstraintDetails: workstreamBuild.streamConstraintDetails,
         })
       : null;
 

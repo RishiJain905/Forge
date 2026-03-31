@@ -173,7 +173,7 @@ const splitWorkstreamSchema = z.object({
   streamDependencies: z.array(z.string().min(1)),
   mergeOrderRequirements: z.array(z.string().min(1)),
   constraints: z.array(z.string().min(1)),
-  blockedReason: z.string().min(1),
+  blockedReason: z.string().min(1).nullable(),
 }).strict();
 
 const splitDependencyEdgeSchema = z.object({
@@ -184,7 +184,7 @@ const splitDependencyEdgeSchema = z.object({
 
 const splitMergeOrderEntrySchema = z.object({
   workstreamId: z.string().min(1),
-  order: z.number().int().nonnegative(),
+  order: z.number().int().positive(),
   reason: z.string().min(1),
 }).strict();
 
@@ -425,6 +425,63 @@ export const splitArtifactSchema = z.object({
       message: "Blocked items must mirror the upstream split diagnostics blockers.",
       path: ["blocked_items"],
     });
+  }
+
+  const workstreamIds = new Set(value.workstreams.map((workstream) => workstream.id));
+  for (const [index, workstream] of value.workstreams.entries()) {
+    if (workstream.category === "blocked" && workstream.blockedReason === null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Blocked workstreams must expose a blockedReason.",
+        path: ["workstreams", index, "blockedReason"],
+      });
+    }
+
+    if (workstream.category !== "blocked" && workstream.blockedReason !== null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Non-blocked workstreams must not expose a blockedReason.",
+        path: ["workstreams", index, "blockedReason"],
+      });
+    }
+
+    for (const [dependencyIndex, dependencyId] of workstream.streamDependencies.entries()) {
+      if (!workstreamIds.has(dependencyId)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Workstream dependencies must reference real workstream ids.",
+          path: ["workstreams", index, "streamDependencies", dependencyIndex],
+        });
+      }
+    }
+  }
+
+  for (const [index, edge] of value.dependency_edges.entries()) {
+    if (!workstreamIds.has(edge.upstreamWorkstreamId) || !workstreamIds.has(edge.downstreamWorkstreamId)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Dependency edges must reference real workstream ids.",
+        path: ["dependency_edges", index],
+      });
+    }
+
+    if (edge.upstreamWorkstreamId === edge.downstreamWorkstreamId) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Dependency edges must not point a workstream at itself.",
+        path: ["dependency_edges", index],
+      });
+    }
+  }
+
+  for (const [index, entry] of value.merge_order.entries()) {
+    if (!workstreamIds.has(entry.workstreamId)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Merge-order entries must reference real workstream ids.",
+        path: ["merge_order", index, "workstreamId"],
+      });
+    }
   }
 });
 

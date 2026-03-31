@@ -64,6 +64,19 @@ interface SplitArtifact {
   source_plan: {
     command: string;
   };
+  workstreams: Array<{
+    id: string;
+    category: string;
+    blockedReason: string | null;
+  }>;
+  dependency_edges: Array<{
+    upstreamWorkstreamId: string;
+    downstreamWorkstreamId: string;
+  }>;
+  merge_order: Array<{
+    workstreamId: string;
+    order: number;
+  }>;
   split_diagnostics: {
     usability_status: "actionable" | "non_actionable" | "upstream_blocked";
   };
@@ -142,6 +155,11 @@ await runScenario(
       assert.ok(artifact.workstream_contract.requiredFields.includes("blockedReason"));
       assert.ok(artifact.workstream_contract.categories.includes("blocked"));
       assert.ok(artifact.workstream_contract.constraintSources.includes("verification_readiness"));
+      assert.ok(artifact.workstreams.length > 0);
+      assert.ok(artifact.workstreams.every((workstream) => workstream.id.startsWith("ws-")));
+      assert.ok(artifact.workstreams.some((workstream) => workstream.blockedReason === null));
+      assert.ok(artifact.dependency_edges.length > 0);
+      assert.ok(artifact.merge_order.length > 0);
       assert.equal(artifact.split_diagnostics.usability_status, "actionable");
       assert.equal(artifact.split_readiness.status, "ready_with_warnings");
       assert.ok(artifact.files.debugArtifactPath.endsWith("split-debug.json"));

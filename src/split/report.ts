@@ -60,11 +60,7 @@ function renderFailureDetails(
 
 function renderWorkstreams(artifact: SplitArtifact): string {
   if (artifact.workstreams.length === 0) {
-    return [
-      "Part 2 keeps execution workstreams conservative and emits no regrouped workstreams yet.",
-      "",
-      "- none",
-    ].join("\n");
+    return "- none";
   }
 
   return artifact.workstreams
@@ -79,18 +75,14 @@ function renderWorkstreams(artifact: SplitArtifact): string {
       `  - Stream Dependencies: ${workstream.streamDependencies.join(", ") || "none"}`,
       `  - Merge Order Requirements: ${workstream.mergeOrderRequirements.join("; ") || "none"}`,
       `  - Constraints: ${workstream.constraints.join("; ") || "none"}`,
-      `  - Blocked Reason: ${workstream.blockedReason}`,
+      `  - Blocked Reason: ${workstream.blockedReason ?? "none"}`,
     ].join("\n"))
     .join("\n");
 }
 
 function renderDependencyEdges(artifact: SplitArtifact): string {
   if (artifact.dependency_edges.length === 0) {
-    return [
-      "Part 2 leaves dependency edges empty until later split workstream generation is added.",
-      "",
-      "- none",
-    ].join("\n");
+    return "- none";
   }
 
   return artifact.dependency_edges
@@ -101,11 +93,7 @@ function renderDependencyEdges(artifact: SplitArtifact): string {
 
 function renderMergeOrder(artifact: SplitArtifact): string {
   if (artifact.merge_order.length === 0) {
-    return [
-      "Part 2 leaves merge order empty until later split workstream generation is added.",
-      "",
-      "- none",
-    ].join("\n");
+    return "- none";
   }
 
   return artifact.merge_order
@@ -164,7 +152,7 @@ export function createSplitReport(artifact: SplitArtifact): string {
       renderFailureDetails(artifact.source_plan.failure),
     ]),
     renderSection("Workstream Contract", [
-      "This section freezes the public Step 4 workstream contract while Part 2 keeps the actual regrouping output intentionally conservative.",
+      "This section freezes the public Step 4 workstream contract while the current split artifact keeps workstream output deterministic and conservative.",
       "",
       "### Required Fields",
       "",
