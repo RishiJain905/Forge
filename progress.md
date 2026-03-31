@@ -400,6 +400,11 @@
   - Extended the workstream builder to keep dependency, conflict-zone, test-obligation, verification target/case/finding/constraint, carry-forward concern, and readiness sources explicitly linked per workstream, while preserving one workstream per Step 2 plan item and keeping blocked streams partially inspectable.
   - Updated split report/debug output so merge-order rules, blocked-item kinds, and stream-level carried-forward constraint linkage are visible in both the primary artifact/report and the optional `FORGE_SPLIT_DEBUG=1` mirrors.
   - Added `tests/split.part4-carry-forward-merge-order-blocking.test.ts`, expanded the split schema/report/debug/command regressions plus smoke coverage, and wired the new Part 4 suite into the default `npm.cmd test` gate.
+- Batch 1.05: `part-5-readiness-and-first-build-order.md` (Step 4)
+  - Added `tests/split.part5-readiness-and-first-build-order.test.ts` and wired it into the default `npm.cmd test` gate so Gate 1 through Gate 4 are explicit, runnable, and frozen against the packaged `forge split` path.
+  - Kept the public Step 4 split surface stable while hardening `split_readiness` summary wording so it now states whether split can proceed, whether all items were safely assigned, whether blocked streams remain, whether merge-order constraints were imposed, and what later execution must honor.
+  - Reworked the `Split Readiness` report section to expose explicit `Can Proceed`, `All Items Safely Assigned`, `Blocked Streams`, `Merge-Order Constraints`, and `Later Execution Must Honor` lines without changing the frozen heading order or top-level artifact contract.
+  - Reused the merge-order recommended-action wording through a shared constant and kept the rest of the runtime narrow to Part 5 closeout instead of reopening the Step 4 contract or workstream model.
 
 ## Current Branch State
 - `dev` includes the completed Step 1 work through Batch 4.05, including the frozen Step 2 handoff contract from Intake.
@@ -432,6 +437,7 @@
 - `dev` now includes Step 4 Batch 1 Part 2, including the public `forge split` CLI, persisted `split.json` / `split-report.md` outputs, optional `FORGE_SPLIT_DEBUG=1` debug mirrors, and a runnable smoke path from `forge intake` through `forge split`.
 - `dev` now includes Step 4 Batch 1 Part 3, including the real workstream builder, explicit stream-category safety rules, populated dependency and merge-order output, blocked-workstream warning handling, and inspectable stream-constraint debug detail while keeping the frozen top-level split contract stable.
 - `dev` now includes Step 4 Batch 1 Part 4, including explicit merge-order rule objects, explicit blocked-item versus blocked-workstream modeling, public carried-forward stream-constraint detail in `split.json` and `split-report.md`, and matching debug/smoke/test coverage while keeping the frozen top-level split contract stable.
+- `dev` now includes Step 4 Batch 1 Part 5, including explicit Part 5 acceptance gates, stronger split readiness/report wording for assignment status plus merge-order and blocked-stream caution, and confirmation that Step 4 Batch 1 can proceed without reopening its frozen contract.
 
 ## Verification
 - `npm.cmd test`
@@ -462,4 +468,6 @@
 - Step 4 Batch 1 Part 2 is complete.
 - Step 4 Batch 1 Part 3 is complete.
 - Step 4 Batch 1 Part 4 is complete.
-- Next implementation work should move to Step 4 Batch 1 Part 5.
+- Step 4 Batch 1 Part 5 is complete.
+- Step 4 Batch 1 is complete.
+- No later Step 4 batch spec is present in-repo yet.
