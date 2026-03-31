@@ -1,8 +1,9 @@
 import { z } from "zod";
 
+import { FORGE_SCHEMA_VERSION } from "../intake/constants.js";
 import { planArtifactSchema } from "../plan/schema.js";
 import { verifyArtifactSchema } from "../verify/schema.js";
-import type { SplitFoundationResult } from "./types.js";
+import type { SplitArtifact, SplitFoundationResult } from "./types.js";
 import {
   FORGE_SPLIT_COMMAND,
   FORGE_SPLIT_STAGE,
@@ -158,4 +159,277 @@ export const splitFoundationSchema = z.object({
 
 export function validateSplitFoundationResult(result: unknown): SplitFoundationResult {
   return splitFoundationSchema.parse(result);
+}
+
+const splitWorkstreamSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  description: z.string().min(1),
+  category: z.enum(SPLIT_STREAM_CATEGORIES),
+  sourcePlanItemIds: z.array(z.string().min(1)),
+  sourceVerificationCaseIds: z.array(z.string().min(1)),
+  sourceFindingIds: z.array(z.string().min(1)),
+  likelyAffectedPaths: z.array(z.string().min(1)),
+  streamDependencies: z.array(z.string().min(1)),
+  mergeOrderRequirements: z.array(z.string().min(1)),
+  constraints: z.array(z.string().min(1)),
+  blockedReason: z.string().min(1),
+}).strict();
+
+const splitDependencyEdgeSchema = z.object({
+  upstreamWorkstreamId: z.string().min(1),
+  downstreamWorkstreamId: z.string().min(1),
+  reason: z.string().min(1),
+}).strict();
+
+const splitMergeOrderEntrySchema = z.object({
+  workstreamId: z.string().min(1),
+  order: z.number().int().nonnegative(),
+  reason: z.string().min(1),
+}).strict();
+
+const splitArtifactFilesSchema = z.object({
+  artifactPath: z.string().min(1).nullable(),
+  reportPath: z.string().min(1).nullable(),
+  debugArtifactPath: z.string().min(1),
+  debugWorkstreamsPath: z.string().min(1),
+  debugMergeOrderPath: z.string().min(1),
+  debugBlockedItemsPath: z.string().min(1),
+  debugStreamConstraintsPath: z.string().min(1),
+}).strict();
+
+const splitWritePolicySchema = z.object({
+  mode: z.literal("output-root-only"),
+  repoReadOnlyOutsideOutputRoot: z.boolean(),
+  allowedRoot: z.string().min(1),
+  allowedSideEffects: z.array(z.string().min(1)).min(1),
+  deferredCapabilities: z.array(z.string().min(1)).min(1),
+  disallowedCapabilities: z.array(z.string().min(1)).min(1),
+}).strict();
+
+const splitCarriedForwardConstraintsSchema = z.object({
+  findings: z.array(verifyArtifactSchema.shape.findings.element).min(0),
+  constraints: z.array(verifyArtifactSchema.shape.constraints.element).min(0),
+  plan_concerns: z.array(planArtifactSchema.shape.carry_forward.shape.concerns.element).min(0),
+  planning_readiness: planArtifactSchema.shape.planning_readiness,
+  verification_readiness: verifyArtifactSchema.shape.verification_readiness,
+}).strict();
+
+const splitDiagnosticsSchema = z.object({
+  usability_status: z.enum(["actionable", "non_actionable", "upstream_blocked"]),
+  warning_items: z.array(splitInputIssueSchema),
+  blocking_items: z.array(splitInputIssueSchema),
+  partial_output: z.object({
+    code: z.string().min(1),
+    message: z.string().min(1),
+    fallbackReason: z.string().min(1).optional(),
+  }).strict().nullable(),
+}).strict();
+
+const splitReadinessSchema = z.object({
+  ready: z.boolean(),
+  status: z.enum(["ready", "ready_with_warnings", "blocked"]),
+  summary: z.string().min(1),
+  warning_items: z.array(splitInputIssueSchema),
+  blocking_issues: z.array(splitInputIssueSchema),
+  partial_output: z.object({
+    code: z.string().min(1),
+    message: z.string().min(1),
+    fallbackReason: z.string().min(1).optional(),
+  }).strict().nullable(),
+  constraining_concern_ids: z.array(z.string().min(1)),
+  recommended_user_actions: z.array(z.string().min(1)),
+}).strict();
+
+export const SPLIT_ARTIFACT_TOP_LEVEL_KEYS = [
+  "schemaVersion",
+  "command",
+  "stage",
+  "status",
+  "purpose",
+  "repoRoot",
+  "requestedOutputRoot",
+  "outputRoot",
+  "writePolicy",
+  "files",
+  "startedAt",
+  "finishedAt",
+  "summary",
+  "boundaryNotes",
+  "source_verify",
+  "source_plan",
+  "workstream_contract",
+  "workstreams",
+  "dependency_edges",
+  "merge_order",
+  "blocked_items",
+  "carried_forward_constraints",
+  "split_diagnostics",
+  "split_readiness",
+  "failure",
+] as const satisfies readonly (keyof SplitArtifact)[];
+
+function assertSplitArtifactTopLevelKeys(artifact: SplitArtifact): void {
+  const actualKeys = Object.keys(artifact);
+  const expectedKeys = [...SPLIT_ARTIFACT_TOP_LEVEL_KEYS];
+
+  if (
+    actualKeys.length !== expectedKeys.length ||
+    actualKeys.some((key, index) => key !== expectedKeys[index])
+  ) {
+    throw new Error("Split artifact top-level key contract drifted from the required set.");
+  }
+}
+
+export const splitArtifactSchema = z.object({
+  schemaVersion: z.literal(FORGE_SCHEMA_VERSION),
+  command: z.literal(`forge ${FORGE_SPLIT_COMMAND}`),
+  stage: z.literal(FORGE_SPLIT_STAGE),
+  status: z.enum(["ready", "blocked", "failed"]),
+  purpose: z.string().min(1),
+  repoRoot: z.string().min(1),
+  requestedOutputRoot: z.string().nullable(),
+  outputRoot: z.string().min(1),
+  writePolicy: splitWritePolicySchema,
+  files: splitArtifactFilesSchema,
+  startedAt: z.string().min(1),
+  finishedAt: z.string().min(1),
+  summary: z.string().min(1),
+  boundaryNotes: z.array(z.string().min(1)).min(1),
+  source_verify: splitVerifyReferenceSchema,
+  source_plan: splitPlanReferenceSchema,
+  workstream_contract: splitWorkstreamContractSchema,
+  workstreams: z.array(splitWorkstreamSchema),
+  dependency_edges: z.array(splitDependencyEdgeSchema),
+  merge_order: z.array(splitMergeOrderEntrySchema),
+  blocked_items: z.array(splitInputIssueSchema),
+  carried_forward_constraints: splitCarriedForwardConstraintsSchema,
+  split_diagnostics: splitDiagnosticsSchema,
+  split_readiness: splitReadinessSchema,
+  failure: z.object({
+    code: z.string().min(1),
+    message: z.string().min(1),
+    fallbackReason: z.string().min(1).optional(),
+  }).strict().nullable(),
+}).strict().superRefine((value, context) => {
+  const diagnosticWarnings = value.split_diagnostics.warning_items;
+  const readinessWarnings = value.split_readiness.warning_items;
+  if (
+    diagnosticWarnings.length !== readinessWarnings.length ||
+    diagnosticWarnings.some(
+      (item, index) =>
+        item.code !== readinessWarnings[index]?.code ||
+        item.message !== readinessWarnings[index]?.message,
+    )
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Split readiness warning items must mirror split diagnostics warning items.",
+      path: ["split_readiness", "warning_items"],
+    });
+  }
+
+  const diagnosticBlockingItems = value.split_diagnostics.blocking_items;
+  const readinessBlockingIssues = value.split_readiness.blocking_issues;
+  if (
+    diagnosticBlockingItems.length !== readinessBlockingIssues.length ||
+    diagnosticBlockingItems.some(
+      (item, index) =>
+        item.code !== readinessBlockingIssues[index]?.code ||
+        item.message !== readinessBlockingIssues[index]?.message,
+    )
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Split readiness blocking issues must mirror split diagnostics blocking items.",
+      path: ["split_readiness", "blocking_issues"],
+    });
+  }
+
+  if (
+    value.split_diagnostics.partial_output?.code !== value.split_readiness.partial_output?.code ||
+    value.split_diagnostics.partial_output?.message !== value.split_readiness.partial_output?.message ||
+    value.split_diagnostics.partial_output?.fallbackReason !== value.split_readiness.partial_output?.fallbackReason
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Split readiness partial output must mirror split diagnostics partial output.",
+      path: ["split_readiness", "partial_output"],
+    });
+  }
+
+  const hasWarnings =
+    readinessWarnings.length > 0 ||
+    value.split_readiness.constraining_concern_ids.length > 0 ||
+    value.split_readiness.partial_output !== null;
+  const expectedReadinessStatus = value.split_readiness.ready
+    ? hasWarnings
+      ? "ready_with_warnings"
+      : "ready"
+    : "blocked";
+  if (value.split_readiness.status !== expectedReadinessStatus) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Split readiness status must match the resolved ready/warning/block state.",
+      path: ["split_readiness", "status"],
+    });
+  }
+
+  const expectedTopLevelStatus = value.failure
+    ? "failed"
+    : value.split_readiness.ready
+      ? "ready"
+      : "blocked";
+  if (value.status !== expectedTopLevelStatus) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Split artifact status must match the readiness and failure matrix.",
+      path: ["status"],
+    });
+  }
+
+  const carriedPlanningReadiness = value.carried_forward_constraints.planning_readiness;
+  if (
+    JSON.stringify(carriedPlanningReadiness) !==
+    JSON.stringify(value.source_plan.planningReadiness)
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Split carried-forward planning readiness must mirror the source Step 2 planning readiness.",
+      path: ["carried_forward_constraints", "planning_readiness"],
+    });
+  }
+
+  const carriedVerificationReadiness = value.carried_forward_constraints.verification_readiness;
+  if (
+    JSON.stringify(carriedVerificationReadiness) !==
+    JSON.stringify(value.source_verify.verificationReadiness)
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Split carried-forward verification readiness must mirror the source Step 3 verification readiness.",
+      path: ["carried_forward_constraints", "verification_readiness"],
+    });
+  }
+
+  if (
+    value.blocked_items.length !== value.split_diagnostics.blocking_items.length ||
+    value.blocked_items.some(
+      (item, index) =>
+        item.code !== value.split_diagnostics.blocking_items[index]?.code ||
+        item.message !== value.split_diagnostics.blocking_items[index]?.message,
+    )
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Blocked items must mirror the upstream split diagnostics blockers.",
+      path: ["blocked_items"],
+    });
+  }
+});
+
+export function validateSplitArtifact(artifact: unknown): SplitArtifact {
+  const parsedArtifact = splitArtifactSchema.parse(artifact);
+  assertSplitArtifactTopLevelKeys(parsedArtifact);
+  return parsedArtifact;
 }

@@ -2,6 +2,15 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { resolveFilesystemRepoRoot, resolveOutputFilePath, resolveOutputRoot } from "../intake/path-policy.js";
+import {
+  SPLIT_ARTIFACT_NAME,
+  SPLIT_DEBUG_ARTIFACT_NAME,
+  SPLIT_DEBUG_BLOCKED_ITEMS_NAME,
+  SPLIT_DEBUG_MERGE_ORDER_NAME,
+  SPLIT_DEBUG_STREAM_CONSTRAINTS_NAME,
+  SPLIT_DEBUG_WORKSTREAMS_NAME,
+  SPLIT_REPORT_NAME,
+} from "./constants.js";
 import { PLAN_ARTIFACT_NAME } from "../plan/constants.js";
 import { validatePlanArtifact } from "../plan/schema.js";
 import type { PlanArtifact } from "../plan/types.js";
@@ -222,14 +231,26 @@ export async function resolveSplitOutputPaths(
   requestedOutputDirectory?: string,
 ): Promise<SplitResolvedOutputPaths> {
   const outputRoot = await resolveOutputRoot(repoRoot, requestedOutputDirectory);
+  const resolvedOutputRoot = outputRoot.outputRoot;
 
   return {
     requestedOutputRoot: outputRoot.requestedOutputRoot,
-    outputRoot: outputRoot.outputRoot,
+    outputRoot: resolvedOutputRoot,
     usedFallbackRoot: outputRoot.usedFallbackRoot,
     fallbackReason: outputRoot.fallbackReason,
-    verifyArtifactPath: resolveOutputFilePath(outputRoot.outputRoot, VERIFY_ARTIFACT_NAME),
-    planArtifactPath: resolveOutputFilePath(outputRoot.outputRoot, PLAN_ARTIFACT_NAME),
+    verifyArtifactPath: resolveOutputFilePath(resolvedOutputRoot, VERIFY_ARTIFACT_NAME),
+    planArtifactPath: resolveOutputFilePath(resolvedOutputRoot, PLAN_ARTIFACT_NAME),
+    artifactPath: resolveOutputFilePath(resolvedOutputRoot, SPLIT_ARTIFACT_NAME),
+    reportPath: resolveOutputFilePath(resolvedOutputRoot, "reports", SPLIT_REPORT_NAME),
+    debugArtifactPath: resolveOutputFilePath(resolvedOutputRoot, "debug", SPLIT_DEBUG_ARTIFACT_NAME),
+    debugWorkstreamsPath: resolveOutputFilePath(resolvedOutputRoot, "debug", SPLIT_DEBUG_WORKSTREAMS_NAME),
+    debugMergeOrderPath: resolveOutputFilePath(resolvedOutputRoot, "debug", SPLIT_DEBUG_MERGE_ORDER_NAME),
+    debugBlockedItemsPath: resolveOutputFilePath(resolvedOutputRoot, "debug", SPLIT_DEBUG_BLOCKED_ITEMS_NAME),
+    debugStreamConstraintsPath: resolveOutputFilePath(
+      resolvedOutputRoot,
+      "debug",
+      SPLIT_DEBUG_STREAM_CONSTRAINTS_NAME,
+    ),
   };
 }
 
