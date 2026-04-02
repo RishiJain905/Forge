@@ -410,6 +410,12 @@
   - Expanded the Step 4 boundary policy with the explicit Batch 2 mission, ordered implementation priorities, required implementation-task/code-surface lists, and the missing do-not-touch guardrails for Step 5 execution drift, code-edit packet generation, code modification during splitting, verification-constraint bypass, and broad Step 4 redesign.
   - Tightened `tests/split.goal-and-boundaries.test.ts`, added a stale-wording regression in `tests/split.workstream-model.test.ts`, and removed the lingering Batch 1 wording from generated workstream descriptions so the stronger Batch 2 contract is locked in direct coverage.
   - Updated `README.md`, `progress.md`, and `S4-B2-Done/p1-done-summary.md` so Step 4 Batch 2 Part 1 is documented and traceable.
+- Batch 2.02: `part-2-stage-1-and-2-verify-consumption-workstream-foundation.md` (Step 4)
+  - Reworked the Step 4 input foundation so split now consumes persisted Step 3 verification output plus the referenced Step 2 plan artifact through indexed `planItemEvidence` bundles instead of rebuilding workstream context from repeated raw-array scans.
+  - Hardened the Step 4 schema and type contracts so source readiness, diagnostics, verification targets/cases/findings/constraints, conflict zones, dependency entries, test obligations, and carried-forward concerns stay aligned per plan item and fail deterministically when the Step 3 to Step 2 handoff is tampered with or mismatched.
+  - Reworked workstream construction to build deterministic grouped or standalone streams from the normalized evidence, including bounded direct source/test regrouping, bounded same-surface sibling regrouping, grouped-id dependency collapsing, and explicit blocked-stream handling without changing the public `forge split` CLI or top-level split artifact contract.
+  - Expanded `tests/split.goal-and-boundaries.test.ts`, `tests/split.workstream-model.test.ts`, and `tests/split.part5-readiness-and-first-build-order.test.ts` so Stage 1 and Stage 2 now lock warning-heavy handoffs, tampered evidence failures, nested-path grouping, migration-order exclusions, hard-dependency-only direct pairs, deterministic candidate tie-breaks, and grouped merge-order behavior under the default test gate.
+  - Updated `README.md`, `progress.md`, and `S4-B2-Done/p2-done-summary.md` so Step 4 Batch 2 Part 2 is documented and traceable.
 
 ## Current Branch State
 - `dev` includes the completed Step 1 work through Batch 4.05, including the frozen Step 2 handoff contract from Intake.
@@ -444,6 +450,7 @@
 - `dev` now includes Step 4 Batch 1 Part 4, including explicit merge-order rule objects, explicit blocked-item versus blocked-workstream modeling, public carried-forward stream-constraint detail in `split.json` and `split-report.md`, and matching debug/smoke/test coverage while keeping the frozen top-level split contract stable.
 - `dev` now includes Step 4 Batch 1 Part 5, including explicit Part 5 acceptance gates, stronger split readiness/report wording for assignment status plus merge-order and blocked-stream caution, and confirmation that Step 4 Batch 1 can proceed without reopening its frozen contract.
 - `dev` now includes Step 4 Batch 2 Part 1, including the explicit Batch 2 split mission, ordered implementation priorities, required implementation-task/code-surface metadata in the Step 4 boundary contract, stronger do-not-touch guardrails, and direct regression coverage for stale Batch 1 wording while keeping the public split surface stable.
+- `dev` now includes Step 4 Batch 2 Part 2, including indexed Step 3-to-Step 2 split input normalization, stronger per-plan-item evidence validation, bounded real regrouping for direct source/test pairs and same-surface siblings, deterministic grouped dependency collapse, and dedicated regressions that keep the public split surface stable while making the internal workstream foundation materially real.
 
 ## Verification
 - `npm.cmd test`
@@ -477,4 +484,5 @@
 - Step 4 Batch 1 Part 5 is complete.
 - Step 4 Batch 1 is complete.
 - Step 4 Batch 2 Part 1 is complete.
-- Next Step 4 target: `forge_step4_batch2/part-2-stage-1-and-2-verify-consumption-workstream-foundation.md`
+- Step 4 Batch 2 Part 2 is complete.
+- Next Step 4 target: `forge_step4_batch2/part-3-stage-3-and-4-stream-categories-safety-merge-order-and-blocking.md`

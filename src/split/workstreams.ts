@@ -6,6 +6,7 @@ import type {
   SplitFoundationResult,
   SplitInputIssue,
   SplitMergeOrderEntry,
+  SplitPlanItemEvidence,
   SplitStreamCategory,
   SplitStreamConstraintDetail,
   SplitWorkstream,
@@ -144,11 +145,11 @@ function buildConstraintMessages(params: {
 }
 
 function buildMergeOrderRequirements(params: {
-  planItem: PlanItem;
   category: SplitStreamCategory;
   streamDependencies: string[];
   verificationConstraints: VerificationConstraint[];
   blockedReason: string | null;
+  groupNote?: string | null;
 }): string[] {
   const requirements: string[] = [];
 
@@ -172,6 +173,10 @@ function buildMergeOrderRequirements(params: {
 
   if (params.blockedReason) {
     requirements.push(`Blocked until resolved: ${params.blockedReason}`);
+  }
+
+  if (params.groupNote) {
+    requirements.push(params.groupNote);
   }
 
   for (const constraint of params.verificationConstraints) {
@@ -284,16 +289,6 @@ function resolveBlockedReason(params: {
   return null;
 }
 
-function buildDependencyEdges(
-  dependencyGraph: PlanArtifact["dependency_graph"],
-): SplitDependencyEdge[] {
-  return dependencyGraph.map((entry) => ({
-    upstreamWorkstreamId: workstreamIdForPlanItem(entry.dependsOnPlanItemId),
-    downstreamWorkstreamId: workstreamIdForPlanItem(entry.planItemId),
-    reason: entry.reason,
-  }));
-}
-
 function computeStreamDepth(
   workstreamId: string,
   dependencyByDownstream: Map<string, string[]>,
@@ -332,6 +327,670 @@ function computeStreamDepth(
   } finally {
     visiting.delete(workstreamId);
   }
+}
+
+type WorkstreamGroupKind = "single" | "direct_dependency_test_pair" | "same_surface_siblings";
+
+interface ResolvedPlanItemSeed {
+  evidence: SplitPlanItemEvidence;
+  category: SplitStreamCategory;
+  blockedReason: string | null;
+  dominantSurfaceKey: string | null;
+  surfaceSpecificity: number;
+  appliedRules: string[];
+}
+
+interface WorkstreamGroup {
+  id: string;
+  kind: WorkstreamGroupKind;
+  members: ResolvedPlanItemSeed[];
+  category: SplitStreamCategory;
+  dominantSurfaceKey: string | null;
+  note: string | null;
+}
+
+const SURFACE_WRAPPER_SEGMENTS = new Set(["src", "tests", "test", "spec", "lib"]);
+
+function normalizeSurfaceSegments(pathValue: string): string[] {
+  const normalizedPath = pathValue.replace(/\\/g, "/").trim();
+  if (!normalizedPath) {
+    return [];
+  }
+
+  const strippedPath = normalizedPath.replace(/^\.\//u, "").replace(/^\/+|\/+$/gu, "");
+  const segments = strippedPath.split("/").filter(Boolean);
+  if (segments.length === 0) {
+    return [];
+  }
+
+  const surfaceSegments = [...segments];
+  if (surfaceSegments.length > 0 && SURFACE_WRAPPER_SEGMENTS.has(surfaceSegments[0].toLowerCase())) {
+    surfaceSegments.shift();
+  }
+
+  if (surfaceSegments.length === 0) {
+    return [];
+  }
+
+  const leafIndex = surfaceSegments.length - 1;
+  const leaf = surfaceSegments[leafIndex] ?? "";
+  const leafWithoutExtension = leaf.replace(/\.[^.\/]+$/u, "");
+  const leafWithoutTestSuffix = leafWithoutExtension.replace(/(?:\.(?:test|spec)|(?:-test|_test))$/iu, "");
+  surfaceSegments[leafIndex] = leafWithoutTestSuffix || leafWithoutExtension || leaf;
+
+  return surfaceSegments.filter(Boolean);
+}
+
+function buildSurfaceCandidateKeys(pathValue: string): string[] {
+  const normalizedPath = pathValue.replace(/\\/g, "/").trim();
+  const rawSegments = normalizedPath.replace(/^\.\//u, "").replace(/^\/+|\/+$/gu, "").split("/").filter(Boolean);
+  const segments = normalizeSurfaceSegments(pathValue);
+  if (segments.length === 0) {
+    return [];
+  }
+
+  const candidates: string[] = [];
+  const isTestLayout = ["tests", "test", "spec"].includes((rawSegments[0] ?? "").toLowerCase());
+  const leaf = segments[segments.length - 1] ?? "";
+  const parentSurface = segments.length > 1 ? segments.slice(0, segments.length - 1).join("/") : leaf;
+
+  if (isTestLayout) {
+    candidates.push(leaf);
+    if (parentSurface && parentSurface !== leaf) {
+      candidates.push(parentSurface);
+    }
+  } else {
+    if (parentSurface && parentSurface !== leaf) {
+      candidates.push(parentSurface);
+    }
+    candidates.push(leaf);
+  }
+
+  for (let index = 1; index <= segments.length; index += 1) {
+    candidates.push(segments.slice(0, index).join("/"));
+  }
+  for (let index = 0; index < segments.length; index += 1) {
+    candidates.push(segments.slice(index).join("/"));
+  }
+
+  return dedupeStrings(candidates);
+}
+
+function resolveSurfaceSpecificity(likelyAffectedPaths: string[]): number {
+  let maxSpecificity = 0;
+
+  for (const pathValue of likelyAffectedPaths) {
+    const specificity = normalizeSurfaceSegments(pathValue).length;
+    if (specificity > maxSpecificity) {
+      maxSpecificity = specificity;
+    }
+  }
+
+  return maxSpecificity;
+}
+
+function resolveDominantSurfaceKey(likelyAffectedPaths: string[]): string | null {
+  const candidateSets = likelyAffectedPaths
+    .map((pathValue) => buildSurfaceCandidateKeys(pathValue))
+    .filter((candidates) => candidates.length > 0);
+
+  if (candidateSets.length === 0) {
+    return null;
+  }
+
+  let sharedCandidates = new Set(candidateSets[0]);
+  for (const candidates of candidateSets.slice(1)) {
+    const next = new Set<string>();
+    for (const candidate of candidates) {
+      if (sharedCandidates.has(candidate)) {
+        next.add(candidate);
+      }
+    }
+    sharedCandidates = next;
+  }
+
+  if (sharedCandidates.size === 0) {
+    return null;
+  }
+
+  return [...sharedCandidates].sort((left, right) => {
+    const leftRank = candidateSets.reduce(
+      (total, candidates) => total + Math.max(candidates.indexOf(left), 0),
+      0,
+    );
+    const rightRank = candidateSets.reduce(
+      (total, candidates) => total + Math.max(candidates.indexOf(right), 0),
+      0,
+    );
+    if (leftRank !== rightRank) {
+      return leftRank - rightRank;
+    }
+
+    const leftDepth = left.split("/").length;
+    const rightDepth = right.split("/").length;
+    if (leftDepth !== rightDepth) {
+      return rightDepth - leftDepth;
+    }
+
+    return left.localeCompare(right);
+  })[0] ?? null;
+}
+
+function isGroupableStreamCategory(category: SplitStreamCategory): boolean {
+  return category !== "blocked" && category !== "serial" && category !== "protected_merge";
+}
+
+function isGroupableDependencyType(type: PlanArtifact["dependency_graph"][number]["type"]): boolean {
+  return type === "hard";
+}
+
+function buildSeedConstraintMessages(seed: ResolvedPlanItemSeed): string[] {
+  return dedupeStrings([
+    ...seed.evidence.dependencyGraphEntries.map((entry) =>
+      formatConstraint(`dependency:${entry.dependsOnPlanItemId}`, entry.reason),
+    ),
+    ...seed.evidence.conflictZones.map((zone) => formatConstraint(zone.id, zone.reason)),
+    ...seed.evidence.testObligations.map((entry) => formatConstraint(`test:${entry.category}`, entry.reason)),
+    ...seed.evidence.constraints.map((constraint) => formatConstraint(constraint.id, constraint.summary)),
+    ...seed.evidence.concerns.map((concern) => formatConstraint(concern.id, concern.message)),
+  ]);
+}
+
+function buildGroupNote(kind: WorkstreamGroupKind): string | null {
+  if (kind === "single") {
+    return null;
+  }
+
+  if (kind === "direct_dependency_test_pair") {
+    return "Grouped source/test pair; keep the source-before-test order visible inside the stream.";
+  }
+
+  return "Grouped same-surface siblings; keep the pair together as a protected merge unit.";
+}
+
+function buildWorkstreamDescription(group: WorkstreamGroup): string {
+  const titles = group.members.map((member) => member.evidence.planItem.title);
+  if (group.kind === "single") {
+    return buildDescription(group.members[0].evidence.planItem);
+  }
+
+  const joinedTitles = titles.join(" and ");
+  const surfaceSuffix = group.dominantSurfaceKey ? ` on the ${group.dominantSurfaceKey} surface` : "";
+  const groupingReason =
+    group.kind === "direct_dependency_test_pair"
+      ? `Grouped from ${joinedTitles} because the test item depends directly on the source change${surfaceSuffix}.`
+      : `Grouped from ${joinedTitles} because the sibling updates share the same surface context${surfaceSuffix}.`;
+
+  return `${groupingReason} Step 4 keeps the grouped workstream explicitly traceable to each member plan item.`;
+}
+
+function buildGroupAppliedRules(group: WorkstreamGroup): string[] {
+  const seedRules = dedupeStrings(group.members.flatMap((member) => member.appliedRules));
+  if (group.kind === "single") {
+    return seedRules;
+  }
+
+  return dedupeStrings([
+    ...seedRules,
+    `grouping:${group.kind}`,
+    `grouped_with:${group.id}`,
+    `dominant_surface:${group.dominantSurfaceKey ?? "none"}`,
+    ...(group.note ? [group.note] : []),
+  ]);
+}
+
+interface CandidateChoice {
+  kind: WorkstreamGroupKind;
+  candidate: ResolvedPlanItemSeed;
+  candidateIndex: number;
+  sharedContextCount: number;
+}
+
+function countSharedGroupingContext(left: ResolvedPlanItemSeed, right: ResolvedPlanItemSeed): number {
+  let sharedCount = 0;
+
+  const leftTargetIds = new Set(left.evidence.verificationTargets.map((target) => target.id));
+  const rightTargetIds = new Set(right.evidence.verificationTargets.map((target) => target.id));
+  for (const targetId of leftTargetIds) {
+    if (rightTargetIds.has(targetId)) {
+      sharedCount += 1;
+    }
+  }
+
+  const leftConflictZoneIds = new Set(left.evidence.conflictZones.map((zone) => zone.id));
+  const rightConflictZoneIds = new Set(right.evidence.conflictZones.map((zone) => zone.id));
+  for (const conflictZoneId of leftConflictZoneIds) {
+    if (rightConflictZoneIds.has(conflictZoneId)) {
+      sharedCount += 1;
+    }
+  }
+
+  return sharedCount;
+}
+
+function isPreferredCandidateChoice(left: CandidateChoice, right: CandidateChoice): boolean {
+  const kindPriority = left.kind === "direct_dependency_test_pair" ? 2 : 1;
+  const rightKindPriority = right.kind === "direct_dependency_test_pair" ? 2 : 1;
+  if (kindPriority !== rightKindPriority) {
+    return kindPriority > rightKindPriority;
+  }
+
+  if (left.candidate.surfaceSpecificity !== right.candidate.surfaceSpecificity) {
+    return left.candidate.surfaceSpecificity > right.candidate.surfaceSpecificity;
+  }
+
+  if (left.sharedContextCount !== right.sharedContextCount) {
+    return left.sharedContextCount > right.sharedContextCount;
+  }
+
+  if (left.candidateIndex !== right.candidateIndex) {
+    return left.candidateIndex < right.candidateIndex;
+  }
+
+  return left.candidate.evidence.planItem.id.localeCompare(right.candidate.evidence.planItem.id) < 0;
+}
+
+function createResolvedSeeds(params: { foundation: SplitFoundationResult }): ResolvedPlanItemSeed[] {
+  return params.foundation.splitInput.context.planItems.map((planItem, index) => {
+    const evidence = params.foundation.splitInput.planItemEvidence[index];
+    if (!evidence || evidence.planItem.id !== planItem.id) {
+      throw new Error("Split workstream evidence is not aligned with the source plan items.");
+    }
+
+    const appliedRules: string[] = [];
+    const category = resolveCategory({
+      foundation: params.foundation,
+      planItem,
+      verificationCases: evidence.verificationCases,
+      verificationFindings: evidence.findings,
+      verificationConstraints: evidence.constraints,
+      conflictZones: evidence.conflictZones,
+      appliedRules,
+    });
+    const blockedReason = resolveBlockedReason({
+      foundation: params.foundation,
+      verificationCases: evidence.verificationCases,
+      verificationFindings: evidence.findings,
+    });
+    const dominantSurfaceKey = resolveDominantSurfaceKey(planItem.likelyAffectedPaths);
+    const surfaceSpecificity = resolveSurfaceSpecificity(planItem.likelyAffectedPaths);
+
+    return {
+      evidence,
+      category,
+      blockedReason,
+      dominantSurfaceKey,
+      surfaceSpecificity,
+      appliedRules: dedupeStrings([
+        ...appliedRules,
+        `dominant_surface:${dominantSurfaceKey ?? "none"}`,
+        `plan_item:${planItem.id}`,
+      ]),
+    };
+  });
+}
+
+function seedDependsOnCandidate(seed: ResolvedPlanItemSeed, candidate: ResolvedPlanItemSeed): boolean {
+  return seed.evidence.dependencyGraphEntries.some(
+    (entry) => entry.dependsOnPlanItemId === candidate.evidence.planItem.id,
+  );
+}
+
+function pairHasAnyDirectDependency(left: ResolvedPlanItemSeed, right: ResolvedPlanItemSeed): boolean {
+  return seedDependsOnCandidate(left, right) || seedDependsOnCandidate(right, left);
+}
+
+function hasOnlyPairInternalDependencies(
+  left: ResolvedPlanItemSeed,
+  right: ResolvedPlanItemSeed,
+): boolean {
+  const pairIds = new Set([left.evidence.planItem.id, right.evidence.planItem.id]);
+  const dependencyEntries = [...left.evidence.dependencyGraphEntries, ...right.evidence.dependencyGraphEntries];
+
+  return dependencyEntries.every((entry) => pairIds.has(entry.dependsOnPlanItemId));
+}
+
+function hasSharedGroupingContext(left: ResolvedPlanItemSeed, right: ResolvedPlanItemSeed): boolean {
+  const leftTargetIds = new Set(left.evidence.verificationTargets.map((target) => target.id));
+  const rightTargetIds = new Set(right.evidence.verificationTargets.map((target) => target.id));
+  for (const targetId of leftTargetIds) {
+    if (rightTargetIds.has(targetId)) {
+      return true;
+    }
+  }
+
+  const leftConflictZoneIds = new Set(left.evidence.conflictZones.map((zone) => zone.id));
+  const rightConflictZoneIds = new Set(right.evidence.conflictZones.map((zone) => zone.id));
+  for (const conflictZoneId of leftConflictZoneIds) {
+    if (rightConflictZoneIds.has(conflictZoneId)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function isDirectDependencyTestPairCandidate(
+  seed: ResolvedPlanItemSeed,
+  candidate: ResolvedPlanItemSeed,
+): boolean {
+  if (
+    seed.evidence.planItem.verificationRelevance.categories.includes("migration_order") ||
+    candidate.evidence.planItem.verificationRelevance.categories.includes("migration_order")
+  ) {
+    return false;
+  }
+
+  if (!isGroupableStreamCategory(seed.category) || !isGroupableStreamCategory(candidate.category)) {
+    return false;
+  }
+
+  if (seed.evidence.planItem.category === "test" || candidate.evidence.planItem.category !== "test") {
+    return false;
+  }
+
+  if (!seed.dominantSurfaceKey || seed.dominantSurfaceKey !== candidate.dominantSurfaceKey) {
+    return false;
+  }
+
+  if (seedDependsOnCandidate(seed, candidate)) {
+    return false;
+  }
+
+  return candidate.evidence.dependencyGraphEntries.some(
+    (entry) =>
+      entry.dependsOnPlanItemId === seed.evidence.planItem.id &&
+      isGroupableDependencyType(entry.type),
+  );
+}
+
+function isSameSurfaceSiblingCandidate(
+  seed: ResolvedPlanItemSeed,
+  candidate: ResolvedPlanItemSeed,
+): boolean {
+  if (!isGroupableStreamCategory(seed.category) || !isGroupableStreamCategory(candidate.category)) {
+    return false;
+  }
+
+  if (seed.evidence.planItem.category === "test" || candidate.evidence.planItem.category === "test") {
+    return false;
+  }
+
+  if (!seed.dominantSurfaceKey || seed.dominantSurfaceKey !== candidate.dominantSurfaceKey) {
+    return false;
+  }
+
+  if (!hasSharedGroupingContext(seed, candidate)) {
+    return false;
+  }
+
+  if (pairHasAnyDirectDependency(seed, candidate)) {
+    return false;
+  }
+
+  return hasOnlyPairInternalDependencies(seed, candidate);
+}
+
+function selectWorkstreamGroups(seeds: ResolvedPlanItemSeed[]): WorkstreamGroup[] {
+  const usedPlanItemIds = new Set<string>();
+  const groups: WorkstreamGroup[] = [];
+
+  for (let index = 0; index < seeds.length; index += 1) {
+    const seed = seeds[index];
+    const seedId = seed.evidence.planItem.id;
+
+    if (usedPlanItemIds.has(seedId)) {
+      continue;
+    }
+
+    let bestChoice: CandidateChoice | null = null;
+
+    for (let candidateIndex = index + 1; candidateIndex < seeds.length; candidateIndex += 1) {
+      const possibleCandidate = seeds[candidateIndex];
+      const candidateId = possibleCandidate.evidence.planItem.id;
+      if (usedPlanItemIds.has(candidateId)) {
+        continue;
+      }
+
+      const kind = isDirectDependencyTestPairCandidate(seed, possibleCandidate)
+        ? "direct_dependency_test_pair"
+        : isSameSurfaceSiblingCandidate(seed, possibleCandidate)
+          ? "same_surface_siblings"
+          : null;
+      if (!kind) {
+        continue;
+      }
+
+      const choice: CandidateChoice = {
+        kind,
+        candidate: possibleCandidate,
+        candidateIndex,
+        sharedContextCount:
+          kind === "same_surface_siblings" ? countSharedGroupingContext(seed, possibleCandidate) : 0,
+      };
+
+      if (!bestChoice || isPreferredCandidateChoice(choice, bestChoice)) {
+        bestChoice = choice;
+      }
+    }
+
+    if (bestChoice) {
+      usedPlanItemIds.add(seedId);
+      usedPlanItemIds.add(bestChoice.candidate.evidence.planItem.id);
+      const group: WorkstreamGroup = {
+        id: `ws-${seedId}__${bestChoice.candidate.evidence.planItem.id}`,
+        kind: bestChoice.kind,
+        members: [seed, bestChoice.candidate],
+        category:
+          bestChoice.kind === "direct_dependency_test_pair"
+            ? "parallel_after_dependency"
+            : "protected_merge",
+        dominantSurfaceKey: seed.dominantSurfaceKey,
+        note: buildGroupNote(bestChoice.kind),
+      };
+
+      groups.push(group);
+      continue;
+    }
+
+    usedPlanItemIds.add(seedId);
+    groups.push({
+      id: `ws-${seedId}`,
+      kind: "single",
+      members: [seed],
+      category: seed.category,
+      dominantSurfaceKey: seed.dominantSurfaceKey,
+      note: buildGroupNote("single"),
+    });
+  }
+
+  return groups;
+}
+
+function buildGroupStreamDependencies(
+  group: WorkstreamGroup,
+  groupIdByPlanItemId: Map<string, string>,
+): string[] {
+  const dependencies: string[] = [];
+  const seen = new Set<string>();
+
+  for (const member of group.members) {
+    const currentGroupId = group.id;
+
+    for (const dependency of member.evidence.dependencyGraphEntries) {
+      const upstreamWorkstreamId = groupIdByPlanItemId.get(dependency.dependsOnPlanItemId);
+      if (!upstreamWorkstreamId || upstreamWorkstreamId === currentGroupId) {
+        continue;
+      }
+
+      if (seen.has(upstreamWorkstreamId)) {
+        continue;
+      }
+
+      seen.add(upstreamWorkstreamId);
+      dependencies.push(upstreamWorkstreamId);
+    }
+  }
+
+  return dependencies;
+}
+
+function buildDependencyEdgesFromGroups(
+  groups: WorkstreamGroup[],
+  groupIdByPlanItemId: Map<string, string>,
+): SplitDependencyEdge[] {
+  const edgesByPair = new Map<
+    string,
+    {
+      upstreamWorkstreamId: string;
+      downstreamWorkstreamId: string;
+      reasons: string[];
+    }
+  >();
+
+  for (const group of groups) {
+    for (const member of group.members) {
+      for (const dependency of member.evidence.dependencyGraphEntries) {
+        const upstreamWorkstreamId = groupIdByPlanItemId.get(dependency.dependsOnPlanItemId);
+        if (!upstreamWorkstreamId || upstreamWorkstreamId === group.id) {
+          continue;
+        }
+
+        const pairKey = `${upstreamWorkstreamId}::${group.id}`;
+        const existing = edgesByPair.get(pairKey);
+        if (existing) {
+          existing.reasons.push(dependency.reason);
+          continue;
+        }
+
+        edgesByPair.set(pairKey, {
+          upstreamWorkstreamId,
+          downstreamWorkstreamId: group.id,
+          reasons: [dependency.reason],
+        });
+      }
+    }
+  }
+
+  return [...edgesByPair.values()].map((edge) => ({
+    upstreamWorkstreamId: edge.upstreamWorkstreamId,
+    downstreamWorkstreamId: edge.downstreamWorkstreamId,
+    reason: dedupeStrings(edge.reasons).join("; "),
+  }));
+}
+
+function buildGroupWorkstreams(params: {
+  groups: WorkstreamGroup[];
+  sourceReadinessIds: string[];
+}): {
+  workstreams: SplitWorkstream[];
+  streamConstraintDetails: SplitStreamConstraintDetail[];
+  dependencyEdges: SplitDependencyEdge[];
+} {
+  const groupIdByPlanItemId = new Map<string, string>();
+  for (const group of params.groups) {
+    for (const member of group.members) {
+      groupIdByPlanItemId.set(member.evidence.planItem.id, group.id);
+    }
+  }
+
+  const streamConstraintDetails: SplitStreamConstraintDetail[] = [];
+  const workstreams: SplitWorkstream[] = params.groups.map((group) => {
+    const blockedReason = group.members[0]?.blockedReason ?? null;
+    const appliedRules = buildGroupAppliedRules(group);
+    const sourcePlanItemIds = group.members.map((member) => member.evidence.planItem.id);
+    const sourceVerificationCaseIds = dedupeStrings(
+      group.members.flatMap((member) => member.evidence.verificationCases.map((verificationCase) => verificationCase.id)),
+    );
+    const sourceFindingIds = dedupeStrings(
+      group.members.flatMap((member) => member.evidence.findings.map((finding) => finding.id)),
+    );
+    const likelyAffectedPaths = dedupeStrings(
+      group.members.flatMap((member) => member.evidence.planItem.likelyAffectedPaths),
+    );
+    const sourceDependencyIds = dedupeStrings(
+      group.members.flatMap((member) => member.evidence.dependencyGraphEntries.map(dependencySourceId)),
+    );
+    const sourceConflictZoneIds = dedupeStrings(
+      group.members.flatMap((member) => member.evidence.conflictZones.map((zone) => zone.id)),
+    );
+    const sourceTestObligationIds = dedupeStrings(
+      group.members.flatMap((member) => member.evidence.testObligations.map(testObligationSourceId)),
+    );
+    const sourceVerificationTargetIds = dedupeStrings(
+      group.members.flatMap((member) => member.evidence.verificationTargets.map((target) => target.id)),
+    );
+    const sourceConstraintIds = dedupeStrings(
+      group.members.flatMap((member) => member.evidence.constraints.map((constraint) => constraint.id)),
+    );
+    const sourceConcernIds = dedupeStrings(
+      group.members.flatMap((member) => member.evidence.concerns.map((concern) => concern.id)),
+    );
+    const category = group.category;
+    const streamDependencies = buildGroupStreamDependencies(group, groupIdByPlanItemId);
+    const verificationConstraints = group.members.flatMap((member) => member.evidence.constraints);
+    const mergeOrderRequirements = buildMergeOrderRequirements({
+      category,
+      streamDependencies,
+      verificationConstraints,
+      blockedReason,
+      groupNote: group.note,
+    });
+    const constraints = dedupeStrings(
+      group.members.flatMap((member) => buildSeedConstraintMessages(member)),
+    );
+    const workstream = {
+      id: group.id,
+      title:
+        group.members.length === 1
+          ? group.members[0].evidence.planItem.title
+          : group.members.map((member) => member.evidence.planItem.title).join(" + "),
+      description: buildWorkstreamDescription(group),
+      category,
+      sourcePlanItemIds,
+      sourceVerificationCaseIds,
+      sourceFindingIds,
+      likelyAffectedPaths,
+      streamDependencies,
+      mergeOrderRequirements,
+      constraints,
+      blockedReason: group.members[0]?.blockedReason ?? null,
+    } satisfies SplitWorkstream;
+
+    streamConstraintDetails.push({
+      workstreamId: group.id,
+      category,
+      appliedRules,
+      sourceDependencyIds,
+      sourceConflictZoneIds,
+      sourceTestObligationIds,
+      sourceVerificationTargetIds,
+      sourceVerificationCaseIds,
+      sourceFindingIds,
+      sourceConstraintIds,
+      sourceConcernIds,
+      sourceReadinessIds: params.sourceReadinessIds,
+      mergeOrderRuleIds: [],
+      blockedItemIds: [],
+      mergeOrderRequirements,
+      blockedReason,
+    });
+
+    return workstream;
+  });
+
+  return {
+    workstreams,
+    streamConstraintDetails,
+    dependencyEdges: buildDependencyEdgesFromGroups(params.groups, groupIdByPlanItemId),
+  };
+}
+
+function buildSourceReadinessIds(foundation: SplitFoundationResult): string[] {
+  return dedupeStrings([
+    foundation.sourcePlan.planningReadiness.status === "ready" ? "" : "planning_readiness",
+    foundation.sourceVerify.verificationReadiness.status === "ready" ? "" : "verification_readiness",
+  ]);
 }
 
 function buildMergeOrder(params: {
@@ -397,112 +1056,17 @@ function buildMergeOrder(params: {
 export function buildSplitWorkstreams(params: {
   foundation: SplitFoundationResult;
 }): SplitWorkstreamBuildResult {
-  const concerns = params.foundation.carryForward.planCarryForward.concerns;
-  const dependencyEdges = buildDependencyEdges(params.foundation.splitInput.context.dependencyGraph);
-  const workstreamOrder: string[] = [];
-  const streamConstraintDetails: SplitStreamConstraintDetail[] = [];
-
-  const workstreams = params.foundation.splitInput.context.planItems.map((planItem) => {
-    const verificationCases = findCasesForPlanItem(
-      params.foundation.splitInput.context.verificationCases,
-      planItem.id,
-    );
-    const verificationCaseIds = verificationCases.map((verificationCase) => verificationCase.id);
-    const verificationFindings = findFindingsForCases(
-      params.foundation.splitInput.context.findings,
-      verificationCaseIds,
-    );
-    const verificationConstraints = findConstraintsForCases(
-      params.foundation.splitInput.context.constraints,
-      verificationCaseIds,
-    );
-    const itemConcerns = findConcernsForPlanItem(concerns, planItem.id);
-    const sourceDependencyIds = params.foundation.splitInput.context.dependencyGraph
-      .filter((entry) => entry.planItemId === planItem.id)
-      .map(dependencySourceId);
-    const sourceConflictZoneIds = params.foundation.splitInput.context.conflictZones
-      .filter((zone) => zone.planItemIds.includes(planItem.id))
-      .map((zone) => zone.id);
-    const sourceTestObligationIds = params.foundation.splitInput.context.testObligations
-      .filter((entry) => entry.planItemId === planItem.id)
-      .map(testObligationSourceId);
-    const sourceVerificationTargetIds = dedupeStrings(
-      verificationCases.map((verificationCase) => verificationCase.verificationTargetId),
-    );
-    const sourceReadinessIds = dedupeStrings([
-      params.foundation.sourcePlan.planningReadiness.status === "ready" ? "" : "planning_readiness",
-      params.foundation.sourceVerify.verificationReadiness.status === "ready" ? "" : "verification_readiness",
-    ]);
-    const appliedRules: string[] = [];
-    const category = resolveCategory({
-      foundation: params.foundation,
-      planItem,
-      verificationCases,
-      verificationFindings,
-      verificationConstraints,
-      conflictZones: params.foundation.splitInput.context.conflictZones,
-      appliedRules,
-    });
-    const blockedReason = resolveBlockedReason({
-      foundation: params.foundation,
-      verificationCases,
-      verificationFindings,
-    });
-    const streamDependencies = planItem.dependencies.map((dependency) =>
-      workstreamIdForPlanItem(dependency.planItemId)
-    );
-    const mergeOrderRequirements = buildMergeOrderRequirements({
-      planItem,
-      category,
-      streamDependencies,
-      verificationConstraints,
-      blockedReason,
-    });
-    const constraints = buildConstraintMessages({
-      planItem,
-      dependencyGraph: params.foundation.splitInput.context.dependencyGraph,
-      conflictZones: params.foundation.splitInput.context.conflictZones,
-      testObligations: params.foundation.splitInput.context.testObligations,
-      verificationConstraints,
-      concerns: itemConcerns,
-    });
-    const workstreamId = workstreamIdForPlanItem(planItem.id);
-    workstreamOrder.push(workstreamId);
-
-    streamConstraintDetails.push({
-      workstreamId,
-      category,
-      appliedRules,
-      sourceDependencyIds,
-      sourceConflictZoneIds,
-      sourceTestObligationIds,
-      sourceVerificationTargetIds,
-      sourceVerificationCaseIds: verificationCaseIds,
-      sourceFindingIds: verificationFindings.map((finding) => finding.id),
-      sourceConstraintIds: verificationConstraints.map((constraint) => constraint.id),
-      sourceConcernIds: itemConcerns.map((concern) => concern.id),
-      sourceReadinessIds,
-      mergeOrderRuleIds: [],
-      blockedItemIds: [],
-      mergeOrderRequirements,
-      blockedReason,
-    });
-
-    return {
-      id: workstreamId,
-      title: planItem.title,
-      description: buildDescription(planItem),
-      category,
-      sourcePlanItemIds: [planItem.id],
-      sourceVerificationCaseIds: verificationCaseIds,
-      sourceFindingIds: verificationFindings.map((finding) => finding.id),
-      likelyAffectedPaths: dedupeStrings(planItem.likelyAffectedPaths),
-      streamDependencies,
-      mergeOrderRequirements,
-      constraints,
-      blockedReason,
-    } satisfies SplitWorkstream;
+  const sourceReadinessIds = buildSourceReadinessIds(params.foundation);
+  const seeds = createResolvedSeeds({ foundation: params.foundation });
+  const groups = selectWorkstreamGroups(seeds);
+  const groupedResult = buildGroupWorkstreams({
+    groups,
+    sourceReadinessIds,
   });
+  const workstreams = groupedResult.workstreams;
+  const dependencyEdges = groupedResult.dependencyEdges;
+  const streamConstraintDetails = groupedResult.streamConstraintDetails;
+  const workstreamOrder = workstreams.map((workstream) => workstream.id);
 
   const blockedItems: SplitBlockedItem[] = workstreams
     .filter((workstream) => workstream.category === "blocked")

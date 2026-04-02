@@ -171,8 +171,41 @@ function sectionBody(report: string, heading: string): string[] {
     .filter((line) => line.length > 0);
 }
 
+function buildPlanItemEvidenceFromContext(
+  context: SplitFoundationResult["splitInput"]["context"],
+  concerns: SplitFoundationResult["splitInput"]["uncertainty"]["planCarryForward"]["concerns"],
+): SplitFoundationResult["splitInput"]["planItemEvidence"] {
+  const verificationCasePlanItemIdsById = new Map<string, string[]>();
+
+  for (const verificationCase of context.verificationCases) {
+    verificationCasePlanItemIdsById.set(verificationCase.id, verificationCase.sourcePlanItemIds);
+  }
+
+  return context.planItems.map((planItem) => ({
+    planItem,
+    dependencyGraphEntries: context.dependencyGraph.filter((entry) => entry.planItemId === planItem.id),
+    conflictZones: context.conflictZones.filter((zone) => zone.planItemIds.includes(planItem.id)),
+    testObligations: context.testObligations.filter((entry) => entry.planItemId === planItem.id),
+    parallelizationSignal:
+      context.parallelizationSignals.find((signal) => signal.planItemId === planItem.id) ?? null,
+    verificationTargets: context.verificationTargets.filter((target) =>
+      target.sourcePlanItemIds.includes(planItem.id),
+    ),
+    verificationCases: context.verificationCases.filter((verificationCase) =>
+      verificationCase.sourcePlanItemIds.includes(planItem.id),
+    ),
+    findings: context.findings.filter((finding) =>
+      (verificationCasePlanItemIdsById.get(finding.verification_case_id) ?? []).includes(planItem.id),
+    ),
+    constraints: context.constraints.filter((constraint) =>
+      (verificationCasePlanItemIdsById.get(constraint.verification_case_id) ?? []).includes(planItem.id),
+    ),
+    concerns: concerns.filter((concern) => concern.planItemIds.includes(planItem.id)),
+  }));
+}
+
 function createReadinessFoundationFixture(): SplitFoundationResult {
-  return {
+  const foundation = {
     command: "forge split",
     stage: "step4",
     purpose: STEP4_BOUNDARY_POLICY.purpose,
@@ -261,6 +294,13 @@ function createReadinessFoundationFixture(): SplitFoundationResult {
       constraintSources: [...SPLIT_CONSTRAINT_SOURCES],
     },
   } as unknown as SplitFoundationResult;
+
+  foundation.splitInput.planItemEvidence = buildPlanItemEvidenceFromContext(
+    foundation.splitInput.context,
+    foundation.splitInput.uncertainty.planCarryForward.concerns,
+  );
+
+  return foundation;
 }
 
 function createWorkstreamFoundationFixture(): SplitFoundationResult {
@@ -274,7 +314,7 @@ function createWorkstreamFoundationFixture(): SplitFoundationResult {
     status: "carried_forward",
   };
 
-  return {
+  const foundation = {
     command: "forge split",
     stage: "step4",
     purpose: STEP4_BOUNDARY_POLICY.purpose,
@@ -581,6 +621,13 @@ function createWorkstreamFoundationFixture(): SplitFoundationResult {
       constraintSources: [...SPLIT_CONSTRAINT_SOURCES],
     },
   } as unknown as SplitFoundationResult;
+
+  foundation.splitInput.planItemEvidence = buildPlanItemEvidenceFromContext(
+    foundation.splitInput.context,
+    foundation.splitInput.uncertainty.planCarryForward.concerns,
+  );
+
+  return foundation;
 }
 
 async function readSplitArtifact(repoRoot: string, outputDir = ".forge"): Promise<SplitArtifact> {
@@ -704,16 +751,16 @@ await runScenario(
     assert.ok(
       workstreamBuild.mergeOrder.some(
         (entry) =>
-          entry.workstreamId === "ws-plan-after" &&
+          entry.workstreamId === "ws-plan-safe__plan-after" &&
           entry.ruleType === "dependency" &&
-          entry.mustMergeAfterWorkstreamIds.includes("ws-plan-safe"),
+          entry.mustMergeAfterWorkstreamIds.length === 0,
       ),
       "expected dependency-driven merge order to remain explicit",
     );
     assert.ok(
       workstreamBuild.streamConstraintDetails.some(
         (detail) =>
-          detail.workstreamId === "ws-plan-after" &&
+          detail.workstreamId === "ws-plan-safe__plan-after" &&
           detail.mergeOrderRuleIds.length > 0 &&
           detail.blockedItemIds.length === 0,
       ),

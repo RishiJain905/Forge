@@ -564,6 +564,10 @@ Step 4 Batch 1 is complete. `forge split` now consumes the persisted Step 3 `ver
 
 Step 4 Batch 2 Part 1 is a narrow alignment pass over that already real split runtime. It hardens the explicit Batch 2 mission, ordered implementation priorities, and do-not-touch guardrails in the Step 4 boundary contract so later Batch 2 work stays inside the real split path instead of drifting into Step 5 execution behavior, code-edit packet generation, code modification, verification bypass, or broad Step 4 redesign.
 
+Step 4 Batch 2 Part 2 makes the Stage 1 and Stage 2 split foundation materially real without reopening the public split surface. Step 4 now normalizes persisted Step 3 verify output plus the referenced Step 2 plan artifact into indexed per-plan-item evidence bundles, validates that the verify-to-plan handoff stays aligned, and builds structured workstreams from that normalized evidence instead of repeatedly re-deriving context from raw arrays.
+
+Part 2 also introduces bounded real regrouping where it improves execution readiness without weakening auditability: direct source/test pairs can group only on explicit hard dependencies plus a shared dominant surface, same-surface siblings can group only when they share concrete conflict or verification context and have no unsafe outside dependencies, and blocked or migration-order work remains explicit. The public `forge split` CLI, top-level `split.json` keys, and split-report heading order remain unchanged.
+
 ---
 
 # Repository Intent

@@ -91,6 +91,117 @@ function buildSplitPlanReference(
   };
 }
 
+function addToLookup<T>(lookup: Map<string, T[]>, key: string, value: T): void {
+  const bucket = lookup.get(key);
+  if (bucket) {
+    bucket.push(value);
+    return;
+  }
+
+  lookup.set(key, [value]);
+}
+
+interface SplitPlanItemEvidenceLookups {
+  dependencyGraphEntriesByPlanItemId: Map<string, PlanArtifact["dependency_graph"]>;
+  conflictZonesByPlanItemId: Map<string, PlanArtifact["conflict_zones"]>;
+  testObligationsByPlanItemId: Map<string, PlanArtifact["test_obligations"]>;
+  parallelizationSignalByPlanItemId: Map<string, PlanArtifact["parallelization_signals"][number]>;
+  verificationTargetsByPlanItemId: Map<string, VerifyArtifact["verification_targets"]>;
+  verificationCasesByPlanItemId: Map<string, VerifyArtifact["verification_cases"]>;
+  findingsByPlanItemId: Map<string, VerifyArtifact["findings"]>;
+  constraintsByPlanItemId: Map<string, VerifyArtifact["constraints"]>;
+  concernsByPlanItemId: Map<string, PlanArtifact["carry_forward"]["concerns"]>;
+}
+
+function buildSplitPlanItemEvidenceLookups(
+  planArtifact: PlanArtifact,
+  verifyArtifact: VerifyArtifact,
+): SplitPlanItemEvidenceLookups {
+  const dependencyGraphEntriesByPlanItemId = new Map<string, PlanArtifact["dependency_graph"]>();
+  const conflictZonesByPlanItemId = new Map<string, PlanArtifact["conflict_zones"]>();
+  const testObligationsByPlanItemId = new Map<string, PlanArtifact["test_obligations"]>();
+  const parallelizationSignalByPlanItemId = new Map<string, PlanArtifact["parallelization_signals"][number]>();
+  const verificationTargetsByPlanItemId = new Map<string, VerifyArtifact["verification_targets"]>();
+  const verificationCasesByPlanItemId = new Map<string, VerifyArtifact["verification_cases"]>();
+  const findingsByPlanItemId = new Map<string, VerifyArtifact["findings"]>();
+  const constraintsByPlanItemId = new Map<string, VerifyArtifact["constraints"]>();
+  const concernsByPlanItemId = new Map<string, PlanArtifact["carry_forward"]["concerns"]>();
+  const verificationCasePlanItemIdsById = new Map<string, string[]>();
+
+  for (const dependencyGraphEntry of planArtifact.dependency_graph) {
+    addToLookup(dependencyGraphEntriesByPlanItemId, dependencyGraphEntry.planItemId, dependencyGraphEntry);
+  }
+
+  for (const conflictZone of planArtifact.conflict_zones) {
+    for (const planItemId of conflictZone.planItemIds) {
+      addToLookup(conflictZonesByPlanItemId, planItemId, conflictZone);
+    }
+  }
+
+  for (const testObligation of planArtifact.test_obligations) {
+    addToLookup(testObligationsByPlanItemId, testObligation.planItemId, testObligation);
+  }
+
+  for (const signal of planArtifact.parallelization_signals) {
+    if (!parallelizationSignalByPlanItemId.has(signal.planItemId)) {
+      parallelizationSignalByPlanItemId.set(signal.planItemId, signal);
+    }
+  }
+
+  for (const verificationTarget of verifyArtifact.verification_targets) {
+    for (const planItemId of verificationTarget.sourcePlanItemIds) {
+      addToLookup(verificationTargetsByPlanItemId, planItemId, verificationTarget);
+    }
+  }
+
+  for (const verificationCase of verifyArtifact.verification_cases) {
+    verificationCasePlanItemIdsById.set(verificationCase.id, verificationCase.sourcePlanItemIds);
+    for (const planItemId of verificationCase.sourcePlanItemIds) {
+      addToLookup(verificationCasesByPlanItemId, planItemId, verificationCase);
+    }
+  }
+
+  for (const finding of verifyArtifact.findings) {
+    const planItemIds = verificationCasePlanItemIdsById.get(finding.verification_case_id);
+    if (!planItemIds) {
+      continue;
+    }
+
+    for (const planItemId of planItemIds) {
+      addToLookup(findingsByPlanItemId, planItemId, finding);
+    }
+  }
+
+  for (const constraint of verifyArtifact.constraints) {
+    const planItemIds = verificationCasePlanItemIdsById.get(constraint.verification_case_id);
+    if (!planItemIds) {
+      continue;
+    }
+
+    for (const planItemId of planItemIds) {
+      addToLookup(constraintsByPlanItemId, planItemId, constraint);
+    }
+  }
+
+  for (const concern of planArtifact.carry_forward.concerns) {
+    for (const planItemId of concern.planItemIds) {
+      addToLookup(concernsByPlanItemId, planItemId, concern);
+    }
+  }
+
+  return {
+    dependencyGraphEntriesByPlanItemId,
+    conflictZonesByPlanItemId,
+    testObligationsByPlanItemId,
+    parallelizationSignalByPlanItemId,
+    verificationTargetsByPlanItemId,
+    verificationCasesByPlanItemId,
+    findingsByPlanItemId,
+    constraintsByPlanItemId,
+    concernsByPlanItemId,
+  };
+}
+
 function buildWarningItems(verifyArtifact: VerifyArtifact): SplitInputIssue[] {
   const warningItems: SplitInputIssue[] = [];
 
@@ -120,6 +231,28 @@ function buildWarningItems(verifyArtifact: VerifyArtifact): SplitInputIssue[] {
   }
 
   return warningItems;
+}
+
+function buildSplitPlanItemEvidence(
+  planArtifact: PlanArtifact,
+  verifyArtifact: VerifyArtifact,
+): SplitPlanningInput["planItemEvidence"] {
+  const evidenceLookups = buildSplitPlanItemEvidenceLookups(planArtifact, verifyArtifact);
+
+  return planArtifact.plan_items.map((planItem) => {
+    return {
+      planItem,
+      dependencyGraphEntries: [...(evidenceLookups.dependencyGraphEntriesByPlanItemId.get(planItem.id) ?? [])],
+      conflictZones: [...(evidenceLookups.conflictZonesByPlanItemId.get(planItem.id) ?? [])],
+      testObligations: [...(evidenceLookups.testObligationsByPlanItemId.get(planItem.id) ?? [])],
+      parallelizationSignal: evidenceLookups.parallelizationSignalByPlanItemId.get(planItem.id) ?? null,
+      verificationTargets: [...(evidenceLookups.verificationTargetsByPlanItemId.get(planItem.id) ?? [])],
+      verificationCases: [...(evidenceLookups.verificationCasesByPlanItemId.get(planItem.id) ?? [])],
+      findings: [...(evidenceLookups.findingsByPlanItemId.get(planItem.id) ?? [])],
+      constraints: [...(evidenceLookups.constraintsByPlanItemId.get(planItem.id) ?? [])],
+      concerns: [...(evidenceLookups.concernsByPlanItemId.get(planItem.id) ?? [])],
+    };
+  });
 }
 
 function buildBlockingItems(
@@ -164,6 +297,7 @@ function buildSplitPlanningInput(
       findings: verifyArtifact.findings,
       constraints: verifyArtifact.constraints,
     },
+    planItemEvidence: buildSplitPlanItemEvidence(planArtifact, verifyArtifact),
     uncertainty: {
       sourceIntake: planArtifact.source_intake,
       planCarryForward: planArtifact.carry_forward,

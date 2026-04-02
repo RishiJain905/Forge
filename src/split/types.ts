@@ -87,6 +87,19 @@ export interface SplitPlanningContext {
   constraints: VerifyArtifact["constraints"];
 }
 
+export interface SplitPlanItemEvidence {
+  planItem: PlanArtifact["plan_items"][number];
+  dependencyGraphEntries: PlanArtifact["dependency_graph"];
+  conflictZones: PlanArtifact["conflict_zones"];
+  testObligations: PlanArtifact["test_obligations"];
+  parallelizationSignal: PlanArtifact["parallelization_signals"][number] | null;
+  verificationTargets: VerifyArtifact["verification_targets"];
+  verificationCases: VerifyArtifact["verification_cases"];
+  findings: VerifyArtifact["findings"];
+  constraints: VerifyArtifact["constraints"];
+  concerns: PlanArtifact["carry_forward"]["concerns"];
+}
+
 export interface SplitPlanningUncertainty {
   sourceIntake: PlanArtifact["source_intake"];
   planCarryForward: PlanArtifact["carry_forward"];
@@ -105,6 +118,7 @@ export interface SplitInputUsability {
 
 export interface SplitPlanningInput {
   context: SplitPlanningContext;
+  planItemEvidence: SplitPlanItemEvidence[];
   uncertainty: SplitPlanningUncertainty;
   usability: SplitInputUsability;
 }

@@ -3,8 +3,41 @@ import assert from "node:assert/strict";
 import { buildSplitWorkstreams } from "../src/split/workstreams.js";
 import type { SplitFoundationResult } from "../src/split/types.js";
 
+function buildPlanItemEvidenceFromContext(
+  context: SplitFoundationResult["splitInput"]["context"],
+  concerns: SplitFoundationResult["splitInput"]["uncertainty"]["planCarryForward"]["concerns"],
+): SplitFoundationResult["splitInput"]["planItemEvidence"] {
+  const verificationCasePlanItemIdsById = new Map<string, string[]>();
+
+  for (const verificationCase of context.verificationCases) {
+    verificationCasePlanItemIdsById.set(verificationCase.id, verificationCase.sourcePlanItemIds);
+  }
+
+  return context.planItems.map((planItem) => ({
+    planItem,
+    dependencyGraphEntries: context.dependencyGraph.filter((entry) => entry.planItemId === planItem.id),
+    conflictZones: context.conflictZones.filter((zone) => zone.planItemIds.includes(planItem.id)),
+    testObligations: context.testObligations.filter((entry) => entry.planItemId === planItem.id),
+    parallelizationSignal:
+      context.parallelizationSignals.find((signal) => signal.planItemId === planItem.id) ?? null,
+    verificationTargets: context.verificationTargets.filter((target) =>
+      target.sourcePlanItemIds.includes(planItem.id),
+    ),
+    verificationCases: context.verificationCases.filter((verificationCase) =>
+      verificationCase.sourcePlanItemIds.includes(planItem.id),
+    ),
+    findings: context.findings.filter((finding) =>
+      (verificationCasePlanItemIdsById.get(finding.verification_case_id) ?? []).includes(planItem.id),
+    ),
+    constraints: context.constraints.filter((constraint) =>
+      (verificationCasePlanItemIdsById.get(constraint.verification_case_id) ?? []).includes(planItem.id),
+    ),
+    concerns: concerns.filter((concern) => concern.planItemIds.includes(planItem.id)),
+  }));
+}
+
 function createFoundationFixture(): SplitFoundationResult {
-  return {
+  const foundation = {
     command: "forge split",
     stage: "step4",
     purpose: "Transform verified planning output into safe execution-ready workstreams.",
@@ -167,7 +200,14 @@ function createFoundationFixture(): SplitFoundationResult {
             category: "test",
             sourceRequirements: ["Align helper tests"],
             likelyAffectedPaths: ["tests/helper.test.ts"],
-            dependencies: [{ planItemId: "plan-safe", type: "hard", reason: "Tests depend on helper updates." }],
+            dependencies: [
+              { planItemId: "plan-safe", type: "hard", reason: "Tests depend on helper updates." },
+              {
+                planItemId: "plan-serial",
+                type: "hard",
+                reason: "The helper test also waits for the config migration to settle.",
+              },
+            ],
             riskLevel: "medium",
             testObligations: [{ category: "regression", reason: "Regression coverage must stay aligned." }],
             verificationRelevance: {
@@ -220,6 +260,46 @@ function createFoundationFixture(): SplitFoundationResult {
               reason: "Would be safe in isolation without the formal failure.",
             },
           },
+          {
+            id: "plan-shared-a",
+            title: "Update shared alpha helper",
+            description: "Refine the first helper on the shared module surface.",
+            category: "implementation",
+            sourceRequirements: ["Update shared alpha helper"],
+            likelyAffectedPaths: ["src/shared/core/alpha.ts"],
+            dependencies: [],
+            riskLevel: "low",
+            testObligations: [{ category: "unit", reason: "Shared alpha helper behavior should stay covered." }],
+            verificationRelevance: {
+              relevant: true,
+              categories: ["code_surface"],
+              notes: ["Shares the same module surface as the sibling helper update."],
+            },
+            parallelization: {
+              signal: "safe_parallel",
+              reason: "Shared alpha helper work is isolated on its own path.",
+            },
+          },
+          {
+            id: "plan-shared-b",
+            title: "Update shared beta helper",
+            description: "Refine the second helper on the shared module surface.",
+            category: "implementation",
+            sourceRequirements: ["Update shared beta helper"],
+            likelyAffectedPaths: ["src/shared/core/beta.ts"],
+            dependencies: [],
+            riskLevel: "low",
+            testObligations: [{ category: "regression", reason: "Shared beta helper behavior should stay covered." }],
+            verificationRelevance: {
+              relevant: true,
+              categories: ["code_surface"],
+              notes: ["Shares the same module surface as the sibling helper update."],
+            },
+            parallelization: {
+              signal: "safe_parallel",
+              reason: "Shared beta helper work is isolated on its own path.",
+            },
+          },
         ],
         dependencyGraph: [
           {
@@ -227,6 +307,12 @@ function createFoundationFixture(): SplitFoundationResult {
             dependsOnPlanItemId: "plan-safe",
             type: "hard",
             reason: "Tests depend on helper updates.",
+          },
+          {
+            planItemId: "plan-after",
+            dependsOnPlanItemId: "plan-serial",
+            type: "hard",
+            reason: "The helper test also waits for the config migration to settle.",
           },
         ],
         conflictZones: [
@@ -244,6 +330,16 @@ function createFoundationFixture(): SplitFoundationResult {
             planItemId: "plan-blocked",
             category: "integration",
             reason: "Ownership flow needs integration coverage.",
+          },
+          {
+            planItemId: "plan-shared-a",
+            category: "unit",
+            reason: "Shared alpha helper behavior should stay covered.",
+          },
+          {
+            planItemId: "plan-shared-b",
+            category: "regression",
+            reason: "Shared beta helper behavior should stay covered.",
           },
         ],
         parallelizationSignals: [
@@ -264,6 +360,8 @@ function createFoundationFixture(): SplitFoundationResult {
             signal: "safe_parallel",
             reason: "Would be safe without formal blocking evidence.",
           },
+          { planItemId: "plan-shared-a", signal: "safe_parallel", reason: "Shared alpha helper work is isolated." },
+          { planItemId: "plan-shared-b", signal: "safe_parallel", reason: "Shared beta helper work is isolated." },
         ],
         verificationTargetContract: {
           requiredFields: [
@@ -362,6 +460,18 @@ function createFoundationFixture(): SplitFoundationResult {
             verificationCaseIds: ["case-blocked"],
             traceabilityNotes: ["Blocked until formal ownership failure is resolved."],
           },
+          {
+            id: "target-shared-surface",
+            title: "Shared helper surface updates",
+            category: "code_surface",
+            sourcePlanItemIds: ["plan-shared-a", "plan-shared-b"],
+            riskSummary: "Sibling helper updates share a stable code surface and can stay grouped.",
+            candidateLanes: ["structural"],
+            sourceRiskSources: ["plan_item_verification_relevance"],
+            expectedFindingKinds: ["surface_overlap"],
+            verificationCaseIds: ["case-shared-a", "case-shared-b"],
+            traceabilityNotes: ["Shared helper work stays auditable as one surface group."],
+          },
         ],
         verificationCases: [
           {
@@ -406,6 +516,38 @@ function createFoundationFixture(): SplitFoundationResult {
               errors: [],
             },
           },
+          {
+            id: "case-shared-a",
+            verificationTargetId: "target-shared-surface",
+            title: "Shared alpha helper surface verification",
+            category: "code_surface",
+            sourcePlanItemIds: ["plan-shared-a"],
+            lanes: ["structural"],
+            goal: "Keep the shared alpha helper aligned.",
+            status: "passed",
+            summary: "Shared alpha helper remains aligned.",
+            findings: ["finding-shared-a"],
+            mitigations: ["Keep the grouped stream together."],
+            constraints: ["constraint-shared-a"],
+            traceabilityNotes: ["Shared alpha helper stays tied to the shared surface target."],
+            formalDetails: null,
+          },
+          {
+            id: "case-shared-b",
+            verificationTargetId: "target-shared-surface",
+            title: "Shared beta helper surface verification",
+            category: "code_surface",
+            sourcePlanItemIds: ["plan-shared-b"],
+            lanes: ["structural"],
+            goal: "Keep the shared beta helper aligned.",
+            status: "passed",
+            summary: "Shared beta helper remains aligned.",
+            findings: ["finding-shared-b"],
+            mitigations: ["Keep the grouped stream together."],
+            constraints: ["constraint-shared-b"],
+            traceabilityNotes: ["Shared beta helper stays tied to the shared surface target."],
+            formalDetails: null,
+          },
         ],
         findings: [
           {
@@ -418,6 +560,30 @@ function createFoundationFixture(): SplitFoundationResult {
             tla_spec_id: "tla-blocked",
             tlc_result_id: "tlc-blocked",
             trace: "OwnerA -> OwnerB -> stale write",
+            errors: [],
+          },
+          {
+            id: "finding-shared-a",
+            lane: "structural",
+            verification_case_id: "case-shared-a",
+            verification_target_id: "target-shared-surface",
+            status: "passed",
+            summary: "Shared alpha helper remains aligned.",
+            tla_spec_id: null,
+            tlc_result_id: null,
+            trace: null,
+            errors: [],
+          },
+          {
+            id: "finding-shared-b",
+            lane: "structural",
+            verification_case_id: "case-shared-b",
+            verification_target_id: "target-shared-surface",
+            status: "passed",
+            summary: "Shared beta helper remains aligned.",
+            tla_spec_id: null,
+            tlc_result_id: null,
+            trace: null,
             errors: [],
           },
         ],
@@ -435,6 +601,20 @@ function createFoundationFixture(): SplitFoundationResult {
             verification_case_id: "case-blocked",
             verification_target_id: "target-blocked",
             summary: "Ownership flow is blocked until the formal failure is repaired.",
+          },
+          {
+            id: "constraint-shared-a",
+            lane: "structural",
+            verification_case_id: "case-shared-a",
+            verification_target_id: "target-shared-surface",
+            summary: "Shared alpha helper should stay grouped on the shared surface.",
+          },
+          {
+            id: "constraint-shared-b",
+            lane: "structural",
+            verification_case_id: "case-shared-b",
+            verification_target_id: "target-shared-surface",
+            summary: "Shared beta helper should stay grouped on the shared surface.",
           },
         ],
       },
@@ -739,10 +919,10 @@ function createFoundationFixture(): SplitFoundationResult {
       deferredCapabilities: ["forge execute"],
       disallowedCapabilities: ["modify code"],
     },
-    workstreamContract: {
-      requiredFields: [
-        "id",
-        "title",
+      workstreamContract: {
+        requiredFields: [
+          "id",
+          "title",
         "description",
         "category",
         "sourcePlanItemIds",
@@ -766,9 +946,20 @@ function createFoundationFixture(): SplitFoundationResult {
         "verification_constraint",
         "carry_forward_concern",
         "verification_readiness",
-      ],
-    },
+        ],
+      },
   } as unknown as SplitFoundationResult;
+
+  return {
+    ...foundation,
+    splitInput: {
+      ...foundation.splitInput,
+      planItemEvidence: buildPlanItemEvidenceFromContext(
+        foundation.splitInput.context,
+        foundation.splitInput.uncertainty.planCarryForward.concerns,
+      ),
+    },
+  };
 }
 
 async function runScenario(name: string, scenario: () => Promise<void> | void): Promise<void> {
@@ -783,7 +974,7 @@ async function runScenario(name: string, scenario: () => Promise<void> | void): 
 }
 
 await runScenario(
-  "buildSplitWorkstreams maps one plan item to one workstream and resolves all Part 3 categories",
+  "buildSplitWorkstreams groups the helper/test pair and same-surface siblings while preserving blocked workstreams",
   () => {
     const result = buildSplitWorkstreams({ foundation: createFoundationFixture() });
 
@@ -792,12 +983,26 @@ await runScenario(
       result.workstreams.map((workstream: { id: string; category: string }) => [workstream.id, workstream.category]),
       [
         ["ws-plan-serial", "serial"],
-        ["ws-plan-safe", "safe_parallel"],
-        ["ws-plan-after", "parallel_after_dependency"],
+        ["ws-plan-safe__plan-after", "parallel_after_dependency"],
         ["ws-plan-protected", "protected_merge"],
         ["ws-plan-blocked", "blocked"],
+        ["ws-plan-shared-a__plan-shared-b", "protected_merge"],
       ],
     );
+
+    const groupedTestStream = result.workstreams.find(
+      (workstream: { id: string }) => workstream.id === "ws-plan-safe__plan-after",
+    );
+    assert.ok(groupedTestStream);
+    assert.deepEqual(groupedTestStream.sourcePlanItemIds, ["plan-safe", "plan-after"]);
+    assert.match(groupedTestStream.description, /grouped/i);
+
+    const groupedSharedStream = result.workstreams.find(
+      (workstream: { id: string }) => workstream.id === "ws-plan-shared-a__plan-shared-b",
+    );
+    assert.ok(groupedSharedStream);
+    assert.deepEqual(groupedSharedStream.sourcePlanItemIds, ["plan-shared-a", "plan-shared-b"]);
+    assert.match(groupedSharedStream.description, /grouped/i);
 
     const blockedStream = result.workstreams.find(
       (workstream: { id: string }) => workstream.id === "ws-plan-blocked",
@@ -815,15 +1020,147 @@ await runScenario(
 );
 
 await runScenario(
-  "buildSplitWorkstreams derives dependency edges and deterministic merge order for constrained streams",
+  "buildSplitWorkstreams keeps migration-order source/test pairs separate instead of regrouping them",
+  () => {
+    const foundation = createFoundationFixture();
+    const planAfter = foundation.splitInput.context.planItems.find((item) => item.id === "plan-after");
+
+    if (!planAfter) {
+      throw new Error("Expected the fixture to include plan-after work items.");
+    }
+
+    planAfter.verificationRelevance.categories = [
+      ...planAfter.verificationRelevance.categories,
+      "migration_order",
+    ];
+    foundation.splitInput.planItemEvidence = buildPlanItemEvidenceFromContext(
+      foundation.splitInput.context,
+      foundation.splitInput.uncertainty.planCarryForward.concerns,
+    );
+
+    const result = buildSplitWorkstreams({ foundation });
+
+    assert.ok(result.workstreams.some((workstream) => workstream.id === "ws-plan-safe"));
+    assert.ok(result.workstreams.some((workstream) => workstream.id === "ws-plan-after"));
+    assert.ok(
+      result.workstreams.every((workstream) => workstream.id !== "ws-plan-safe__plan-after"),
+      "expected migration-order source/test pairs to stay separate",
+    );
+  },
+);
+
+await runScenario(
+  "buildSplitWorkstreams keeps sequencing source/test pairs separate instead of regrouping them",
+  () => {
+    const foundation = createFoundationFixture();
+    const planAfter = foundation.splitInput.context.planItems.find((item) => item.id === "plan-after");
+    const dependencyGraphEntry = foundation.splitInput.context.dependencyGraph.find(
+      (entry) =>
+        entry.planItemId === "plan-after" &&
+        entry.dependsOnPlanItemId === "plan-safe",
+    );
+
+    if (!planAfter || !dependencyGraphEntry) {
+      throw new Error("Expected the fixture to include plan-after source/test work items.");
+    }
+
+    planAfter.dependencies = [
+      {
+        planItemId: "plan-safe",
+        type: "sequencing",
+        reason: "Dependency ordering should not qualify as a direct pair for regrouping.",
+      },
+      ...planAfter.dependencies.slice(1),
+    ];
+    dependencyGraphEntry.type = "sequencing";
+    foundation.splitInput.planItemEvidence = buildPlanItemEvidenceFromContext(
+      foundation.splitInput.context,
+      foundation.splitInput.uncertainty.planCarryForward.concerns,
+    );
+
+    const result = buildSplitWorkstreams({ foundation });
+
+    assert.ok(result.workstreams.some((workstream) => workstream.id === "ws-plan-safe"));
+    assert.ok(result.workstreams.some((workstream) => workstream.id === "ws-plan-after"));
+    assert.ok(
+      result.workstreams.every((workstream) => workstream.id !== "ws-plan-safe__plan-after"),
+      "expected sequencing source/test pairs to stay separate",
+    );
+  },
+);
+
+await runScenario(
+  "buildSplitWorkstreams prefers the more specific nested helper test when multiple direct candidates are eligible",
+  () => {
+    const foundation = createFoundationFixture();
+    const planAfter = foundation.splitInput.context.planItems.find((item) => item.id === "plan-after");
+
+    if (!planAfter) {
+      throw new Error("Expected the fixture to include plan-after work items.");
+    }
+
+    const nestedTestItem = {
+      ...planAfter,
+      id: "plan-after-nested",
+      title: "Align nested helper tests",
+      description: "Update the nested dependent helper test after helper changes land.",
+      likelyAffectedPaths: ["tests/unit/helper.test.ts"],
+      verificationRelevance: {
+        ...planAfter.verificationRelevance,
+        notes: [
+          "Depends on source change first.",
+          "Nested test path should still resolve to the helper surface.",
+        ],
+      },
+    };
+
+    foundation.splitInput.context.planItems = [
+      ...foundation.splitInput.context.planItems,
+      nestedTestItem,
+    ];
+    foundation.splitInput.context.dependencyGraph = [
+      ...foundation.splitInput.context.dependencyGraph,
+      {
+        planItemId: "plan-after-nested",
+        dependsOnPlanItemId: "plan-safe",
+        type: "hard",
+        reason: "Nested helper tests depend on helper updates.",
+      },
+    ];
+    foundation.splitInput.context.parallelizationSignals = [
+      ...foundation.splitInput.context.parallelizationSignals,
+      {
+        planItemId: "plan-after-nested",
+        signal: "parallel_after_dependency",
+        reason: "Only safe after the source update merges first.",
+      },
+    ];
+    foundation.splitInput.planItemEvidence = buildPlanItemEvidenceFromContext(
+      foundation.splitInput.context,
+      foundation.splitInput.uncertainty.planCarryForward.concerns,
+    );
+
+    const result = buildSplitWorkstreams({ foundation });
+
+    assert.ok(result.workstreams.some((workstream) => workstream.id === "ws-plan-safe__plan-after-nested"));
+    assert.ok(result.workstreams.some((workstream) => workstream.id === "ws-plan-after"));
+    assert.ok(
+      result.workstreams.every((workstream) => workstream.id !== "ws-plan-safe__plan-after"),
+      "expected the more specific nested helper path to win the direct pairing tie-break",
+    );
+  },
+);
+
+await runScenario(
+  "buildSplitWorkstreams derives dependency edges and deterministic merge order for grouped constrained streams",
   () => {
     const result = buildSplitWorkstreams({ foundation: createFoundationFixture() });
 
     assert.deepEqual(result.dependencyEdges, [
       {
-        upstreamWorkstreamId: "ws-plan-safe",
-        downstreamWorkstreamId: "ws-plan-after",
-        reason: "Tests depend on helper updates.",
+        upstreamWorkstreamId: "ws-plan-serial",
+        downstreamWorkstreamId: "ws-plan-safe__plan-after",
+        reason: "The helper test also waits for the config migration to settle.",
       },
     ]);
 
@@ -832,14 +1169,15 @@ await runScenario(
       [
         ["ws-plan-serial", 1],
         ["ws-plan-protected", 2],
-        ["ws-plan-after", 3],
+        ["ws-plan-shared-a__plan-shared-b", 3],
+        ["ws-plan-safe__plan-after", 4],
       ],
     );
   },
 );
 
 await runScenario(
-  "buildSplitWorkstreams tolerates cyclic dependency graphs without recursing forever",
+  "buildSplitWorkstreams keeps cyclic source/test pairs separate instead of regrouping them",
   () => {
     const foundation = createFoundationFixture();
     const safeItem = foundation.splitInput.context.planItems.find((item) => item.id === "plan-safe");
@@ -877,13 +1215,23 @@ await runScenario(
         reason: "Introduce a cycle for regression coverage.",
       },
     ];
+    foundation.splitInput.planItemEvidence = buildPlanItemEvidenceFromContext(
+      foundation.splitInput.context,
+      foundation.splitInput.uncertainty.planCarryForward.concerns,
+    );
 
     const result = buildSplitWorkstreams({ foundation });
 
-    assert.equal(result.mergeOrder.length, 3);
+    assert.equal(result.workstreams.length, 6);
+    assert.ok(result.workstreams.some((workstream) => workstream.id === "ws-plan-safe"));
+    assert.ok(result.workstreams.some((workstream) => workstream.id === "ws-plan-after"));
+    assert.ok(
+      result.workstreams.every((workstream) => workstream.id !== "ws-plan-safe__plan-after"),
+      "expected cyclic source/test pairs to stay separate",
+    );
     assert.deepEqual(
       result.mergeOrder.map((entry: { workstreamId: string }) => entry.workstreamId),
-      ["ws-plan-serial", "ws-plan-protected", "ws-plan-after"],
+      ["ws-plan-serial", "ws-plan-protected", "ws-plan-shared-a__plan-shared-b", "ws-plan-after"],
     );
   },
 );
@@ -910,6 +1258,7 @@ await runScenario(
       }>;
       streamConstraintDetails: Array<{
         workstreamId: string;
+        appliedRules: string[];
         sourceDependencyIds: string[];
         sourceConflictZoneIds: string[];
         sourceTestObligationIds: string[];
@@ -926,9 +1275,9 @@ await runScenario(
     );
     assert.ok(
       result.mergeOrder.some((entry) =>
-        entry.workstreamId === "ws-plan-after" &&
+        entry.workstreamId === "ws-plan-safe__plan-after" &&
         entry.ruleType === "dependency" &&
-        entry.mustMergeAfterWorkstreamIds.includes("ws-plan-safe"),
+        entry.mustMergeAfterWorkstreamIds.includes("ws-plan-serial"),
       ),
       "expected dependency-driven merge order to be explicit",
     );
@@ -939,6 +1288,15 @@ await runScenario(
         entry.sourceConstraintIds.includes("constraint-protected"),
       ),
       "expected protected-merge rules to stay source-traceable",
+    );
+    assert.ok(
+      result.mergeOrder.some((entry) =>
+        entry.workstreamId === "ws-plan-shared-a__plan-shared-b" &&
+        entry.ruleType === "protected_merge" &&
+        entry.sourceConstraintIds.includes("constraint-shared-a") &&
+        entry.sourceConstraintIds.includes("constraint-shared-b"),
+      ),
+      "expected same-surface grouped workstreams to keep both constraint sources visible",
     );
 
     assert.ok(
@@ -954,9 +1312,10 @@ await runScenario(
 
     assert.ok(
       result.streamConstraintDetails.some((detail) =>
-        detail.workstreamId === "ws-plan-after" &&
+        detail.workstreamId === "ws-plan-safe__plan-after" &&
         detail.sourceDependencyIds.length > 0 &&
-        detail.mergeOrderRuleIds.length > 0,
+        detail.mergeOrderRuleIds.length > 0 &&
+        detail.appliedRules.some((rule) => rule.includes("grouping:direct_dependency_test_pair")),
       ),
       "expected dependency-driven streams to keep dependency ids and merge-rule ids visible",
     );
@@ -967,6 +1326,14 @@ await runScenario(
         detail.sourceVerificationTargetIds.includes("target-protected"),
       ),
       "expected protected streams to retain conflict-zone and verification-target traceability",
+    );
+    assert.ok(
+      result.streamConstraintDetails.some((detail) =>
+        detail.workstreamId === "ws-plan-shared-a__plan-shared-b" &&
+        detail.sourceVerificationTargetIds.includes("target-shared-surface") &&
+        detail.appliedRules.some((rule) => rule.includes("grouping:same_surface_siblings")),
+      ),
+      "expected same-surface grouped workstreams to keep verification-target context visible",
     );
     assert.ok(
       result.streamConstraintDetails.some((detail) =>
