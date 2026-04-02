@@ -73,7 +73,7 @@ function blockedItemId(workstreamId: string): string {
 }
 
 function buildDescription(planItem: PlanItem): string {
-  return `${planItem.description} Batch 1 keeps this work as its own workstream to preserve Step 2 traceability and apply Step 3 safety rules conservatively.`;
+  return `${planItem.description} Step 4 keeps this workstream explicitly traceable to its Step 2 and Step 3 inputs so later execution can honor carried-forward safety and merge-order constraints.`;
 }
 
 function formatConstraint(sourceId: string, message: string): string {

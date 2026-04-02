@@ -335,12 +335,47 @@ await runScenario(
   async () => {
     assert.match(STEP4_BOUNDARY_POLICY.purpose, /execution-ready workstreams/i);
     assert.ok(STEP4_BOUNDARY_POLICY.authoritativeInputs.includes(".forge/verify.json"));
+    assert.match(
+      STEP4_BOUNDARY_POLICY.batch2Mission,
+      /real Step 4 pipeline and produce usable split outputs/i,
+    );
+    assert.deepEqual(STEP4_BOUNDARY_POLICY.implementationPriorities, [
+      "verify-artifact consumption",
+      "workstream construction",
+      "stream categories and safety application",
+      "merge-order and blocking logic",
+      "machine-readable artifact generation",
+      "human-readable split report",
+      "stable split orchestration",
+      "real tests for implemented behavior",
+    ]);
+    assert.deepEqual(STEP4_BOUNDARY_POLICY.requiredImplementationTasks, [
+      "align current Step 4 code with the locked split contract",
+      "ensure one real orchestration path exists",
+      "build workstream construction first",
+      "stabilize stream categorization and safety application",
+      "implement merge-order and blocking logic",
+      "build real artifact/report output",
+      "wire the command and harden with tests",
+    ]);
+    assert.ok(STEP4_BOUNDARY_POLICY.requiredCodeSurfaces.includes("Step 4 runner/orchestrator"));
+    assert.ok(STEP4_BOUNDARY_POLICY.requiredCodeSurfaces.includes("CLI wiring"));
+    assert.ok(STEP4_BOUNDARY_POLICY.requiredCodeSurfaces.includes("Step 4 tests"));
     assert.equal(STEP4_BOUNDARY_POLICY.deterministicFirst, true);
     assert.equal(STEP4_BOUNDARY_POLICY.conservativeRegrouping, true);
     assert.ok(STEP4_BOUNDARY_POLICY.disallowedCapabilities.includes("execute code"));
     assert.ok(STEP4_BOUNDARY_POLICY.disallowedCapabilities.includes("rewrite planning logic"));
     assert.ok(STEP4_BOUNDARY_POLICY.disallowedCapabilities.includes("redo verification"));
     assert.ok(STEP4_BOUNDARY_POLICY.disallowedCapabilities.includes("hide blocked work"));
+    assert.ok(STEP4_BOUNDARY_POLICY.disallowedCapabilities.includes("implement actual execution logic"));
+    assert.ok(STEP4_BOUNDARY_POLICY.disallowedCapabilities.includes("create code-edit prompts or packets"));
+    assert.ok(STEP4_BOUNDARY_POLICY.disallowedCapabilities.includes("modify code as part of splitting"));
+    assert.ok(STEP4_BOUNDARY_POLICY.disallowedCapabilities.includes("ignore verification constraints"));
+    assert.ok(
+      STEP4_BOUNDARY_POLICY.disallowedCapabilities.includes(
+        "redesign Step 4 architecture without strong reason",
+      ),
+    );
     assert.ok(STEP4_BOUNDARY_POLICY.deferredCapabilities.includes("forge execute"));
     assert.ok(STEP4_BOUNDARY_POLICY.deferredCapabilities.includes("forge integrate"));
     assert.ok(STEP4_BOUNDARY_POLICY.conservativeRegroupingNotes.length > 0);

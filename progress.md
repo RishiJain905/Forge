@@ -405,6 +405,11 @@
   - Kept the public Step 4 split surface stable while hardening `split_readiness` summary wording so it now states whether split can proceed, whether all items were safely assigned, whether blocked streams remain, whether merge-order constraints were imposed, and what later execution must honor.
   - Reworked the `Split Readiness` report section to expose explicit `Can Proceed`, `All Items Safely Assigned`, `Blocked Streams`, `Merge-Order Constraints`, and `Later Execution Must Honor` lines without changing the frozen heading order or top-level artifact contract.
   - Reused the merge-order recommended-action wording through a shared constant and kept the rest of the runtime narrow to Part 5 closeout instead of reopening the Step 4 contract or workstream model.
+- Batch 2.01: `part-1-batch2-goal-and-do-not-touch.md` (Step 4)
+  - Treated Step 4 Batch 2 Part 1 as a narrow alignment pass over the already real split pipeline instead of reopening the Step 4 architecture or pulling Part 2-5 work forward.
+  - Expanded the Step 4 boundary policy with the explicit Batch 2 mission, ordered implementation priorities, required implementation-task/code-surface lists, and the missing do-not-touch guardrails for Step 5 execution drift, code-edit packet generation, code modification during splitting, verification-constraint bypass, and broad Step 4 redesign.
+  - Tightened `tests/split.goal-and-boundaries.test.ts`, added a stale-wording regression in `tests/split.workstream-model.test.ts`, and removed the lingering Batch 1 wording from generated workstream descriptions so the stronger Batch 2 contract is locked in direct coverage.
+  - Updated `README.md`, `progress.md`, and `S4-B2-Done/p1-done-summary.md` so Step 4 Batch 2 Part 1 is documented and traceable.
 
 ## Current Branch State
 - `dev` includes the completed Step 1 work through Batch 4.05, including the frozen Step 2 handoff contract from Intake.
@@ -438,6 +443,7 @@
 - `dev` now includes Step 4 Batch 1 Part 3, including the real workstream builder, explicit stream-category safety rules, populated dependency and merge-order output, blocked-workstream warning handling, and inspectable stream-constraint debug detail while keeping the frozen top-level split contract stable.
 - `dev` now includes Step 4 Batch 1 Part 4, including explicit merge-order rule objects, explicit blocked-item versus blocked-workstream modeling, public carried-forward stream-constraint detail in `split.json` and `split-report.md`, and matching debug/smoke/test coverage while keeping the frozen top-level split contract stable.
 - `dev` now includes Step 4 Batch 1 Part 5, including explicit Part 5 acceptance gates, stronger split readiness/report wording for assignment status plus merge-order and blocked-stream caution, and confirmation that Step 4 Batch 1 can proceed without reopening its frozen contract.
+- `dev` now includes Step 4 Batch 2 Part 1, including the explicit Batch 2 split mission, ordered implementation priorities, required implementation-task/code-surface metadata in the Step 4 boundary contract, stronger do-not-touch guardrails, and direct regression coverage for stale Batch 1 wording while keeping the public split surface stable.
 
 ## Verification
 - `npm.cmd test`
@@ -470,4 +476,5 @@
 - Step 4 Batch 1 Part 4 is complete.
 - Step 4 Batch 1 Part 5 is complete.
 - Step 4 Batch 1 is complete.
-- No later Step 4 batch spec is present in-repo yet.
+- Step 4 Batch 2 Part 1 is complete.
+- Next Step 4 target: `forge_step4_batch2/part-2-stage-1-and-2-verify-consumption-workstream-foundation.md`

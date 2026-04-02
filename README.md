@@ -560,7 +560,9 @@ Batch 3 Part 5 closes Step 3 by proving the existing `verify.json`, `verify-repo
 
 Step 3 Batch 3 is complete, and Step 3 is now frozen for V1 except for future bug fixes. Step 4 should consume the persisted Step 3 outputs instead of re-verifying broad planning logic from scratch.
 
-Step 4 Batch 1 Part 1 is now implemented as an internal `src/split` foundation. It treats `verify.json` as the primary Step 4 gate, loads the referenced `plan.json` as supporting structure, freezes the Step 4 mission and boundary policy, and keeps Split internal-only for now without public CLI wiring or split artifact/report persistence yet.
+Step 4 Batch 1 is complete. `forge split` now consumes the persisted Step 3 `verify.json` handoff plus the referenced Step 2 `plan.json`, emits real workstreams/categories/merge-order/blocking output, persists `split.json` and `split-report.md`, and keeps optional debug mirrors behind `FORGE_SPLIT_DEBUG=1` without reopening the frozen top-level split contract.
+
+Step 4 Batch 2 Part 1 is a narrow alignment pass over that already real split runtime. It hardens the explicit Batch 2 mission, ordered implementation priorities, and do-not-touch guardrails in the Step 4 boundary contract so later Batch 2 work stays inside the real split path instead of drifting into Step 5 execution behavior, code-edit packet generation, code modification, verification bypass, or broad Step 4 redesign.
 
 ---
 

@@ -696,6 +696,40 @@ function createFoundationFixture(): SplitFoundationResult {
       command: "forge split",
       stage: "step4",
       purpose: "Transform verified planning output into safe execution-ready workstreams.",
+      batch2Mission: "Make forge split run through the real Step 4 pipeline and produce usable split outputs.",
+      implementationPriorities: [
+        "verify-artifact consumption",
+        "workstream construction",
+        "stream categories and safety application",
+        "merge-order and blocking logic",
+        "machine-readable artifact generation",
+        "human-readable split report",
+        "stable split orchestration",
+        "real tests for implemented behavior",
+      ],
+      requiredImplementationTasks: [
+        "align current Step 4 code with the locked split contract",
+        "ensure one real orchestration path exists",
+        "build workstream construction first",
+        "stabilize stream categorization and safety application",
+        "implement merge-order and blocking logic",
+        "build real artifact/report output",
+        "wire the command and harden with tests",
+      ],
+      requiredCodeSurfaces: [
+        "Step 4 shared types/contracts",
+        "Step 3 artifact consumption layer",
+        "workstream construction",
+        "stream-category logic",
+        "merge-order logic",
+        "blocking logic",
+        "carried-constraint logic",
+        "artifact/report builders",
+        "persistence",
+        "Step 4 runner/orchestrator",
+        "CLI wiring",
+        "Step 4 tests",
+      ],
       authoritativeInputs: [".forge/verify.json", "source_plan.artifactPath"],
       deterministicFirst: true,
       conservativeRegrouping: true,
@@ -773,6 +807,10 @@ await runScenario(
     assert.deepEqual(blockedStream.sourceVerificationCaseIds, ["case-blocked"]);
     assert.deepEqual(blockedStream.sourceFindingIds, ["finding-blocked"]);
     assert.match(blockedStream.blockedReason ?? "", /formal ownership failure/i);
+    assert.ok(
+      result.workstreams.every((workstream) => !/Batch 1/i.test(workstream.description)),
+      "expected Batch 2 workstream descriptions to avoid stale Batch 1 wording",
+    );
   },
 );
 

@@ -51,6 +51,45 @@ export const SPLIT_CONSTRAINT_SOURCES = [
 export const STEP4_SPLIT_PURPOSE =
   "Transform verified planning output into safe execution-ready workstreams that preserve dependency, verification, and merge-order constraints." as const;
 
+export const STEP4_BATCH2_MISSION =
+  "Make forge split run through the real Step 4 pipeline and produce usable split outputs." as const;
+
+export const STEP4_BATCH2_REQUIRED_IMPLEMENTATION_TASKS = [
+  "align current Step 4 code with the locked split contract",
+  "ensure one real orchestration path exists",
+  "build workstream construction first",
+  "stabilize stream categorization and safety application",
+  "implement merge-order and blocking logic",
+  "build real artifact/report output",
+  "wire the command and harden with tests",
+] as const;
+
+export const STEP4_IMPLEMENTATION_PRIORITIES = [
+  "verify-artifact consumption",
+  "workstream construction",
+  "stream categories and safety application",
+  "merge-order and blocking logic",
+  "machine-readable artifact generation",
+  "human-readable split report",
+  "stable split orchestration",
+  "real tests for implemented behavior",
+] as const;
+
+export const STEP4_BATCH2_REQUIRED_CODE_SURFACES = [
+  "Step 4 shared types/contracts",
+  "Step 3 artifact consumption layer",
+  "workstream construction",
+  "stream-category logic",
+  "merge-order logic",
+  "blocking logic",
+  "carried-constraint logic",
+  "artifact/report builders",
+  "persistence",
+  "Step 4 runner/orchestrator",
+  "CLI wiring",
+  "Step 4 tests",
+] as const;
+
 export const STEP4_DETERMINISTIC_FIRST_NOTES = [
   "Consume the persisted Step 3 verify artifact instead of re-running broad verification logic.",
   "Load the referenced Step 2 plan artifact only as supporting structure for plan items, dependencies, conflict zones, test obligations, and parallelization signals.",
@@ -86,21 +125,30 @@ export const STEP4_DEFERRED_CAPABILITIES = [
 
 export const STEP4_DISALLOWED_CAPABILITIES = [
   "execute code",
+  "implement actual execution logic",
   "modify code",
+  "modify code as part of splitting",
   "edit source files directly",
+  "create code-edit prompts or packets",
   "rewrite planning logic",
   "redo verification",
+  "ignore verification constraints",
   "ignore TLC-backed failures or mitigations",
   "hide blocked work",
   "hide unresolved risk inside broad stream descriptions",
   "act like a freeform project-manager step",
   "aggressively regroup work without a clear safety gain",
+  "redesign Step 4 architecture without strong reason",
 ] as const;
 
 export interface Step4BoundaryPolicy {
   command: string;
   stage: string;
   purpose: string;
+  batch2Mission: string;
+  implementationPriorities: readonly string[];
+  requiredImplementationTasks: readonly string[];
+  requiredCodeSurfaces: readonly string[];
   authoritativeInputs: readonly string[];
   deterministicFirst: true;
   conservativeRegrouping: true;
@@ -115,6 +163,10 @@ export const STEP4_BOUNDARY_POLICY: Step4BoundaryPolicy = {
   command: FORGE_SPLIT_FULL_COMMAND,
   stage: FORGE_SPLIT_STAGE,
   purpose: STEP4_SPLIT_PURPOSE,
+  batch2Mission: STEP4_BATCH2_MISSION,
+  implementationPriorities: STEP4_IMPLEMENTATION_PRIORITIES,
+  requiredImplementationTasks: STEP4_BATCH2_REQUIRED_IMPLEMENTATION_TASKS,
+  requiredCodeSurfaces: STEP4_BATCH2_REQUIRED_CODE_SURFACES,
   authoritativeInputs: [
     ".forge/verify.json",
     "source_plan.artifactPath",
