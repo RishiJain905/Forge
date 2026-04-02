@@ -285,6 +285,119 @@ async function main() {
     assert.match(verifyReport, /## Summary/);
     assert.equal(/deferred in Part 2/i.test(verifyReport), false);
 
+    const splitResult = spawnSync(process.execPath, [
+      entryPointPath,
+      "split",
+      "--repo",
+      tempRepo,
+    ], {
+      cwd: tempRepo,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+      },
+    });
+
+    if (splitResult.error) {
+      throw splitResult.error;
+    }
+
+    assert.equal(splitResult.status, 0);
+    assert.match(splitResult.stdout, /Status: ready/);
+    assert.match(splitResult.stdout, /Summary:/);
+    assert.match(splitResult.stdout, /Output root:/);
+    assert.match(splitResult.stdout, /Artifact:/);
+    assert.match(splitResult.stdout, /Report:/);
+
+    const splitArtifactPath = join(tempRepo, ".forge", "split.json");
+    const splitReportPath = join(tempRepo, ".forge", "reports", "split-report.md");
+    const splitArtifact = JSON.parse(await readFile(splitArtifactPath, "utf8"));
+    const splitReport = await readFile(splitReportPath, "utf8");
+
+    assert.equal(splitArtifact.status, "ready");
+    assert.equal(splitArtifact.command, "forge split");
+    assert.equal(splitArtifact.outputRoot, resolve(tempRepo, ".forge"));
+    assert.equal(splitArtifact.files.artifactPath, splitArtifactPath);
+    assert.equal(splitArtifact.files.reportPath, splitReportPath);
+    assert.equal(splitArtifact.files.debugArtifactPath, join(tempRepo, ".forge", "debug", "split-debug.json"));
+    assert.equal(splitArtifact.files.debugWorkstreamsPath, join(tempRepo, ".forge", "debug", "workstreams.json"));
+    assert.equal(splitArtifact.files.debugMergeOrderPath, join(tempRepo, ".forge", "debug", "merge-order.json"));
+    assert.equal(splitArtifact.files.debugBlockedItemsPath, join(tempRepo, ".forge", "debug", "blocked-items.json"));
+    assert.equal(
+      splitArtifact.files.debugStreamConstraintsPath,
+      join(tempRepo, ".forge", "debug", "stream-constraints.json"),
+    );
+    assert.equal(splitArtifact.source_verify.artifactPath, verifyArtifactPath);
+    assert.equal(splitArtifact.source_verify.command, "forge verify");
+    assert.equal(splitArtifact.source_plan.artifactPath, planArtifactPath);
+    assert.equal(splitArtifact.source_plan.command, "forge plan");
+    assert.deepEqual(splitArtifact.workstream_contract.requiredFields, [
+      "id",
+      "title",
+      "description",
+      "category",
+      "sourcePlanItemIds",
+      "sourceVerificationCaseIds",
+      "sourceFindingIds",
+      "likelyAffectedPaths",
+      "streamDependencies",
+      "mergeOrderRequirements",
+      "constraints",
+      "blockedReason",
+    ]);
+    assert.deepEqual(splitArtifact.workstream_contract.categories, [
+      "serial",
+      "safe_parallel",
+      "parallel_after_dependency",
+      "protected_merge",
+      "blocked",
+    ]);
+    assert.ok(splitArtifact.workstream_contract.constraintSources.includes("dependency_graph"));
+    assert.ok(splitArtifact.workstream_contract.constraintSources.includes("verification_readiness"));
+    assert.equal(splitArtifact.split_diagnostics.usability_status, "actionable");
+    assert.ok(Array.isArray(splitArtifact.boundaryNotes));
+    assert.ok(splitArtifact.boundaryNotes.length > 0);
+    assert.ok(Array.isArray(splitArtifact.workstreams));
+    assert.ok(Array.isArray(splitArtifact.dependency_edges));
+    assert.ok(Array.isArray(splitArtifact.merge_order));
+    assert.ok(Array.isArray(splitArtifact.blocked_items));
+    assert.ok(Array.isArray(splitArtifact.carried_forward_constraints.stream_constraint_details));
+    assert.ok(splitArtifact.workstreams.length > 0);
+    assert.ok(splitArtifact.dependency_edges.length > 0);
+    assert.ok(splitArtifact.merge_order.length > 0);
+    assert.ok(splitArtifact.carried_forward_constraints.stream_constraint_details.length > 0);
+    assert.ok(
+      splitArtifact.workstreams.every(
+        (workstream) => splitArtifact.workstream_contract.categories.includes(workstream.category),
+      ),
+    );
+    assert.ok(splitArtifact.merge_order.every((entry) => entry.id.length > 0));
+    assert.ok(splitArtifact.merge_order.every((entry) => entry.ruleType.length > 0));
+    assert.ok(splitArtifact.merge_order.every((entry) => Array.isArray(entry.mustMergeAfterWorkstreamIds)));
+    assert.ok(
+      splitArtifact.blocked_items.every((item) =>
+        item.id.length > 0 && item.kind.length > 0 && typeof item.partialMetadataAvailable === "boolean",
+      ),
+    );
+    assert.ok(
+      splitArtifact.carried_forward_constraints.stream_constraint_details.every((detail) =>
+        Array.isArray(detail.mergeOrderRuleIds) && Array.isArray(detail.blockedItemIds),
+      ),
+    );
+    assert.equal(splitArtifact.split_readiness.ready, true);
+    assert.match(splitArtifact.split_readiness.status, /^ready(?:_with_warnings)?$/);
+    assert.ok(Array.isArray(splitArtifact.split_readiness.recommended_user_actions));
+    assert.ok(splitArtifact.summary.length > 0);
+    assert.match(splitReport, /# Forge Split Report/);
+    assert.match(splitReport, /## Overview/);
+    assert.match(splitReport, /## Workstream Contract/);
+    assert.match(splitReport, /## Workstreams/);
+    assert.match(splitReport, /## Split Readiness/);
+    assert.match(splitReport, /## Output Files/);
+    assert.match(splitReport, /split\.json and reports\/split-report\.md are the durable Step 4 outputs\./);
+    assert.equal(/Part 2 keeps execution workstreams conservative/i.test(splitReport), false);
+    assert.equal(/Part 2 keeps the actual regrouping output intentionally conservative/i.test(splitReport), false);
+
     await writeFile(join(tempRepo, "src", "app.ts"), "export const smoke = true;\n", "utf8");
     await writeFile(
       join(tempRepo, "tests", "app.test.ts"),

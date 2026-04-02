@@ -4,6 +4,8 @@ import { runIntakeCommand } from "./intake/runner.js";
 import type { IntakeCommandResult } from "./intake/types.js";
 import { runPlanCommand } from "./plan/runner.js";
 import type { PlanCommandResult } from "./plan/types.js";
+import { runSplitCommand } from "./split/runner.js";
+import type { SplitCommandResult } from "./split/types.js";
 import { runVerifyCommand } from "./verify/runner.js";
 import type { VerifyCommandResult } from "./verify/types.js";
 
@@ -38,6 +40,19 @@ export function formatPlanCommandOutput(result: PlanCommandResult): string {
 }
 
 export function formatVerifyCommandOutput(result: VerifyCommandResult): string {
+  const lines = [
+    `Status: ${result.status}`,
+    `Summary: ${result.summary}`,
+    result.outputRoot ? `Output root: ${result.outputRoot}` : null,
+    result.artifactPath ? `Artifact: ${result.artifactPath}` : null,
+    result.reportPath ? `Report: ${result.reportPath}` : null,
+    result.failure ? `Failure: [${result.failure.code}] ${result.failure.message}` : null,
+  ].filter((line): line is string => Boolean(line));
+
+  return `${lines.join("\n")}\n`;
+}
+
+export function formatSplitCommandOutput(result: SplitCommandResult): string {
   const lines = [
     `Status: ${result.status}`,
     `Summary: ${result.summary}`,
@@ -171,6 +186,30 @@ export async function runCli(argv: string[]): Promise<number> {
     }) => {
       const result = await runVerifyCommand(options);
       const output = formatVerifyCommandOutput(result);
+
+      if (result.status !== "ready") {
+        process.stderr.write(output);
+        exitCode = 1;
+        return;
+      }
+
+      process.stdout.write(output);
+    });
+
+  program
+    .command("split")
+    .description("Run the Step 4 split stage from the persisted Step 3 verify artifact.")
+    .option("--repo <path>", "Target repo root. Defaults to the current directory.")
+    .option(
+      "--output-dir <path>",
+      "Custom repo-internal output directory for split outputs. Defaults to .forge.",
+    )
+    .action(async (options: {
+      repo?: string;
+      outputDir?: string;
+    }) => {
+      const result = await runSplitCommand(options);
+      const output = formatSplitCommandOutput(result);
 
       if (result.status !== "ready") {
         process.stderr.write(output);

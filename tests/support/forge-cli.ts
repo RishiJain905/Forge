@@ -136,12 +136,52 @@ export function runForgeVerifyBinary(
   return runForgeBinary(["verify", ...args], cwd, envOverrides);
 }
 
+export function runForgeSplitBinary(
+  args: string[],
+  cwd: string,
+  envOverrides: ForgeEnvOverrides = {},
+): ForgeRunResult {
+  return runForgeBinary(["split", ...args], cwd, envOverrides);
+}
+
 export function verifyArtifactPath(repoRoot: string, outputDir = ".forge"): string {
   return join(repoRoot, outputDir, "verify.json");
 }
 
 export function verifyReportPath(repoRoot: string, outputDir = ".forge"): string {
   return join(repoRoot, outputDir, "reports", "verify-report.md");
+}
+
+export function splitArtifactPath(repoRoot: string, outputDir = ".forge"): string {
+  return join(repoRoot, outputDir, "split.json");
+}
+
+export function splitReportPath(repoRoot: string, outputDir = ".forge"): string {
+  return join(repoRoot, outputDir, "reports", "split-report.md");
+}
+
+export function splitDebugPath(repoRoot: string, fileName: string, outputDir = ".forge"): string {
+  return join(repoRoot, outputDir, "debug", fileName);
+}
+
+export function splitDebugArtifactPath(repoRoot: string, outputDir = ".forge"): string {
+  return splitDebugPath(repoRoot, "split-debug.json", outputDir);
+}
+
+export function splitWorkstreamsPath(repoRoot: string, outputDir = ".forge"): string {
+  return splitDebugPath(repoRoot, "workstreams.json", outputDir);
+}
+
+export function splitMergeOrderPath(repoRoot: string, outputDir = ".forge"): string {
+  return splitDebugPath(repoRoot, "merge-order.json", outputDir);
+}
+
+export function splitBlockedItemsPath(repoRoot: string, outputDir = ".forge"): string {
+  return splitDebugPath(repoRoot, "blocked-items.json", outputDir);
+}
+
+export function splitStreamConstraintsPath(repoRoot: string, outputDir = ".forge"): string {
+  return splitDebugPath(repoRoot, "stream-constraints.json", outputDir);
 }
 
 const VERIFY_REPORT_HEADING_MARKERS = [
@@ -173,6 +213,39 @@ export function assertForgeVerifyOutputHasNoReportHeadings(
 ): void {
   for (const output of [result.stdout, result.stderr]) {
     for (const heading of VERIFY_REPORT_HEADING_MARKERS) {
+      assert.equal(output.includes(heading), false);
+    }
+  }
+}
+
+const SPLIT_REPORT_HEADING_MARKERS = [
+  "# Forge Split Report",
+  "## Overview",
+  "## Purpose",
+  "## Source Verify",
+  "## Source Plan",
+  "## Workstream Contract",
+  "## Workstreams",
+  "## Dependency Edges",
+  "## Merge Order",
+  "## Blocked Items",
+  "## Carried-Forward Constraints",
+  "## Split Diagnostics",
+  "## Split Readiness",
+  "## Boundary Notes",
+  "## Deferred Capabilities",
+  "## Allowed Side Effects",
+  "## Disallowed Capabilities",
+  "## Output Files",
+  "## Failure",
+  "## Summary",
+] as const;
+
+export function assertForgeSplitOutputHasNoReportHeadings(
+  result: Pick<ForgeRunResult, "stdout" | "stderr">,
+): void {
+  for (const output of [result.stdout, result.stderr]) {
+    for (const heading of SPLIT_REPORT_HEADING_MARKERS) {
       assert.equal(output.includes(heading), false);
     }
   }
