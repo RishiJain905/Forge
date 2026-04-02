@@ -298,10 +298,15 @@ function computeStreamDepth(
   workstreamId: string,
   dependencyByDownstream: Map<string, string[]>,
   cache: Map<string, number>,
+  visiting: Set<string> = new Set(),
 ): number {
   const cached = cache.get(workstreamId);
   if (typeof cached === "number") {
     return cached;
+  }
+
+  if (visiting.has(workstreamId)) {
+    return 0;
   }
 
   const upstreamIds = dependencyByDownstream.get(workstreamId) ?? [];
@@ -310,9 +315,23 @@ function computeStreamDepth(
     return 0;
   }
 
-  const depth = Math.max(...upstreamIds.map((upstreamId) => computeStreamDepth(upstreamId, dependencyByDownstream, cache))) + 1;
-  cache.set(workstreamId, depth);
-  return depth;
+  visiting.add(workstreamId);
+  try {
+    let maxUpstreamDepth = 0;
+
+    for (const upstreamId of upstreamIds) {
+      const upstreamDepth = computeStreamDepth(upstreamId, dependencyByDownstream, cache, visiting);
+      if (upstreamDepth > maxUpstreamDepth) {
+        maxUpstreamDepth = upstreamDepth;
+      }
+    }
+
+    const depth = maxUpstreamDepth + 1;
+    cache.set(workstreamId, depth);
+    return depth;
+  } finally {
+    visiting.delete(workstreamId);
+  }
 }
 
 function buildMergeOrder(params: {

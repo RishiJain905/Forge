@@ -801,6 +801,56 @@ await runScenario(
 );
 
 await runScenario(
+  "buildSplitWorkstreams tolerates cyclic dependency graphs without recursing forever",
+  () => {
+    const foundation = createFoundationFixture();
+    const safeItem = foundation.splitInput.context.planItems.find((item) => item.id === "plan-safe");
+    const afterItem = foundation.splitInput.context.planItems.find((item) => item.id === "plan-after");
+
+    if (!safeItem || !afterItem) {
+      throw new Error("Expected the fixture to include plan-safe and plan-after work items.");
+    }
+
+    safeItem.dependencies = [
+      {
+        planItemId: "plan-after",
+        type: "hard",
+        reason: "Introduce a cycle for regression coverage.",
+      },
+    ];
+    afterItem.dependencies = [
+      {
+        planItemId: "plan-safe",
+        type: "hard",
+        reason: "Introduce a cycle for regression coverage.",
+      },
+    ];
+    foundation.splitInput.context.dependencyGraph = [
+      {
+        planItemId: "plan-safe",
+        dependsOnPlanItemId: "plan-after",
+        type: "hard",
+        reason: "Introduce a cycle for regression coverage.",
+      },
+      {
+        planItemId: "plan-after",
+        dependsOnPlanItemId: "plan-safe",
+        type: "hard",
+        reason: "Introduce a cycle for regression coverage.",
+      },
+    ];
+
+    const result = buildSplitWorkstreams({ foundation });
+
+    assert.equal(result.mergeOrder.length, 3);
+    assert.deepEqual(
+      result.mergeOrder.map((entry: { workstreamId: string }) => entry.workstreamId),
+      ["ws-plan-serial", "ws-plan-protected", "ws-plan-after"],
+    );
+  },
+);
+
+await runScenario(
   "buildSplitWorkstreams emits explicit Part 4 merge-order rule objects and blocked-item records",
   () => {
     const result = buildSplitWorkstreams({ foundation: createFoundationFixture() }) as unknown as {
