@@ -10,6 +10,11 @@ export const SPLIT_DEBUG_MERGE_ORDER_NAME = "merge-order.json" as const;
 export const SPLIT_DEBUG_BLOCKED_ITEMS_NAME = "blocked-items.json" as const;
 export const SPLIT_DEBUG_STREAM_CONSTRAINTS_NAME = "stream-constraints.json" as const;
 export const SPLIT_INPUT_TOO_WEAK = "SPLIT_INPUT_TOO_WEAK" as const;
+export const SPLIT_EXECUTION_SCOPES = [
+  "all_streams",
+  "non_blocked_only",
+  "none",
+] as const;
 
 export const SPLIT_STREAM_CATEGORIES = [
   "serial",

@@ -59,21 +59,15 @@ function renderFailureDetails(
 }
 
 function renderReadinessLines(artifact: SplitArtifact): string[] {
-  const blockedWorkstreamCount = artifact.blocked_items.filter(
-    (item) => item.kind === "blocked_workstream",
-  ).length;
-  const partiallyBlockedItemCount = artifact.blocked_items.filter(
-    (item) => item.kind === "blocked_plan_item",
-  ).length;
-  const mergeOrderCount = artifact.merge_order.length;
   const laterExecutionMustHonor = artifact.split_readiness.recommended_user_actions;
 
   return [
     `- Can Proceed: ${artifact.split_readiness.ready ? "yes" : "no"}`,
-    `- All Items Safely Assigned: ${artifact.split_readiness.ready && blockedWorkstreamCount === 0 && partiallyBlockedItemCount === 0 ? "yes" : "no"}`,
-    `- Blocked Streams: ${blockedWorkstreamCount > 0 ? blockedWorkstreamCount : "none"}`,
-    `- Partially Blocked Items: ${partiallyBlockedItemCount > 0 ? partiallyBlockedItemCount : "none"}`,
-    `- Merge-Order Constraints: ${mergeOrderCount > 0 ? mergeOrderCount : "none"}`,
+    `- All Items Safely Assigned: ${artifact.split_readiness.execution_scope === "all_streams" ? "yes" : "no"}`,
+    `- Execution Scope: ${artifact.split_readiness.execution_scope}`,
+    `- Blocked Workstream Count: ${artifact.split_readiness.blocked_workstream_count}`,
+    `- Partially Blocked Item Count: ${artifact.split_readiness.partially_blocked_item_count}`,
+    `- Merge-Order Rule Count: ${artifact.split_readiness.merge_order_rule_count}`,
     `- Later Execution Must Honor: ${laterExecutionMustHonor.join("; ") || "none"}`,
   ];
 }
@@ -322,6 +316,10 @@ export function createSplitReport(artifact: SplitArtifact): string {
       ...renderKeyValueLines([
         ["Status", artifact.split_readiness.status],
         ["Summary", artifact.split_readiness.summary],
+        ["Execution Scope", artifact.split_readiness.execution_scope],
+        ["Blocked Workstream Count", artifact.split_readiness.blocked_workstream_count],
+        ["Partially Blocked Item Count", artifact.split_readiness.partially_blocked_item_count],
+        ["Merge-Order Rule Count", artifact.split_readiness.merge_order_rule_count],
         ["Partial Output", artifact.split_readiness.partial_output?.code ?? null],
         ["Constraining Concern IDs", artifact.split_readiness.constraining_concern_ids.join(", ") || null],
       ]),

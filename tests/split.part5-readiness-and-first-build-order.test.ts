@@ -106,6 +106,10 @@ type SplitArtifact = {
     ready: boolean;
     status: string;
     summary: string;
+    execution_scope: "all_streams" | "non_blocked_only" | "none";
+    blocked_workstream_count: number;
+    partially_blocked_item_count: number;
+    merge_order_rule_count: number;
     warning_items: Array<{ code: string; message: string }>;
     blocking_issues: Array<{ code: string; message: string }>;
     partial_output: { code: string; message: string; fallbackReason?: string } | null;
@@ -733,6 +737,9 @@ await runScenario(
     const readiness = resolveSplitReadiness({
       foundation: createReadinessFoundationFixture(),
       failure: null,
+      blockedWorkstreamCount: workstreamBuild.blockedItems.filter((item) => item.kind === "blocked_workstream").length,
+      partiallyBlockedItemCount: workstreamBuild.blockedItems.filter((item) => item.kind === "blocked_plan_item").length,
+      mergeOrderRuleCount: workstreamBuild.mergeOrder.length,
       additionalWarningItems: workstreamBuild.warningItems,
       additionalRecommendedActions: [
         "Honor the explicit merge_order rules before execution and integration.",
@@ -784,6 +791,10 @@ await runScenario(
       "expected blocked-stream detail to stay linked to the blocked stream",
     );
     assert.equal(readiness.splitReadiness.status, "ready_with_warnings");
+    assert.equal(readiness.splitReadiness.execution_scope, "non_blocked_only");
+    assert.equal(readiness.splitReadiness.blocked_workstream_count, 1);
+    assert.equal(readiness.splitReadiness.partially_blocked_item_count, 0);
+    assert.equal(readiness.splitReadiness.merge_order_rule_count, 1);
     assert.match(readiness.splitReadiness.summary, /blocked streams/i);
   },
 );
@@ -798,6 +809,10 @@ await runScenario(
 
     assert.equal(readiness.splitReadiness.ready, true);
     assert.equal(readiness.splitReadiness.status, "ready");
+    assert.equal(readiness.splitReadiness.execution_scope, "all_streams");
+    assert.equal(readiness.splitReadiness.blocked_workstream_count, 0);
+    assert.equal(readiness.splitReadiness.partially_blocked_item_count, 0);
+    assert.equal(readiness.splitReadiness.merge_order_rule_count, 0);
     assert.equal(readiness.splitReadiness.warning_items.length, 0);
     assert.equal(readiness.splitReadiness.blocking_issues.length, 0);
     assert.equal(readiness.splitReadiness.recommended_user_actions.length, 0);
@@ -818,11 +833,16 @@ await runScenario(
       assert.ok(["ready", "ready_with_warnings"].includes(artifact.split_readiness.status));
       assert.match(artifact.split_readiness.summary, /all items were safely assigned/i);
       assert.match(artifact.split_readiness.summary, /merge-order constraints/i);
+      assert.equal(artifact.split_readiness.execution_scope, "all_streams");
+      assert.equal(artifact.split_readiness.blocked_workstream_count, 0);
+      assert.equal(artifact.split_readiness.partially_blocked_item_count, 0);
+      assert.equal(artifact.split_readiness.merge_order_rule_count, artifact.merge_order.length);
       assert.match(readinessBody, /Can Proceed:/i);
       assert.match(readinessBody, /All Items Safely Assigned:/i);
-      assert.match(readinessBody, /Blocked Streams:/i);
-      assert.match(readinessBody, /Partially Blocked Items:/i);
-      assert.match(readinessBody, /Merge-Order Constraints:/i);
+      assert.match(readinessBody, /Execution Scope:/i);
+      assert.match(readinessBody, /Blocked Workstream Count:/i);
+      assert.match(readinessBody, /Partially Blocked Item Count:/i);
+      assert.match(readinessBody, /Merge-Order Rule Count:/i);
       assert.match(readinessBody, /Later Execution Must Honor:/i);
     } finally {
       await disposeTempRepo(repoRoot);
@@ -863,9 +883,17 @@ await runScenario(
         artifact.blocked_items.some((item) => item.kind === "input_blocker"),
         "expected input blockers to stay explicit",
       );
+      assert.equal(artifact.split_readiness.execution_scope, "none");
+      assert.equal(
+        artifact.split_readiness.blocked_workstream_count,
+        artifact.blocked_items.filter((item) => item.kind === "blocked_workstream").length,
+      );
+      assert.equal(artifact.split_readiness.partially_blocked_item_count, 0);
+      assert.equal(artifact.split_readiness.merge_order_rule_count, artifact.merge_order.length);
       assert.match(artifact.split_readiness.summary, /persisted Step 3 handoff is unblocked/i);
       assert.match(readinessBody, /Can Proceed:/i);
-      assert.match(readinessBody, /Blocked Streams:/i);
+      assert.match(readinessBody, /Execution Scope:\s+none/i);
+      assert.match(readinessBody, /Blocked Workstream Count:/i);
     } finally {
       await disposeTempRepo(repoRoot);
     }

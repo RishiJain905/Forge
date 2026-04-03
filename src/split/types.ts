@@ -2,12 +2,14 @@ import type { PlanArtifact } from "../plan/types.js";
 import type { VerifyArtifact } from "../verify/types.js";
 
 import type {
+  SPLIT_EXECUTION_SCOPES,
   SPLIT_CONSTRAINT_SOURCES,
   SPLIT_STREAM_CATEGORIES,
   SPLIT_WORKSTREAM_REQUIRED_FIELDS,
   Step4BoundaryPolicy,
 } from "./constants.js";
 
+export type SplitExecutionScope = typeof SPLIT_EXECUTION_SCOPES[number];
 export type SplitStreamCategory = typeof SPLIT_STREAM_CATEGORIES[number];
 export type SplitWorkstreamRequiredField = typeof SPLIT_WORKSTREAM_REQUIRED_FIELDS[number];
 export type SplitConstraintSource = typeof SPLIT_CONSTRAINT_SOURCES[number];
@@ -267,6 +269,10 @@ export interface SplitReadiness {
   ready: boolean;
   status: SplitReadinessStatus;
   summary: string;
+  execution_scope: SplitExecutionScope;
+  blocked_workstream_count: number;
+  partially_blocked_item_count: number;
+  merge_order_rule_count: number;
   warning_items: SplitInputIssue[];
   blocking_issues: SplitInputIssue[];
   partial_output: SplitCommandFailure | null;

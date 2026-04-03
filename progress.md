@@ -422,6 +422,12 @@
   - Expanded merge-order handling so dependency ordering remains explicit even for otherwise `safe_parallel` streams when sequencing, interface-first, or hard prerequisites still constrain merge order, while standalone downstream work that depends on blocked upstream streams now becomes honestly blocked.
   - Expanded `tests/split.workstream-model.test.ts`, `tests/split.artifact-schema.test.ts`, `tests/split.report.test.ts`, and `tests/split.part5-readiness-and-first-build-order.test.ts` so warning-grade protected merges, blocked-upstream dependency propagation, partial blocked-plan-item visibility, safe-parallel dependency merge-order rules, and richer stream-constraint detail are locked under the default test gate.
   - Updated `README.md`, `progress.md`, and `S4-B2-Done/p3-done-summary.md` so Step 4 Batch 2 Part 3 is documented and traceable.
+- Batch 2.04: `part-4-stage-5-artifacts-report-debug-outputs-and-readiness.md` (Step 4)
+  - Hardened the nested Step 4 readiness contract with explicit `execution_scope`, `blocked_workstream_count`, `partially_blocked_item_count`, and `merge_order_rule_count` fields without changing the frozen top-level `split.json` key set or CLI surface.
+  - Reworked readiness resolution and schema validation so those derived fields stay aligned with real blocked-item and merge-order output on ready, warning-heavy, blocked, and fallback-output-failed runs while keeping the top-level artifact status versus nested readiness semantics intact.
+  - Reworked `split-report.md` so the `Split Readiness` section now renders explicit execution-scope and count fields directly from the artifact instead of recomputing readiness from raw arrays in report-only logic.
+  - Added `tests/split.batch2-part4-artifacts-report-debug-readiness.test.ts`, expanded split artifact/debug/readiness regressions plus smoke coverage, and wired the new Stage 5 suite into the default `npm.cmd test` gate.
+  - Updated `README.md`, `progress.md`, and `S4-B2-Done/p4-done-summary.md` so Step 4 Batch 2 Part 4 is documented and traceable.
 
 ## Current Branch State
 - `dev` includes the completed Step 1 work through Batch 4.05, including the frozen Step 2 handoff contract from Intake.
@@ -458,6 +464,7 @@
 - `dev` now includes Step 4 Batch 2 Part 1, including the explicit Batch 2 split mission, ordered implementation priorities, required implementation-task/code-surface metadata in the Step 4 boundary contract, stronger do-not-touch guardrails, and direct regression coverage for stale Batch 1 wording while keeping the public split surface stable.
 - `dev` now includes Step 4 Batch 2 Part 2, including indexed Step 3-to-Step 2 split input normalization, stronger per-plan-item evidence validation, bounded real regrouping for direct source/test pairs and same-surface siblings, deterministic grouped dependency collapse, and dedicated regressions that keep the public split surface stable while making the internal workstream foundation materially real.
 - `dev` now includes Step 4 Batch 2 Part 3, including post-grouping stream safety resolution from carried-forward verification evidence, explicit blocked-plan-item versus blocked-workstream visibility, dependency-driven blocking propagation, safe-parallel merge-order constraints, and richer carried-forward stream-constraint rationale while keeping the public split surface stable.
+- `dev` now includes Step 4 Batch 2 Part 4, including explicit split-readiness execution-scope/count fields, report/debug parity for those derived readiness signals, warning-heavy readability hardening, and a dedicated Stage 5 regression suite while keeping the frozen top-level split contract stable.
 
 ## Verification
 - `npm.cmd test`
@@ -493,4 +500,5 @@
 - Step 4 Batch 2 Part 1 is complete.
 - Step 4 Batch 2 Part 2 is complete.
 - Step 4 Batch 2 Part 3 is complete.
-- Next Step 4 target: `forge_step4_batch2/part-4-stage-5-artifacts-report-debug-outputs-and-readiness.md`
+- Step 4 Batch 2 Part 4 is complete.
+- Next Step 4 target: `forge_step4_batch2/part-5-stage-6-cli-wiring-tests-and-runnable-milestone.md`

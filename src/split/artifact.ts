@@ -179,12 +179,17 @@ function buildSplitReadinessResolution(
   failure: SplitCommandFailure | null,
   workstreamBuild: SplitWorkstreamBuildResult,
 ): SplitReadinessResolution {
-  const hasBlockedWorkstreams = workstreamBuild.blockedItems.some((item) => item.kind === "blocked_workstream");
-  const hasBlockedPlanItems = workstreamBuild.blockedItems.some((item) => item.kind === "blocked_plan_item");
+  const blockedWorkstreamCount = workstreamBuild.blockedItems.filter((item) => item.kind === "blocked_workstream").length;
+  const partiallyBlockedItemCount = workstreamBuild.blockedItems.filter((item) => item.kind === "blocked_plan_item").length;
+  const hasBlockedWorkstreams = blockedWorkstreamCount > 0;
+  const hasBlockedPlanItems = partiallyBlockedItemCount > 0;
 
   return resolveSplitReadiness({
     foundation,
     failure,
+    blockedWorkstreamCount,
+    partiallyBlockedItemCount,
+    mergeOrderRuleCount: workstreamBuild.mergeOrder.length,
     additionalWarningItems: workstreamBuild.warningItems,
     additionalRecommendedActions: dedupeStrings([
       workstreamBuild.mergeOrder.length > 0

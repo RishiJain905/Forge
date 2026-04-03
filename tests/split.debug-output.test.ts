@@ -139,7 +139,21 @@ await runScenario(
         workstream_contract: {
           categories: string[];
         };
+        split_readiness: {
+          execution_scope: "all_streams" | "non_blocked_only" | "none";
+          blocked_workstream_count: number;
+          partially_blocked_item_count: number;
+          merge_order_rule_count: number;
+        };
       }>(splitArtifactPath(repoRoot));
+      const splitDebugArtifact = await readJsonFile<{
+        split_readiness: {
+          execution_scope: "all_streams" | "non_blocked_only" | "none";
+          blocked_workstream_count: number;
+          partially_blocked_item_count: number;
+          merge_order_rule_count: number;
+        };
+      }>(splitDebugArtifactPath(repoRoot));
       const workstreamsDebug = await readJsonFile<{ workstreams: Array<{ id: string; category: string }> }>(
         splitWorkstreamsPath(repoRoot),
       );
@@ -188,6 +202,14 @@ await runScenario(
         constraintsDebug.stream_constraint_details.every((detail) =>
           Array.isArray(detail.mergeOrderRuleIds) && Array.isArray(detail.blockedItemIds),
         ),
+      );
+      assert.deepEqual(splitDebugArtifact.split_readiness, splitArtifact.split_readiness);
+      assert.equal(splitDebugArtifact.split_readiness.execution_scope, "all_streams");
+      assert.equal(splitDebugArtifact.split_readiness.blocked_workstream_count, 0);
+      assert.equal(splitDebugArtifact.split_readiness.partially_blocked_item_count, 0);
+      assert.equal(
+        splitDebugArtifact.split_readiness.merge_order_rule_count,
+        splitArtifact.split_readiness.merge_order_rule_count,
       );
     } finally {
       await disposeTempRepo(repoRoot);

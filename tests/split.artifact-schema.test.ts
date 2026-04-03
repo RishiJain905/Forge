@@ -107,6 +107,10 @@ interface SplitArtifact {
   };
   split_readiness: {
     status: "ready" | "ready_with_warnings" | "blocked";
+    execution_scope: "all_streams" | "non_blocked_only" | "none";
+    blocked_workstream_count: number;
+    partially_blocked_item_count: number;
+    merge_order_rule_count: number;
   };
 }
 
@@ -210,6 +214,10 @@ await runScenario(
       );
       assert.equal(artifact.split_diagnostics.usability_status, "actionable");
       assert.equal(artifact.split_readiness.status, "ready_with_warnings");
+      assert.equal(artifact.split_readiness.execution_scope, "all_streams");
+      assert.equal(artifact.split_readiness.blocked_workstream_count, 0);
+      assert.equal(artifact.split_readiness.partially_blocked_item_count, 0);
+      assert.equal(artifact.split_readiness.merge_order_rule_count, artifact.merge_order.length);
       assert.ok(artifact.files.debugArtifactPath.endsWith("split-debug.json"));
       assert.ok(artifact.files.debugWorkstreamsPath.endsWith("workstreams.json"));
       assert.ok(artifact.files.debugMergeOrderPath.endsWith("merge-order.json"));

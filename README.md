@@ -572,6 +572,8 @@ Step 4 Batch 2 Part 3 makes Stage 3 and Stage 4 materially real without reopenin
 
 Part 3 also hardens merge-order and blocking behavior so dependency ordering remains explicit even when a downstream stream stays `safe_parallel`, blocked work stays first-class in `blocked_items`, and the carried-forward stream-constraint detail now preserves base versus final category, category reasons, merge-order reasons, blocking reasons, warning notes, mitigation summaries, blocked-upstream linkage, and blocked-plan-item linkage while keeping the top-level `split.json` contract and split-report heading order stable.
 
+Step 4 Batch 2 Part 4 hardens the shipped split outputs without reopening the public surface. `split_readiness` now exposes explicit execution scope plus blocked-workstream, partially-blocked-item, and merge-order-rule counts so later steps do not have to reverse-engineer execution readiness from raw arrays, `split-report.md` renders those derived readiness fields directly while keeping the frozen heading order, and the optional `FORGE_SPLIT_DEBUG=1` mirrors stay aligned with the primary artifact on ready, warning-heavy, blocked, and fallback-output-failed runs.
+
 ---
 
 # Repository Intent

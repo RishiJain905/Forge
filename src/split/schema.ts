@@ -9,6 +9,7 @@ import {
   FORGE_SPLIT_COMMAND,
   FORGE_SPLIT_STAGE,
   SPLIT_CONSTRAINT_SOURCES,
+  SPLIT_EXECUTION_SCOPES,
   SPLIT_INPUT_TOO_WEAK,
   SPLIT_STREAM_CATEGORIES,
   SPLIT_WORKSTREAM_REQUIRED_FIELDS,
@@ -543,6 +544,10 @@ const splitReadinessSchema = z.object({
   ready: z.boolean(),
   status: z.enum(["ready", "ready_with_warnings", "blocked"]),
   summary: z.string().min(1),
+  execution_scope: z.enum(SPLIT_EXECUTION_SCOPES),
+  blocked_workstream_count: z.number().int().nonnegative(),
+  partially_blocked_item_count: z.number().int().nonnegative(),
+  merge_order_rule_count: z.number().int().nonnegative(),
   warning_items: z.array(splitInputIssueSchema),
   blocking_issues: z.array(splitInputIssueSchema),
   partial_output: z.object({
@@ -701,6 +706,19 @@ export const splitArtifactSchema = z.object({
     });
   }
 
+  const expectedExecutionScope = !value.split_readiness.ready
+    ? "none"
+    : value.split_readiness.blocked_workstream_count > 0 || value.split_readiness.partially_blocked_item_count > 0
+      ? "non_blocked_only"
+      : "all_streams";
+  if (value.split_readiness.execution_scope !== expectedExecutionScope) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Split readiness execution scope must match the ready and blocked-item state.",
+      path: ["split_readiness", "execution_scope"],
+    });
+  }
+
   const carriedPlanningReadiness = value.carried_forward_constraints.planning_readiness;
   if (
     JSON.stringify(carriedPlanningReadiness) !==
@@ -728,6 +746,29 @@ export const splitArtifactSchema = z.object({
   const workstreamIds = new Set(value.workstreams.map((workstream) => workstream.id));
   const mergeOrderIds = new Set(value.merge_order.map((entry) => entry.id));
   const blockedItemIds = new Set(value.blocked_items.map((item) => item.id));
+  const blockedWorkstreamCount = value.blocked_items.filter((item) => item.kind === "blocked_workstream").length;
+  const partiallyBlockedItemCount = value.blocked_items.filter((item) => item.kind === "blocked_plan_item").length;
+  if (value.split_readiness.blocked_workstream_count !== blockedWorkstreamCount) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Split readiness blocked_workstream_count must match blocked_items.",
+      path: ["split_readiness", "blocked_workstream_count"],
+    });
+  }
+  if (value.split_readiness.partially_blocked_item_count !== partiallyBlockedItemCount) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Split readiness partially_blocked_item_count must match blocked_items.",
+      path: ["split_readiness", "partially_blocked_item_count"],
+    });
+  }
+  if (value.split_readiness.merge_order_rule_count !== value.merge_order.length) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Split readiness merge_order_rule_count must match merge_order.",
+      path: ["split_readiness", "merge_order_rule_count"],
+    });
+  }
   for (const [index, workstream] of value.workstreams.entries()) {
     if (workstream.category === "blocked" && workstream.blockedReason === null) {
       context.addIssue({
