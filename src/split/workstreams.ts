@@ -879,88 +879,375 @@ function buildDependencyEdgesFromGroups(
   }));
 }
 
-function buildGroupWorkstreams(params: {
-  groups: WorkstreamGroup[];
-  sourceReadinessIds: string[];
-}): {
-  workstreams: SplitWorkstream[];
-  streamConstraintDetails: SplitStreamConstraintDetail[];
-  dependencyEdges: SplitDependencyEdge[];
-} {
+function blockedPlanItemId(workstreamId: string, planItemId: string): string {
+  return `blocked:${workstreamId}:${planItemId}`;
+}
+
+function isBlockingDependencyType(type: PlanArtifact["dependency_graph"][number]["type"]): boolean {
+  return type === "hard";
+}
+
+function isMergeOrderDependencyType(type: PlanArtifact["dependency_graph"][number]["type"]): boolean {
+  return type === "hard" || type === "sequencing" || type === "interface_first";
+}
+
+function buildGroupIdByPlanItemId(groups: WorkstreamGroup[]): Map<string, string> {
   const groupIdByPlanItemId = new Map<string, string>();
-  for (const group of params.groups) {
+
+  for (const group of groups) {
     for (const member of group.members) {
       groupIdByPlanItemId.set(member.evidence.planItem.id, group.id);
     }
   }
 
-  const streamConstraintDetails: SplitStreamConstraintDetail[] = [];
-  const workstreams: SplitWorkstream[] = params.groups.map((group) => {
-    const blockedReason = group.members[0]?.blockedReason ?? null;
-    const appliedRules = buildGroupAppliedRules(group);
-    const sourcePlanItemIds = group.members.map((member) => member.evidence.planItem.id);
-    const sourceVerificationCaseIds = dedupeStrings(
-      group.members.flatMap((member) => member.evidence.verificationCases.map((verificationCase) => verificationCase.id)),
-    );
-    const sourceFindingIds = dedupeStrings(
-      group.members.flatMap((member) => member.evidence.findings.map((finding) => finding.id)),
-    );
-    const likelyAffectedPaths = dedupeStrings(
-      group.members.flatMap((member) => member.evidence.planItem.likelyAffectedPaths),
-    );
-    const sourceDependencyIds = dedupeStrings(
-      group.members.flatMap((member) => member.evidence.dependencyGraphEntries.map(dependencySourceId)),
-    );
-    const sourceConflictZoneIds = dedupeStrings(
-      group.members.flatMap((member) => member.evidence.conflictZones.map((zone) => zone.id)),
-    );
-    const sourceTestObligationIds = dedupeStrings(
-      group.members.flatMap((member) => member.evidence.testObligations.map(testObligationSourceId)),
-    );
-    const sourceVerificationTargetIds = dedupeStrings(
-      group.members.flatMap((member) => member.evidence.verificationTargets.map((target) => target.id)),
-    );
-    const sourceConstraintIds = dedupeStrings(
-      group.members.flatMap((member) => member.evidence.constraints.map((constraint) => constraint.id)),
-    );
-    const sourceConcernIds = dedupeStrings(
-      group.members.flatMap((member) => member.evidence.concerns.map((concern) => concern.id)),
-    );
-    const category = group.category;
-    const streamDependencies = buildGroupStreamDependencies(group, groupIdByPlanItemId);
-    const verificationConstraints = group.members.flatMap((member) => member.evidence.constraints);
-    const mergeOrderRequirements = buildMergeOrderRequirements({
-      category,
-      streamDependencies,
-      verificationConstraints,
-      blockedReason,
-      groupNote: group.note,
-    });
-    const constraints = dedupeStrings(
-      group.members.flatMap((member) => buildSeedConstraintMessages(member)),
-    );
-    const workstream = {
-      id: group.id,
-      title:
-        group.members.length === 1
-          ? group.members[0].evidence.planItem.title
-          : group.members.map((member) => member.evidence.planItem.title).join(" + "),
-      description: buildWorkstreamDescription(group),
-      category,
-      sourcePlanItemIds,
-      sourceVerificationCaseIds,
-      sourceFindingIds,
-      likelyAffectedPaths,
-      streamDependencies,
-      mergeOrderRequirements,
-      constraints,
-      blockedReason: group.members[0]?.blockedReason ?? null,
-    } satisfies SplitWorkstream;
+  return groupIdByPlanItemId;
+}
 
-    streamConstraintDetails.push({
+function hasConcernEffect(
+  concerns: CarryForwardConcern[],
+  effect: CarryForwardConcern["effects"][number],
+): boolean {
+  return concerns.some((concern) => concern.effects.includes(effect));
+}
+
+function buildWarningNotes(params: {
+  foundation: SplitFoundationResult;
+  group: WorkstreamGroup;
+}): string[] {
+  return dedupeStrings([
+    ...params.foundation.splitInput.usability.warningItems.map((issue) => issue.message),
+    ...(params.foundation.sourceVerify.verificationReadiness.status === "ready_with_warnings"
+      ? ["Step 3 verification readiness stayed warning-grade and must remain visible in the split output."]
+      : []),
+    ...(params.foundation.sourcePlan.planningReadiness.status === "ready_with_warnings"
+      ? ["Step 2 planning readiness stayed warning-grade and must remain visible in the split output."]
+      : []),
+    ...params.group.members.flatMap((member) =>
+      member.evidence.concerns
+        .filter((concern) => concern.effects.includes("parallelization_caution"))
+        .map((concern) => concern.message)
+    ),
+  ]);
+}
+
+interface BlockedMemberState {
+  member: ResolvedPlanItemSeed;
+  blockedReason: string | null;
+  blockedUpstreamWorkstreamIds: string[];
+}
+
+interface ResolvedGroupAnalysis {
+  workstream: SplitWorkstream;
+  detail: SplitStreamConstraintDetail;
+  blockedMemberStates: BlockedMemberState[];
+}
+
+function buildBlockedMemberState(params: {
+  member: ResolvedPlanItemSeed;
+  groupId: string;
+  blockedGroupIds: Set<string>;
+  groupIdByPlanItemId: Map<string, string>;
+}): BlockedMemberState {
+  const blockedReasons: string[] = [];
+  const blockedUpstreamWorkstreamIds = new Set<string>();
+
+  if (params.member.blockedReason) {
+    blockedReasons.push(params.member.blockedReason);
+  }
+
+  for (const concern of params.member.evidence.concerns) {
+    if (concern.effects.includes("planning_readiness")) {
+      blockedReasons.push(concern.message);
+    }
+  }
+
+  for (const dependency of params.member.evidence.dependencyGraphEntries) {
+    if (!isBlockingDependencyType(dependency.type)) {
+      continue;
+    }
+
+    const upstreamWorkstreamId = params.groupIdByPlanItemId.get(dependency.dependsOnPlanItemId);
+    if (!upstreamWorkstreamId || upstreamWorkstreamId === params.groupId) {
+      continue;
+    }
+
+    if (!params.blockedGroupIds.has(upstreamWorkstreamId)) {
+      continue;
+    }
+
+    blockedUpstreamWorkstreamIds.add(upstreamWorkstreamId);
+    blockedReasons.push(
+      `${dependency.reason} Blocked upstream workstream: ${upstreamWorkstreamId}.`,
+    );
+  }
+
+  return {
+    member: params.member,
+    blockedReason: dedupeStrings(blockedReasons).join("; ") || null,
+    blockedUpstreamWorkstreamIds: [...blockedUpstreamWorkstreamIds],
+  };
+}
+
+function resolveBlockedGroupIds(params: {
+  groups: WorkstreamGroup[];
+  groupIdByPlanItemId: Map<string, string>;
+}): Set<string> {
+  const blockedGroupIds = new Set<string>(
+    params.groups
+      .filter((group) => group.members.every((member) => member.blockedReason !== null))
+      .map((group) => group.id),
+  );
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+
+    for (const group of params.groups) {
+      if (blockedGroupIds.has(group.id)) {
+        continue;
+      }
+
+      const memberStates = group.members.map((member) =>
+        buildBlockedMemberState({
+          member,
+          groupId: group.id,
+          blockedGroupIds,
+          groupIdByPlanItemId: params.groupIdByPlanItemId,
+        })
+      );
+
+      if (memberStates.length > 0 && memberStates.every((state) => state.blockedReason !== null)) {
+        blockedGroupIds.add(group.id);
+        changed = true;
+      }
+    }
+  }
+
+  return blockedGroupIds;
+}
+
+function buildGroupMitigationSummaries(group: WorkstreamGroup): string[] {
+  return dedupeStrings(
+    group.members.flatMap((member) =>
+      member.evidence.verificationCases.flatMap((verificationCase) =>
+        Array.isArray(verificationCase.mitigations) ? verificationCase.mitigations : []
+      )
+    ),
+  );
+}
+
+function analyzeGroup(params: {
+  foundation: SplitFoundationResult;
+  groups: WorkstreamGroup[];
+  sourceReadinessIds: string[];
+  group: WorkstreamGroup;
+  blockedGroupIds: Set<string>;
+  groupIdByPlanItemId: Map<string, string>;
+}): ResolvedGroupAnalysis {
+  const { group } = params;
+  const baseCategory = group.category;
+  const appliedRules = [...buildGroupAppliedRules(group)];
+  const categoryReasons: string[] = [];
+  const mergeOrderReasons: string[] = [];
+  const blockingReasons: string[] = [];
+  const warningNotes = buildWarningNotes({
+    foundation: params.foundation,
+    group,
+  });
+  const mitigationSummaries = buildGroupMitigationSummaries(group);
+  const blockedMemberStates = group.members.map((member) =>
+    buildBlockedMemberState({
+      member,
+      groupId: group.id,
+      blockedGroupIds: params.blockedGroupIds,
+      groupIdByPlanItemId: params.groupIdByPlanItemId,
+    })
+  );
+  const partiallyBlockedMembers = blockedMemberStates.filter((state) => state.blockedReason !== null);
+
+  const sourcePlanItemIds = group.members.map((member) => member.evidence.planItem.id);
+  const sourceVerificationCaseIds = dedupeStrings(
+    group.members.flatMap((member) => member.evidence.verificationCases.map((verificationCase) => verificationCase.id)),
+  );
+  const sourceFindingIds = dedupeStrings(
+    group.members.flatMap((member) => member.evidence.findings.map((finding) => finding.id)),
+  );
+  const likelyAffectedPaths = dedupeStrings(
+    group.members.flatMap((member) => member.evidence.planItem.likelyAffectedPaths),
+  );
+  const sourceDependencyIds = dedupeStrings(
+    group.members.flatMap((member) => member.evidence.dependencyGraphEntries.map(dependencySourceId)),
+  );
+  const sourceConflictZoneIds = dedupeStrings(
+    group.members.flatMap((member) => member.evidence.conflictZones.map((zone) => zone.id)),
+  );
+  const sourceTestObligationIds = dedupeStrings(
+    group.members.flatMap((member) => member.evidence.testObligations.map(testObligationSourceId)),
+  );
+  const sourceVerificationTargetIds = dedupeStrings(
+    group.members.flatMap((member) => member.evidence.verificationTargets.map((target) => target.id)),
+  );
+  const sourceConstraintIds = dedupeStrings(
+    group.members.flatMap((member) => member.evidence.constraints.map((constraint) => constraint.id)),
+  );
+  const sourceConcernIds = dedupeStrings(
+    group.members.flatMap((member) => member.evidence.concerns.map((concern) => concern.id)),
+  );
+  const streamDependencies = buildGroupStreamDependencies(group, params.groupIdByPlanItemId);
+  const verificationConstraints = group.members.flatMap((member) => member.evidence.constraints);
+  const blockedUpstreamWorkstreamIds = dedupeStrings(
+    partiallyBlockedMembers.flatMap((state) => state.blockedUpstreamWorkstreamIds),
+  );
+  const blockedPlanItemIds = partiallyBlockedMembers.map((state) => state.member.evidence.planItem.id);
+  const hasMigrationOrderCategory = group.members.some((member) =>
+    member.evidence.planItem.verificationRelevance.categories.includes("migration_order")
+  );
+  const hasParallelizationCaution = group.members.some((member) =>
+    hasConcernEffect(member.evidence.concerns, "parallelization_caution")
+  );
+  const hasPlanningReadinessConcern = group.members.some((member) =>
+    hasConcernEffect(member.evidence.concerns, "planning_readiness")
+  );
+  const hasProtectedVerificationSignals =
+    baseCategory === "protected_merge" ||
+    group.members.some((member) =>
+      member.evidence.planItem.verificationRelevance.categories.includes("api_contract") ||
+      member.evidence.planItem.verificationRelevance.categories.includes("parallel_overlap")
+    ) ||
+    group.members.some((member) =>
+      member.evidence.conflictZones.some((zone) => zone.riskLevel === "high")
+    ) ||
+    hasParallelizationCaution ||
+    mitigationSummaries.length > 0;
+  const hasDependencyDrivenCategory =
+    baseCategory === "parallel_after_dependency" ||
+    group.members.some((member) =>
+      member.evidence.dependencyGraphEntries.some((dependency) =>
+        isBlockingDependencyType(dependency.type) &&
+        params.groupIdByPlanItemId.get(dependency.dependsOnPlanItemId) !== group.id
+      )
+    );
+  const requiresDependencyMergeOrder = group.members.some((member) =>
+    member.evidence.dependencyGraphEntries.some((dependency) =>
+      isMergeOrderDependencyType(dependency.type) &&
+      params.groupIdByPlanItemId.get(dependency.dependsOnPlanItemId) !== group.id
+    )
+  );
+
+  let category: SplitStreamCategory;
+  if (params.blockedGroupIds.has(group.id)) {
+    category = "blocked";
+    appliedRules.push("final_category:blocked");
+    if (blockedUpstreamWorkstreamIds.length > 0) {
+      appliedRules.push("blocked_upstream_dependency");
+    }
+    if (hasPlanningReadinessConcern) {
+      appliedRules.push("carry_forward_concern:planning_readiness");
+    }
+    blockingReasons.push(
+      ...dedupeStrings(partiallyBlockedMembers.flatMap((state) => state.blockedReason ? [state.blockedReason] : [])),
+    );
+    categoryReasons.push(
+      blockedUpstreamWorkstreamIds.length > 0
+        ? `Blocked by upstream workstreams: ${blockedUpstreamWorkstreamIds.join(", ")}.`
+        : "Blocked by carried-forward Step 3 evidence.",
+    );
+  } else if (baseCategory === "serial" || hasMigrationOrderCategory) {
+    category = "serial";
+    appliedRules.push("final_category:serial");
+    if (hasMigrationOrderCategory) {
+      appliedRules.push("verification_relevance:migration_order");
+      categoryReasons.push("Serial category is required because migration/order-sensitive work remains in scope.");
+    } else {
+      categoryReasons.push("Serial category is required by the base parallelization signal.");
+    }
+  } else if (hasProtectedVerificationSignals) {
+    category = "protected_merge";
+    appliedRules.push("final_category:protected_merge");
+    if (hasParallelizationCaution) {
+      appliedRules.push("carry_forward_concern:parallelization_caution");
+      categoryReasons.push("Protected merge is required because warning-grade carry-forward caution reduced confidence without fully blocking the stream.");
+    } else {
+      categoryReasons.push("Protected merge is required because shared-risk verification constraints or mitigations remain in force.");
+    }
+    if (mitigationSummaries.length > 0) {
+      appliedRules.push("verification_mitigations_present");
+    }
+  } else if (hasDependencyDrivenCategory) {
+    category = "parallel_after_dependency";
+    appliedRules.push("final_category:parallel_after_dependency");
+    categoryReasons.push("Parallel execution is allowed only after the required upstream dependency settles.");
+  } else {
+    category = "safe_parallel";
+    appliedRules.push("final_category:safe_parallel");
+    categoryReasons.push("No blocking, serial-only, or protected-merge constraints remain, so the stream stays safe_parallel.");
+  }
+
+  if (requiresDependencyMergeOrder && category !== "blocked") {
+    mergeOrderReasons.push(
+      streamDependencies.length > 0
+        ? `Dependent stream must merge after ${streamDependencies.join(", ")} settles.`
+        : "Dependent stream must merge after its upstream prerequisites settle.",
+    );
+  }
+
+  if (category === "serial") {
+    mergeOrderReasons.push("Serial-only stream requires isolated merge ordering.");
+  }
+  if (category === "protected_merge") {
+    mergeOrderReasons.push("Protected merge stream keeps shared-risk work under explicit ordering.");
+  }
+  if (partiallyBlockedMembers.length > 0 && category !== "blocked") {
+    appliedRules.push("partial_blocking_present");
+    blockingReasons.push(
+      ...dedupeStrings(partiallyBlockedMembers.flatMap((state) => state.blockedReason ? [state.blockedReason] : [])),
+    );
+  }
+
+  const blockedReason = category === "blocked"
+    ? dedupeStrings(blockingReasons).join("; ") || "Blocked workstream"
+    : null;
+  const mergeOrderRequirements = buildMergeOrderRequirements({
+    category,
+    streamDependencies,
+    verificationConstraints,
+    blockedReason,
+    groupNote: group.note,
+  });
+  const constraints = dedupeStrings(
+    group.members.flatMap((member) => buildSeedConstraintMessages(member)),
+  );
+  const workstream = {
+    id: group.id,
+    title:
+      group.members.length === 1
+        ? group.members[0].evidence.planItem.title
+        : group.members.map((member) => member.evidence.planItem.title).join(" + "),
+    description: buildWorkstreamDescription(group),
+    category,
+    sourcePlanItemIds,
+    sourceVerificationCaseIds,
+    sourceFindingIds,
+    likelyAffectedPaths,
+    streamDependencies,
+    mergeOrderRequirements,
+    constraints,
+    blockedReason,
+  } satisfies SplitWorkstream;
+
+  return {
+    workstream,
+    blockedMemberStates,
+    detail: {
       workstreamId: group.id,
+      baseCategory,
       category,
-      appliedRules,
+      appliedRules: dedupeStrings(appliedRules),
+      categoryReasons: dedupeStrings(categoryReasons),
+      mergeOrderReasons: dedupeStrings(mergeOrderReasons),
+      blockingReasons: dedupeStrings(blockingReasons),
+      warningNotes,
+      mitigationSummaries,
       sourceDependencyIds,
       sourceConflictZoneIds,
       sourceTestObligationIds,
@@ -970,19 +1257,13 @@ function buildGroupWorkstreams(params: {
       sourceConstraintIds,
       sourceConcernIds,
       sourceReadinessIds: params.sourceReadinessIds,
+      blockedUpstreamWorkstreamIds,
+      blockedPlanItemIds,
       mergeOrderRuleIds: [],
       blockedItemIds: [],
       mergeOrderRequirements,
       blockedReason,
-    });
-
-    return workstream;
-  });
-
-  return {
-    workstreams,
-    streamConstraintDetails,
-    dependencyEdges: buildDependencyEdgesFromGroups(params.groups, groupIdByPlanItemId),
+    },
   };
 }
 
@@ -995,30 +1276,42 @@ function buildSourceReadinessIds(foundation: SplitFoundationResult): string[] {
 
 function buildMergeOrder(params: {
   workstreams: SplitWorkstream[];
-  dependencyEdges: SplitDependencyEdge[];
-  workstreamOrder: string[];
   streamConstraintDetails: SplitStreamConstraintDetail[];
 }): SplitMergeOrderEntry[] {
-  const dependencyByDownstream = new Map<string, string[]>();
-
-  for (const edge of params.dependencyEdges) {
-    dependencyByDownstream.set(edge.downstreamWorkstreamId, [
-      ...(dependencyByDownstream.get(edge.downstreamWorkstreamId) ?? []),
-      edge.upstreamWorkstreamId,
-    ]);
-  }
-
-  const depthCache = new Map<string, number>();
-  const constrainedWorkstreams = params.workstreams.filter((workstream) =>
-    workstream.category === "serial" ||
-    workstream.category === "protected_merge" ||
-    workstream.category === "parallel_after_dependency"
-  );
   const detailByWorkstreamId = new Map(
     params.streamConstraintDetails.map((detail) => [detail.workstreamId, detail] as const),
   );
+  const dependencyByDownstream = new Map<string, string[]>();
 
-  const indexById = new Map(params.workstreamOrder.map((workstreamId, index) => [workstreamId, index] as const));
+  for (const workstream of params.workstreams) {
+    if (workstream.streamDependencies.length === 0) {
+      continue;
+    }
+
+    dependencyByDownstream.set(workstream.id, [...workstream.streamDependencies]);
+  }
+
+  const depthCache = new Map<string, number>();
+  const constrainedWorkstreams = params.workstreams.filter((workstream) => {
+    if (workstream.category === "blocked") {
+      return false;
+    }
+
+    if (
+      workstream.category === "serial" ||
+      workstream.category === "protected_merge" ||
+      workstream.category === "parallel_after_dependency"
+    ) {
+      return true;
+    }
+
+    if (workstream.streamDependencies.length > 0) {
+      return true;
+    }
+
+    return (detailByWorkstreamId.get(workstream.id)?.mergeOrderReasons.length ?? 0) > 0;
+  });
+  const indexById = new Map(params.workstreams.map((workstream, index) => [workstream.id, index] as const));
 
   constrainedWorkstreams.sort((left, right) => {
     const leftDepth = computeStreamDepth(left.id, dependencyByDownstream, depthCache);
@@ -1046,7 +1339,8 @@ function buildMergeOrder(params: {
         ? "Serial-only stream requires isolated merge ordering."
         : workstream.category === "protected_merge"
           ? "Protected merge stream keeps shared-risk work under explicit ordering."
-          : "Dependent stream must merge after its upstream work settles.",
+          : detailByWorkstreamId.get(workstream.id)?.mergeOrderReasons.join("; ") ||
+            "Dependent stream must merge after its upstream work settles.",
     sourceDependencyIds: detailByWorkstreamId.get(workstream.id)?.sourceDependencyIds ?? [],
     sourceConstraintIds: detailByWorkstreamId.get(workstream.id)?.sourceConstraintIds ?? [],
     sourceConcernIds: detailByWorkstreamId.get(workstream.id)?.sourceConcernIds ?? [],
@@ -1059,39 +1353,66 @@ export function buildSplitWorkstreams(params: {
   const sourceReadinessIds = buildSourceReadinessIds(params.foundation);
   const seeds = createResolvedSeeds({ foundation: params.foundation });
   const groups = selectWorkstreamGroups(seeds);
-  const groupedResult = buildGroupWorkstreams({
+  const groupIdByPlanItemId = buildGroupIdByPlanItemId(groups);
+  const blockedGroupIds = resolveBlockedGroupIds({
     groups,
-    sourceReadinessIds,
+    groupIdByPlanItemId,
   });
-  const workstreams = groupedResult.workstreams;
-  const dependencyEdges = groupedResult.dependencyEdges;
-  const streamConstraintDetails = groupedResult.streamConstraintDetails;
-  const workstreamOrder = workstreams.map((workstream) => workstream.id);
+  const dependencyEdges = buildDependencyEdgesFromGroups(groups, groupIdByPlanItemId);
+  const analyses = groups.map((group) =>
+    analyzeGroup({
+      foundation: params.foundation,
+      groups,
+      sourceReadinessIds,
+      group,
+      blockedGroupIds,
+      groupIdByPlanItemId,
+    })
+  );
+  const workstreams = analyses.map((analysis) => analysis.workstream);
+  const streamConstraintDetails = analyses.map((analysis) => analysis.detail);
 
-  const blockedItems: SplitBlockedItem[] = workstreams
-    .filter((workstream) => workstream.category === "blocked")
-    .map((workstream) => {
-      const detail = streamConstraintDetails.find((entry) => entry.workstreamId === workstream.id);
+  const blockedItems: SplitBlockedItem[] = [];
+  for (const analysis of analyses) {
+    const { workstream, detail } = analysis;
 
-      return {
+    if (workstream.category === "blocked") {
+      blockedItems.push({
         id: blockedItemId(workstream.id),
         kind: "blocked_workstream",
         code: "BLOCKED_WORKSTREAM",
         message: workstream.blockedReason ?? "Blocked workstream",
         workstreamId: workstream.id,
         sourcePlanItemIds: [...workstream.sourcePlanItemIds],
-        sourceVerificationCaseIds: detail?.sourceVerificationCaseIds ?? [],
-        sourceFindingIds: detail?.sourceFindingIds ?? [],
-        sourceConstraintIds: detail?.sourceConstraintIds ?? [],
-        sourceConcernIds: detail?.sourceConcernIds ?? [],
+        sourceVerificationCaseIds: detail.sourceVerificationCaseIds,
+        sourceFindingIds: detail.sourceFindingIds,
+        sourceConstraintIds: detail.sourceConstraintIds,
+        sourceConcernIds: detail.sourceConcernIds,
         partialMetadataAvailable: true,
-      };
-    });
+      });
+      continue;
+    }
+
+    const blockedPlanItems = analysis.blockedMemberStates.filter((state) => state.blockedReason !== null);
+    for (const blockedPlanItem of blockedPlanItems) {
+      blockedItems.push({
+        id: blockedPlanItemId(workstream.id, blockedPlanItem.member.evidence.planItem.id),
+        kind: "blocked_plan_item",
+        code: "BLOCKED_PLAN_ITEM",
+        message: blockedPlanItem.blockedReason ?? "Blocked plan item",
+        workstreamId: workstream.id,
+        sourcePlanItemIds: [blockedPlanItem.member.evidence.planItem.id],
+        sourceVerificationCaseIds: blockedPlanItem.member.evidence.verificationCases.map((verificationCase) => verificationCase.id),
+        sourceFindingIds: blockedPlanItem.member.evidence.findings.map((finding) => finding.id),
+        sourceConstraintIds: blockedPlanItem.member.evidence.constraints.map((constraint) => constraint.id),
+        sourceConcernIds: blockedPlanItem.member.evidence.concerns.map((concern) => concern.id),
+        partialMetadataAvailable: true,
+      });
+    }
+  }
 
   const mergeOrder = buildMergeOrder({
     workstreams,
-    dependencyEdges,
-    workstreamOrder,
     streamConstraintDetails,
   });
   const mergeOrderIdsByWorkstream = new Map<string, string[]>();
@@ -1122,12 +1443,20 @@ export function buildSplitWorkstreams(params: {
   }));
 
   const warningItems: SplitInputIssue[] = [];
-  const hasBlockedWorkstreams = blockedItems.length > 0;
+  const hasBlockedWorkstreams = blockedItems.some((item) => item.kind === "blocked_workstream");
+  const hasPartiallyBlockedPlanItems = blockedItems.some((item) => item.kind === "blocked_plan_item");
   if (params.foundation.splitInput.usability.status === "actionable" && hasBlockedWorkstreams) {
     warningItems.push({
       code: "BLOCKED_WORKSTREAMS_PRESENT",
       message:
         "One or more workstreams remain blocked by carried-forward Step 3 evidence and must stay out of active execution.",
+    });
+  }
+  if (params.foundation.splitInput.usability.status === "actionable" && hasPartiallyBlockedPlanItems) {
+    warningItems.push({
+      code: "PARTIALLY_BLOCKED_STREAM_ITEMS_PRESENT",
+      message:
+        "One or more grouped workstreams include blocked plan items that must stay explicit until their carried-forward blockers are resolved.",
     });
   }
 

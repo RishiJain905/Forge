@@ -105,12 +105,19 @@ function buildRecommendedUserActions(params: {
   if (params.warningItems.some((item) => item.code === "BLOCKED_WORKSTREAMS_PRESENT")) {
     actions.push("Keep blocked workstreams out of active execution until their carried-forward evidence is resolved.");
   }
+  if (params.warningItems.some((item) => item.code === "PARTIALLY_BLOCKED_STREAM_ITEMS_PRESENT")) {
+    actions.push("Keep blocked plan items explicit inside their grouped workstreams until their carried-forward blockers are resolved.");
+  }
 
   return dedupeStrings(actions);
 }
 
 function hasBlockedStreams(warningItems: SplitInputIssue[]): boolean {
   return warningItems.some((item) => item.code === "BLOCKED_WORKSTREAMS_PRESENT");
+}
+
+function hasPartiallyBlockedItems(warningItems: SplitInputIssue[]): boolean {
+  return warningItems.some((item) => item.code === "PARTIALLY_BLOCKED_STREAM_ITEMS_PRESENT");
 }
 
 function hasMergeOrderConstraints(additionalRecommendedActions: string[] | undefined): boolean {
@@ -139,13 +146,17 @@ function buildReadinessSummary(params: {
   }
 
   const blockedStreamsPresent = hasBlockedStreams(params.warningItems);
+  const partiallyBlockedItemsPresent = hasPartiallyBlockedItems(params.warningItems);
   const mergeOrderConstraintsPresent = hasMergeOrderConstraints(params.additionalRecommendedActions);
-  const assignmentPhrase = blockedStreamsPresent
+  const assignmentPhrase = blockedStreamsPresent || partiallyBlockedItemsPresent
     ? "Not all items were safely assigned"
     : "All items were safely assigned";
   const blockedStreamsPhrase = blockedStreamsPresent
     ? "blocked streams remain visible"
     : "no blocked streams remain";
+  const partiallyBlockedPhrase = partiallyBlockedItemsPresent
+    ? "partially blocked items remain visible"
+    : "no partially blocked items remain";
   const mergeOrderPhrase = mergeOrderConstraintsPresent
     ? "merge-order constraints were imposed"
     : "no merge-order constraints were needed";
@@ -153,13 +164,13 @@ function buildReadinessSummary(params: {
 
   if (params.status === "ready_with_warnings") {
     if (params.partialOutput !== null && params.warningItems.length === 0) {
-      return `Forge split can proceed with warnings. ${assignmentPhrase}, ${blockedStreamsPhrase}, ${mergeOrderPhrase}, and ${executionPhrase}.`;
+      return `Forge split can proceed with warnings. ${assignmentPhrase}, ${blockedStreamsPhrase}, ${partiallyBlockedPhrase}, ${mergeOrderPhrase}, and ${executionPhrase}.`;
     }
 
-    return `Forge split can proceed with warnings. ${assignmentPhrase}, ${blockedStreamsPhrase}, ${mergeOrderPhrase}, and ${executionPhrase}.`;
+    return `Forge split can proceed with warnings. ${assignmentPhrase}, ${blockedStreamsPhrase}, ${partiallyBlockedPhrase}, ${mergeOrderPhrase}, and ${executionPhrase}.`;
   }
 
-  return `Forge split can proceed. ${assignmentPhrase}, ${blockedStreamsPhrase}, ${mergeOrderPhrase}, and ${executionPhrase}.`;
+  return `Forge split can proceed. ${assignmentPhrase}, ${blockedStreamsPhrase}, ${partiallyBlockedPhrase}, ${mergeOrderPhrase}, and ${executionPhrase}.`;
 }
 
 export function resolveSplitReadiness(params: {

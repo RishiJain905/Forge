@@ -461,7 +461,7 @@ const splitMergeOrderEntrySchema = z.object({
 
 const splitBlockedItemSchema = z.object({
   id: z.string().min(1),
-  kind: z.enum(["input_blocker", "blocked_workstream"]),
+  kind: z.enum(["input_blocker", "blocked_workstream", "blocked_plan_item"]),
   code: z.string().min(1),
   message: z.string().min(1),
   workstreamId: z.string().min(1).nullable(),
@@ -475,8 +475,14 @@ const splitBlockedItemSchema = z.object({
 
 const splitStreamConstraintDetailSchema = z.object({
   workstreamId: z.string().min(1),
+  baseCategory: z.enum(SPLIT_STREAM_CATEGORIES),
   category: z.enum(SPLIT_STREAM_CATEGORIES),
   appliedRules: z.array(z.string().min(1)),
+  categoryReasons: z.array(z.string().min(1)),
+  mergeOrderReasons: z.array(z.string().min(1)),
+  blockingReasons: z.array(z.string().min(1)),
+  warningNotes: z.array(z.string().min(1)),
+  mitigationSummaries: z.array(z.string().min(1)),
   sourceDependencyIds: z.array(z.string().min(1)),
   sourceConflictZoneIds: z.array(z.string().min(1)),
   sourceTestObligationIds: z.array(z.string().min(1)),
@@ -486,6 +492,8 @@ const splitStreamConstraintDetailSchema = z.object({
   sourceConstraintIds: z.array(z.string().min(1)),
   sourceConcernIds: z.array(z.string().min(1)),
   sourceReadinessIds: z.array(z.enum(["planning_readiness", "verification_readiness"])),
+  blockedUpstreamWorkstreamIds: z.array(z.string().min(1)),
+  blockedPlanItemIds: z.array(z.string().min(1)),
   mergeOrderRuleIds: z.array(z.string().min(1)),
   blockedItemIds: z.array(z.string().min(1)),
   mergeOrderRequirements: z.array(z.string().min(1)),

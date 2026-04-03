@@ -62,13 +62,17 @@ function renderReadinessLines(artifact: SplitArtifact): string[] {
   const blockedWorkstreamCount = artifact.blocked_items.filter(
     (item) => item.kind === "blocked_workstream",
   ).length;
+  const partiallyBlockedItemCount = artifact.blocked_items.filter(
+    (item) => item.kind === "blocked_plan_item",
+  ).length;
   const mergeOrderCount = artifact.merge_order.length;
   const laterExecutionMustHonor = artifact.split_readiness.recommended_user_actions;
 
   return [
     `- Can Proceed: ${artifact.split_readiness.ready ? "yes" : "no"}`,
-    `- All Items Safely Assigned: ${artifact.split_readiness.ready && blockedWorkstreamCount === 0 ? "yes" : "no"}`,
+    `- All Items Safely Assigned: ${artifact.split_readiness.ready && blockedWorkstreamCount === 0 && partiallyBlockedItemCount === 0 ? "yes" : "no"}`,
     `- Blocked Streams: ${blockedWorkstreamCount > 0 ? blockedWorkstreamCount : "none"}`,
+    `- Partially Blocked Items: ${partiallyBlockedItemCount > 0 ? partiallyBlockedItemCount : "none"}`,
     `- Merge-Order Constraints: ${mergeOrderCount > 0 ? mergeOrderCount : "none"}`,
     `- Later Execution Must Honor: ${laterExecutionMustHonor.join("; ") || "none"}`,
   ];
@@ -261,8 +265,14 @@ export function createSplitReport(artifact: SplitArtifact): string {
       artifact.carried_forward_constraints.stream_constraint_details.length > 0
         ? artifact.carried_forward_constraints.stream_constraint_details.map((detail) => [
             `- ${detail.workstreamId}`,
+            `  - Base Category: ${detail.baseCategory}`,
             `  - Category: ${detail.category}`,
             `  - Applied Rules: ${detail.appliedRules.join(", ") || "none"}`,
+            `  - Category Reasons: ${detail.categoryReasons.join("; ") || "none"}`,
+            `  - Merge-Order Reasons: ${detail.mergeOrderReasons.join("; ") || "none"}`,
+            `  - Blocking Reasons: ${detail.blockingReasons.join("; ") || "none"}`,
+            `  - Warning Notes: ${detail.warningNotes.join("; ") || "none"}`,
+            `  - Mitigation Summaries: ${detail.mitigationSummaries.join("; ") || "none"}`,
             `  - Source Dependency IDs: ${detail.sourceDependencyIds.join(", ") || "none"}`,
             `  - Source Conflict Zone IDs: ${detail.sourceConflictZoneIds.join(", ") || "none"}`,
             `  - Source Test Obligation IDs: ${detail.sourceTestObligationIds.join(", ") || "none"}`,
@@ -272,6 +282,8 @@ export function createSplitReport(artifact: SplitArtifact): string {
             `  - Source Constraint IDs: ${detail.sourceConstraintIds.join(", ") || "none"}`,
             `  - Source Concern IDs: ${detail.sourceConcernIds.join(", ") || "none"}`,
             `  - Source Readiness IDs: ${detail.sourceReadinessIds.join(", ") || "none"}`,
+            `  - Blocked Upstream Workstream IDs: ${detail.blockedUpstreamWorkstreamIds.join(", ") || "none"}`,
+            `  - Blocked Plan Item IDs: ${detail.blockedPlanItemIds.join(", ") || "none"}`,
             `  - Merge Order Rule IDs: ${detail.mergeOrderRuleIds.join(", ") || "none"}`,
             `  - Blocked Item IDs: ${detail.blockedItemIds.join(", ") || "none"}`,
             `  - Blocked Reason: ${detail.blockedReason ?? "none"}`,

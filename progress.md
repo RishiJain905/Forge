@@ -416,6 +416,12 @@
   - Reworked workstream construction to build deterministic grouped or standalone streams from the normalized evidence, including bounded direct source/test regrouping, bounded same-surface sibling regrouping, grouped-id dependency collapsing, and explicit blocked-stream handling without changing the public `forge split` CLI or top-level split artifact contract.
   - Expanded `tests/split.goal-and-boundaries.test.ts`, `tests/split.workstream-model.test.ts`, and `tests/split.part5-readiness-and-first-build-order.test.ts` so Stage 1 and Stage 2 now lock warning-heavy handoffs, tampered evidence failures, nested-path grouping, migration-order exclusions, hard-dependency-only direct pairs, deterministic candidate tie-breaks, and grouped merge-order behavior under the default test gate.
   - Updated `README.md`, `progress.md`, and `S4-B2-Done/p2-done-summary.md` so Step 4 Batch 2 Part 2 is documented and traceable.
+- Batch 2.03: `part-3-stage-3-and-4-stream-categories-safety-merge-order-and-blocking.md` (Step 4)
+  - Reworked the Stage 3 and Stage 4 split safety pass so final stream categories are now resolved after grouping from real verification constraints, mitigations, carry-forward concerns, warning-grade readiness context, and blocked-upstream dependencies instead of relying on the raw Step 2 parallelization signal alone.
+  - Extended blocked-item and stream-constraint modeling so split now distinguishes blocked workstreams from partially blocked plan items, keeps base-versus-final category rationale visible, and preserves blocking reasons, merge-order reasons, warning notes, mitigation summaries, blocked-upstream linkage, and blocked-plan-item linkage in the carried-forward constraint detail.
+  - Expanded merge-order handling so dependency ordering remains explicit even for otherwise `safe_parallel` streams when sequencing, interface-first, or hard prerequisites still constrain merge order, while standalone downstream work that depends on blocked upstream streams now becomes honestly blocked.
+  - Expanded `tests/split.workstream-model.test.ts`, `tests/split.artifact-schema.test.ts`, `tests/split.report.test.ts`, and `tests/split.part5-readiness-and-first-build-order.test.ts` so warning-grade protected merges, blocked-upstream dependency propagation, partial blocked-plan-item visibility, safe-parallel dependency merge-order rules, and richer stream-constraint detail are locked under the default test gate.
+  - Updated `README.md`, `progress.md`, and `S4-B2-Done/p3-done-summary.md` so Step 4 Batch 2 Part 3 is documented and traceable.
 
 ## Current Branch State
 - `dev` includes the completed Step 1 work through Batch 4.05, including the frozen Step 2 handoff contract from Intake.
@@ -451,6 +457,7 @@
 - `dev` now includes Step 4 Batch 1 Part 5, including explicit Part 5 acceptance gates, stronger split readiness/report wording for assignment status plus merge-order and blocked-stream caution, and confirmation that Step 4 Batch 1 can proceed without reopening its frozen contract.
 - `dev` now includes Step 4 Batch 2 Part 1, including the explicit Batch 2 split mission, ordered implementation priorities, required implementation-task/code-surface metadata in the Step 4 boundary contract, stronger do-not-touch guardrails, and direct regression coverage for stale Batch 1 wording while keeping the public split surface stable.
 - `dev` now includes Step 4 Batch 2 Part 2, including indexed Step 3-to-Step 2 split input normalization, stronger per-plan-item evidence validation, bounded real regrouping for direct source/test pairs and same-surface siblings, deterministic grouped dependency collapse, and dedicated regressions that keep the public split surface stable while making the internal workstream foundation materially real.
+- `dev` now includes Step 4 Batch 2 Part 3, including post-grouping stream safety resolution from carried-forward verification evidence, explicit blocked-plan-item versus blocked-workstream visibility, dependency-driven blocking propagation, safe-parallel merge-order constraints, and richer carried-forward stream-constraint rationale while keeping the public split surface stable.
 
 ## Verification
 - `npm.cmd test`
@@ -485,4 +492,5 @@
 - Step 4 Batch 1 is complete.
 - Step 4 Batch 2 Part 1 is complete.
 - Step 4 Batch 2 Part 2 is complete.
-- Next Step 4 target: `forge_step4_batch2/part-3-stage-3-and-4-stream-categories-safety-merge-order-and-blocking.md`
+- Step 4 Batch 2 Part 3 is complete.
+- Next Step 4 target: `forge_step4_batch2/part-4-stage-5-artifacts-report-debug-outputs-and-readiness.md`

@@ -84,6 +84,14 @@ type SplitArtifact = {
     };
     stream_constraint_details: Array<{
       workstreamId: string;
+      baseCategory: string;
+      categoryReasons: string[];
+      mergeOrderReasons: string[];
+      blockingReasons: string[];
+      warningNotes: string[];
+      mitigationSummaries: string[];
+      blockedUpstreamWorkstreamIds: string[];
+      blockedPlanItemIds: string[];
       mergeOrderRuleIds: string[];
       blockedItemIds: string[];
     }>;
@@ -813,6 +821,7 @@ await runScenario(
       assert.match(readinessBody, /Can Proceed:/i);
       assert.match(readinessBody, /All Items Safely Assigned:/i);
       assert.match(readinessBody, /Blocked Streams:/i);
+      assert.match(readinessBody, /Partially Blocked Items:/i);
       assert.match(readinessBody, /Merge-Order Constraints:/i);
       assert.match(readinessBody, /Later Execution Must Honor:/i);
     } finally {

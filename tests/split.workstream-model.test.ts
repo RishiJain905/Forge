@@ -962,6 +962,13 @@ function createFoundationFixture(): SplitFoundationResult {
   };
 }
 
+function refreshPlanItemEvidence(foundation: SplitFoundationResult): void {
+  foundation.splitInput.planItemEvidence = buildPlanItemEvidenceFromContext(
+    foundation.splitInput.context,
+    foundation.splitInput.uncertainty.planCarryForward.concerns,
+  );
+}
+
 async function runScenario(name: string, scenario: () => Promise<void> | void): Promise<void> {
   try {
     await scenario();
@@ -1231,7 +1238,7 @@ await runScenario(
     );
     assert.deepEqual(
       result.mergeOrder.map((entry: { workstreamId: string }) => entry.workstreamId),
-      ["ws-plan-serial", "ws-plan-protected", "ws-plan-shared-a__plan-shared-b", "ws-plan-after"],
+      ["ws-plan-serial", "ws-plan-protected", "ws-plan-shared-a__plan-shared-b", "ws-plan-after", "ws-plan-safe"],
     );
   },
 );
@@ -1370,6 +1377,357 @@ await runScenario(
           detail.sourceConcernIds.includes("concern-blocked"),
       ),
       "expected stream constraint details to keep blocked evidence traceable for debug output",
+    );
+  },
+);
+
+await runScenario(
+  "buildSplitWorkstreams downgrades warning-grade cautionary streams to protected_merge",
+  () => {
+    const foundation = createFoundationFixture();
+
+    foundation.splitInput.context.planItems = [
+      ...foundation.splitInput.context.planItems,
+      {
+        id: "plan-caution",
+        title: "Apply cautionary helper follow-up",
+        description: "Apply a helper follow-up that stays warning-grade but should not merge freely.",
+        category: "implementation",
+        sourceRequirements: ["Apply cautionary helper follow-up"],
+        likelyAffectedPaths: ["src/cautionary-helper.ts"],
+        dependencies: [],
+        riskLevel: "medium",
+        testObligations: [{ category: "regression", reason: "The cautionary helper flow should stay covered." }],
+        verificationRelevance: {
+          relevant: true,
+          categories: ["code_surface"],
+          notes: ["Warning-grade verification context still requires merge protection."],
+        },
+        parallelization: {
+          signal: "safe_parallel",
+          reason: "The helper follow-up is otherwise isolated.",
+        },
+      },
+    ];
+    foundation.splitInput.context.testObligations = [
+      ...foundation.splitInput.context.testObligations,
+      {
+        planItemId: "plan-caution",
+        category: "regression",
+        reason: "The cautionary helper flow should stay covered.",
+      },
+    ];
+    foundation.splitInput.context.parallelizationSignals = [
+      ...foundation.splitInput.context.parallelizationSignals,
+      {
+        planItemId: "plan-caution",
+        signal: "safe_parallel",
+        reason: "The helper follow-up is otherwise isolated.",
+      },
+    ];
+    foundation.splitInput.context.verificationTargets = [
+      ...foundation.splitInput.context.verificationTargets,
+      {
+        id: "target-caution",
+        title: "Apply cautionary helper follow-up",
+        category: "code_surface",
+        sourcePlanItemIds: ["plan-caution"],
+        riskSummary: "Warning-grade carry-forward context should keep this stream merge-protected.",
+        candidateLanes: ["structural"],
+        sourceRiskSources: ["carry_forward_concern"],
+        expectedFindingKinds: ["warning_grade_caution"],
+        verificationCaseIds: ["case-caution"],
+        traceabilityNotes: ["Warning-grade safety inputs still need protected merge handling."],
+      },
+    ];
+    foundation.splitInput.context.verificationCases = [
+      ...foundation.splitInput.context.verificationCases,
+      {
+        id: "case-caution",
+        verificationTargetId: "target-caution",
+        title: "Warning-grade cautionary helper follow-up",
+        category: "code_surface",
+        sourcePlanItemIds: ["plan-caution"],
+        lanes: ["structural"],
+        goal: "Keep warning-grade helper work merge-protected without fully blocking it.",
+        status: "passed",
+        summary: "The helper follow-up is structurally usable with caution.",
+        findings: [],
+        mitigations: ["Keep the cautionary helper work under protected merge until review clears the warning."],
+        constraints: ["constraint-caution"],
+        traceabilityNotes: ["Usable, but not freely parallel-merge safe."],
+        formalDetails: null,
+      },
+    ];
+    foundation.splitInput.context.constraints = [
+      ...foundation.splitInput.context.constraints,
+      {
+        id: "constraint-caution",
+        lane: "structural",
+        verification_case_id: "case-caution",
+        verification_target_id: "target-caution",
+        summary: "Keep the cautionary helper follow-up behind a protected merge until the warning is resolved.",
+      },
+    ];
+    foundation.splitInput.uncertainty.planCarryForward.concerns = [
+      ...foundation.splitInput.uncertainty.planCarryForward.concerns,
+      {
+        id: "concern-caution",
+        source: "warning",
+        code: "CAUTIONARY_HELPER_WARNING",
+        message: "Warning-grade helper work should stay merge-protected until review clears it.",
+        planItemIds: ["plan-caution"],
+        effects: ["parallelization_caution"],
+        status: "carried_forward",
+      },
+    ];
+    refreshPlanItemEvidence(foundation);
+
+    const result = buildSplitWorkstreams({ foundation }) as unknown as {
+      workstreams: Array<{ id: string; category: string }>;
+      streamConstraintDetails: Array<{ workstreamId: string; appliedRules: string[] }>;
+    };
+
+    assert.ok(
+      result.workstreams.some((workstream) =>
+        workstream.id === "ws-plan-caution" && workstream.category === "protected_merge"
+      ),
+      "expected warning-grade cautionary work to downgrade from safe_parallel to protected_merge",
+    );
+    assert.ok(
+      result.streamConstraintDetails.some((detail) =>
+        detail.workstreamId === "ws-plan-caution" &&
+        detail.appliedRules.some((rule) => rule.includes("parallelization_caution"))
+      ),
+      "expected the protected category rationale to keep the carry-forward caution visible",
+    );
+  },
+);
+
+await runScenario(
+  "buildSplitWorkstreams blocks standalone streams that depend on blocked upstream workstreams",
+  () => {
+    const foundation = createFoundationFixture();
+
+    foundation.splitInput.context.planItems = [
+      ...foundation.splitInput.context.planItems,
+      {
+        id: "plan-downstream-blocked",
+        title: "Apply blocked downstream follow-up",
+        description: "Follow-up work that cannot proceed until the blocked ownership repair is resolved.",
+        category: "implementation",
+        sourceRequirements: ["Apply blocked downstream follow-up"],
+        likelyAffectedPaths: ["src/downstream-blocked.ts"],
+        dependencies: [
+          {
+            planItemId: "plan-blocked",
+            type: "hard",
+            reason: "This follow-up cannot proceed until the blocked ownership repair is resolved.",
+          },
+        ],
+        riskLevel: "medium",
+        testObligations: [{ category: "integration", reason: "Downstream repair work should stay covered." }],
+        verificationRelevance: {
+          relevant: true,
+          categories: ["ownership"],
+          notes: ["Depends on blocked ownership work first."],
+        },
+        parallelization: {
+          signal: "safe_parallel",
+          reason: "The follow-up would otherwise be isolated.",
+        },
+      },
+    ];
+    foundation.splitInput.context.dependencyGraph = [
+      ...foundation.splitInput.context.dependencyGraph,
+      {
+        planItemId: "plan-downstream-blocked",
+        dependsOnPlanItemId: "plan-blocked",
+        type: "hard",
+        reason: "This follow-up cannot proceed until the blocked ownership repair is resolved.",
+      },
+    ];
+    foundation.splitInput.context.testObligations = [
+      ...foundation.splitInput.context.testObligations,
+      {
+        planItemId: "plan-downstream-blocked",
+        category: "integration",
+        reason: "Downstream repair work should stay covered.",
+      },
+    ];
+    foundation.splitInput.context.parallelizationSignals = [
+      ...foundation.splitInput.context.parallelizationSignals,
+      {
+        planItemId: "plan-downstream-blocked",
+        signal: "safe_parallel",
+        reason: "The follow-up would otherwise be isolated.",
+      },
+    ];
+    refreshPlanItemEvidence(foundation);
+
+    const result = buildSplitWorkstreams({ foundation });
+    const blockedDownstream = result.workstreams.find((workstream) => workstream.id === "ws-plan-downstream-blocked");
+
+    assert.ok(blockedDownstream, "expected the downstream blocked stream to exist");
+    assert.equal(blockedDownstream?.category, "blocked");
+    assert.match(blockedDownstream?.blockedReason ?? "", /blocked upstream|ownership repair/i);
+  },
+);
+
+await runScenario(
+  "buildSplitWorkstreams emits blocked plan-item records when only part of a grouped stream is blocked",
+  () => {
+    const foundation = createFoundationFixture();
+
+    foundation.splitInput.context.dependencyGraph = [
+      ...foundation.splitInput.context.dependencyGraph,
+      {
+        planItemId: "plan-after",
+        dependsOnPlanItemId: "plan-blocked",
+        type: "hard",
+        reason: "The test follow-up also waits for the blocked ownership repair to finish.",
+      },
+    ];
+    const planAfter = foundation.splitInput.context.planItems.find((planItem) => planItem.id === "plan-after");
+    if (!planAfter) {
+      throw new Error("Expected the fixture to include the grouped test plan item.");
+    }
+
+    planAfter.dependencies = [
+      ...planAfter.dependencies,
+      {
+        planItemId: "plan-blocked",
+        type: "hard",
+        reason: "The test follow-up also waits for the blocked ownership repair to finish.",
+      },
+    ];
+    refreshPlanItemEvidence(foundation);
+
+    const result = buildSplitWorkstreams({ foundation }) as unknown as {
+      workstreams: Array<{ id: string; category: string }>;
+      blockedItems: Array<{
+        kind: string;
+        workstreamId: string | null;
+        sourcePlanItemIds: string[];
+        partialMetadataAvailable: boolean;
+      }>;
+      streamConstraintDetails: Array<{ workstreamId: string; blockedItemIds: string[] }>;
+    };
+
+    assert.ok(
+      result.workstreams.some((workstream) =>
+        workstream.id === "ws-plan-safe__plan-after" && workstream.category === "parallel_after_dependency"
+      ),
+      "expected the grouped source/test stream to remain present instead of collapsing into a full blocked stream",
+    );
+    assert.ok(
+      result.blockedItems.some((item) =>
+        item.kind === "blocked_plan_item" &&
+        item.workstreamId === "ws-plan-safe__plan-after" &&
+        item.partialMetadataAvailable === true &&
+        item.sourcePlanItemIds.includes("plan-after")
+      ),
+      "expected the blocked member plan item to stay explicit inside the grouped stream",
+    );
+    assert.ok(
+      result.streamConstraintDetails.some((detail) =>
+        detail.workstreamId === "ws-plan-safe__plan-after" &&
+        detail.blockedItemIds.length > 0
+      ),
+      "expected grouped stream constraint detail to link the partial blocker",
+    );
+  },
+);
+
+await runScenario(
+  "buildSplitWorkstreams emits dependency merge-order rules even when the downstream stream stays safe_parallel",
+  () => {
+    const foundation = createFoundationFixture();
+
+    foundation.splitInput.context.planItems = [
+      ...foundation.splitInput.context.planItems,
+      {
+        id: "plan-sequenced",
+        title: "Apply sequencing-only follow-up",
+        description: "Follow-up work that stays safe_parallel but still merges after its upstream prerequisite.",
+        category: "implementation",
+        sourceRequirements: ["Apply sequencing-only follow-up"],
+        likelyAffectedPaths: ["src/sequenced-followup.ts"],
+        dependencies: [
+          {
+            planItemId: "plan-safe",
+            type: "sequencing",
+            reason: "This follow-up should merge after the helper update even though it can be prepared in parallel.",
+          },
+        ],
+        riskLevel: "low",
+        testObligations: [{ category: "regression", reason: "Sequencing-only follow-up should stay covered." }],
+        verificationRelevance: {
+          relevant: false,
+          categories: [],
+          notes: ["Merge order still matters even though the stream stays safe_parallel."],
+        },
+        parallelization: {
+          signal: "safe_parallel",
+          reason: "The follow-up is otherwise isolated.",
+        },
+      },
+    ];
+    foundation.splitInput.context.dependencyGraph = [
+      ...foundation.splitInput.context.dependencyGraph,
+      {
+        planItemId: "plan-sequenced",
+        dependsOnPlanItemId: "plan-safe",
+        type: "sequencing",
+        reason: "This follow-up should merge after the helper update even though it can be prepared in parallel.",
+      },
+    ];
+    foundation.splitInput.context.testObligations = [
+      ...foundation.splitInput.context.testObligations,
+      {
+        planItemId: "plan-sequenced",
+        category: "regression",
+        reason: "Sequencing-only follow-up should stay covered.",
+      },
+    ];
+    foundation.splitInput.context.parallelizationSignals = [
+      ...foundation.splitInput.context.parallelizationSignals,
+      {
+        planItemId: "plan-sequenced",
+        signal: "safe_parallel",
+        reason: "The follow-up is otherwise isolated.",
+      },
+    ];
+    refreshPlanItemEvidence(foundation);
+
+    const result = buildSplitWorkstreams({ foundation }) as unknown as {
+      workstreams: Array<{ id: string; category: string; streamDependencies: string[] }>;
+      mergeOrder: Array<{ workstreamId: string; ruleType: string; mustMergeAfterWorkstreamIds: string[] }>;
+      streamConstraintDetails: Array<{ workstreamId: string; mergeOrderRuleIds: string[] }>;
+    };
+
+    assert.ok(
+      result.workstreams.some((workstream) =>
+        workstream.id === "ws-plan-sequenced" &&
+        workstream.category === "safe_parallel" &&
+        workstream.streamDependencies.includes("ws-plan-safe__plan-after")
+      ),
+      "expected the sequencing-only follow-up to remain safe_parallel while keeping its dependency visible",
+    );
+    assert.ok(
+      result.mergeOrder.some((entry) =>
+        entry.workstreamId === "ws-plan-sequenced" &&
+        entry.ruleType === "dependency" &&
+        entry.mustMergeAfterWorkstreamIds.includes("ws-plan-safe__plan-after")
+      ),
+      "expected a merge-order rule even when the downstream stream stays safe_parallel",
+    );
+    assert.ok(
+      result.streamConstraintDetails.some((detail) =>
+        detail.workstreamId === "ws-plan-sequenced" &&
+        detail.mergeOrderRuleIds.length > 0
+      ),
+      "expected stream constraint detail to link the sequencing-only merge-order rule",
     );
   },
 );

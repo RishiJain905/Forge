@@ -568,6 +568,10 @@ Step 4 Batch 2 Part 2 makes the Stage 1 and Stage 2 split foundation materially 
 
 Part 2 also introduces bounded real regrouping where it improves execution readiness without weakening auditability: direct source/test pairs can group only on explicit hard dependencies plus a shared dominant surface, same-surface siblings can group only when they share concrete conflict or verification context and have no unsafe outside dependencies, and blocked or migration-order work remains explicit. The public `forge split` CLI, top-level `split.json` keys, and split-report heading order remain unchanged.
 
+Step 4 Batch 2 Part 3 makes Stage 3 and Stage 4 materially real without reopening the public split surface. Split now resolves final stream categories after grouping from real Step 2 and Step 3 evidence instead of only echoing Step 2 parallelization signals: warning-grade carry-forward caution can downgrade work to `protected_merge`, blocked upstream dependencies can block downstream standalone streams, and grouped streams can now expose partially blocked plan items without hiding the rest of the stream.
+
+Part 3 also hardens merge-order and blocking behavior so dependency ordering remains explicit even when a downstream stream stays `safe_parallel`, blocked work stays first-class in `blocked_items`, and the carried-forward stream-constraint detail now preserves base versus final category, category reasons, merge-order reasons, blocking reasons, warning notes, mitigation summaries, blocked-upstream linkage, and blocked-plan-item linkage while keeping the top-level `split.json` contract and split-report heading order stable.
+
 ---
 
 # Repository Intent

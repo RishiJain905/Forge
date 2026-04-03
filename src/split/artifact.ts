@@ -74,7 +74,7 @@ function buildSplitBoundaryNotes(foundation: SplitFoundationResult): string[] {
   return dedupeStrings([
     ...foundation.boundaryPolicy.deterministicFirstNotes,
     ...foundation.boundaryPolicy.conservativeRegroupingNotes,
-    "Part 3 populates explicit workstreams, dependency edges, and merge ordering from persisted Step 2 and Step 3 safety inputs while keeping the Step 4 top-level contract stable.",
+    "Batch 2 Part 3 applies explicit stream categories, safety constraints, merge-order expectations, and blocking visibility from persisted Step 2 and Step 3 inputs while keeping the Step 4 top-level contract stable.",
   ]);
 }
 
@@ -179,6 +179,9 @@ function buildSplitReadinessResolution(
   failure: SplitCommandFailure | null,
   workstreamBuild: SplitWorkstreamBuildResult,
 ): SplitReadinessResolution {
+  const hasBlockedWorkstreams = workstreamBuild.blockedItems.some((item) => item.kind === "blocked_workstream");
+  const hasBlockedPlanItems = workstreamBuild.blockedItems.some((item) => item.kind === "blocked_plan_item");
+
   return resolveSplitReadiness({
     foundation,
     failure,
@@ -187,8 +190,11 @@ function buildSplitReadinessResolution(
       workstreamBuild.mergeOrder.length > 0
         ? STEP4_HONOR_MERGE_ORDER_ACTION
         : "",
-      workstreamBuild.blockedItems.length > 0
+      hasBlockedWorkstreams
         ? "Keep blocked_items out of active execution until their carried-forward blockers are resolved."
+        : "",
+      hasBlockedPlanItems
+        ? "Keep blocked plan items explicit inside their grouped workstreams until their carried-forward blockers are resolved."
         : "",
     ]),
   });

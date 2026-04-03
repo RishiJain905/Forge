@@ -183,7 +183,7 @@ export interface SplitMergeOrderEntry {
 
 export interface SplitBlockedItem {
   id: string;
-  kind: "input_blocker" | "blocked_workstream";
+  kind: "input_blocker" | "blocked_workstream" | "blocked_plan_item";
   code: string;
   message: string;
   workstreamId: string | null;
@@ -197,8 +197,14 @@ export interface SplitBlockedItem {
 
 export interface SplitStreamConstraintDetail {
   workstreamId: string;
+  baseCategory: SplitStreamCategory;
   category: SplitStreamCategory;
   appliedRules: string[];
+  categoryReasons: string[];
+  mergeOrderReasons: string[];
+  blockingReasons: string[];
+  warningNotes: string[];
+  mitigationSummaries: string[];
   sourceDependencyIds: string[];
   sourceConflictZoneIds: string[];
   sourceTestObligationIds: string[];
@@ -208,6 +214,8 @@ export interface SplitStreamConstraintDetail {
   sourceConstraintIds: string[];
   sourceConcernIds: string[];
   sourceReadinessIds: string[];
+  blockedUpstreamWorkstreamIds: string[];
+  blockedPlanItemIds: string[];
   mergeOrderRuleIds: string[];
   blockedItemIds: string[];
   mergeOrderRequirements: string[];
