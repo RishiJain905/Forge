@@ -428,6 +428,12 @@
   - Reworked `split-report.md` so the `Split Readiness` section now renders explicit execution-scope and count fields directly from the artifact instead of recomputing readiness from raw arrays in report-only logic.
   - Added `tests/split.batch2-part4-artifacts-report-debug-readiness.test.ts`, expanded split artifact/debug/readiness regressions plus smoke coverage, and wired the new Stage 5 suite into the default `npm.cmd test` gate.
   - Updated `README.md`, `progress.md`, and `S4-B2-Done/p4-done-summary.md` so Step 4 Batch 2 Part 4 is documented and traceable.
+- Batch 2.05: `part-5-stage-6-cli-wiring-tests-and-runnable-milestone.md` (Step 4)
+  - Added `tests/split.batch2-part5-runnable-milestone.test.ts` so Step 4 now has a dedicated Batch 2 closeout suite that proves the default `npm.cmd test` gate includes the shipped split runnable-milestone regression.
+  - Added a packaged-CLI runnable-milestone regression that runs `forge intake` -> `forge plan` -> `forge verify` -> `forge split`, removes upstream source inputs before the split run, and proves persisted Step 3 plus Step 2 artifacts are sufficient for the real Step 4 path.
+  - Kept the public `forge split` CLI and frozen top-level `split.json` / `split-report.md` contract stable while proving durable on-disk split outputs, non-empty workstreams/dependency edges/merge-order output, carried-forward stream-constraint detail, and honest minimal CLI output.
+  - Wired the new Batch 2 Part 5 suite into the default `npm.cmd test` gate and kept `scripts/smoke.mjs` as the broader packaged workflow proof instead of adding a second parallel smoke path.
+  - Updated `README.md`, `progress.md`, and `S4-B2-Done/p5-done-summary.md` so Step 4 Batch 2 Part 5 and the full Batch 2 milestone are documented and traceable.
 
 ## Current Branch State
 - `dev` includes the completed Step 1 work through Batch 4.05, including the frozen Step 2 handoff contract from Intake.
@@ -465,6 +471,8 @@
 - `dev` now includes Step 4 Batch 2 Part 2, including indexed Step 3-to-Step 2 split input normalization, stronger per-plan-item evidence validation, bounded real regrouping for direct source/test pairs and same-surface siblings, deterministic grouped dependency collapse, and dedicated regressions that keep the public split surface stable while making the internal workstream foundation materially real.
 - `dev` now includes Step 4 Batch 2 Part 3, including post-grouping stream safety resolution from carried-forward verification evidence, explicit blocked-plan-item versus blocked-workstream visibility, dependency-driven blocking propagation, safe-parallel merge-order constraints, and richer carried-forward stream-constraint rationale while keeping the public split surface stable.
 - `dev` now includes Step 4 Batch 2 Part 4, including explicit split-readiness execution-scope/count fields, report/debug parity for those derived readiness signals, warning-heavy readability hardening, and a dedicated Stage 5 regression suite while keeping the frozen top-level split contract stable.
+- `dev` now includes Step 4 Batch 2 Part 5, including a dedicated runnable-milestone regression wired into the default `npm.cmd test` gate, proof that packaged `forge split` can run end to end from persisted Step 3 plus Step 2 artifacts with durable outputs, and documentation that closes Step 4 Batch 2 without reopening the public split surface.
+- `dev` now treats Step 4 Batch 2 as complete for V1 milestone purposes, with later Step 4 work reserved for hardening and freeze follow-up rather than first-time CLI wiring or runnable-milestone delivery.
 
 ## Verification
 - `npm.cmd test`
@@ -501,4 +509,6 @@
 - Step 4 Batch 2 Part 2 is complete.
 - Step 4 Batch 2 Part 3 is complete.
 - Step 4 Batch 2 Part 4 is complete.
-- Next Step 4 target: `forge_step4_batch2/part-5-stage-6-cli-wiring-tests-and-runnable-milestone.md`
+- Step 4 Batch 2 Part 5 is complete.
+- Step 4 Batch 2 is complete.
+- Next Step 4 work is reserved for hardening and freeze follow-up.
