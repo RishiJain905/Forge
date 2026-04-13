@@ -1004,3 +1004,193 @@ The LLM-assisted generation can infer typed variables and temporal properties fr
 - [ ] Write tests for each component
 - [ ] Test with real coordination scenarios (queue, rate limiter, ownership transfer)
 - [ ] Document enhanced formal verification in docs/forge_step3_formal.md
+
+---
+
+## LLM Connection
+
+All LLM calls in this doc (`callLLM`) use the same connection mechanism defined in the models config. See `domain-context-enrichment.md` for the full config structure.
+
+### Call Interface
+
+```typescript
+// src/verify/llm.ts
+import { loadModelConfig } from "../../execute/config/store.js";
+
+export interface LLMCallOptions {
+  model?: string;          // Model name/id, defaults to active model
+  messages: Array<{
+    role: "system" | "user" | "assistant";
+    content: string;
+  }>;
+  temperature?: number;
+  maxTokens?: number;
+}
+
+export async function callLLM(options: LLMCallOptions): Promise<LLMResponse> {
+  const config = loadModelConfig();  // Reads from .forge/config.json
+  const modelEntry = resolveModel(config, options.model);
+
+  if (modelEntry.provider === "anthropic") {
+    return callAnthropicAPI(modelEntry, options);
+  } else {
+    return callOpenAICompatibleAPI(modelEntry, options);
+  }
+}
+
+async function callAnthropicAPI(
+  model: ModelEntry,
+  options: LLMCallOptions
+): Promise<LLMResponse> {
+  const response = await fetch(`${model.baseUrl}/v1/messages`, {
+    method: "POST",
+    headers: {
+      "x-api-key": model.apiKey,
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model: model.model,
+      max_tokens: options.maxTokens ?? model.maxOutputTokens ?? 8192,
+      messages: options.messages,
+      temperature: options.temperature ?? 0.7,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Anthropic API error: ${response.status} ${await response.text()}`);
+  }
+
+  const data = await response.json();
+  return {
+    content: data.content[0].text,
+    model: model.model,
+    usage: {
+      inputTokens: data.usage.input_tokens,
+      outputTokens: data.usage.output_tokens,
+    },
+  };
+}
+
+async function callOpenAICompatibleAPI(
+  model: ModelEntry,
+  options: LLMCallOptions
+): Promise<LLMResponse> {
+  const response = await fetch(`${model.baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${model.apiKey}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model: model.model,
+      max_tokens: options.maxTokens ?? model.maxOutputTokens ?? 8192,
+      messages: options.messages,
+      temperature: options.temperature ?? 0.7,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`OpenAI-compatible API error: ${response.status} ${await response.text()}`);
+  }
+
+  const data = await response.json();
+  return {
+    content: data.choices[0].message.content,
+    model: data.model ?? model.model,
+    usage: {
+      inputTokens: data.usage.prompt_tokens,
+      outputTokens: data.usage.completion_tokens,
+    },
+  };
+}
+
+export interface LLMResponse {
+  content: string;
+  model: string;
+  usage: {
+    inputTokens: number;
+    outputTokens: number;
+  };
+}
+```
+
+### Resolving the Active Model
+
+```typescript
+// src/verify/llm.ts
+function resolveModel(config: ForgeConfig, requestedModel?: string): ModelEntry {
+  // If explicitly requested, find by name or ID
+  if (requestedModel) {
+    const found = config.models.find(
+      (m) => m.model.includes(requestedModel) || m.id === requestedModel
+    );
+    if (found) return found;
+  }
+
+  // Otherwise use active model
+  return config.models[config.activeModelIndex];
+}
+```
+
+### Usage in Components
+
+Every component that needs an LLM just calls:
+
+```typescript
+// In generator.ts, inferrer.ts, explainer.ts
+import { callLLM } from "../llm.js";
+
+const response = await callLLM({
+  model: "glm-5.1",  // optional — defaults to active model
+  messages: [
+    { role: "system", content: systemPrompt },
+    { role: "user", content: userPrompt },
+  ],
+  temperature: 0.3,
+});
+```
+
+### Error Handling
+
+```typescript
+export class LLMError extends Error {
+  constructor(
+    message: string,
+    public code: "API_ERROR" | "RATE_LIMIT" | "INVALID_RESPONSE" | "NO_MODEL_CONFIGURED",
+    public retryable: boolean
+  ) {
+    super(message);
+  }
+}
+
+export async function callLLMWithRetry(options: LLMCallOptions, maxRetries = 2): Promise<LLMResponse> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await callLLM(options);
+    } catch (error) {
+      const isRetryable = error instanceof LLMError && error.retryable;
+      if (!isRetryable || attempt === maxRetries) throw error;
+      await sleep(Math.pow(2, attempt) * 1000);  // exponential backoff
+    }
+  }
+  throw new Error("unreachable");
+}
+```
+
+### No Model Configured
+
+If a user runs a feature that requires LLM but has no model configured:
+
+```typescript
+export async function requireLLMConfig(): Promise<void> {
+  const config = loadModelConfig();
+  if (!config.models || config.models.length === 0) {
+    throw new LLMError(
+      "No model configured. Run 'forge models add' to set up a model, or use --no-llm flag to skip LLM features.",
+      "NO_MODEL_CONFIGURED",
+      false
+    );
+  }
+}
+```
