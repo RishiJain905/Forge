@@ -105,10 +105,10 @@ const splitBoundaryPolicySchema = z.object({
   command: z.literal(`forge ${FORGE_SPLIT_COMMAND}`),
   stage: z.literal(FORGE_SPLIT_STAGE),
   purpose: z.string().min(1),
-  batch2Mission: z.string().min(1),
+  freezeGoal: z.string().min(1),
+  finishLine: z.array(z.string().min(1)).min(1),
   implementationPriorities: z.array(z.string().min(1)).min(1),
   requiredImplementationTasks: z.array(z.string().min(1)).min(1),
-  requiredCodeSurfaces: z.array(z.string().min(1)).min(1),
   authoritativeInputs: z.array(z.string().min(1)).min(1),
   deterministicFirst: z.literal(true),
   conservativeRegrouping: z.literal(true),
@@ -269,6 +269,78 @@ export const splitFoundationSchema = z.object({
       code: z.ZodIssueCode.custom,
       message: "Boundary policy command drifted from the Step 4 contract.",
       path: ["boundaryPolicy", "command"],
+    });
+  }
+
+  if (value.boundaryPolicy.freezeGoal !== STEP4_BOUNDARY_POLICY.freezeGoal) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Boundary policy freeze goal drifted from the Step 4 contract.",
+      path: ["boundaryPolicy", "freezeGoal"],
+    });
+  }
+
+  if (!isDeepStrictEqual(value.boundaryPolicy.finishLine, STEP4_BOUNDARY_POLICY.finishLine)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Boundary policy finish line drifted from the Step 4 contract.",
+      path: ["boundaryPolicy", "finishLine"],
+    });
+  }
+
+  if (!isDeepStrictEqual(value.boundaryPolicy.requiredImplementationTasks, STEP4_BOUNDARY_POLICY.requiredImplementationTasks)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Boundary policy required implementation tasks drifted from the Step 4 contract.",
+      path: ["boundaryPolicy", "requiredImplementationTasks"],
+    });
+  }
+
+  if (!isDeepStrictEqual(value.boundaryPolicy.authoritativeInputs, STEP4_BOUNDARY_POLICY.authoritativeInputs)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Boundary policy authoritative inputs drifted from the Step 4 contract.",
+      path: ["boundaryPolicy", "authoritativeInputs"],
+    });
+  }
+
+  if (!isDeepStrictEqual(value.boundaryPolicy.deferredCapabilities, STEP4_BOUNDARY_POLICY.deferredCapabilities)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Boundary policy deferred capabilities drifted from the Step 4 contract.",
+      path: ["boundaryPolicy", "deferredCapabilities"],
+    });
+  }
+
+  if (!isDeepStrictEqual(value.boundaryPolicy.disallowedCapabilities, STEP4_BOUNDARY_POLICY.disallowedCapabilities)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Boundary policy disallowed capabilities drifted from the Step 4 contract.",
+      path: ["boundaryPolicy", "disallowedCapabilities"],
+    });
+  }
+
+  if (!isDeepStrictEqual(value.workstreamContract.requiredFields, SPLIT_WORKSTREAM_REQUIRED_FIELDS)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Workstream contract required fields drifted from the Step 4 contract.",
+      path: ["workstreamContract", "requiredFields"],
+    });
+  }
+
+  if (!isDeepStrictEqual(value.workstreamContract.categories, SPLIT_STREAM_CATEGORIES)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Workstream contract categories drifted from the Step 4 contract.",
+      path: ["workstreamContract", "categories"],
+    });
+  }
+
+  if (!isDeepStrictEqual(value.workstreamContract.constraintSources, SPLIT_CONSTRAINT_SOURCES)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Workstream contract constraint sources drifted from the Step 4 contract.",
+      path: ["workstreamContract", "constraintSources"],
     });
   }
 
@@ -630,6 +702,38 @@ export const splitArtifactSchema = z.object({
     fallbackReason: z.string().min(1).optional(),
   }).strict().nullable(),
 }).strict().superRefine((value, context) => {
+  if (value.purpose !== STEP4_BOUNDARY_POLICY.purpose) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Split artifact purpose drifted from the Step 4 contract.",
+      path: ["purpose"],
+    });
+  }
+
+  if (!isDeepStrictEqual(value.workstream_contract.requiredFields, SPLIT_WORKSTREAM_REQUIRED_FIELDS)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Split artifact workstream required fields drifted from the Step 4 contract.",
+      path: ["workstream_contract", "requiredFields"],
+    });
+  }
+
+  if (!isDeepStrictEqual(value.workstream_contract.categories, SPLIT_STREAM_CATEGORIES)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Split artifact workstream categories drifted from the Step 4 contract.",
+      path: ["workstream_contract", "categories"],
+    });
+  }
+
+  if (!isDeepStrictEqual(value.workstream_contract.constraintSources, SPLIT_CONSTRAINT_SOURCES)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Split artifact workstream constraint sources drifted from the Step 4 contract.",
+      path: ["workstream_contract", "constraintSources"],
+    });
+  }
+
   const diagnosticWarnings = value.split_diagnostics.warning_items;
   const readinessWarnings = value.split_readiness.warning_items;
   if (

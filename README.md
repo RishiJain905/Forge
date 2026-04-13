@@ -576,6 +576,8 @@ Step 4 Batch 2 Part 4 hardens the shipped split outputs without reopening the pu
 
 Step 4 Batch 2 Part 5 closes the runnable milestone and default verification gate without reopening the split surface. `forge split` already ran the real Step 4 flow, so Part 5 hardens the shipped milestone by wiring a dedicated runnable-milestone regression into `npm.cmd test`, proving the packaged CLI can consume persisted Step 3 output plus the referenced Step 2 plan, build real workstreams/categories/merge-order output, persist honest `split.json` and `split-report.md` files, and keep CLI output minimal. Step 4 Batch 2 is now complete, with later Step 4 work reserved for hardening and freeze follow-up rather than first-time CLI wiring.
 
+Step 4 Batch 3 Part 1 is the finish-and-freeze framing pass over that already real split runtime. It makes the Step 4 freeze goal explicit in code, adds explicit finish-line and do-not-touch boundary metadata to the Step 4 boundary contract, reframes conservative regrouping as hardening the already-shipped aggressive regrouping behavior rather than reinventing it, adds dedicated Batch 3 Part 1 freeze coverage for grounded, warning-heavy, repeated-run, and debug-output split runs, and keeps the public `forge split` CLI plus top-level `split.json` / `split-report.md` contracts stable.
+
 ---
 
 # Repository Intent

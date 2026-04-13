@@ -355,8 +355,12 @@ async function main() {
     assert.ok(splitArtifact.workstream_contract.constraintSources.includes("dependency_graph"));
     assert.ok(splitArtifact.workstream_contract.constraintSources.includes("verification_readiness"));
     assert.equal(splitArtifact.split_diagnostics.usability_status, "actionable");
+    assert.match(splitArtifact.purpose, /V1-complete split stage/i);
+    assert.match(splitArtifact.purpose, /future bug fixes/i);
     assert.ok(Array.isArray(splitArtifact.boundaryNotes));
     assert.ok(splitArtifact.boundaryNotes.length > 0);
+    assert.ok(splitArtifact.boundaryNotes.some((entry) => /finish-and-freeze pass/i.test(entry)));
+    assert.ok(splitArtifact.boundaryNotes.some((entry) => /Step 5 can consume stable split outputs without guesswork/i.test(entry)));
     assert.ok(Array.isArray(splitArtifact.workstreams));
     assert.ok(Array.isArray(splitArtifact.dependency_edges));
     assert.ok(Array.isArray(splitArtifact.merge_order));
@@ -398,11 +402,14 @@ async function main() {
     assert.match(splitReport, /## Workstreams/);
     assert.match(splitReport, /## Split Readiness/);
     assert.match(splitReport, /## Output Files/);
+    assert.match(splitReport, /V1-complete split stage/i);
+    assert.match(splitReport, /future bug fixes/i);
     assert.match(splitReport, /split\.json and reports\/split-report\.md are the durable Step 4 outputs\./);
     assert.match(splitReport, /Execution Scope:/);
     assert.match(splitReport, /Blocked Workstream Count:/);
     assert.match(splitReport, /Partially Blocked Item Count:/);
     assert.match(splitReport, /Merge-Order Rule Count:/);
+    assert.doesNotMatch(splitReport, /Batch 2/i);
     assert.equal(/Part 2 keeps execution workstreams conservative/i.test(splitReport), false);
     assert.equal(/Part 2 keeps the actual regrouping output intentionally conservative/i.test(splitReport), false);
 

@@ -74,7 +74,7 @@ function buildSplitBoundaryNotes(foundation: SplitFoundationResult): string[] {
   return dedupeStrings([
     ...foundation.boundaryPolicy.deterministicFirstNotes,
     ...foundation.boundaryPolicy.conservativeRegroupingNotes,
-    "Batch 2 Part 3 applies explicit stream categories, safety constraints, merge-order expectations, and blocking visibility from persisted Step 2 and Step 3 inputs while keeping the Step 4 top-level contract stable.",
+    "Keep the Step 4 finish-and-freeze line explicit so Step 5 can consume stable split outputs without guesswork while the top-level split contract stays frozen.",
   ]);
 }
 

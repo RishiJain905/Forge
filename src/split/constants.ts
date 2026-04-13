@@ -54,58 +54,49 @@ export const SPLIT_CONSTRAINT_SOURCES = [
 ] as const;
 
 export const STEP4_SPLIT_PURPOSE =
-  "Transform verified planning output into safe execution-ready workstreams that preserve dependency, verification, and merge-order constraints." as const;
+  "Finish forge split as a V1-complete split stage and freeze it except for future bug fixes by transforming verified planning output into stable execution-ready workstreams that preserve dependency, verification, blocking, and merge-order constraints for clean Step 5 consumption." as const;
 
-export const STEP4_BATCH2_MISSION =
-  "Make forge split run through the real Step 4 pipeline and produce usable split outputs." as const;
+export const STEP4_BATCH3_FREEZE_GOAL =
+  "Finish Step 4 as a V1-complete split stage and freeze it except for future bug fixes." as const;
 
-export const STEP4_BATCH2_REQUIRED_IMPLEMENTATION_TASKS = [
-  "align current Step 4 code with the locked split contract",
-  "ensure one real orchestration path exists",
-  "build workstream construction first",
-  "stabilize stream categorization and safety application",
-  "implement merge-order and blocking logic",
-  "build real artifact/report output",
-  "wire the command and harden with tests",
+export const STEP4_BATCH3_FINISH_LINE = [
+  "`forge split` works reliably",
+  "`.forge/split.json` is contract-stable",
+  "`.forge/reports/split-report.md` is useful and consistent",
+  "debug split artifacts can be emitted in a stable way",
+  "warning/failure/readiness behavior is predictable",
+  "aggressive regrouping remains auditable and traceable",
+  "merge-order, blocked, and partially blocked semantics are stable",
+  "tests are strong enough that only bug-fix work should remain",
+  "Step 5 can consume Step 4 output without guessing",
+] as const;
+
+export const STEP4_BATCH3_REQUIRED_IMPLEMENTATION_TASKS = [
+  "close remaining Step 4 gaps",
+  "harden warnings, failures, readiness, and debug visibility",
+  "harden regrouping semantics",
+  "harden merge-order and blocking semantics",
+  "align outputs for clean Step 5 consumption",
+  "harden tests and freeze criteria",
 ] as const;
 
 export const STEP4_IMPLEMENTATION_PRIORITIES = [
-  "verify-artifact consumption",
-  "workstream construction",
-  "stream categories and safety application",
-  "merge-order and blocking logic",
-  "machine-readable artifact generation",
-  "human-readable split report",
-  "stable split orchestration",
-  "real tests for implemented behavior",
-] as const;
-
-export const STEP4_BATCH2_REQUIRED_CODE_SURFACES = [
-  "Step 4 shared types/contracts",
-  "Step 3 artifact consumption layer",
-  "workstream construction",
-  "stream-category logic",
-  "merge-order logic",
-  "blocking logic",
-  "carried-constraint logic",
-  "artifact/report builders",
-  "persistence",
-  "Step 4 runner/orchestrator",
-  "CLI wiring",
-  "Step 4 tests",
+  ...STEP4_BATCH3_REQUIRED_IMPLEMENTATION_TASKS,
 ] as const;
 
 export const STEP4_DETERMINISTIC_FIRST_NOTES = [
   "Consume the persisted Step 3 verify artifact instead of re-running broad verification logic.",
   "Load the referenced Step 2 plan artifact only as supporting structure for plan items, dependencies, conflict zones, test obligations, and parallelization signals.",
   "Treat Step 3 findings, constraints, carried-forward uncertainty, and split-readiness signals as authoritative safety inputs.",
-  "Keep the split skeleton deterministic-first so later assistive phrasing cannot override the safety model.",
+  "Keep one real orchestration path from persisted Step 3 plus Step 2 output to persisted split outputs.",
+  "Treat Batch 3 as the finish-and-freeze pass over the existing Step 4 runtime instead of a reason to start Step 5 behavior early.",
 ] as const;
 
 export const STEP4_CONSERVATIVE_REGROUPING_NOTES = [
-  "Preserve the Step 2 and Step 3 structure where possible instead of aggressively recomposing work.",
-  "Only regroup when safety and clarity clearly improve.",
-  "Keep blocked work explicit instead of burying it inside broad stream descriptions.",
+  "Keep the already-shipped stronger regrouping where it clearly improves execution readiness instead of reverting to placeholder one-stream-per-plan-item output.",
+  "Keep source traceability and grouping rationale explicit so regrouped work stays auditable.",
+  "Keep blocked and constrained work explicit instead of burying it inside broad stream descriptions.",
+  "Harden aggressive regrouping semantics rather than widening them with new unstable experiments right before freeze.",
 ] as const;
 
 export const STEP4_HONOR_MERGE_ORDER_ACTION =
@@ -122,15 +113,17 @@ export const STEP4_ALLOWED_SIDE_EFFECTS = [
 export const STEP4_DEFERRED_CAPABILITIES = [
   "forge execute",
   "forge integrate",
-  "interactive shell behavior",
+  "interactive slash-command mode",
   "memory backends",
+  "unrelated execution platform abstractions",
   "execution-packet prompt generation",
-  "freeform regrouping optimization",
 ] as const;
 
 export const STEP4_DISALLOWED_CAPABILITIES = [
   "execute code",
   "implement actual execution logic",
+  "implement forge execute",
+  "implement forge integrate",
   "modify code",
   "modify code as part of splitting",
   "edit source files directly",
@@ -141,8 +134,11 @@ export const STEP4_DISALLOWED_CAPABILITIES = [
   "ignore TLC-backed failures or mitigations",
   "hide blocked work",
   "hide unresolved risk inside broad stream descriptions",
-  "act like a freeform project-manager step",
-  "aggressively regroup work without a clear safety gain",
+  "treat regrouping as a new experimental design space",
+  "destabilize grouping semantics with experimental regrouping logic",
+  "rename files for aesthetics only",
+  "introduce large new abstractions",
+  "reopen the Step 4 orchestrator shape without strong reason",
   "redesign Step 4 architecture without strong reason",
 ] as const;
 
@@ -150,10 +146,10 @@ export interface Step4BoundaryPolicy {
   command: string;
   stage: string;
   purpose: string;
-  batch2Mission: string;
+  freezeGoal: string;
+  finishLine: readonly string[];
   implementationPriorities: readonly string[];
   requiredImplementationTasks: readonly string[];
-  requiredCodeSurfaces: readonly string[];
   authoritativeInputs: readonly string[];
   deterministicFirst: true;
   conservativeRegrouping: true;
@@ -168,10 +164,10 @@ export const STEP4_BOUNDARY_POLICY: Step4BoundaryPolicy = {
   command: FORGE_SPLIT_FULL_COMMAND,
   stage: FORGE_SPLIT_STAGE,
   purpose: STEP4_SPLIT_PURPOSE,
-  batch2Mission: STEP4_BATCH2_MISSION,
+  freezeGoal: STEP4_BATCH3_FREEZE_GOAL,
+  finishLine: STEP4_BATCH3_FINISH_LINE,
   implementationPriorities: STEP4_IMPLEMENTATION_PRIORITIES,
-  requiredImplementationTasks: STEP4_BATCH2_REQUIRED_IMPLEMENTATION_TASKS,
-  requiredCodeSurfaces: STEP4_BATCH2_REQUIRED_CODE_SURFACES,
+  requiredImplementationTasks: STEP4_BATCH3_REQUIRED_IMPLEMENTATION_TASKS,
   authoritativeInputs: [
     ".forge/verify.json",
     "source_plan.artifactPath",

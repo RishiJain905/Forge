@@ -434,6 +434,12 @@
   - Kept the public `forge split` CLI and frozen top-level `split.json` / `split-report.md` contract stable while proving durable on-disk split outputs, non-empty workstreams/dependency edges/merge-order output, carried-forward stream-constraint detail, and honest minimal CLI output.
   - Wired the new Batch 2 Part 5 suite into the default `npm.cmd test` gate and kept `scripts/smoke.mjs` as the broader packaged workflow proof instead of adding a second parallel smoke path.
   - Updated `README.md`, `progress.md`, and `S4-B2-Done/p5-done-summary.md` so Step 4 Batch 2 Part 5 and the full Batch 2 milestone are documented and traceable.
+- Batch 3.01: `part-1-batch3-goal-finish-line-and-do-not-touch.md` (Step 4)
+  - Treated Step 4 Batch 3 Part 1 as the umbrella finish-and-freeze pass over the existing `forge split` runtime instead of reopening the split orchestrator, redesigning the Step 4 architecture, or pulling Step 5 behavior forward.
+  - Expanded the Step 4 boundary policy with the explicit Batch 3 freeze goal, finish-line bullets, required implementation-task list, and do-not-touch guardrails for `forge execute`, `forge integrate`, future-platform ideas, regrouping experiments, aesthetic renames, and large new abstractions while keeping aggressive regrouping framed as hardening rather than reinvention.
+  - Added `tests/split.batch3-freeze-criteria.test.ts`, tightened `tests/split.goal-and-boundaries.test.ts`, updated `tests/split.workstream-model.test.ts`, and strengthened `scripts/smoke.mjs` so grounded, warning-heavy, repeated-run, and debug-output split behavior now anchors the Batch 3 Part 1 finish line.
+  - Kept the public `forge split` CLI and the frozen top-level `split.json` / `split-report.md` contract stable while letting the stronger finish-and-freeze wording flow through the existing Step 4 purpose, boundary notes, report, and smoke surfaces.
+  - Updated `README.md`, `progress.md`, and `docs/S4-B3-Done/p1-done.md` so Step 4 Batch 3 Part 1 is documented and traceable.
 
 ## Current Branch State
 - `dev` includes the completed Step 1 work through Batch 4.05, including the frozen Step 2 handoff contract from Intake.
@@ -472,7 +478,8 @@
 - `dev` now includes Step 4 Batch 2 Part 3, including post-grouping stream safety resolution from carried-forward verification evidence, explicit blocked-plan-item versus blocked-workstream visibility, dependency-driven blocking propagation, safe-parallel merge-order constraints, and richer carried-forward stream-constraint rationale while keeping the public split surface stable.
 - `dev` now includes Step 4 Batch 2 Part 4, including explicit split-readiness execution-scope/count fields, report/debug parity for those derived readiness signals, warning-heavy readability hardening, and a dedicated Stage 5 regression suite while keeping the frozen top-level split contract stable.
 - `dev` now includes Step 4 Batch 2 Part 5, including a dedicated runnable-milestone regression wired into the default `npm.cmd test` gate, proof that packaged `forge split` can run end to end from persisted Step 3 plus Step 2 artifacts with durable outputs, and documentation that closes Step 4 Batch 2 without reopening the public split surface.
-- `dev` now treats Step 4 Batch 2 as complete for V1 milestone purposes, with later Step 4 work reserved for hardening and freeze follow-up rather than first-time CLI wiring or runnable-milestone delivery.
+- `dev` now includes Step 4 Batch 3 Part 1, including the explicit freeze goal and finish-line metadata in the Step 4 boundary contract, Batch 3 freeze coverage for grounded/warning/debug/determinism split runs, and stronger finish-and-freeze smoke wording while keeping the public split surface stable.
+- `dev` now treats remaining Step 4 work as Batch 3 hardening and Step 5 handoff follow-through rather than first-time CLI wiring, architecture redesign, or early `forge execute` behavior.
 
 ## Verification
 - `npm.cmd test`
@@ -511,4 +518,5 @@
 - Step 4 Batch 2 Part 4 is complete.
 - Step 4 Batch 2 Part 5 is complete.
 - Step 4 Batch 2 is complete.
-- Next Step 4 work is reserved for hardening and freeze follow-up.
+- Step 4 Batch 3 Part 1 is complete.
+- Next Step 4 target: Batch 3 Part 2 (`part-2-regrouping-blocking-and-merge-order-hardening.md`).
