@@ -1,11 +1,11 @@
 import type {
   SplitCommandFailure,
+  SplitExecutionScope,
   SplitFoundationResult,
   SplitInputIssue,
   SplitReadinessResolution,
   SplitReadinessStatus,
 } from "./types.js";
-import { STEP4_HONOR_MERGE_ORDER_ACTION } from "./constants.js";
 
 function cloneIssue(issue: SplitInputIssue): SplitInputIssue {
   return {
@@ -105,16 +105,27 @@ function buildRecommendedUserActions(params: {
   if (params.warningItems.some((item) => item.code === "BLOCKED_WORKSTREAMS_PRESENT")) {
     actions.push("Keep blocked workstreams out of active execution until their carried-forward evidence is resolved.");
   }
+  if (params.warningItems.some((item) => item.code === "PARTIALLY_BLOCKED_STREAM_ITEMS_PRESENT")) {
+    actions.push("Keep blocked plan items explicit inside their grouped workstreams until their carried-forward blockers are resolved.");
+  }
 
   return dedupeStrings(actions);
 }
 
-function hasBlockedStreams(warningItems: SplitInputIssue[]): boolean {
-  return warningItems.some((item) => item.code === "BLOCKED_WORKSTREAMS_PRESENT");
-}
+function resolveExecutionScope(params: {
+  ready: boolean;
+  blockedWorkstreamCount: number;
+  partiallyBlockedItemCount: number;
+}): SplitExecutionScope {
+  if (!params.ready) {
+    return "none";
+  }
 
-function hasMergeOrderConstraints(additionalRecommendedActions: string[] | undefined): boolean {
-  return additionalRecommendedActions?.includes(STEP4_HONOR_MERGE_ORDER_ACTION) ?? false;
+  if (params.blockedWorkstreamCount > 0 || params.partiallyBlockedItemCount > 0) {
+    return "non_blocked_only";
+  }
+
+  return "all_streams";
 }
 
 function buildReadinessSummary(params: {
@@ -124,7 +135,10 @@ function buildReadinessSummary(params: {
   blockingItems: SplitInputIssue[];
   warningItems: SplitInputIssue[];
   partialOutput: SplitCommandFailure | null;
-  additionalRecommendedActions?: string[];
+  executionScope: SplitExecutionScope;
+  blockedWorkstreamCount: number;
+  partiallyBlockedItemCount: number;
+  mergeOrderRuleCount: number;
 }): string {
   if (!params.ready) {
     if (params.foundation.splitInput.usability.status === "upstream_blocked") {
@@ -138,14 +152,18 @@ function buildReadinessSummary(params: {
     return "Forge split should not proceed until the upstream blockers are resolved.";
   }
 
-  const blockedStreamsPresent = hasBlockedStreams(params.warningItems);
-  const mergeOrderConstraintsPresent = hasMergeOrderConstraints(params.additionalRecommendedActions);
-  const assignmentPhrase = blockedStreamsPresent
-    ? "Not all items were safely assigned"
-    : "All items were safely assigned";
+  const blockedStreamsPresent = params.blockedWorkstreamCount > 0;
+  const partiallyBlockedItemsPresent = params.partiallyBlockedItemCount > 0;
+  const mergeOrderConstraintsPresent = params.mergeOrderRuleCount > 0;
+  const normalizedAssignmentPhrase = params.executionScope === "all_streams"
+    ? "All items were safely assigned"
+    : "Not all items were safely assigned";
   const blockedStreamsPhrase = blockedStreamsPresent
     ? "blocked streams remain visible"
     : "no blocked streams remain";
+  const partiallyBlockedPhrase = partiallyBlockedItemsPresent
+    ? "partially blocked items remain visible"
+    : "no partially blocked items remain";
   const mergeOrderPhrase = mergeOrderConstraintsPresent
     ? "merge-order constraints were imposed"
     : "no merge-order constraints were needed";
@@ -153,18 +171,21 @@ function buildReadinessSummary(params: {
 
   if (params.status === "ready_with_warnings") {
     if (params.partialOutput !== null && params.warningItems.length === 0) {
-      return `Forge split can proceed with warnings. ${assignmentPhrase}, ${blockedStreamsPhrase}, ${mergeOrderPhrase}, and ${executionPhrase}.`;
+      return `Forge split can proceed with warnings. ${normalizedAssignmentPhrase}, ${blockedStreamsPhrase}, ${partiallyBlockedPhrase}, ${mergeOrderPhrase}, and ${executionPhrase}.`;
     }
 
-    return `Forge split can proceed with warnings. ${assignmentPhrase}, ${blockedStreamsPhrase}, ${mergeOrderPhrase}, and ${executionPhrase}.`;
+    return `Forge split can proceed with warnings. ${normalizedAssignmentPhrase}, ${blockedStreamsPhrase}, ${partiallyBlockedPhrase}, ${mergeOrderPhrase}, and ${executionPhrase}.`;
   }
 
-  return `Forge split can proceed. ${assignmentPhrase}, ${blockedStreamsPhrase}, ${mergeOrderPhrase}, and ${executionPhrase}.`;
+  return `Forge split can proceed. ${normalizedAssignmentPhrase}, ${blockedStreamsPhrase}, ${partiallyBlockedPhrase}, ${mergeOrderPhrase}, and ${executionPhrase}.`;
 }
 
 export function resolveSplitReadiness(params: {
   foundation: SplitFoundationResult;
   failure: SplitCommandFailure | null;
+  blockedWorkstreamCount?: number;
+  partiallyBlockedItemCount?: number;
+  mergeOrderRuleCount?: number;
   additionalWarningItems?: SplitInputIssue[];
   additionalRecommendedActions?: string[];
 }): SplitReadinessResolution {
@@ -185,6 +206,11 @@ export function resolveSplitReadiness(params: {
       ? "ready_with_warnings"
       : "ready"
     : "blocked";
+  const executionScope = resolveExecutionScope({
+    ready,
+    blockedWorkstreamCount: params.blockedWorkstreamCount ?? 0,
+    partiallyBlockedItemCount: params.partiallyBlockedItemCount ?? 0,
+  });
 
   const splitDiagnostics = {
     usability_status: params.foundation.splitInput.usability.status,
@@ -203,8 +229,15 @@ export function resolveSplitReadiness(params: {
       blockingItems,
       warningItems,
       partialOutput,
-      additionalRecommendedActions: params.additionalRecommendedActions,
+      executionScope,
+      blockedWorkstreamCount: params.blockedWorkstreamCount ?? 0,
+      partiallyBlockedItemCount: params.partiallyBlockedItemCount ?? 0,
+      mergeOrderRuleCount: params.mergeOrderRuleCount ?? 0,
     }),
+    execution_scope: executionScope,
+    blocked_workstream_count: params.blockedWorkstreamCount ?? 0,
+    partially_blocked_item_count: params.partiallyBlockedItemCount ?? 0,
+    merge_order_rule_count: params.mergeOrderRuleCount ?? 0,
     warning_items: warningItems,
     blocking_issues: blockingItems,
     partial_output: partialOutput,

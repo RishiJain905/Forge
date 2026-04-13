@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 import { STEP4_BOUNDARY_POLICY } from "../src/split/constants.js";
 import { buildSplitFoundation, runSplitFoundation } from "../src/split/runner.js";
+import { validateSplitFoundationResult } from "../src/split/schema.js";
 import type { PlanArtifact } from "../src/plan/types.js";
 import type { VerifyArtifact } from "../src/verify/types.js";
 import {
@@ -95,6 +96,37 @@ await runScenario(
         foundation.splitInput.context.verificationCases,
         verifyArtifact.verification_cases,
       );
+      assert.equal(
+        foundation.splitInput.uncertainty.planCarryForward.confidence.level,
+        planArtifact.carry_forward.confidence.level,
+      );
+      assert.deepEqual(
+        foundation.splitInput.uncertainty.verifyCarryForward.concerns,
+        verifyArtifact.carry_forward.concerns,
+      );
+      const planItemEvidence = foundation.splitInput.planItemEvidence;
+      assert.equal(planItemEvidence.length, planArtifact.plan_items.length);
+      assert.deepEqual(
+        planItemEvidence.map((item) => item.planItem.id),
+        planArtifact.plan_items.map((item) => item.id),
+      );
+      assert.ok(
+        planItemEvidence.every((item) =>
+          item.verificationCases.every((verificationCase) =>
+            verificationCase.sourcePlanItemIds.includes(item.planItem.id)
+          ) &&
+          item.findings.every((finding) =>
+            item.verificationCases.some((verificationCase) =>
+              verificationCase.id === finding.verification_case_id
+            )
+          ) &&
+          item.constraints.every((constraint) =>
+            item.verificationCases.some((verificationCase) =>
+              verificationCase.id === constraint.verification_case_id
+            )
+          )
+        ),
+      );
       assert.deepEqual(foundation.carryForward.sourceIntake, planArtifact.source_intake);
       assert.deepEqual(foundation.carryForward.planCarryForward, planArtifact.carry_forward);
       assert.deepEqual(foundation.carryForward.verifyCarryForward, verifyArtifact.carry_forward);
@@ -160,6 +192,49 @@ await runScenario(
         result.foundation.splitInput.usability.warningItems.some(
           (item) => item.code === "VERIFY_WARNING_CONTEXT_PRESENT",
         ),
+      );
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
+  "split foundation rejects tampered plan-item evidence that drops source findings",
+  async () => {
+    const repoRoot = await createTempRepo("forge-split-evidence-invalid-");
+
+    try {
+      await seedSpecRepo(repoRoot);
+
+      const intakeResult = runForgeBinary(
+        ["intake", "--repo", repoRoot, "--spec", join(repoRoot, "task.md")],
+        repoRoot,
+      );
+      assert.equal(intakeResult.code, 0, intakeResult.stderr);
+
+      const planResult = runForgePlanBinary(["--repo", repoRoot], repoRoot);
+      assert.equal(planResult.code, 0, planResult.stderr);
+
+      const verifyResult = runForgeVerifyBinary(["--repo", repoRoot], repoRoot);
+      assert.equal(verifyResult.code, 0, verifyResult.stderr);
+
+      const result = await runSplitFoundation({ repo: repoRoot }, repoRoot);
+
+      assert.equal(result.status, "ready");
+      assert.ok(result.foundation);
+
+      const tamperedFoundation = JSON.parse(JSON.stringify(result.foundation)) as typeof result.foundation;
+      const evidenceWithFindings = tamperedFoundation.splitInput.planItemEvidence.find(
+        (item) => item.findings.length > 0,
+      );
+
+      assert.ok(evidenceWithFindings, "expected at least one plan item evidence bundle with findings");
+      evidenceWithFindings.findings = evidenceWithFindings.findings.slice(1);
+
+      assert.throws(
+        () => validateSplitFoundationResult(tamperedFoundation),
+        /Plan-item evidence findings must mirror the source verification cases exactly/i,
       );
     } finally {
       await disposeTempRepo(repoRoot);
@@ -331,16 +406,87 @@ await runScenario(
 );
 
 await runScenario(
+  "split foundation returns a deterministic failure when verify.json references the wrong plan artifact path",
+  async () => {
+    const repoRoot = await createTempRepo("forge-split-plan-mismatch-");
+
+    try {
+      await seedSpecRepo(repoRoot);
+
+      const intakeResult = runForgeBinary(
+        ["intake", "--repo", repoRoot, "--spec", join(repoRoot, "task.md")],
+        repoRoot,
+      );
+      assert.equal(intakeResult.code, 0, intakeResult.stderr);
+
+      const planResult = runForgePlanBinary(["--repo", repoRoot], repoRoot);
+      assert.equal(planResult.code, 0, planResult.stderr);
+
+      const verifyResult = runForgeVerifyBinary(["--repo", repoRoot], repoRoot);
+      assert.equal(verifyResult.code, 0, verifyResult.stderr);
+
+      const verifyArtifact = await readJsonFile<VerifyArtifact>(verifyArtifactPath(repoRoot));
+      verifyArtifact.source_plan.artifactPath = ".forge/plan.json";
+      await writeRepoFile(repoRoot, ".forge/verify.json", JSON.stringify(verifyArtifact, null, 2));
+
+      const result = await runSplitFoundation({ repo: repoRoot }, repoRoot);
+
+      assert.equal(result.status, "failed");
+      assert.equal(result.foundation, null);
+      assert.equal(result.failure?.code, "SPLIT_SOURCE_PLAN_MISMATCH");
+      assert.match(result.failure?.message ?? "", /referenced plan artifact|mismatch/i);
+    } finally {
+      await disposeTempRepo(repoRoot);
+    }
+  },
+);
+
+await runScenario(
   "step 4 boundary policy explicitly prohibits later-step drift and keeps regrouping conservative",
   async () => {
     assert.match(STEP4_BOUNDARY_POLICY.purpose, /execution-ready workstreams/i);
     assert.ok(STEP4_BOUNDARY_POLICY.authoritativeInputs.includes(".forge/verify.json"));
+    assert.match(
+      STEP4_BOUNDARY_POLICY.batch2Mission,
+      /real Step 4 pipeline and produce usable split outputs/i,
+    );
+    assert.deepEqual(STEP4_BOUNDARY_POLICY.implementationPriorities, [
+      "verify-artifact consumption",
+      "workstream construction",
+      "stream categories and safety application",
+      "merge-order and blocking logic",
+      "machine-readable artifact generation",
+      "human-readable split report",
+      "stable split orchestration",
+      "real tests for implemented behavior",
+    ]);
+    assert.deepEqual(STEP4_BOUNDARY_POLICY.requiredImplementationTasks, [
+      "align current Step 4 code with the locked split contract",
+      "ensure one real orchestration path exists",
+      "build workstream construction first",
+      "stabilize stream categorization and safety application",
+      "implement merge-order and blocking logic",
+      "build real artifact/report output",
+      "wire the command and harden with tests",
+    ]);
+    assert.ok(STEP4_BOUNDARY_POLICY.requiredCodeSurfaces.includes("Step 4 runner/orchestrator"));
+    assert.ok(STEP4_BOUNDARY_POLICY.requiredCodeSurfaces.includes("CLI wiring"));
+    assert.ok(STEP4_BOUNDARY_POLICY.requiredCodeSurfaces.includes("Step 4 tests"));
     assert.equal(STEP4_BOUNDARY_POLICY.deterministicFirst, true);
     assert.equal(STEP4_BOUNDARY_POLICY.conservativeRegrouping, true);
     assert.ok(STEP4_BOUNDARY_POLICY.disallowedCapabilities.includes("execute code"));
     assert.ok(STEP4_BOUNDARY_POLICY.disallowedCapabilities.includes("rewrite planning logic"));
     assert.ok(STEP4_BOUNDARY_POLICY.disallowedCapabilities.includes("redo verification"));
     assert.ok(STEP4_BOUNDARY_POLICY.disallowedCapabilities.includes("hide blocked work"));
+    assert.ok(STEP4_BOUNDARY_POLICY.disallowedCapabilities.includes("implement actual execution logic"));
+    assert.ok(STEP4_BOUNDARY_POLICY.disallowedCapabilities.includes("create code-edit prompts or packets"));
+    assert.ok(STEP4_BOUNDARY_POLICY.disallowedCapabilities.includes("modify code as part of splitting"));
+    assert.ok(STEP4_BOUNDARY_POLICY.disallowedCapabilities.includes("ignore verification constraints"));
+    assert.ok(
+      STEP4_BOUNDARY_POLICY.disallowedCapabilities.includes(
+        "redesign Step 4 architecture without strong reason",
+      ),
+    );
     assert.ok(STEP4_BOUNDARY_POLICY.deferredCapabilities.includes("forge execute"));
     assert.ok(STEP4_BOUNDARY_POLICY.deferredCapabilities.includes("forge integrate"));
     assert.ok(STEP4_BOUNDARY_POLICY.conservativeRegroupingNotes.length > 0);

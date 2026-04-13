@@ -405,6 +405,35 @@
   - Kept the public Step 4 split surface stable while hardening `split_readiness` summary wording so it now states whether split can proceed, whether all items were safely assigned, whether blocked streams remain, whether merge-order constraints were imposed, and what later execution must honor.
   - Reworked the `Split Readiness` report section to expose explicit `Can Proceed`, `All Items Safely Assigned`, `Blocked Streams`, `Merge-Order Constraints`, and `Later Execution Must Honor` lines without changing the frozen heading order or top-level artifact contract.
   - Reused the merge-order recommended-action wording through a shared constant and kept the rest of the runtime narrow to Part 5 closeout instead of reopening the Step 4 contract or workstream model.
+- Batch 2.01: `part-1-batch2-goal-and-do-not-touch.md` (Step 4)
+  - Treated Step 4 Batch 2 Part 1 as a narrow alignment pass over the already real split pipeline instead of reopening the Step 4 architecture or pulling Part 2-5 work forward.
+  - Expanded the Step 4 boundary policy with the explicit Batch 2 mission, ordered implementation priorities, required implementation-task/code-surface lists, and the missing do-not-touch guardrails for Step 5 execution drift, code-edit packet generation, code modification during splitting, verification-constraint bypass, and broad Step 4 redesign.
+  - Tightened `tests/split.goal-and-boundaries.test.ts`, added a stale-wording regression in `tests/split.workstream-model.test.ts`, and removed the lingering Batch 1 wording from generated workstream descriptions so the stronger Batch 2 contract is locked in direct coverage.
+  - Updated `README.md`, `progress.md`, and `S4-B2-Done/p1-done-summary.md` so Step 4 Batch 2 Part 1 is documented and traceable.
+- Batch 2.02: `part-2-stage-1-and-2-verify-consumption-workstream-foundation.md` (Step 4)
+  - Reworked the Step 4 input foundation so split now consumes persisted Step 3 verification output plus the referenced Step 2 plan artifact through indexed `planItemEvidence` bundles instead of rebuilding workstream context from repeated raw-array scans.
+  - Hardened the Step 4 schema and type contracts so source readiness, diagnostics, verification targets/cases/findings/constraints, conflict zones, dependency entries, test obligations, and carried-forward concerns stay aligned per plan item and fail deterministically when the Step 3 to Step 2 handoff is tampered with or mismatched.
+  - Reworked workstream construction to build deterministic grouped or standalone streams from the normalized evidence, including bounded direct source/test regrouping, bounded same-surface sibling regrouping, grouped-id dependency collapsing, and explicit blocked-stream handling without changing the public `forge split` CLI or top-level split artifact contract.
+  - Expanded `tests/split.goal-and-boundaries.test.ts`, `tests/split.workstream-model.test.ts`, and `tests/split.part5-readiness-and-first-build-order.test.ts` so Stage 1 and Stage 2 now lock warning-heavy handoffs, tampered evidence failures, nested-path grouping, migration-order exclusions, hard-dependency-only direct pairs, deterministic candidate tie-breaks, and grouped merge-order behavior under the default test gate.
+  - Updated `README.md`, `progress.md`, and `S4-B2-Done/p2-done-summary.md` so Step 4 Batch 2 Part 2 is documented and traceable.
+- Batch 2.03: `part-3-stage-3-and-4-stream-categories-safety-merge-order-and-blocking.md` (Step 4)
+  - Reworked the Stage 3 and Stage 4 split safety pass so final stream categories are now resolved after grouping from real verification constraints, mitigations, carry-forward concerns, warning-grade readiness context, and blocked-upstream dependencies instead of relying on the raw Step 2 parallelization signal alone.
+  - Extended blocked-item and stream-constraint modeling so split now distinguishes blocked workstreams from partially blocked plan items, keeps base-versus-final category rationale visible, and preserves blocking reasons, merge-order reasons, warning notes, mitigation summaries, blocked-upstream linkage, and blocked-plan-item linkage in the carried-forward constraint detail.
+  - Expanded merge-order handling so dependency ordering remains explicit even for otherwise `safe_parallel` streams when sequencing, interface-first, or hard prerequisites still constrain merge order, while standalone downstream work that depends on blocked upstream streams now becomes honestly blocked.
+  - Expanded `tests/split.workstream-model.test.ts`, `tests/split.artifact-schema.test.ts`, `tests/split.report.test.ts`, and `tests/split.part5-readiness-and-first-build-order.test.ts` so warning-grade protected merges, blocked-upstream dependency propagation, partial blocked-plan-item visibility, safe-parallel dependency merge-order rules, and richer stream-constraint detail are locked under the default test gate.
+  - Updated `README.md`, `progress.md`, and `S4-B2-Done/p3-done-summary.md` so Step 4 Batch 2 Part 3 is documented and traceable.
+- Batch 2.04: `part-4-stage-5-artifacts-report-debug-outputs-and-readiness.md` (Step 4)
+  - Hardened the nested Step 4 readiness contract with explicit `execution_scope`, `blocked_workstream_count`, `partially_blocked_item_count`, and `merge_order_rule_count` fields without changing the frozen top-level `split.json` key set or CLI surface.
+  - Reworked readiness resolution and schema validation so those derived fields stay aligned with real blocked-item and merge-order output on ready, warning-heavy, blocked, and fallback-output-failed runs while keeping the top-level artifact status versus nested readiness semantics intact.
+  - Reworked `split-report.md` so the `Split Readiness` section now renders explicit execution-scope and count fields directly from the artifact instead of recomputing readiness from raw arrays in report-only logic.
+  - Added `tests/split.batch2-part4-artifacts-report-debug-readiness.test.ts`, expanded split artifact/debug/readiness regressions plus smoke coverage, and wired the new Stage 5 suite into the default `npm.cmd test` gate.
+  - Updated `README.md`, `progress.md`, and `S4-B2-Done/p4-done-summary.md` so Step 4 Batch 2 Part 4 is documented and traceable.
+- Batch 2.05: `part-5-stage-6-cli-wiring-tests-and-runnable-milestone.md` (Step 4)
+  - Added `tests/split.batch2-part5-runnable-milestone.test.ts` so Step 4 now has a dedicated Batch 2 closeout suite that proves the default `npm.cmd test` gate includes the shipped split runnable-milestone regression.
+  - Added a packaged-CLI runnable-milestone regression that runs `forge intake` -> `forge plan` -> `forge verify` -> `forge split`, removes upstream source inputs before the split run, and proves persisted Step 3 plus Step 2 artifacts are sufficient for the real Step 4 path.
+  - Kept the public `forge split` CLI and frozen top-level `split.json` / `split-report.md` contract stable while proving durable on-disk split outputs, non-empty workstreams/dependency edges/merge-order output, carried-forward stream-constraint detail, and honest minimal CLI output.
+  - Wired the new Batch 2 Part 5 suite into the default `npm.cmd test` gate and kept `scripts/smoke.mjs` as the broader packaged workflow proof instead of adding a second parallel smoke path.
+  - Updated `README.md`, `progress.md`, and `S4-B2-Done/p5-done-summary.md` so Step 4 Batch 2 Part 5 and the full Batch 2 milestone are documented and traceable.
 
 ## Current Branch State
 - `dev` includes the completed Step 1 work through Batch 4.05, including the frozen Step 2 handoff contract from Intake.
@@ -438,6 +467,12 @@
 - `dev` now includes Step 4 Batch 1 Part 3, including the real workstream builder, explicit stream-category safety rules, populated dependency and merge-order output, blocked-workstream warning handling, and inspectable stream-constraint debug detail while keeping the frozen top-level split contract stable.
 - `dev` now includes Step 4 Batch 1 Part 4, including explicit merge-order rule objects, explicit blocked-item versus blocked-workstream modeling, public carried-forward stream-constraint detail in `split.json` and `split-report.md`, and matching debug/smoke/test coverage while keeping the frozen top-level split contract stable.
 - `dev` now includes Step 4 Batch 1 Part 5, including explicit Part 5 acceptance gates, stronger split readiness/report wording for assignment status plus merge-order and blocked-stream caution, and confirmation that Step 4 Batch 1 can proceed without reopening its frozen contract.
+- `dev` now includes Step 4 Batch 2 Part 1, including the explicit Batch 2 split mission, ordered implementation priorities, required implementation-task/code-surface metadata in the Step 4 boundary contract, stronger do-not-touch guardrails, and direct regression coverage for stale Batch 1 wording while keeping the public split surface stable.
+- `dev` now includes Step 4 Batch 2 Part 2, including indexed Step 3-to-Step 2 split input normalization, stronger per-plan-item evidence validation, bounded real regrouping for direct source/test pairs and same-surface siblings, deterministic grouped dependency collapse, and dedicated regressions that keep the public split surface stable while making the internal workstream foundation materially real.
+- `dev` now includes Step 4 Batch 2 Part 3, including post-grouping stream safety resolution from carried-forward verification evidence, explicit blocked-plan-item versus blocked-workstream visibility, dependency-driven blocking propagation, safe-parallel merge-order constraints, and richer carried-forward stream-constraint rationale while keeping the public split surface stable.
+- `dev` now includes Step 4 Batch 2 Part 4, including explicit split-readiness execution-scope/count fields, report/debug parity for those derived readiness signals, warning-heavy readability hardening, and a dedicated Stage 5 regression suite while keeping the frozen top-level split contract stable.
+- `dev` now includes Step 4 Batch 2 Part 5, including a dedicated runnable-milestone regression wired into the default `npm.cmd test` gate, proof that packaged `forge split` can run end to end from persisted Step 3 plus Step 2 artifacts with durable outputs, and documentation that closes Step 4 Batch 2 without reopening the public split surface.
+- `dev` now treats Step 4 Batch 2 as complete for V1 milestone purposes, with later Step 4 work reserved for hardening and freeze follow-up rather than first-time CLI wiring or runnable-milestone delivery.
 
 ## Verification
 - `npm.cmd test`
@@ -470,4 +505,10 @@
 - Step 4 Batch 1 Part 4 is complete.
 - Step 4 Batch 1 Part 5 is complete.
 - Step 4 Batch 1 is complete.
-- No later Step 4 batch spec is present in-repo yet.
+- Step 4 Batch 2 Part 1 is complete.
+- Step 4 Batch 2 Part 2 is complete.
+- Step 4 Batch 2 Part 3 is complete.
+- Step 4 Batch 2 Part 4 is complete.
+- Step 4 Batch 2 Part 5 is complete.
+- Step 4 Batch 2 is complete.
+- Next Step 4 work is reserved for hardening and freeze follow-up.

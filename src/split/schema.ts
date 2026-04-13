@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isDeepStrictEqual } from "node:util";
 
 import { FORGE_SCHEMA_VERSION } from "../intake/constants.js";
 import { planArtifactSchema } from "../plan/schema.js";
@@ -8,6 +9,7 @@ import {
   FORGE_SPLIT_COMMAND,
   FORGE_SPLIT_STAGE,
   SPLIT_CONSTRAINT_SOURCES,
+  SPLIT_EXECUTION_SCOPES,
   SPLIT_INPUT_TOO_WEAK,
   SPLIT_STREAM_CATEGORIES,
   SPLIT_WORKSTREAM_REQUIRED_FIELDS,
@@ -44,6 +46,19 @@ const splitPlanReferenceSchema = z.object({
   failure: planArtifactSchema.shape.failure,
 }).strict();
 
+const splitPlanItemEvidenceSchema = z.object({
+  planItem: planArtifactSchema.shape.plan_items.element,
+  dependencyGraphEntries: z.array(planArtifactSchema.shape.dependency_graph.element),
+  conflictZones: z.array(planArtifactSchema.shape.conflict_zones.element),
+  testObligations: z.array(planArtifactSchema.shape.test_obligations.element),
+  parallelizationSignal: planArtifactSchema.shape.parallelization_signals.element.nullable(),
+  verificationTargets: z.array(verifyArtifactSchema.shape.verification_targets.element),
+  verificationCases: z.array(verifyArtifactSchema.shape.verification_cases.element),
+  findings: z.array(verifyArtifactSchema.shape.findings.element),
+  constraints: z.array(verifyArtifactSchema.shape.constraints.element),
+  concerns: z.array(planArtifactSchema.shape.carry_forward.shape.concerns.element),
+}).strict();
+
 const splitPlanningInputSchema = z.object({
   context: z.object({
     planItemContract: planArtifactSchema.shape.plan_item_contract,
@@ -59,6 +74,7 @@ const splitPlanningInputSchema = z.object({
     findings: verifyArtifactSchema.shape.findings,
     constraints: verifyArtifactSchema.shape.constraints,
   }).strict(),
+  planItemEvidence: z.array(splitPlanItemEvidenceSchema),
   uncertainty: z.object({
     sourceIntake: planArtifactSchema.shape.source_intake,
     planCarryForward: planArtifactSchema.shape.carry_forward,
@@ -89,6 +105,10 @@ const splitBoundaryPolicySchema = z.object({
   command: z.literal(`forge ${FORGE_SPLIT_COMMAND}`),
   stage: z.literal(FORGE_SPLIT_STAGE),
   purpose: z.string().min(1),
+  batch2Mission: z.string().min(1),
+  implementationPriorities: z.array(z.string().min(1)).min(1),
+  requiredImplementationTasks: z.array(z.string().min(1)).min(1),
+  requiredCodeSurfaces: z.array(z.string().min(1)).min(1),
   authoritativeInputs: z.array(z.string().min(1)).min(1),
   deterministicFirst: z.literal(true),
   conservativeRegrouping: z.literal(true),
@@ -104,6 +124,129 @@ const splitWorkstreamContractSchema = z.object({
   categories: z.array(z.enum(SPLIT_STREAM_CATEGORIES)).min(1),
   constraintSources: z.array(z.enum(SPLIT_CONSTRAINT_SOURCES)).min(1),
 }).strict();
+
+type SplitPlanningContext = SplitFoundationResult["splitInput"]["context"];
+type SplitDependencyGraphEntry = SplitPlanningContext["dependencyGraph"][number];
+type SplitConflictZone = SplitPlanningContext["conflictZones"][number];
+type SplitTestObligation = SplitPlanningContext["testObligations"][number];
+type SplitParallelizationSignal = SplitPlanningContext["parallelizationSignals"][number];
+type SplitVerificationTarget = SplitPlanningContext["verificationTargets"][number];
+type SplitVerificationCase = SplitPlanningContext["verificationCases"][number];
+type SplitFinding = SplitPlanningContext["findings"][number];
+type SplitConstraint = SplitPlanningContext["constraints"][number];
+type SplitConcern = SplitFoundationResult["splitInput"]["uncertainty"]["planCarryForward"]["concerns"][number];
+
+interface SplitPlanItemEvidenceExpectations {
+  dependencyGraphEntriesByPlanItemId: Map<string, SplitDependencyGraphEntry[]>;
+  conflictZonesByPlanItemId: Map<string, SplitConflictZone[]>;
+  testObligationsByPlanItemId: Map<string, SplitTestObligation[]>;
+  parallelizationSignalByPlanItemId: Map<string, SplitParallelizationSignal>;
+  verificationTargetsByPlanItemId: Map<string, SplitVerificationTarget[]>;
+  verificationCasesByPlanItemId: Map<string, SplitVerificationCase[]>;
+  findingsByPlanItemId: Map<string, SplitFinding[]>;
+  constraintsByPlanItemId: Map<string, SplitConstraint[]>;
+  concernsByPlanItemId: Map<string, SplitConcern[]>;
+}
+
+function addToLookup<T>(lookup: Map<string, T[]>, key: string, value: T): void {
+  const bucket = lookup.get(key);
+  if (bucket) {
+    bucket.push(value);
+    return;
+  }
+
+  lookup.set(key, [value]);
+}
+
+function buildSplitPlanItemEvidenceExpectations(
+  context: SplitPlanningContext,
+  concerns: SplitConcern[],
+): SplitPlanItemEvidenceExpectations {
+  const dependencyGraphEntriesByPlanItemId = new Map<string, SplitDependencyGraphEntry[]>();
+  const conflictZonesByPlanItemId = new Map<string, SplitConflictZone[]>();
+  const testObligationsByPlanItemId = new Map<string, SplitTestObligation[]>();
+  const parallelizationSignalByPlanItemId = new Map<string, SplitParallelizationSignal>();
+  const verificationTargetsByPlanItemId = new Map<string, SplitVerificationTarget[]>();
+  const verificationCasesByPlanItemId = new Map<string, SplitVerificationCase[]>();
+  const findingsByPlanItemId = new Map<string, SplitFinding[]>();
+  const constraintsByPlanItemId = new Map<string, SplitConstraint[]>();
+  const concernsByPlanItemId = new Map<string, SplitConcern[]>();
+  const verificationCasePlanItemIdsById = new Map<string, string[]>();
+
+  for (const dependencyGraphEntry of context.dependencyGraph) {
+    addToLookup(dependencyGraphEntriesByPlanItemId, dependencyGraphEntry.planItemId, dependencyGraphEntry);
+  }
+
+  for (const conflictZone of context.conflictZones) {
+    for (const planItemId of conflictZone.planItemIds) {
+      addToLookup(conflictZonesByPlanItemId, planItemId, conflictZone);
+    }
+  }
+
+  for (const testObligation of context.testObligations) {
+    addToLookup(testObligationsByPlanItemId, testObligation.planItemId, testObligation);
+  }
+
+  for (const signal of context.parallelizationSignals) {
+    if (!parallelizationSignalByPlanItemId.has(signal.planItemId)) {
+      parallelizationSignalByPlanItemId.set(signal.planItemId, signal);
+    }
+  }
+
+  for (const target of context.verificationTargets) {
+    for (const planItemId of target.sourcePlanItemIds) {
+      addToLookup(verificationTargetsByPlanItemId, planItemId, target);
+    }
+  }
+
+  for (const verificationCase of context.verificationCases) {
+    verificationCasePlanItemIdsById.set(verificationCase.id, verificationCase.sourcePlanItemIds);
+
+    for (const planItemId of verificationCase.sourcePlanItemIds) {
+      addToLookup(verificationCasesByPlanItemId, planItemId, verificationCase);
+    }
+  }
+
+  for (const finding of context.findings) {
+    const planItemIds = verificationCasePlanItemIdsById.get(finding.verification_case_id);
+    if (!planItemIds) {
+      continue;
+    }
+
+    for (const planItemId of planItemIds) {
+      addToLookup(findingsByPlanItemId, planItemId, finding);
+    }
+  }
+
+  for (const constraint of context.constraints) {
+    const planItemIds = verificationCasePlanItemIdsById.get(constraint.verification_case_id);
+    if (!planItemIds) {
+      continue;
+    }
+
+    for (const planItemId of planItemIds) {
+      addToLookup(constraintsByPlanItemId, planItemId, constraint);
+    }
+  }
+
+  for (const concern of concerns) {
+    for (const planItemId of concern.planItemIds) {
+      addToLookup(concernsByPlanItemId, planItemId, concern);
+    }
+  }
+
+  return {
+    dependencyGraphEntriesByPlanItemId,
+    conflictZonesByPlanItemId,
+    testObligationsByPlanItemId,
+    parallelizationSignalByPlanItemId,
+    verificationTargetsByPlanItemId,
+    verificationCasesByPlanItemId,
+    findingsByPlanItemId,
+    constraintsByPlanItemId,
+    concernsByPlanItemId,
+  };
+}
 
 export const splitFoundationSchema = z.object({
   command: z.literal(`forge ${FORGE_SPLIT_COMMAND}`),
@@ -155,6 +298,129 @@ export const splitFoundationSchema = z.object({
       path: ["splitInput", "usability", "blockingItems"],
     });
   }
+
+  const planItems = value.splitInput.context.planItems;
+  if (value.splitInput.planItemEvidence.length !== planItems.length) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Split plan-item evidence must exist for every plan item.",
+      path: ["splitInput", "planItemEvidence"],
+    });
+  }
+
+  const evidenceExpectations = buildSplitPlanItemEvidenceExpectations(
+    value.splitInput.context,
+    value.splitInput.uncertainty.planCarryForward.concerns,
+  );
+
+  for (const [index, evidence] of value.splitInput.planItemEvidence.entries()) {
+    const planItem = planItems[index];
+    if (!planItem) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Split plan-item evidence must stay aligned with plan items.",
+        path: ["splitInput", "planItemEvidence", index],
+      });
+      continue;
+    }
+
+    if (evidence.planItem.id !== planItem.id) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Split plan-item evidence must preserve plan-item ordering and ids.",
+        path: ["splitInput", "planItemEvidence", index, "planItem", "id"],
+      });
+    }
+
+    if (!isDeepStrictEqual(evidence.planItem, planItem)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Plan-item evidence must preserve the source plan item exactly.",
+        path: ["splitInput", "planItemEvidence", index, "planItem"],
+      });
+    }
+
+    const expectedDependencyGraphEntries = evidenceExpectations.dependencyGraphEntriesByPlanItemId.get(planItem.id) ?? [];
+    if (!isDeepStrictEqual(evidence.dependencyGraphEntries, expectedDependencyGraphEntries)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Plan-item evidence dependency graph entries must mirror the source plan item exactly.",
+        path: ["splitInput", "planItemEvidence", index, "dependencyGraphEntries"],
+      });
+    }
+
+    const expectedConflictZones = evidenceExpectations.conflictZonesByPlanItemId.get(planItem.id) ?? [];
+    if (!isDeepStrictEqual(evidence.conflictZones, expectedConflictZones)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Plan-item evidence conflict zones must mirror the source plan item exactly.",
+        path: ["splitInput", "planItemEvidence", index, "conflictZones"],
+      });
+    }
+
+    const expectedTestObligations = evidenceExpectations.testObligationsByPlanItemId.get(planItem.id) ?? [];
+    if (!isDeepStrictEqual(evidence.testObligations, expectedTestObligations)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Plan-item evidence test obligations must mirror the source plan item exactly.",
+        path: ["splitInput", "planItemEvidence", index, "testObligations"],
+      });
+    }
+
+    const expectedParallelizationSignal = evidenceExpectations.parallelizationSignalByPlanItemId.get(planItem.id) ?? null;
+    if (!isDeepStrictEqual(evidence.parallelizationSignal, expectedParallelizationSignal)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Plan-item evidence parallelization signals must mirror the source plan item exactly.",
+        path: ["splitInput", "planItemEvidence", index, "parallelizationSignal"],
+      });
+    }
+
+    const expectedVerificationTargets = evidenceExpectations.verificationTargetsByPlanItemId.get(planItem.id) ?? [];
+    if (!isDeepStrictEqual(evidence.verificationTargets, expectedVerificationTargets)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Plan-item evidence verification targets must mirror the source plan item exactly.",
+        path: ["splitInput", "planItemEvidence", index, "verificationTargets"],
+      });
+    }
+
+    const expectedVerificationCases = evidenceExpectations.verificationCasesByPlanItemId.get(planItem.id) ?? [];
+    if (!isDeepStrictEqual(evidence.verificationCases, expectedVerificationCases)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Plan-item evidence verification cases must mirror the source plan item exactly.",
+        path: ["splitInput", "planItemEvidence", index, "verificationCases"],
+      });
+    }
+
+    const expectedFindings = evidenceExpectations.findingsByPlanItemId.get(planItem.id) ?? [];
+    if (!isDeepStrictEqual(evidence.findings, expectedFindings)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Plan-item evidence findings must mirror the source verification cases exactly.",
+        path: ["splitInput", "planItemEvidence", index, "findings"],
+      });
+    }
+
+    const expectedConstraints = evidenceExpectations.constraintsByPlanItemId.get(planItem.id) ?? [];
+    if (!isDeepStrictEqual(evidence.constraints, expectedConstraints)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Plan-item evidence constraints must mirror the source verification cases exactly.",
+        path: ["splitInput", "planItemEvidence", index, "constraints"],
+      });
+    }
+
+    const expectedConcerns = evidenceExpectations.concernsByPlanItemId.get(planItem.id) ?? [];
+    if (!isDeepStrictEqual(evidence.concerns, expectedConcerns)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Plan-item evidence concerns must mirror the source plan item exactly.",
+        path: ["splitInput", "planItemEvidence", index, "concerns"],
+      });
+    }
+  }
 });
 
 export function validateSplitFoundationResult(result: unknown): SplitFoundationResult {
@@ -196,7 +462,7 @@ const splitMergeOrderEntrySchema = z.object({
 
 const splitBlockedItemSchema = z.object({
   id: z.string().min(1),
-  kind: z.enum(["input_blocker", "blocked_workstream"]),
+  kind: z.enum(["input_blocker", "blocked_workstream", "blocked_plan_item"]),
   code: z.string().min(1),
   message: z.string().min(1),
   workstreamId: z.string().min(1).nullable(),
@@ -210,8 +476,14 @@ const splitBlockedItemSchema = z.object({
 
 const splitStreamConstraintDetailSchema = z.object({
   workstreamId: z.string().min(1),
+  baseCategory: z.enum(SPLIT_STREAM_CATEGORIES),
   category: z.enum(SPLIT_STREAM_CATEGORIES),
   appliedRules: z.array(z.string().min(1)),
+  categoryReasons: z.array(z.string().min(1)),
+  mergeOrderReasons: z.array(z.string().min(1)),
+  blockingReasons: z.array(z.string().min(1)),
+  warningNotes: z.array(z.string().min(1)),
+  mitigationSummaries: z.array(z.string().min(1)),
   sourceDependencyIds: z.array(z.string().min(1)),
   sourceConflictZoneIds: z.array(z.string().min(1)),
   sourceTestObligationIds: z.array(z.string().min(1)),
@@ -221,6 +493,8 @@ const splitStreamConstraintDetailSchema = z.object({
   sourceConstraintIds: z.array(z.string().min(1)),
   sourceConcernIds: z.array(z.string().min(1)),
   sourceReadinessIds: z.array(z.enum(["planning_readiness", "verification_readiness"])),
+  blockedUpstreamWorkstreamIds: z.array(z.string().min(1)),
+  blockedPlanItemIds: z.array(z.string().min(1)),
   mergeOrderRuleIds: z.array(z.string().min(1)),
   blockedItemIds: z.array(z.string().min(1)),
   mergeOrderRequirements: z.array(z.string().min(1)),
@@ -270,6 +544,10 @@ const splitReadinessSchema = z.object({
   ready: z.boolean(),
   status: z.enum(["ready", "ready_with_warnings", "blocked"]),
   summary: z.string().min(1),
+  execution_scope: z.enum(SPLIT_EXECUTION_SCOPES),
+  blocked_workstream_count: z.number().int().nonnegative(),
+  partially_blocked_item_count: z.number().int().nonnegative(),
+  merge_order_rule_count: z.number().int().nonnegative(),
   warning_items: z.array(splitInputIssueSchema),
   blocking_issues: z.array(splitInputIssueSchema),
   partial_output: z.object({
@@ -428,6 +706,19 @@ export const splitArtifactSchema = z.object({
     });
   }
 
+  const expectedExecutionScope = !value.split_readiness.ready
+    ? "none"
+    : value.split_readiness.blocked_workstream_count > 0 || value.split_readiness.partially_blocked_item_count > 0
+      ? "non_blocked_only"
+      : "all_streams";
+  if (value.split_readiness.execution_scope !== expectedExecutionScope) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Split readiness execution scope must match the ready and blocked-item state.",
+      path: ["split_readiness", "execution_scope"],
+    });
+  }
+
   const carriedPlanningReadiness = value.carried_forward_constraints.planning_readiness;
   if (
     JSON.stringify(carriedPlanningReadiness) !==
@@ -455,6 +746,29 @@ export const splitArtifactSchema = z.object({
   const workstreamIds = new Set(value.workstreams.map((workstream) => workstream.id));
   const mergeOrderIds = new Set(value.merge_order.map((entry) => entry.id));
   const blockedItemIds = new Set(value.blocked_items.map((item) => item.id));
+  const blockedWorkstreamCount = value.blocked_items.filter((item) => item.kind === "blocked_workstream").length;
+  const partiallyBlockedItemCount = value.blocked_items.filter((item) => item.kind === "blocked_plan_item").length;
+  if (value.split_readiness.blocked_workstream_count !== blockedWorkstreamCount) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Split readiness blocked_workstream_count must match blocked_items.",
+      path: ["split_readiness", "blocked_workstream_count"],
+    });
+  }
+  if (value.split_readiness.partially_blocked_item_count !== partiallyBlockedItemCount) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Split readiness partially_blocked_item_count must match blocked_items.",
+      path: ["split_readiness", "partially_blocked_item_count"],
+    });
+  }
+  if (value.split_readiness.merge_order_rule_count !== value.merge_order.length) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Split readiness merge_order_rule_count must match merge_order.",
+      path: ["split_readiness", "merge_order_rule_count"],
+    });
+  }
   for (const [index, workstream] of value.workstreams.entries()) {
     if (workstream.category === "blocked" && workstream.blockedReason === null) {
       context.addIssue({

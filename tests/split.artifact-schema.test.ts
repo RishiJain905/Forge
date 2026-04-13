@@ -90,6 +90,14 @@ interface SplitArtifact {
   carried_forward_constraints: {
     stream_constraint_details: Array<{
       workstreamId: string;
+      baseCategory: string;
+      categoryReasons: string[];
+      mergeOrderReasons: string[];
+      blockingReasons: string[];
+      warningNotes: string[];
+      mitigationSummaries: string[];
+      blockedUpstreamWorkstreamIds: string[];
+      blockedPlanItemIds: string[];
       mergeOrderRuleIds: string[];
       blockedItemIds: string[];
     }>;
@@ -99,6 +107,10 @@ interface SplitArtifact {
   };
   split_readiness: {
     status: "ready" | "ready_with_warnings" | "blocked";
+    execution_scope: "all_streams" | "non_blocked_only" | "none";
+    blocked_workstream_count: number;
+    partially_blocked_item_count: number;
+    merge_order_rule_count: number;
   };
 }
 
@@ -188,11 +200,24 @@ await runScenario(
       assert.ok(artifact.carried_forward_constraints.stream_constraint_details.length > 0);
       assert.ok(
         artifact.carried_forward_constraints.stream_constraint_details.every((detail) =>
-          Array.isArray(detail.mergeOrderRuleIds) && Array.isArray(detail.blockedItemIds),
+          detail.baseCategory.length > 0 &&
+          Array.isArray(detail.categoryReasons) &&
+          Array.isArray(detail.mergeOrderReasons) &&
+          Array.isArray(detail.blockingReasons) &&
+          Array.isArray(detail.warningNotes) &&
+          Array.isArray(detail.mitigationSummaries) &&
+          Array.isArray(detail.blockedUpstreamWorkstreamIds) &&
+          Array.isArray(detail.blockedPlanItemIds) &&
+          Array.isArray(detail.mergeOrderRuleIds) &&
+          Array.isArray(detail.blockedItemIds),
         ),
       );
       assert.equal(artifact.split_diagnostics.usability_status, "actionable");
       assert.equal(artifact.split_readiness.status, "ready_with_warnings");
+      assert.equal(artifact.split_readiness.execution_scope, "all_streams");
+      assert.equal(artifact.split_readiness.blocked_workstream_count, 0);
+      assert.equal(artifact.split_readiness.partially_blocked_item_count, 0);
+      assert.equal(artifact.split_readiness.merge_order_rule_count, artifact.merge_order.length);
       assert.ok(artifact.files.debugArtifactPath.endsWith("split-debug.json"));
       assert.ok(artifact.files.debugWorkstreamsPath.endsWith("workstreams.json"));
       assert.ok(artifact.files.debugMergeOrderPath.endsWith("merge-order.json"));

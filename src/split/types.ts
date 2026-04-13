@@ -2,12 +2,14 @@ import type { PlanArtifact } from "../plan/types.js";
 import type { VerifyArtifact } from "../verify/types.js";
 
 import type {
+  SPLIT_EXECUTION_SCOPES,
   SPLIT_CONSTRAINT_SOURCES,
   SPLIT_STREAM_CATEGORIES,
   SPLIT_WORKSTREAM_REQUIRED_FIELDS,
   Step4BoundaryPolicy,
 } from "./constants.js";
 
+export type SplitExecutionScope = typeof SPLIT_EXECUTION_SCOPES[number];
 export type SplitStreamCategory = typeof SPLIT_STREAM_CATEGORIES[number];
 export type SplitWorkstreamRequiredField = typeof SPLIT_WORKSTREAM_REQUIRED_FIELDS[number];
 export type SplitConstraintSource = typeof SPLIT_CONSTRAINT_SOURCES[number];
@@ -87,6 +89,19 @@ export interface SplitPlanningContext {
   constraints: VerifyArtifact["constraints"];
 }
 
+export interface SplitPlanItemEvidence {
+  planItem: PlanArtifact["plan_items"][number];
+  dependencyGraphEntries: PlanArtifact["dependency_graph"];
+  conflictZones: PlanArtifact["conflict_zones"];
+  testObligations: PlanArtifact["test_obligations"];
+  parallelizationSignal: PlanArtifact["parallelization_signals"][number] | null;
+  verificationTargets: VerifyArtifact["verification_targets"];
+  verificationCases: VerifyArtifact["verification_cases"];
+  findings: VerifyArtifact["findings"];
+  constraints: VerifyArtifact["constraints"];
+  concerns: PlanArtifact["carry_forward"]["concerns"];
+}
+
 export interface SplitPlanningUncertainty {
   sourceIntake: PlanArtifact["source_intake"];
   planCarryForward: PlanArtifact["carry_forward"];
@@ -105,6 +120,7 @@ export interface SplitInputUsability {
 
 export interface SplitPlanningInput {
   context: SplitPlanningContext;
+  planItemEvidence: SplitPlanItemEvidence[];
   uncertainty: SplitPlanningUncertainty;
   usability: SplitInputUsability;
 }
@@ -169,7 +185,7 @@ export interface SplitMergeOrderEntry {
 
 export interface SplitBlockedItem {
   id: string;
-  kind: "input_blocker" | "blocked_workstream";
+  kind: "input_blocker" | "blocked_workstream" | "blocked_plan_item";
   code: string;
   message: string;
   workstreamId: string | null;
@@ -183,8 +199,14 @@ export interface SplitBlockedItem {
 
 export interface SplitStreamConstraintDetail {
   workstreamId: string;
+  baseCategory: SplitStreamCategory;
   category: SplitStreamCategory;
   appliedRules: string[];
+  categoryReasons: string[];
+  mergeOrderReasons: string[];
+  blockingReasons: string[];
+  warningNotes: string[];
+  mitigationSummaries: string[];
   sourceDependencyIds: string[];
   sourceConflictZoneIds: string[];
   sourceTestObligationIds: string[];
@@ -194,6 +216,8 @@ export interface SplitStreamConstraintDetail {
   sourceConstraintIds: string[];
   sourceConcernIds: string[];
   sourceReadinessIds: string[];
+  blockedUpstreamWorkstreamIds: string[];
+  blockedPlanItemIds: string[];
   mergeOrderRuleIds: string[];
   blockedItemIds: string[];
   mergeOrderRequirements: string[];
@@ -245,6 +269,10 @@ export interface SplitReadiness {
   ready: boolean;
   status: SplitReadinessStatus;
   summary: string;
+  execution_scope: SplitExecutionScope;
+  blocked_workstream_count: number;
+  partially_blocked_item_count: number;
+  merge_order_rule_count: number;
   warning_items: SplitInputIssue[];
   blocking_issues: SplitInputIssue[];
   partial_output: SplitCommandFailure | null;

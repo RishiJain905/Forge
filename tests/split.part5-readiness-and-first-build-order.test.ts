@@ -84,6 +84,14 @@ type SplitArtifact = {
     };
     stream_constraint_details: Array<{
       workstreamId: string;
+      baseCategory: string;
+      categoryReasons: string[];
+      mergeOrderReasons: string[];
+      blockingReasons: string[];
+      warningNotes: string[];
+      mitigationSummaries: string[];
+      blockedUpstreamWorkstreamIds: string[];
+      blockedPlanItemIds: string[];
       mergeOrderRuleIds: string[];
       blockedItemIds: string[];
     }>;
@@ -98,6 +106,10 @@ type SplitArtifact = {
     ready: boolean;
     status: string;
     summary: string;
+    execution_scope: "all_streams" | "non_blocked_only" | "none";
+    blocked_workstream_count: number;
+    partially_blocked_item_count: number;
+    merge_order_rule_count: number;
     warning_items: Array<{ code: string; message: string }>;
     blocking_issues: Array<{ code: string; message: string }>;
     partial_output: { code: string; message: string; fallbackReason?: string } | null;
@@ -171,8 +183,41 @@ function sectionBody(report: string, heading: string): string[] {
     .filter((line) => line.length > 0);
 }
 
+function buildPlanItemEvidenceFromContext(
+  context: SplitFoundationResult["splitInput"]["context"],
+  concerns: SplitFoundationResult["splitInput"]["uncertainty"]["planCarryForward"]["concerns"],
+): SplitFoundationResult["splitInput"]["planItemEvidence"] {
+  const verificationCasePlanItemIdsById = new Map<string, string[]>();
+
+  for (const verificationCase of context.verificationCases) {
+    verificationCasePlanItemIdsById.set(verificationCase.id, verificationCase.sourcePlanItemIds);
+  }
+
+  return context.planItems.map((planItem) => ({
+    planItem,
+    dependencyGraphEntries: context.dependencyGraph.filter((entry) => entry.planItemId === planItem.id),
+    conflictZones: context.conflictZones.filter((zone) => zone.planItemIds.includes(planItem.id)),
+    testObligations: context.testObligations.filter((entry) => entry.planItemId === planItem.id),
+    parallelizationSignal:
+      context.parallelizationSignals.find((signal) => signal.planItemId === planItem.id) ?? null,
+    verificationTargets: context.verificationTargets.filter((target) =>
+      target.sourcePlanItemIds.includes(planItem.id),
+    ),
+    verificationCases: context.verificationCases.filter((verificationCase) =>
+      verificationCase.sourcePlanItemIds.includes(planItem.id),
+    ),
+    findings: context.findings.filter((finding) =>
+      (verificationCasePlanItemIdsById.get(finding.verification_case_id) ?? []).includes(planItem.id),
+    ),
+    constraints: context.constraints.filter((constraint) =>
+      (verificationCasePlanItemIdsById.get(constraint.verification_case_id) ?? []).includes(planItem.id),
+    ),
+    concerns: concerns.filter((concern) => concern.planItemIds.includes(planItem.id)),
+  }));
+}
+
 function createReadinessFoundationFixture(): SplitFoundationResult {
-  return {
+  const foundation = {
     command: "forge split",
     stage: "step4",
     purpose: STEP4_BOUNDARY_POLICY.purpose,
@@ -261,6 +306,13 @@ function createReadinessFoundationFixture(): SplitFoundationResult {
       constraintSources: [...SPLIT_CONSTRAINT_SOURCES],
     },
   } as unknown as SplitFoundationResult;
+
+  foundation.splitInput.planItemEvidence = buildPlanItemEvidenceFromContext(
+    foundation.splitInput.context,
+    foundation.splitInput.uncertainty.planCarryForward.concerns,
+  );
+
+  return foundation;
 }
 
 function createWorkstreamFoundationFixture(): SplitFoundationResult {
@@ -274,7 +326,7 @@ function createWorkstreamFoundationFixture(): SplitFoundationResult {
     status: "carried_forward",
   };
 
-  return {
+  const foundation = {
     command: "forge split",
     stage: "step4",
     purpose: STEP4_BOUNDARY_POLICY.purpose,
@@ -581,6 +633,13 @@ function createWorkstreamFoundationFixture(): SplitFoundationResult {
       constraintSources: [...SPLIT_CONSTRAINT_SOURCES],
     },
   } as unknown as SplitFoundationResult;
+
+  foundation.splitInput.planItemEvidence = buildPlanItemEvidenceFromContext(
+    foundation.splitInput.context,
+    foundation.splitInput.uncertainty.planCarryForward.concerns,
+  );
+
+  return foundation;
 }
 
 async function readSplitArtifact(repoRoot: string, outputDir = ".forge"): Promise<SplitArtifact> {
@@ -678,6 +737,9 @@ await runScenario(
     const readiness = resolveSplitReadiness({
       foundation: createReadinessFoundationFixture(),
       failure: null,
+      blockedWorkstreamCount: workstreamBuild.blockedItems.filter((item) => item.kind === "blocked_workstream").length,
+      partiallyBlockedItemCount: workstreamBuild.blockedItems.filter((item) => item.kind === "blocked_plan_item").length,
+      mergeOrderRuleCount: workstreamBuild.mergeOrder.length,
       additionalWarningItems: workstreamBuild.warningItems,
       additionalRecommendedActions: [
         "Honor the explicit merge_order rules before execution and integration.",
@@ -704,16 +766,16 @@ await runScenario(
     assert.ok(
       workstreamBuild.mergeOrder.some(
         (entry) =>
-          entry.workstreamId === "ws-plan-after" &&
+          entry.workstreamId === "ws-plan-safe__plan-after" &&
           entry.ruleType === "dependency" &&
-          entry.mustMergeAfterWorkstreamIds.includes("ws-plan-safe"),
+          entry.mustMergeAfterWorkstreamIds.length === 0,
       ),
       "expected dependency-driven merge order to remain explicit",
     );
     assert.ok(
       workstreamBuild.streamConstraintDetails.some(
         (detail) =>
-          detail.workstreamId === "ws-plan-after" &&
+          detail.workstreamId === "ws-plan-safe__plan-after" &&
           detail.mergeOrderRuleIds.length > 0 &&
           detail.blockedItemIds.length === 0,
       ),
@@ -729,6 +791,10 @@ await runScenario(
       "expected blocked-stream detail to stay linked to the blocked stream",
     );
     assert.equal(readiness.splitReadiness.status, "ready_with_warnings");
+    assert.equal(readiness.splitReadiness.execution_scope, "non_blocked_only");
+    assert.equal(readiness.splitReadiness.blocked_workstream_count, 1);
+    assert.equal(readiness.splitReadiness.partially_blocked_item_count, 0);
+    assert.equal(readiness.splitReadiness.merge_order_rule_count, 1);
     assert.match(readiness.splitReadiness.summary, /blocked streams/i);
   },
 );
@@ -743,6 +809,10 @@ await runScenario(
 
     assert.equal(readiness.splitReadiness.ready, true);
     assert.equal(readiness.splitReadiness.status, "ready");
+    assert.equal(readiness.splitReadiness.execution_scope, "all_streams");
+    assert.equal(readiness.splitReadiness.blocked_workstream_count, 0);
+    assert.equal(readiness.splitReadiness.partially_blocked_item_count, 0);
+    assert.equal(readiness.splitReadiness.merge_order_rule_count, 0);
     assert.equal(readiness.splitReadiness.warning_items.length, 0);
     assert.equal(readiness.splitReadiness.blocking_issues.length, 0);
     assert.equal(readiness.splitReadiness.recommended_user_actions.length, 0);
@@ -763,10 +833,16 @@ await runScenario(
       assert.ok(["ready", "ready_with_warnings"].includes(artifact.split_readiness.status));
       assert.match(artifact.split_readiness.summary, /all items were safely assigned/i);
       assert.match(artifact.split_readiness.summary, /merge-order constraints/i);
+      assert.equal(artifact.split_readiness.execution_scope, "all_streams");
+      assert.equal(artifact.split_readiness.blocked_workstream_count, 0);
+      assert.equal(artifact.split_readiness.partially_blocked_item_count, 0);
+      assert.equal(artifact.split_readiness.merge_order_rule_count, artifact.merge_order.length);
       assert.match(readinessBody, /Can Proceed:/i);
       assert.match(readinessBody, /All Items Safely Assigned:/i);
-      assert.match(readinessBody, /Blocked Streams:/i);
-      assert.match(readinessBody, /Merge-Order Constraints:/i);
+      assert.match(readinessBody, /Execution Scope:/i);
+      assert.match(readinessBody, /Blocked Workstream Count:/i);
+      assert.match(readinessBody, /Partially Blocked Item Count:/i);
+      assert.match(readinessBody, /Merge-Order Rule Count:/i);
       assert.match(readinessBody, /Later Execution Must Honor:/i);
     } finally {
       await disposeTempRepo(repoRoot);
@@ -807,9 +883,17 @@ await runScenario(
         artifact.blocked_items.some((item) => item.kind === "input_blocker"),
         "expected input blockers to stay explicit",
       );
+      assert.equal(artifact.split_readiness.execution_scope, "none");
+      assert.equal(
+        artifact.split_readiness.blocked_workstream_count,
+        artifact.blocked_items.filter((item) => item.kind === "blocked_workstream").length,
+      );
+      assert.equal(artifact.split_readiness.partially_blocked_item_count, 0);
+      assert.equal(artifact.split_readiness.merge_order_rule_count, artifact.merge_order.length);
       assert.match(artifact.split_readiness.summary, /persisted Step 3 handoff is unblocked/i);
       assert.match(readinessBody, /Can Proceed:/i);
-      assert.match(readinessBody, /Blocked Streams:/i);
+      assert.match(readinessBody, /Execution Scope:\s+none/i);
+      assert.match(readinessBody, /Blocked Workstream Count:/i);
     } finally {
       await disposeTempRepo(repoRoot);
     }

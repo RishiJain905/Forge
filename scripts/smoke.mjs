@@ -386,6 +386,10 @@ async function main() {
     );
     assert.equal(splitArtifact.split_readiness.ready, true);
     assert.match(splitArtifact.split_readiness.status, /^ready(?:_with_warnings)?$/);
+    assert.equal(splitArtifact.split_readiness.execution_scope, "all_streams");
+    assert.equal(splitArtifact.split_readiness.blocked_workstream_count, 0);
+    assert.equal(splitArtifact.split_readiness.partially_blocked_item_count, 0);
+    assert.equal(splitArtifact.split_readiness.merge_order_rule_count, splitArtifact.merge_order.length);
     assert.ok(Array.isArray(splitArtifact.split_readiness.recommended_user_actions));
     assert.ok(splitArtifact.summary.length > 0);
     assert.match(splitReport, /# Forge Split Report/);
@@ -395,6 +399,10 @@ async function main() {
     assert.match(splitReport, /## Split Readiness/);
     assert.match(splitReport, /## Output Files/);
     assert.match(splitReport, /split\.json and reports\/split-report\.md are the durable Step 4 outputs\./);
+    assert.match(splitReport, /Execution Scope:/);
+    assert.match(splitReport, /Blocked Workstream Count:/);
+    assert.match(splitReport, /Partially Blocked Item Count:/);
+    assert.match(splitReport, /Merge-Order Rule Count:/);
     assert.equal(/Part 2 keeps execution workstreams conservative/i.test(splitReport), false);
     assert.equal(/Part 2 keeps the actual regrouping output intentionally conservative/i.test(splitReport), false);
 
