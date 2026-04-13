@@ -49,6 +49,20 @@ function pushCandidateTarget(targets: CandidateTarget[], target: CandidateTarget
   }
 }
 
+// Optimization: Use O(1) deduplication when building target lists with many items.
+// Expected impact: Speeds up candidate target resolution, particularly for large codebases.
+function pushCandidateTargetFast(
+  targets: CandidateTarget[],
+  seenSet: Set<string>,
+  target: CandidateTarget
+): void {
+  const key = `${target.path}:${target.kind}`;
+  if (!seenSet.has(key)) {
+    seenSet.add(key);
+    targets.push(target);
+  }
+}
+
 function normalizeFileStem(filePath: string): string {
   const baseName = path.posix.basename(normalizePathForComparison(filePath));
   const withoutExtension = baseName.replace(/\.[^.]+$/, "");
@@ -77,8 +91,18 @@ function matchesModuleSignal(filePath: string, moduleSignals: string[]): boolean
     return false;
   }
 
+  // Optimization: Pre-normalize the module signals before looping.
+  const targetSignals = moduleSignals.map((s) => normalizeModuleSignal(s));
+  return matchesModuleSignalFast(filePath, targetSignals);
+}
+
+function matchesModuleSignalFast(filePath: string, normalizedTargetSignals: string[]): boolean {
+  if (normalizedTargetSignals.length === 0) {
+    return false;
+  }
+
   const candidateTokens = tokenizeModuleCandidates(filePath);
-  return moduleSignals.some((moduleSignal) => candidateTokens.includes(normalizeModuleSignal(moduleSignal)));
+  return normalizedTargetSignals.some((signal) => candidateTokens.includes(signal));
 }
 
 function isSharedRiskPath(
@@ -154,14 +178,19 @@ function resolveExplicitCandidateTargets(
     [taskInput.normalizedTaskText, taskInput.parserInputText].filter(Boolean).join("\n"),
   );
   const explicitTargets: CandidateTarget[] = [];
+  const explicitSeen = new Set<string>();
+
+  // Optimization: Pre-normalize module signals once instead of re-calculating per file
+  const normalizedModuleSignals = moduleSignals.map((s) => normalizeModuleSignal(s));
 
   for (const sourceFile of repoContext.sourceFiles) {
     const matchedByPathText = textMentionsPath(text, sourceFile);
-    const matchedByModule = !matchedByPathText && matchesModuleSignal(sourceFile, moduleSignals);
+    const matchedByModule = !matchedByPathText && matchesModuleSignalFast(sourceFile, normalizedModuleSignals);
 
     if (matchedByPathText || matchedByModule) {
-      pushCandidateTarget(
+      pushCandidateTargetFast(
         explicitTargets,
+        explicitSeen,
         buildCandidateTarget(
           sourceFile,
           "source",
@@ -181,11 +210,12 @@ function resolveExplicitCandidateTargets(
 
   for (const testFile of repoContext.testFiles) {
     const matchedByPathText = textMentionsPath(text, testFile);
-    const matchedByModule = !matchedByPathText && matchesModuleSignal(testFile, moduleSignals);
+    const matchedByModule = !matchedByPathText && matchesModuleSignalFast(testFile, normalizedModuleSignals);
 
     if (matchedByPathText || matchedByModule) {
-      pushCandidateTarget(
+      pushCandidateTargetFast(
         explicitTargets,
+        explicitSeen,
         buildCandidateTarget(
           testFile,
           "test",
@@ -205,8 +235,9 @@ function resolveExplicitCandidateTargets(
 
   for (const manifestFile of repoContext.manifestFiles) {
     if (textMentionsManifest(text, manifestFile)) {
-      pushCandidateTarget(
+      pushCandidateTargetFast(
         explicitTargets,
+        explicitSeen,
         buildCandidateTarget(
           manifestFile,
           "manifest",
