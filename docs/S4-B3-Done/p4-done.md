@@ -1,7 +1,7 @@
 # Step 4 Batch 3 Part 4 Done Summary
 
 ## Implemented Spec
-- `forge_step4_batch3/part-4-step4-polish-test-hardening-and-freeze-criteria.md`
+- `docs/forge_step4_batch3/part-4-step4-polish-test-hardening-and-freeze-criteria.md`
 
 ## What Changed
 - Polished the shipped Step 4 report/output story so `split-report.md` now calls out the later-step gate directly in the overview, makes the split-readiness versus split-diagnostics roles explicit, and states more clearly that `split.json` plus `split-report.md` are the authoritative durable Step 4 outputs while debug mirrors remain secondary.
@@ -45,4 +45,4 @@
 - Step 4 is now frozen for V1 except for future bug fixes and is in bug-fix-only maintenance mode until explicit post-freeze bugfix work is needed
 
 ## Follow-On
-- Next Step 4 Batch 3 target: `forge_step4_batch3/part-5-step5-handoff-contract-for-execute.md`
+- Next Step 4 Batch 3 target: `docs/forge_step4_batch3/part-5-step5-handoff-contract-for-execute.md`

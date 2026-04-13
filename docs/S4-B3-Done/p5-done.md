@@ -1,7 +1,7 @@
 # Step 4 Batch 3 Part 5 Done Summary
 
 ## Implemented Spec
-- `forge_step4_batch3/part-5-step5-handoff-contract-for-execute.md`
+- `docs/forge_step4_batch3/part-5-step5-handoff-contract-for-execute.md`
 
 ## What Changed
 - Added a dedicated `tests/split.step5-handoff-contract.test.ts` regression that proves grounded, warning-heavy, blocked, and fallback-output split runs already provide the workstream, merge-order, blocked-item, carried-forward-constraint, and readiness story that Step 5 execute needs without rebuilding split state from Step 3 output.

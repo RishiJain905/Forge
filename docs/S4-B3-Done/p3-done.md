@@ -1,7 +1,7 @@
 # Step 4 Batch 3 Part 3 Done Summary
 
 ## Implemented Spec
-- `forge_step4_batch3/part-3-artifact-report-debug-output-and-readiness-hardening.md`
+- `docs/forge_step4_batch3/part-3-artifact-report-debug-output-and-readiness-hardening.md`
 
 ## What Changed
 - Hardened the split artifact without changing the frozen top-level `split.json` key set by adding an explicit `later_step_gate` plus stable `material_execution_limits` under `split_readiness`, so later stages can determine whether to proceed, proceed with caution, or stay blocked without reverse-engineering raw counts.
@@ -55,4 +55,4 @@
 - Remaining Step 4 work stays inside Batch 3 polish/test hardening plus the explicit Step 5 handoff contract follow-through
 
 ## Follow-On
-- Next Step 4 Batch 3 target: `forge_step4_batch3/part-4-step4-polish-test-hardening-and-freeze-criteria.md`
+- Next Step 4 Batch 3 target: `docs/forge_step4_batch3/part-4-step4-polish-test-hardening-and-freeze-criteria.md`

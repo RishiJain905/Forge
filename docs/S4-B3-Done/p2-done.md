@@ -1,7 +1,7 @@
 # Step 4 Batch 3 Part 2 Done Summary
 
 ## Implemented Spec
-- `forge_step4_batch3/part-2-regrouping-blocking-and-merge-order-hardening.md`
+- `docs/forge_step4_batch3/part-2-regrouping-blocking-and-merge-order-hardening.md`
 
 ## What Changed
 - Hardened the existing aggressive regrouping path instead of reopening the split architecture, so grouped workstreams now expose structured regrouping rationale, dominant-surface context, preserved source-plan-item ids, and per-member traceability directly inside `stream_constraint_details`.
@@ -49,4 +49,4 @@
 - Remaining Step 4 work stays inside Batch 3 output/readiness/test hardening plus the explicit Step 5 handoff contract follow-through
 
 ## Follow-On
-- Next Step 4 Batch 3 target: `forge_step4_batch3/part-3-artifact-report-debug-output-and-readiness-hardening.md`
+- Next Step 4 Batch 3 target: `docs/forge_step4_batch3/part-3-artifact-report-debug-output-and-readiness-hardening.md`

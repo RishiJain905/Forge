@@ -1,7 +1,7 @@
 # Step 4 Batch 3 Part 1 Done Summary
 
 ## Implemented Spec
-- `forge_step4_batch3/part-1-batch3-goal-finish-line-and-do-not-touch.md`
+- `docs/forge_step4_batch3/part-1-batch3-goal-finish-line-and-do-not-touch.md`
 
 ## What Changed
 - Treated Step 4 Batch 3 Part 1 as the finish-and-freeze framing pass over the existing `forge split` runtime instead of reopening the split orchestrator, redesigning Step 4 for aesthetics, or pulling Step 5 behavior forward.
@@ -45,4 +45,4 @@
 - Remaining Step 4 work stays inside Batch 3 hardening plus the explicit Step 5 handoff contract follow-through
 
 ## Follow-On
-- Next Step 4 Batch 3 target: `forge_step4_batch3/part-2-regrouping-blocking-and-merge-order-hardening.md`
+- Next Step 4 Batch 3 target: `docs/forge_step4_batch3/part-2-regrouping-blocking-and-merge-order-hardening.md`
