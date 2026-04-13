@@ -823,6 +823,13 @@ function buildGroupStreamDependencies(
         continue;
       }
 
+      // Only treat merge-order dependency types as workstream ordering constraints.
+      // "soft" dependencies are advisory — they are recorded in dependency_edges for
+      // visibility but must not become hard mustMergeAfterWorkstreamIds gates.
+      if (!isMergeOrderDependencyType(dependency.type)) {
+        continue;
+      }
+
       if (seen.has(upstreamWorkstreamId)) {
         continue;
       }

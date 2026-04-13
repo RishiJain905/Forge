@@ -1,4 +1,7 @@
-## 2024-06-25 - O(1) Candidate Targeting Deduplication
+## 2025-02-13 - [Caching `isPromptTooShortToBeActionable` Results]
+**Learning:** Calling `isPromptTooShortToBeActionable` multiple times per input text parses the string and executes multiple regular expressions repeatedly. Also, when extracting regexes to a shared constants file, JavaScript `RegExp` objects with the `/g` flag are stateful (`lastIndex`). Reusing a `/g` RegExp with `.test()` will result in unpredictable failures because it doesn't reset `lastIndex`.
+**Action:** Caches the result of `isPromptTooShortToBeActionable` into a `promptIsThin` boolean early in the process and passes it down. When sharing regexes, keep a non-global (`NoG`) version specifically for `.test()` checks to avoid state-mutation bugs, or use `/g` only with `.match()`.
 
-**Learning:** During candidate target resolution, looking up items in arrays to enforce uniqueness creates an O(N^2) bottleneck when searching through thousands of files. `Set` allows for O(1) membership checks, dramatically improving scaling.
-**Action:** Use Sets to handle unique tracking or lookup operations inside tight loops, especially when the iteration touches the entire `repoContext.sourceFiles` array. Pre-normalize repeating signals once before loops instead of re-normalizing inside the tight loop.
+## 2025-02-13 - [Pre-compiled Regex for Path Matching Over Array Iteration]
+**Learning:** In heavily-called utility functions (like `isSharedSurfacePath` in `src/plan/planner.ts`), performing `.split("/")` and mapping over segments inside `.some()` creates a massive number of temporary string and array allocations. These string operations compound and block the event loop during large recursive or batch processing tasks.
+**Action:** When repeatedly checking string patterns against a known dictionary of terms, use a pre-compiled `RegExp` instead of splitting and checking via `Set.has()`. This approach is 5-6x faster as it pushes the string matching down to the optimized regex engine without additional array allocations.

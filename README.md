@@ -574,6 +574,8 @@ Part 3 also hardens merge-order and blocking behavior so dependency ordering rem
 
 Step 4 Batch 2 Part 4 hardens the shipped split outputs without reopening the public surface. `split_readiness` now exposes explicit execution scope plus blocked-workstream, partially-blocked-item, and merge-order-rule counts so later steps do not have to reverse-engineer execution readiness from raw arrays, `split-report.md` renders those derived readiness fields directly while keeping the frozen heading order, and the optional `FORGE_SPLIT_DEBUG=1` mirrors stay aligned with the primary artifact on ready, warning-heavy, blocked, and fallback-output-failed runs.
 
+Step 4 Batch 2 Part 5 closes the runnable milestone and default verification gate without reopening the split surface. `forge split` already ran the real Step 4 flow, so Part 5 hardens the shipped milestone by wiring a dedicated runnable-milestone regression into `npm.cmd test`, proving the packaged CLI can consume persisted Step 3 output plus the referenced Step 2 plan, build real workstreams/categories/merge-order output, persist honest `split.json` and `split-report.md` files, and keep CLI output minimal. Step 4 Batch 2 is now complete, with later Step 4 work reserved for hardening and freeze follow-up rather than first-time CLI wiring.
+
 ---
 
 # Repository Intent
