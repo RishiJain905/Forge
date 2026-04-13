@@ -63,11 +63,13 @@ function renderReadinessLines(artifact: SplitArtifact): string[] {
 
   return [
     `- Can Proceed: ${artifact.split_readiness.ready ? "yes" : "no"}`,
+    `- Later-Step Gate: ${artifact.split_readiness.later_step_gate}`,
     `- All Items Safely Assigned: ${artifact.split_readiness.execution_scope === "all_streams" ? "yes" : "no"}`,
     `- Execution Scope: ${artifact.split_readiness.execution_scope}`,
     `- Blocked Workstream Count: ${artifact.split_readiness.blocked_workstream_count}`,
     `- Partially Blocked Item Count: ${artifact.split_readiness.partially_blocked_item_count}`,
     `- Merge-Order Rule Count: ${artifact.split_readiness.merge_order_rule_count}`,
+    `- Material Execution Limits: ${artifact.split_readiness.material_execution_limits.join(", ") || "none"}`,
     `- Later Execution Must Honor: ${laterExecutionMustHonor.join("; ") || "none"}`,
   ];
 }
@@ -337,6 +339,8 @@ export function createSplitReport(artifact: SplitArtifact): string {
         ["Blocked Workstream Count", artifact.split_readiness.blocked_workstream_count],
         ["Partially Blocked Item Count", artifact.split_readiness.partially_blocked_item_count],
         ["Merge-Order Rule Count", artifact.split_readiness.merge_order_rule_count],
+        ["Later-Step Gate", artifact.split_readiness.later_step_gate],
+        ["Material Execution Limits", artifact.split_readiness.material_execution_limits.join(", ") || null],
         ["Partial Output", artifact.split_readiness.partial_output?.code ?? null],
         ["Constraining Concern IDs", artifact.split_readiness.constraining_concern_ids.join(", ") || null],
       ]),
@@ -372,6 +376,7 @@ export function createSplitReport(artifact: SplitArtifact): string {
         ["Debug Merge Order Path", artifact.files.debugMergeOrderPath],
         ["Debug Blocked Items Path", artifact.files.debugBlockedItemsPath],
         ["Debug Stream Constraints Path", artifact.files.debugStreamConstraintsPath],
+        ["Debug Split Readiness Path", artifact.files.debugReadinessPath],
       ]),
     ]),
     renderSection("Failure", [renderFailureDetails(artifact.failure)]),

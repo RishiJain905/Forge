@@ -580,6 +580,8 @@ Step 4 Batch 3 Part 1 is the finish-and-freeze framing pass over that already re
 
 Step 4 Batch 3 Part 2 hardens the real regrouping, blocking, and merge-order semantics without reopening the frozen top-level split contract. `forge split` now preserves structured regrouping rationale and member-level traceability inside `stream_constraint_details`, exposes first-class structured blocking status that distinguishes blocked versus partially blocked grouped work while keeping constraining findings/constraints/concerns inspectable, and carries explicit nested merge-order status plus source-linked rule kinds through the artifact, report, and debug outputs. The default test gate now includes a dedicated Batch 3 Part 2 regression alongside stronger workstream-model and report coverage.
 
+Step 4 Batch 3 Part 3 hardens the actual Step 4 outputs so later stages can consume them without reinterpreting split quality from scratch. `split.json` now carries an explicit later-step gate plus material execution limits inside `split_readiness`, debug output now includes a dedicated `split-readiness.json` mirror alongside the existing split debug files, and `split-report.md` renders the later-step gate, material execution limits, and debug readiness path while keeping the frozen top-level artifact shape and report heading order stable.
+
 ---
 
 # Repository Intent

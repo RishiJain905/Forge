@@ -279,6 +279,9 @@ await runScenario(
       assert.ok(sectionBody(report, "Carried-Forward Constraints").join("\n").includes("Merge-Order Status:"));
       assert.ok(sectionBody(report, "Split Diagnostics").length > 0);
       assert.ok(sectionBody(report, "Split Readiness").length > 0);
+      assert.ok(sectionBody(report, "Split Readiness").join("\n").includes("Later-Step Gate:"));
+      assert.ok(sectionBody(report, "Split Readiness").join("\n").includes("Material Execution Limits:"));
+      assert.ok(sectionBody(report, "Output Files").join("\n").includes("Debug Split Readiness Path:"));
       assert.ok(sectionBody(report, "Boundary Notes").length > 0);
       assert.ok(sectionBody(report, "Deferred Capabilities").length > 0);
       assert.ok(sectionBody(report, "Allowed Side Effects").length > 0);

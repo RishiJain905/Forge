@@ -57,6 +57,7 @@ interface SplitArtifact {
     debugMergeOrderPath: string;
     debugBlockedItemsPath: string;
     debugStreamConstraintsPath: string;
+    debugReadinessPath: string;
   };
   source_verify: {
     command: string;
@@ -111,6 +112,8 @@ interface SplitArtifact {
     blocked_workstream_count: number;
     partially_blocked_item_count: number;
     merge_order_rule_count: number;
+    later_step_gate: string;
+    material_execution_limits: string[];
   };
 }
 
@@ -218,11 +221,14 @@ await runScenario(
       assert.equal(artifact.split_readiness.blocked_workstream_count, 0);
       assert.equal(artifact.split_readiness.partially_blocked_item_count, 0);
       assert.equal(artifact.split_readiness.merge_order_rule_count, artifact.merge_order.length);
+      assert.equal(artifact.split_readiness.later_step_gate, "proceed_with_caution");
+      assert.ok(artifact.split_readiness.material_execution_limits.includes("merge_order_constraints_present"));
       assert.ok(artifact.files.debugArtifactPath.endsWith("split-debug.json"));
       assert.ok(artifact.files.debugWorkstreamsPath.endsWith("workstreams.json"));
       assert.ok(artifact.files.debugMergeOrderPath.endsWith("merge-order.json"));
       assert.ok(artifact.files.debugBlockedItemsPath.endsWith("blocked-items.json"));
       assert.ok(artifact.files.debugStreamConstraintsPath.endsWith("stream-constraints.json"));
+      assert.ok(artifact.files.debugReadinessPath.endsWith("split-readiness.json"));
     } finally {
       await disposeTempRepo(repoRoot);
     }

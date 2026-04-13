@@ -128,6 +128,65 @@ function resolveExecutionScope(params: {
   return "all_streams";
 }
 
+function buildMaterialExecutionLimits(params: {
+  ready: boolean;
+  blockedWorkstreamCount: number;
+  partiallyBlockedItemCount: number;
+  mergeOrderRuleCount: number;
+  warningItems: SplitInputIssue[];
+  blockingItems: SplitInputIssue[];
+  constrainingConcernIds: string[];
+  partialOutput: SplitCommandFailure | null;
+}): Array<
+  | "upstream_blockers_present"
+  | "blocked_workstreams_present"
+  | "partially_blocked_items_present"
+  | "merge_order_constraints_present"
+  | "warning_context_present"
+  | "partial_output_present"
+> {
+  const limits: Array<
+    | "upstream_blockers_present"
+    | "blocked_workstreams_present"
+    | "partially_blocked_items_present"
+    | "merge_order_constraints_present"
+    | "warning_context_present"
+    | "partial_output_present"
+  > = [];
+
+  if (!params.ready || params.blockingItems.length > 0) {
+    limits.push("upstream_blockers_present");
+  }
+  if (params.blockedWorkstreamCount > 0) {
+    limits.push("blocked_workstreams_present");
+  }
+  if (params.partiallyBlockedItemCount > 0) {
+    limits.push("partially_blocked_items_present");
+  }
+  if (params.mergeOrderRuleCount > 0) {
+    limits.push("merge_order_constraints_present");
+  }
+  if (params.warningItems.length > 0 || params.constrainingConcernIds.length > 0) {
+    limits.push("warning_context_present");
+  }
+  if (params.partialOutput !== null) {
+    limits.push("partial_output_present");
+  }
+
+  return limits;
+}
+
+function buildLaterStepGate(params: {
+  ready: boolean;
+  materialExecutionLimits: string[];
+}): "proceed" | "proceed_with_caution" | "blocked" {
+  if (!params.ready) {
+    return "blocked";
+  }
+
+  return params.materialExecutionLimits.length > 0 ? "proceed_with_caution" : "proceed";
+}
+
 function buildReadinessSummary(params: {
   ready: boolean;
   status: "ready" | "ready_with_warnings" | "blocked";
@@ -219,6 +278,16 @@ export function resolveSplitReadiness(params: {
     partial_output: partialOutput,
   };
 
+  const materialExecutionLimits = buildMaterialExecutionLimits({
+    ready,
+    blockedWorkstreamCount: params.blockedWorkstreamCount ?? 0,
+    partiallyBlockedItemCount: params.partiallyBlockedItemCount ?? 0,
+    mergeOrderRuleCount: params.mergeOrderRuleCount ?? 0,
+    warningItems,
+    blockingItems,
+    constrainingConcernIds,
+    partialOutput,
+  });
   const splitReadiness = {
     ready,
     status,
@@ -238,6 +307,11 @@ export function resolveSplitReadiness(params: {
     blocked_workstream_count: params.blockedWorkstreamCount ?? 0,
     partially_blocked_item_count: params.partiallyBlockedItemCount ?? 0,
     merge_order_rule_count: params.mergeOrderRuleCount ?? 0,
+    later_step_gate: buildLaterStepGate({
+      ready,
+      materialExecutionLimits,
+    }),
+    material_execution_limits: materialExecutionLimits,
     warning_items: warningItems,
     blocking_issues: blockingItems,
     partial_output: partialOutput,

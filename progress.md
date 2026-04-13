@@ -446,6 +446,12 @@
   - Hardened merge-order semantics so stream constraint detail now carries explicit nested merge-order status, rule kinds, hard prerequisite workstream ids, and source-linked constraint/concern references in parallel with the existing top-level `merge_order` entries.
   - Updated `split-report.md` and the debug stream-constraint mirror so regrouping, blocking, and merge-order semantics remain inspectable and aligned across artifact, report, and debug outputs without changing the frozen top-level `split.json` key set or report heading order.
   - Added `tests/split.batch3-part2-regrouping-blocking-merge-order.test.ts`, strengthened `tests/split.workstream-model.test.ts` and `tests/split.report.test.ts`, wired the new suite into the default `npm test` gate, and documented completion in `docs/S4-B3-Done/p2-done.md`.
+- Batch 3.03: `part-3-artifact-report-debug-output-and-readiness-hardening.md` (Step 4)
+  - Hardened the split artifact without changing the frozen top-level `split.json` key set by adding an explicit `later_step_gate` plus stable `material_execution_limits` under `split_readiness`, so later stages can determine whether to proceed, proceed with caution, or stay blocked without reverse-engineering raw counts.
+  - Added a dedicated `.forge/debug/split-readiness.json` mirror and wired it through resolved output paths, artifact file metadata, debug output creation, and support helpers so split readiness and diagnostics remain directly inspectable on ready, warning-heavy, blocked, and fallback-output-failed runs.
+  - Reworked `split-report.md` so the `Split Readiness` section now renders the later-step gate and material execution limits directly from the artifact, and the `Output Files` section includes the split-readiness debug path while preserving the frozen report heading order.
+  - Tightened artifact and debug schema parity so readiness counts, warning/blocking mirrors, later-step gating, material execution limits, and debug file metadata all stay coherent across artifact, report, and debug outputs.
+  - Added `tests/split.batch3-part3-output-readiness-hardening.test.ts`, strengthened `tests/split.debug-output.test.ts`, `tests/split.artifact-schema.test.ts`, `tests/split.report.test.ts`, and `tests/split.batch2-part4-artifacts-report-debug-readiness.test.ts`, wired the new suite into the default `npm test` gate, and documented completion in `docs/S4-B3-Done/p3-done.md`.
 
 ## Current Branch State
 - `dev` includes the completed Step 1 work through Batch 4.05, including the frozen Step 2 handoff contract from Intake.
@@ -486,7 +492,8 @@
 - `dev` now includes Step 4 Batch 2 Part 5, including a dedicated runnable-milestone regression wired into the default `npm.cmd test` gate, proof that packaged `forge split` can run end to end from persisted Step 3 plus Step 2 artifacts with durable outputs, and documentation that closes Step 4 Batch 2 without reopening the public split surface.
 - `dev` now includes Step 4 Batch 3 Part 1, including the explicit freeze goal and finish-line metadata in the Step 4 boundary contract, Batch 3 freeze coverage for grounded/warning/debug/determinism split runs, and stronger finish-and-freeze smoke wording while keeping the public split surface stable.
 - `dev` now includes Step 4 Batch 3 Part 2, including structured regrouping rationale plus member-level traceability inside `stream_constraint_details`, explicit nested blocking semantics for unblocked versus partially blocked versus blocked grouped work, explicit nested merge-order status and rule kinds, stronger split report/debug visibility, and a dedicated Batch 3 Part 2 regression while keeping the public split surface stable.
-- `dev` now treats the remaining Step 4 work as Batch 3 output/readiness/test hardening plus the explicit Step 5 handoff follow-through rather than first-time CLI wiring, architecture redesign, or early `forge execute` behavior.
+- `dev` now includes Step 4 Batch 3 Part 3, including an explicit later-step gate plus material execution limits under `split_readiness`, a dedicated `split-readiness.json` debug mirror, stronger report/readiness/debug parity, and a dedicated Batch 3 Part 3 regression while keeping the public split surface stable.
+- `dev` now treats the remaining Step 4 work as Batch 3 polish/test hardening plus the explicit Step 5 handoff follow-through rather than first-time CLI wiring, architecture redesign, or early `forge execute` behavior.
 
 ## Verification
 - `npm.cmd test`
@@ -527,4 +534,5 @@
 - Step 4 Batch 2 is complete.
 - Step 4 Batch 3 Part 1 is complete.
 - Step 4 Batch 3 Part 2 is complete.
-- Next Step 4 target: Batch 3 Part 3 (`part-3-artifact-report-debug-output-and-readiness-hardening.md`).
+- Step 4 Batch 3 Part 3 is complete.
+- Next Step 4 target: Batch 3 Part 4 (`part-4-step4-polish-test-hardening-and-freeze-criteria.md`).

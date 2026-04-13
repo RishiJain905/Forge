@@ -285,7 +285,8 @@ await runScenario(
       assert.match(readme, /Step 4 Batch 3 Part 1/i);
       assert.match(progress, /Step 4 Batch 3 Part 1 is complete/i);
       assert.match(progress, /Step 4 Batch 3 Part 2 is complete/i);
-      assert.match(progress, /Next Step 4 target: Batch 3 Part 3/i);
+      assert.match(progress, /Step 4 Batch 3 Part 3 is complete/i);
+      assert.match(progress, /Next Step 4 target: Batch 3 Part 4/i);
     } finally {
       await disposeTempRepo(repoRoot);
     }

@@ -101,6 +101,7 @@ function buildSplitFiles(paths: SplitResolvedOutputPaths): SplitArtifact["files"
       paths.debugStreamConstraintsPath,
       "debugStreamConstraintsPath",
     ),
+    debugReadinessPath: requireOutputPath(paths.debugReadinessPath, "debugReadinessPath"),
   };
 }
 

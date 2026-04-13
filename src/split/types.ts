@@ -16,6 +16,14 @@ export type SplitConstraintSource = typeof SPLIT_CONSTRAINT_SOURCES[number];
 export type SplitFoundationStatus = "ready" | "blocked" | "failed";
 export type SplitCommandStatus = SplitFoundationStatus;
 export type SplitReadinessStatus = "ready" | "ready_with_warnings" | "blocked";
+export type SplitLaterStepGate = "proceed" | "proceed_with_caution" | "blocked";
+export type SplitMaterialExecutionLimit =
+  | "upstream_blockers_present"
+  | "blocked_workstreams_present"
+  | "partially_blocked_items_present"
+  | "merge_order_constraints_present"
+  | "warning_context_present"
+  | "partial_output_present";
 
 export interface SplitFoundationOptions {
   repo?: string;
@@ -42,6 +50,7 @@ export interface SplitResolvedOutputPaths {
   debugMergeOrderPath?: string;
   debugBlockedItemsPath?: string;
   debugStreamConstraintsPath?: string;
+  debugReadinessPath?: string;
 }
 
 export interface SplitVerifyReference {
@@ -291,6 +300,7 @@ export interface SplitArtifactFiles {
   debugMergeOrderPath: string;
   debugBlockedItemsPath: string;
   debugStreamConstraintsPath: string;
+  debugReadinessPath: string;
 }
 
 export interface SplitCommandFailure {
@@ -323,6 +333,8 @@ export interface SplitReadiness {
   blocked_workstream_count: number;
   partially_blocked_item_count: number;
   merge_order_rule_count: number;
+  later_step_gate: SplitLaterStepGate;
+  material_execution_limits: SplitMaterialExecutionLimit[];
   warning_items: SplitInputIssue[];
   blocking_issues: SplitInputIssue[];
   partial_output: SplitCommandFailure | null;

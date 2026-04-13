@@ -7,6 +7,7 @@ import {
   SPLIT_DEBUG_ARTIFACT_NAME,
   SPLIT_DEBUG_BLOCKED_ITEMS_NAME,
   SPLIT_DEBUG_MERGE_ORDER_NAME,
+  SPLIT_DEBUG_SPLIT_READINESS_NAME,
   SPLIT_DEBUG_STREAM_CONSTRAINTS_NAME,
   SPLIT_DEBUG_WORKSTREAMS_NAME,
   SPLIT_REPORT_NAME,
@@ -384,6 +385,11 @@ export async function resolveSplitOutputPaths(
       resolvedOutputRoot,
       "debug",
       SPLIT_DEBUG_STREAM_CONSTRAINTS_NAME,
+    ),
+    debugReadinessPath: resolveOutputFilePath(
+      resolvedOutputRoot,
+      "debug",
+      SPLIT_DEBUG_SPLIT_READINESS_NAME,
     ),
   };
 }

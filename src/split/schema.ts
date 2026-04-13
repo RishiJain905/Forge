@@ -626,6 +626,7 @@ const splitArtifactFilesSchema = z.object({
   debugMergeOrderPath: z.string().min(1),
   debugBlockedItemsPath: z.string().min(1),
   debugStreamConstraintsPath: z.string().min(1),
+  debugReadinessPath: z.string().min(1),
 }).strict();
 
 const splitWritePolicySchema = z.object({
@@ -665,6 +666,15 @@ const splitReadinessSchema = z.object({
   blocked_workstream_count: z.number().int().nonnegative(),
   partially_blocked_item_count: z.number().int().nonnegative(),
   merge_order_rule_count: z.number().int().nonnegative(),
+  later_step_gate: z.enum(["proceed", "proceed_with_caution", "blocked"]),
+  material_execution_limits: z.array(z.enum([
+    "upstream_blockers_present",
+    "blocked_workstreams_present",
+    "partially_blocked_items_present",
+    "merge_order_constraints_present",
+    "warning_context_present",
+    "partial_output_present",
+  ])),
   warning_items: z.array(splitInputIssueSchema),
   blocking_issues: z.array(splitInputIssueSchema),
   partial_output: z.object({
@@ -865,6 +875,37 @@ export const splitArtifactSchema = z.object({
       code: z.ZodIssueCode.custom,
       message: "Split readiness execution scope must match the ready and blocked-item state.",
       path: ["split_readiness", "execution_scope"],
+    });
+  }
+
+  const expectedMaterialExecutionLimits = [
+    !value.split_readiness.ready || readinessBlockingIssues.length > 0 ? "upstream_blockers_present" : "",
+    value.split_readiness.blocked_workstream_count > 0 ? "blocked_workstreams_present" : "",
+    value.split_readiness.partially_blocked_item_count > 0 ? "partially_blocked_items_present" : "",
+    value.split_readiness.merge_order_rule_count > 0 ? "merge_order_constraints_present" : "",
+    readinessWarnings.length > 0 || value.split_readiness.constraining_concern_ids.length > 0
+      ? "warning_context_present"
+      : "",
+    value.split_readiness.partial_output !== null ? "partial_output_present" : "",
+  ].filter((limit): limit is typeof value.split_readiness.material_execution_limits[number] => Boolean(limit));
+  if (!isDeepStrictEqual(value.split_readiness.material_execution_limits, expectedMaterialExecutionLimits)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Split readiness material_execution_limits must match the resolved readiness constraints.",
+      path: ["split_readiness", "material_execution_limits"],
+    });
+  }
+
+  const expectedLaterStepGate = !value.split_readiness.ready
+    ? "blocked"
+    : expectedMaterialExecutionLimits.length > 0
+      ? "proceed_with_caution"
+      : "proceed";
+  if (value.split_readiness.later_step_gate !== expectedLaterStepGate) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Split readiness later_step_gate must match the resolved readiness constraints.",
+      path: ["split_readiness", "later_step_gate"],
     });
   }
 
