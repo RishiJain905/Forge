@@ -103,29 +103,54 @@ Starting execution...
 {
   "schemaVersion": "1.0",
   "forgeVersion": "1.x.x",
-  "agent": {
-    "provider": "minimax",
-    "model": "MiniMax-Text-01",
-    "apiKeyEnvVar": "MINIMAX_API_KEY"
-  }
+  "activeModelIndex": 0,
+  "models": [
+    {
+      "model": "glm-5.1",
+      "id": "custom:GLM-5.1-[z.ai]-0",
+      "index": 0,
+      "baseUrl": "https://api.z.ai/api/anthropic",
+      "apiKey": "API-KEY-HERE",
+      "maxOutputTokens": 131072,
+      "provider": "anthropic"
+    },
+    {
+      "model": "MiniMax-Text-01",
+      "id": "custom:Minimax-Text-01-[minimax.io]-1",
+      "index": 1,
+      "baseUrl": "https://api.minimax.chat/v1",
+      "apiKey": "API-KEY-HERE",
+      "maxOutputTokens": 8192,
+      "provider": "openai"
+    }
+  ]
 }
 ```
 
-**Note:** The API key itself is NOT stored in the config file. Instead, Forge stores an environment variable reference. On setup, Forge:
-1. Reads the API key from user input
-2. Sets it in the current shell session as an env var
-3. Stores the env var name in the config
+**Note:** Each model entry contains the `baseUrl` and `apiKey` directly. Forge reads from this list at runtime — no environment variable references needed. The `activeModelIndex` points to which model is currently selected for execution. Users can add multiple models to the `models` array and switch between them via CLI flags or the `--setup` flow.
 
-Alternatively, for encrypted storage:
-```json
-{
-  "agent": {
-    "provider": "minimax",
-    "model": "MiniMax-Text-01",
-    "encryptedKey": "base64-encoded-encrypted-key"
-  }
-}
-```
+### Model Entry Fields
+
+| Field | Description |
+|-------|-------------|
+| `model` | Display name of the model (e.g., "glm-5.1", "MiniMax-Text-01") |
+| `id` | Unique identifier in format `custom:<model>-[<provider>]-<index>` |
+| `index` | Numeric index within the models array |
+| `baseUrl` | API endpoint URL — supports Anthropic-compatible endpoints, OpenAI-compatible endpoints |
+| `apiKey` | API key for authentication |
+| `maxOutputTokens` | Maximum tokens in model's response |
+| `provider` | Provider type — "anthropic" or "openai" (determines which adapter to use) |
+
+### Supported Providers and Models
+
+| Provider | Provider Type | Default Model | Notes |
+|----------|--------------|---------------|-------|
+| Anthropic | `anthropic` | `claude-opus-4-6` | Uses Messages API |
+| OpenAI | `openai` | `gpt-4o` | Uses Chat Completions API |
+| Minimax | `openai` | `MiniMax-Text-01` | Via MiniMax API (OpenAI-compatible) |
+| Google | `anthropic` | `gemini-2.0-flash` | Via Google AI API |
+| GLM (Zhipu) | `anthropic` | `glm-4` | Via Zhipu AI API (Anthropic-compatible) |
+| OpenAI-Compatible | `openai` | — | Custom endpoint URL required |
 
 ### Setup Detection
 
@@ -136,7 +161,7 @@ export async function requireAgentConfig(repoRoot: string): Promise<AgentConfig>
   
   if (await fileExists(configPath)) {
     const config = await readJson(configPath);
-    if (config.agent?.provider) {
+    if (config.models?.length > 0) {
       return loadAgentConfig(config);
     }
   }
@@ -146,25 +171,19 @@ export async function requireAgentConfig(repoRoot: string): Promise<AgentConfig>
 }
 ```
 
-### Supported Providers and Models
-
-| Provider | Env Var | Default Model | Notes |
-|----------|---------|---------------|-------|
-| Anthropic | `ANTHROPIC_API_KEY` | `claude-opus-4-6` | Uses Messages API |
-| OpenAI | `OPENAI_API_KEY` | `gpt-4o` | Uses Chat Completions API |
-| Minimax | `MINIMAX_API_KEY` | `MiniMax-Text-01` | Via MiniMax API |
-| Google | `GOOGLE_API_KEY` | `gemini-2.0-flash` | Via Google AI API |
-| GLM (Zhipu) | `ZHIPU_API_KEY` | `glm-4` | Via Zhipu AI API |
-| OpenAI-Compatible | `OPENAI_API_KEY` | — | Custom endpoint URL required |
-
 ### Changing the Agent
 
 To change the configured agent later:
 
 ```bash
+# Re-run setup to add/remove models
 forge execute --setup
-# or
-forge execute --agent anthropic --model claude-sonnet-4-6
+
+# Use a specific model by index
+forge execute --model-index 1
+
+# Use a specific model by ID
+forge execute --model-id custom:Minimax-Text-01-[minimax.io]-1
 ```
 
 ---
@@ -215,19 +234,58 @@ export interface WorkstreamExecutionResult {
   summary: string;
   handoffs: Handoff[];
 }
+
+export interface WorkstreamExecutionContext {
+  workstreamId: string;
+  planItemIds: string[];
+  taskSpec: NormalizedTaskSpec;
+  repoRoot: string;
+  outputRoot: string;
+  
+  // Files that this workstream should receive from upstream workstreams
+  handoffs: HandoffSpec[];
+  
+  // Constraints that must be honored before merge
+  constraints: string[];
+  
+  // Merge order — which workstream IDs must complete before this one merges
+  mergeOrderAfter: string[];
+  
+  // Paths that this workstream should NOT touch (from conflict zones)
+  forbiddenPaths: string[];
+  
+  // Paths that this workstream shares with others (requires coordination)
+  sharedPaths: SharedPathSpec[];
+}
+
+export interface HandoffSpec {
+  fromWorkstreamId: string;
+  toWorkstreamId: string;
+  artifacts: string[];  // file paths that must be handed off
+  validation?: {
+    schemaPath: string;
+    validateFn: string;  // e.g., "validateIntakeArtifact"
+  };
+}
+
+export interface SharedPathSpec {
+  path: string;
+  strategy: "first_writer_wins" | "merge_required" | "read_only" | "serialized";
+  riskLevel: "low" | "medium" | "high";
+}
 ```
 
 ---
 
 ## API Adapter Implementations
 
-### Anthropic Adapter
+### Anthropic-Compatible Adapter
 
 ```typescript
 // src/execute/agents/api-adapters/anthropic.ts
 export const anthropicAdapter: AgentAdapter = {
-  name: "Anthropic",
-  supports: ["anthropic", "claude"],
+  name: "Anthropic-Compatible",
+  supports: ["anthropic"],
 
   async dispatch(params: {
     workstreamId: string;
@@ -235,29 +293,28 @@ export const anthropicAdapter: AgentAdapter = {
     agentConfig: AgentConfig;
   }): Promise<DispatchResult> {
     const { workstreamId, context, agentConfig } = params;
-    const apiKey = process.env[agentConfig.apiKeyEnvVar ?? "ANTHROPIC_API_KEY"];
+    const modelEntry = getModelEntry(agentConfig);
 
     const prompt = buildExecutionPrompt(workstreamId, context);
     const promptPath = `${context.outputRoot}/workstreams/${workstreamId}/prompt.md`;
     await writeFile(promptPath, prompt);
 
-    // Write the full task to a file and instruct Claude to act on it
     const systemPrompt = `You are a code execution agent for Forge.
 Your job: execute the workstream described in the attached prompt file.
 When complete, write your results to ${context.outputRoot}/workstreams/${workstreamId}/result.json
 Use the forbiddenPaths and sharedPaths from the prompt to coordinate with other workstreams.`;
 
     try {
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
+      const response = await fetch(`${modelEntry.baseUrl}/v1/messages`, {
         method: "POST",
         headers: {
-          "x-api-key": apiKey,
+          "x-api-key": modelEntry.apiKey,
           "anthropic-version": "2023-06-01",
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          model: agentConfig.model ?? "claude-opus-4-6",
-          max_tokens: 8192,
+          model: modelEntry.model,
+          max_tokens: modelEntry.maxOutputTokens ?? 8192,
           system: systemPrompt,
           messages: [
             {
@@ -269,7 +326,7 @@ Use the forbiddenPaths and sharedPaths from the prompt to coordinate with other 
       });
 
       if (!response.ok) {
-        throw new Error(`Anthropic API error: ${response.status}`);
+        throw new Error(`API error: ${response.status}`);
       }
 
       const result = await response.json();
@@ -301,13 +358,13 @@ Use the forbiddenPaths and sharedPaths from the prompt to coordinate with other 
 };
 ```
 
-### OpenAI Adapter
+### OpenAI-Compatible Adapter
 
 ```typescript
 // src/execute/agents/api-adapters/openai.ts
 export const openaiAdapter: AgentAdapter = {
-  name: "OpenAI",
-  supports: ["openai", "gpt"],
+  name: "OpenAI-Compatible",
+  supports: ["openai"],
 
   async dispatch(params: {
     workstreamId: string;
@@ -315,7 +372,7 @@ export const openaiAdapter: AgentAdapter = {
     agentConfig: AgentConfig;
   }): Promise<DispatchResult> {
     const { workstreamId, context, agentConfig } = params;
-    const apiKey = process.env[agentConfig.apiKeyEnvVar ?? "OPENAI_API_KEY"];
+    const modelEntry = getModelEntry(agentConfig);
 
     const prompt = buildExecutionPrompt(workstreamId, context);
     const promptPath = `${context.outputRoot}/workstreams/${workstreamId}/prompt.md`;
@@ -327,15 +384,15 @@ When complete, write your results to ${context.outputRoot}/workstreams/${workstr
 Use forbiddenPaths and sharedPaths to coordinate with other workstreams.`;
 
     try {
-      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      const response = await fetch(`${modelEntry.baseUrl}/chat/completions`, {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${apiKey}`,
+          "Authorization": `Bearer ${modelEntry.apiKey}`,
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          model: agentConfig.model ?? "gpt-4o",
-          max_tokens: 8192,
+          model: modelEntry.model,
+          max_tokens: modelEntry.maxOutputTokens ?? 8192,
           messages: [
             { role: "system", content: systemPrompt },
             {
@@ -347,7 +404,7 @@ Use forbiddenPaths and sharedPaths to coordinate with other workstreams.`;
       });
 
       if (!response.ok) {
-        throw new Error(`OpenAI API error: ${response.status}`);
+        throw new Error(`API error: ${response.status}`);
       }
 
       const result = await response.json();
@@ -378,226 +435,6 @@ Use forbiddenPaths and sharedPaths to coordinate with other workstreams.`;
 };
 ```
 
-### Minimax Adapter
-
-```typescript
-// src/execute/agents/api-adapters/minimax.ts
-export const minimaxAdapter: AgentAdapter = {
-  name: "Minimax",
-  supports: ["minimax"],
-
-  async dispatch(params: {
-    workstreamId: string;
-    context: WorkstreamExecutionContext;
-    agentConfig: AgentConfig;
-  }): Promise<DispatchResult> {
-    const { workstreamId, context, agentConfig } = params;
-    const apiKey = process.env[agentConfig.apiKeyEnvVar ?? "MINIMAX_API_KEY"];
-
-    const prompt = buildExecutionPrompt(workstreamId, context);
-    const promptPath = `${context.outputRoot}/workstreams/${workstreamId}/prompt.md`;
-    await writeFile(promptPath, prompt);
-
-    const systemPrompt = `You are a code execution agent for Forge.
-Execute the workstream described in the attached prompt file.
-When complete, write your results to ${context.outputRoot}/workstreams/${workstreamId}/result.json`;
-
-    try {
-      const response = await fetch("https://api.minimax.chat/v1/text/chatcompletion_v2", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${apiKey}`,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          model: agentConfig.model ?? "MiniMax-Text-01",
-          messages: [
-            { role: "system", content: systemPrompt },
-            {
-              role: "user",
-              content: `Execute this workstream:\n\n${readFile(promptPath, "utf-8")}`,
-            },
-          ],
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Minimax API error: ${response.status}`);
-      }
-
-      const result = await response.json();
-
-      return {
-        dispatchId: `minimax-${workstreamId}-${Date.now()}`,
-        agentType: "minimax",
-        state: "completed",
-        result: parseAgentResponse(result, context),
-      };
-    } catch (error) {
-      return {
-        dispatchId: `minimax-${workstreamId}-${Date.now()}`,
-        agentType: "minimax",
-        state: "failed",
-        error: error.message,
-      };
-    }
-  },
-
-  async pollStatus(dispatchId: string): Promise<AgentStatus> {
-    return { state: "unknown" };
-  },
-
-  async cancel(dispatchId: string): Promise<void> {},
-};
-```
-
-### Google AI Adapter
-
-```typescript
-// src/execute/agents/api-adapters/google.ts
-export const googleAdapter: AgentAdapter = {
-  name: "Google AI",
-  supports: ["google", "gemini"],
-
-  async dispatch(params: {
-    workstreamId: string;
-    context: WorkstreamExecutionContext;
-    agentConfig: AgentConfig;
-  }): Promise<DispatchResult> {
-    const { workstreamId, context, agentConfig } = params;
-    const apiKey = process.env[agentConfig.apiKeyEnvVar ?? "GOOGLE_API_KEY"];
-
-    const prompt = buildExecutionPrompt(workstreamId, context);
-    const promptPath = `${context.outputRoot}/workstreams/${workstreamId}/prompt.md`;
-    await writeFile(promptPath, prompt);
-
-    const fullPrompt = `You are a code execution agent for Forge.
-Execute the workstream described in the attached prompt file.
-When complete, write your results to ${context.outputRoot}/workstreams/${workstreamId}/result.json
-
----
-${readFile(promptPath, "utf-8")}`;
-
-    try {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${agentConfig.model ?? "gemini-2.0-flash"}:generateContent?key=${apiKey}`,
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: fullPrompt }] }],
-            generationConfig: { maxOutputTokens: 8192 },
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Google AI API error: ${response.status}`);
-      }
-
-      const result = await response.json();
-
-      return {
-        dispatchId: `google-${workstreamId}-${Date.now()}`,
-        agentType: "google",
-        state: "completed",
-        result: parseAgentResponse(result, context),
-      };
-    } catch (error) {
-      return {
-        dispatchId: `google-${workstreamId}-${Date.now()}`,
-        agentType: "google",
-        state: "failed",
-        error: error.message,
-      };
-    }
-  },
-
-  async pollStatus(dispatchId: string): Promise<AgentStatus> {
-    return { state: "unknown" };
-  },
-
-  async cancel(dispatchId: string): Promise<void> {},
-};
-```
-
-### OpenAI-Compatible Adapter (for local/custom endpoints)
-
-```typescript
-// src/execute/agents/api-adapters/openai-compatible.ts
-export interface OpenAICompatibleConfig extends AgentConfig {
-  endpoint: string;  // e.g., "http://localhost:11434/v1/chat/completions"
-}
-
-export const openaiCompatibleAdapter: AgentAdapter = {
-  name: "OpenAI-Compatible",
-  supports: ["openai-compatible", "local", "custom"],
-
-  async dispatch(params: {
-    workstreamId: string;
-    context: WorkstreamExecutionContext;
-    agentConfig: OpenAICompatibleConfig;
-  }): Promise<DispatchResult> {
-    const { workstreamId, context, agentConfig } = params;
-    const apiKey = process.env[agentConfig.apiKeyEnvVar ?? "OPENAI_API_KEY"];
-
-    const prompt = buildExecutionPrompt(workstreamId, context);
-    const promptPath = `${context.outputRoot}/workstreams/${workstreamId}/prompt.md`;
-    await writeFile(promptPath, prompt);
-
-    const systemPrompt = `You are a code execution agent for Forge.
-Execute the workstream described in the attached prompt file.
-When complete, write your results to ${context.outputRoot}/workstreams/${workstreamId}/result.json`;
-
-    try {
-      const response = await fetch(agentConfig.endpoint, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${apiKey ?? "sk-dummy"}`,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          model: agentConfig.model ?? "local-model",
-          messages: [
-            { role: "system", content: systemPrompt },
-            {
-              role: "user",
-              content: `Execute this workstream:\n\n${readFile(promptPath, "utf-8")}`,
-            },
-          ],
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`OpenAI-compatible endpoint error: ${response.status}`);
-      }
-
-      const result = await response.json();
-
-      return {
-        dispatchId: `openai-compatible-${workstreamId}-${Date.now()}`,
-        agentType: "openai-compatible",
-        state: "completed",
-        result: parseAgentResponse(result, context),
-      };
-    } catch (error) {
-      return {
-        dispatchId: `openai-compatible-${workstreamId}-${Date.now()}`,
-        agentType: "openai-compatible",
-        state: "failed",
-        error: error.message,
-      };
-    }
-  },
-
-  async pollStatus(dispatchId: string): Promise<AgentStatus> {
-    return { state: "unknown" };
-  },
-
-  async cancel(dispatchId: string): Promise<void> {},
-};
-```
-
 ---
 
 ## Workstream State Machine
@@ -624,7 +461,70 @@ When complete, write your results to ${context.outputRoot}/workstreams/${workstr
 
 ---
 
-## Dispatcher Interface
+## Constraint Engine
+
+The constraint engine is the gatekeeper that prevents invalid parallel execution:
+
+```typescript
+// src/execute/orchestrator/constraint-engine.ts
+export class ConstraintEngine {
+  private completedWorkstreams: Set<string> = new Set();
+  private mergedWorkstreams: Set<string> = new Set();
+
+  canDispatch(workstream: SplitWorkstream): DispatchDecision {
+    // Check 1: Is this workstream blocked by upstream failure?
+    if (this.isBlockedByFailure(workstream)) {
+      return {
+        allowed: false,
+        reason: `Blocked by failed workstream: ${this.getBlockingWorkstream(workstream)}`,
+        blockingType: "upstream_failure",
+      };
+    }
+
+    // Check 2: Have all merge_order prerequisites completed?
+    const pendingPrerequisites = workstream.mergeOrderAfter.filter(
+      (id) => !this.mergedWorkstreams.has(id)
+    );
+    if (pendingPrerequisites.length > 0) {
+      return {
+        allowed: false,
+        reason: `Waiting for merge of: ${pendingPrerequisites.join(", ")}`,
+        blockingType: "merge_order",
+        pendingPrerequisites,
+      };
+    }
+
+    // Check 3: Is this workstream blocked by a failed verification case?
+    if (workstream.blockedReason) {
+      return {
+        allowed: false,
+        reason: `Blocked by verification failure: ${workstream.blockedReason}`,
+        blockingType: "verification_blocked",
+      };
+    }
+
+    return { allowed: true };
+  }
+
+  markMerged(workstreamId: string): void {
+    this.mergedWorkstreams.add(workstreamId);
+  }
+
+  getReadyWorkstreams(
+    workstreams: SplitWorkstream[],
+    category: "safe_parallel" | "serial" | "protected_merge"
+  ): SplitWorkstream[] {
+    return workstreams.filter((ws) => {
+      if (ws.category !== category) return false;
+      return this.canDispatch(ws).allowed;
+    });
+  }
+}
+```
+
+---
+
+## Agent Dispatcher
 
 ```typescript
 // src/execute/orchestrator/dispatcher.ts
@@ -718,69 +618,6 @@ The result.json must contain:
       }
     }
     return statuses;
-  }
-}
-```
-
----
-
-## Constraint Engine
-
-The constraint engine is the gatekeeper that prevents invalid parallel execution:
-
-```typescript
-// src/execute/orchestrator/constraint-engine.ts
-export class ConstraintEngine {
-  private completedWorkstreams: Set<string> = new Set();
-  private mergedWorkstreams: Set<string> = new Set();
-
-  canDispatch(workstream: SplitWorkstream): DispatchDecision {
-    // Check 1: Is this workstream blocked by upstream failure?
-    if (this.isBlockedByFailure(workstream)) {
-      return {
-        allowed: false,
-        reason: `Blocked by failed workstream: ${this.getBlockingWorkstream(workstream)}`,
-        blockingType: "upstream_failure",
-      };
-    }
-
-    // Check 2: Have all merge_order prerequisites completed?
-    const pendingPrerequisites = workstream.mergeOrderAfter.filter(
-      (id) => !this.mergedWorkstreams.has(id)
-    );
-    if (pendingPrerequisites.length > 0) {
-      return {
-        allowed: false,
-        reason: `Waiting for merge of: ${pendingPrerequisites.join(", ")}`,
-        blockingType: "merge_order",
-        pendingPrerequisites,
-      };
-    }
-
-    // Check 3: Is this workstream blocked by a failed verification case?
-    if (workstream.blockedReason) {
-      return {
-        allowed: false,
-        reason: `Blocked by verification failure: ${workstream.blockedReason}`,
-        blockingType: "verification_blocked",
-      };
-    }
-
-    return { allowed: true };
-  }
-
-  markMerged(workstreamId: string): void {
-    this.mergedWorkstreams.add(workstreamId);
-  }
-
-  getReadyWorkstreams(
-    workstreams: SplitWorkstream[],
-    category: "safe_parallel" | "serial" | "protected_merge"
-  ): SplitWorkstream[] {
-    return workstreams.filter((ws) => {
-      if (ws.category !== category) return false;
-      return this.canDispatch(ws).allowed;
-    });
   }
 }
 ```
@@ -987,8 +824,11 @@ export interface ExecutionTimelineEntry {
 # Basic execution (prompts for agent setup on first run)
 forge execute
 
-# With specific agent and model
-forge execute --agent anthropic --model claude-sonnet-4-6
+# With specific model index
+forge execute --model-index 1
+
+# With specific model ID
+forge execute --model-id custom:Minimax-Text-01-[minimax.io]-1
 
 # With max concurrency limit
 forge execute --max-parallel 4
@@ -1004,9 +844,6 @@ forge execute --resume .forge/execute-2026-04-13.json
 
 # Re-run agent setup
 forge execute --setup
-
-# Override configured agent
-forge execute --agent openai --model gpt-4o
 ```
 
 ---
@@ -1096,13 +933,10 @@ async initiateRollback(
 ### API Adapters
 - [ ] Implement `AnthropicAdapter` in `src/execute/agents/api-adapters/anthropic.ts`
 - [ ] Implement `OpenAIAdapter` in `src/execute/agents/api-adapters/openai.ts`
-- [ ] Implement `MinimaxAdapter` in `src/execute/agents/api-adapters/minimax.ts`
-- [ ] Implement `GoogleAdapter` in `src/execute/agents/api-adapters/google.ts`
-- [ ] Implement `OpenAICompatibleAdapter` in `src/execute/agents/api-adapters/openai-compatible.ts`
 
 ### Agent Config & Setup
 - [ ] Implement first-run setup flow in `src/execute/config/setup.ts`
-- [ ] Implement encrypted API key storage in `src/execute/config/store.ts`
+- [ ] Implement model registry with `baseUrl` and `apiKey` in `src/execute/config/store.ts`
 - [ ] Implement agent registry/discovery in `src/execute/config/registry.ts`
 - [ ] Add `.forge/config.json` to `.gitignore`
 
@@ -1124,6 +958,7 @@ async initiateRollback(
 - [ ] Add `--max-parallel` concurrency limiting
 - [ ] Add `--resume` for resuming failed executions
 - [ ] Add `--setup` for re-running agent configuration
+- [ ] Add `--model-index` and `--model-id` for model selection
 
 ### Testing
 - [ ] Write tests for constraint engine
@@ -1153,6 +988,6 @@ The orchestrator removes that cognitive load. It turns Forge from a planning too
 3. Failures are **caught and surfaced** before they cascade
 4. Results are **captured** in a structured artifact for Step 6
 
-By supporting API-based agents directly, Forge becomes immediately usable by anyone with an API key — no CLI tools to install, no agent-specific tooling to manage. The adapter layer means you're never locked into one provider.
+By supporting API-based agents directly, Forge becomes immediately usable by anyone with an API key — no CLI tools to install, no agent-specific tooling to manage. The multi-model config with `baseUrl` and `apiKey` per entry means you're never locked into one provider or endpoint.
 
 This is where Forge stops being a documentation system and becomes a real execution engine.
