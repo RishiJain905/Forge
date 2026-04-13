@@ -991,3 +991,247 @@ The orchestrator removes that cognitive load. It turns Forge from a planning too
 By supporting API-based agents directly, Forge becomes immediately usable by anyone with an API key — no CLI tools to install, no agent-specific tooling to manage. The multi-model config with `baseUrl` and `apiKey` per entry means you're never locked into one provider or endpoint.
 
 This is where Forge stops being a documentation system and becomes a real execution engine.
+
+---
+
+## Model Management (`forge models`)
+
+Forge includes a built-in model management system so users can add, list, switch, and remove models without editing config files manually.
+
+### List Models
+
+```bash
+$ forge models list
+Configured models:
+
+  [0] GLM-5.1 (custom:GLM-5.1-[z.ai]-0) [ACTIVE]
+      Provider: Anthropic-compatible | Base URL: https://api.z.ai/api/anthropic
+      Max tokens: 131072
+
+  [1] MiniMax-Text-01 (custom:Minimax-Text-01-[minimax.io]-1)
+      Provider: OpenAI-compatible | Base URL: https://api.minimax.chat/v1
+      Max tokens: 8192
+
+  [2] Claude Sonnet 4 (custom:claude-sonnet-4-[anthropic]-2)
+      Provider: Anthropic | Base URL: https://api.anthropic.com
+      Max tokens: 8192
+
+Active model: GLM-5.1 via custom:GLM-5.1-[z.ai]-0
+```
+
+### Switch Active Model
+
+```bash
+# By index
+$ forge models use 1
+Switched to: MiniMax-Text-01 (custom:Minimax-Text-01-[minimax.io]-1)
+
+# By name (fuzzy match)
+$ forge models use sonnet
+Switched to: Claude Sonnet 4 (custom:claude-sonnet-4-[anthropic]-2)
+
+# By ID
+$ forge models use custom:Minimax-Text-01-[minimax.io]-1
+Switched to: MiniMax-Text-01 (custom:Minimax-Text-01-[minimax.io]-1)
+```
+
+### Add a New Model
+
+```bash
+$ forge models add
+Adding a new model...
+
+Select provider type:
+  [1] Anthropic-compatible (baseUrl + apiKey)
+  [2] OpenAI-compatible (baseUrl + apiKey)
+
+> 1
+
+Enter model name (e.g., claude-sonnet-4-6):
+> claude-sonnet-4-6
+
+Enter a unique ID (e.g., custom:claude-sonnet-4-6-[anthropic]-3):
+> custom:claude-sonnet-4-6-[anthropic]-3
+
+Enter base URL:
+> https://api.anthropic.com
+
+Enter API key:
+> sk-ant-...
+
+Enter max output tokens (leave blank for 8192):
+> 
+
+✓ Model added successfully
+✓ Set as active model
+
+$ forge models list
+Configured models:
+
+  [0] GLM-5.1 (custom:GLM-5.1-[z.ai]-0)
+      Provider: Anthropic-compatible | Base URL: https://api.z.ai/api/anthropic
+      Max tokens: 131072
+
+  [1] MiniMax-Text-01 (custom:Minimax-Text-01-[minimax.io]-1)
+      Provider: OpenAI-compatible | Base URL: https://api.minimax.chat/v1
+      Max tokens: 8192
+
+  [2] Claude Sonnet 4 (custom:claude-sonnet-4-[anthropic]-2)
+      Provider: Anthropic | Base URL: https://api.anthropic.com
+      Max tokens: 8192
+
+  [3] Claude Sonnet 4.6 (custom:claude-sonnet-4-6-[anthropic]-3) [ACTIVE]
+      Provider: Anthropic | Base URL: https://api.anthropic.com
+      Max tokens: 8192
+```
+
+### Remove a Model
+
+```bash
+$ forge models remove 1
+Removed: MiniMax-Text-01 (custom:Minimax-Text-01-[minimax.io]-1)
+
+# Cannot remove the active model — must switch first
+$ forge models remove 0
+Error: Cannot remove active model. Run 'forge models use <id>' to switch first.
+```
+
+### CLI Reference
+
+```bash
+forge models list                  # List all models, show active
+forge models use <index|id|name>    # Switch active model
+forge models add                    # Add a new model interactively
+forge models remove <index>         # Remove a model by index
+forge models info <index>           # Show detailed info for a model
+```
+
+### Execution Display
+
+When running `forge execute`, the active model is shown at startup:
+
+```
+$ forge execute
+Using: GLM-5.1 via custom:GLM-5.1-[z.ai]-0 (Anthropic-compatible)
+Max output tokens: 131072
+
+Reading split artifact from .forge/split.json...
+Starting execution...
+```
+
+If no model is configured, Forge prompts for setup before executing:
+
+```
+$ forge execute
+Error: No model configured. Run 'forge models add' to set up your first model.
+```
+
+---
+
+### Implementation Additions
+
+#### CLI Subcommands
+
+```typescript
+// src/cli.ts — add under the execute command as a subcommand group
+program
+  .command("models")
+  .description("Manage configured models for forge execute")
+  .action(() => {
+    console.log("Use 'forge models list', 'forge models add', or 'forge models use'");
+  });
+
+program
+  .command("models list")
+  .description("List all configured models")
+  .action(async () => {
+    const config = await loadConfig();
+    printModelsList(config);
+  });
+
+program
+  .command("models use <selector>")
+  .description("Switch the active model (by index, name, or id)")
+  .action(async (selector: string) => {
+    const config = await loadConfig();
+    const newIndex = resolveModelIndex(config, selector);
+    if (newIndex === null) {
+      console.error(`Model not found: ${selector}`);
+      process.exit(1);
+    }
+    config.activeModelIndex = newIndex;
+    await saveConfig(config);
+    console.log(`Switched to: ${config.models[newIndex].model}`);
+  });
+
+program
+  .command("models add")
+  .description("Add a new model interactively")
+  .action(async () => {
+    const model = await interactiveModelSetup();
+    const config = await loadConfig();
+    config.models.push(model);
+    config.activeModelIndex = config.models.length - 1; // set as active
+    await saveConfig(config);
+    console.log(`Added and set as active: ${model.model}`);
+  });
+
+program
+  .command("models remove <index>")
+  .description("Remove a model by index")
+  .action(async (indexStr: string) => {
+    const index = parseInt(indexStr, 10);
+    const config = await loadConfig();
+    if (index === config.activeModelIndex) {
+      console.error("Cannot remove active model. Run 'forge models use' to switch first.");
+      process.exit(1);
+    }
+    const removed = config.models.splice(index, 1)[0];
+    // Re-index remaining models
+    config.models.forEach((m, i) => m.index = i);
+    // Adjust activeModelIndex if needed
+    if (config.activeModelIndex > index) {
+      config.activeModelIndex--;
+    }
+    await saveConfig(config);
+    console.log(`Removed: ${removed.model}`);
+  });
+```
+
+#### Helper Functions
+
+```typescript
+// src/execute/config/registry.ts
+export function resolveModelIndex(config: ForgeConfig, selector: string): number | null {
+  // Try by index
+  const byIndex = parseInt(selector, 10);
+  if (!isNaN(byIndex) && byIndex >= 0 && byIndex < config.models.length) {
+    return byIndex;
+  }
+
+  // Try by ID
+  const byId = config.models.findIndex((m) => m.id === selector);
+  if (byId !== -1) return byId;
+
+  // Try by name (fuzzy contains match)
+  const byName = config.models.findIndex(
+    (m) => m.model.toLowerCase().includes(selector.toLowerCase())
+  );
+  if (byName !== -1) return byName;
+
+  return null;
+}
+
+export function printModelsList(config: ForgeConfig): void {
+  console.log("Configured models:\n");
+  config.models.forEach((m, i) => {
+    const active = i === config.activeModelIndex ? " [ACTIVE]" : "";
+    console.log(`  [${i}] ${m.model} (${m.id})${active}`);
+    console.log(`      Provider: ${m.provider} | Base URL: ${m.baseUrl}`);
+    console.log(`      Max tokens: ${m.maxOutputTokens}\n`);
+  });
+  const active = config.models[config.activeModelIndex];
+  console.log(`Active model: ${active.model} via ${active.id}`);
+}
+```
+
