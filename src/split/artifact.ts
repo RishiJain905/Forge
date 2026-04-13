@@ -75,6 +75,9 @@ function buildSplitBoundaryNotes(foundation: SplitFoundationResult): string[] {
     ...foundation.boundaryPolicy.deterministicFirstNotes,
     ...foundation.boundaryPolicy.conservativeRegroupingNotes,
     "Keep the Step 4 finish-and-freeze line explicit so Step 5 can consume stable split outputs without guesswork while the top-level split contract stays frozen.",
+    "Step 4 is frozen for V1 except for future bug fixes.",
+    "Only bug-fix work should remain in Step 4; future feature work belongs in the Step 5 handoff and later stages.",
+    "Treat split.json and reports/split-report.md as the authoritative Step 4 outputs while debug files remain optional internal mirrors.",
   ]);
 }
 

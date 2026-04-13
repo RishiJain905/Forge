@@ -582,6 +582,8 @@ Step 4 Batch 3 Part 2 hardens the real regrouping, blocking, and merge-order sem
 
 Step 4 Batch 3 Part 3 hardens the actual Step 4 outputs so later stages can consume them without reinterpreting split quality from scratch. `split.json` now carries an explicit later-step gate plus material execution limits inside `split_readiness`, debug output now includes a dedicated `split-readiness.json` mirror alongside the existing split debug files, and `split-report.md` renders the later-step gate, material execution limits, and debug readiness path while keeping the frozen top-level artifact shape and report heading order stable.
 
+Step 4 Batch 3 Part 4 closes the Step 4 freeze pass with final report/output polish, stronger freeze-oriented regression coverage, and explicit frozen-runtime documentation instead of reopening split architecture or sneaking Step 5 behavior forward. `forge split` now states more clearly that `split.json` and `split-report.md` are the authoritative durable outputs, keeps debug mirrors explicitly secondary, carries an explicit frozen-for-V1 boundary note in the shipped artifact/report, and treats the Step 4 runtime surface as being in bug-fix-only maintenance mode after Batch 3 Part 4.
+
 ---
 
 # Repository Intent

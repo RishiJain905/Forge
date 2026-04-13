@@ -361,6 +361,8 @@ async function main() {
     assert.ok(splitArtifact.boundaryNotes.length > 0);
     assert.ok(splitArtifact.boundaryNotes.some((entry) => /finish-and-freeze pass/i.test(entry)));
     assert.ok(splitArtifact.boundaryNotes.some((entry) => /Step 5 can consume stable split outputs without guesswork/i.test(entry)));
+    assert.ok(splitArtifact.boundaryNotes.some((entry) => /Step 4 is frozen for V1 except for future bug fixes/i.test(entry)));
+    assert.ok(splitArtifact.boundaryNotes.some((entry) => /Only bug-fix work should remain in Step 4/i.test(entry)));
     assert.ok(Array.isArray(splitArtifact.workstreams));
     assert.ok(Array.isArray(splitArtifact.dependency_edges));
     assert.ok(Array.isArray(splitArtifact.merge_order));
@@ -404,7 +406,10 @@ async function main() {
     assert.match(splitReport, /## Output Files/);
     assert.match(splitReport, /V1-complete split stage/i);
     assert.match(splitReport, /future bug fixes/i);
+    assert.match(splitReport, /bug-fix-only maintenance mode/i);
     assert.match(splitReport, /split\.json and reports\/split-report\.md are the durable Step 4 outputs\./);
+    assert.match(splitReport, /split\.json and reports\/split-report\.md remain the authoritative Step 4 outputs\./);
+    assert.match(splitReport, /Debug files are optional internal mirrors and never replace the durable Step 4 outputs\./);
     assert.match(splitReport, /Execution Scope:/);
     assert.match(splitReport, /Blocked Workstream Count:/);
     assert.match(splitReport, /Partially Blocked Item Count:/);

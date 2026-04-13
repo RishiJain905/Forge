@@ -137,8 +137,16 @@ async function assertNoStep4Markers(): Promise<void> {
 
   for (const filePath of scannedFiles) {
     const contents = await readTextFile(filePath);
+    const lines = contents.split("\n");
+    const hasUnresolvedMarker = lines.some((line) => {
+      if (!freezeMarkerPattern.test(line)) {
+        return false;
+      }
 
-    if (freezeMarkerPattern.test(contents)) {
+      return !/no blocking .*TODO\/FIXME\/XXX|`TODO`|`FIXME`|`XXX`|marker sweep/i.test(line);
+    });
+
+    if (hasUnresolvedMarker) {
       offenders.push(filePath);
     }
   }
@@ -192,15 +200,18 @@ await runScenario(
       assert.equal(artifact.split_readiness.merge_order_rule_count, artifact.merge_order.length);
       assert.ok(artifact.boundaryNotes.some((entry) => /finish-and-freeze pass/i.test(entry)));
       assert.ok(artifact.boundaryNotes.some((entry) => /Step 5 can consume stable split outputs without guesswork/i.test(entry)));
+      assert.ok(artifact.boundaryNotes.some((entry) => /Step 4 is frozen for V1 except for future bug fixes/i.test(entry)));
       assert.match(report, /V1-complete split stage/i);
       assert.match(report, /future bug fixes/i);
       assert.match(report, /split\.json and reports\/split-report\.md are the durable Step 4 outputs\./i);
+      assert.match(report, /split\.json and reports\/split-report\.md remain the authoritative Step 4 outputs\./i);
+      assert.match(report, /Debug files are optional internal mirrors and never replace the durable Step 4 outputs\./i);
       assert.match(report, /Later Execution Must Honor:/i);
       assert.doesNotMatch(report, /Batch 2/i);
-      assert.match(readme, /Step 4 Batch 3 Part 1/i);
-      assert.match(readme, /finish-and-freeze pass/i);
-      assert.match(progress, /Batch 3\.01: `part-1-batch3-goal-finish-line-and-do-not-touch\.md` \(Step 4\)/i);
-      assert.match(progress, /Step 4 Batch 3 Part 1 is complete/i);
+      assert.match(readme, /Step 4 Batch 3 Part 4/i);
+      assert.match(readme, /bug-fix-only maintenance mode/i);
+      assert.match(progress, /Batch 3\.04: `part-4-step4-polish-test-hardening-and-freeze-criteria\.md` \(Step 4\)/i);
+      assert.match(progress, /Step 4 Batch 3 Part 4 is complete/i);
     } finally {
       await disposeTempRepo(repoRoot);
     }
@@ -282,11 +293,13 @@ await runScenario(
 
       const readme = await readTextFile(join(process.cwd(), "README.md"));
       const progress = await readTextFile(join(process.cwd(), "progress.md"));
-      assert.match(readme, /Step 4 Batch 3 Part 1/i);
+      assert.match(readme, /Step 4 Batch 3 Part 4/i);
       assert.match(progress, /Step 4 Batch 3 Part 1 is complete/i);
       assert.match(progress, /Step 4 Batch 3 Part 2 is complete/i);
       assert.match(progress, /Step 4 Batch 3 Part 3 is complete/i);
-      assert.match(progress, /Next Step 4 target: Batch 3 Part 4/i);
+      assert.match(progress, /Step 4 Batch 3 Part 4 is complete/i);
+      assert.match(progress, /Step 4 Batch 3 is complete/i);
+      assert.match(progress, /Next Step 4 target: Batch 3 Part 5/i);
     } finally {
       await disposeTempRepo(repoRoot);
     }

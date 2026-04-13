@@ -160,6 +160,9 @@ export function createSplitReport(artifact: SplitArtifact): string {
         ["Report Path", artifact.files.reportPath],
         ["Split Readiness Status", artifact.split_readiness.status],
         ["Split Usability", artifact.split_diagnostics.usability_status],
+        ["Later-Step Gate", artifact.split_readiness.later_step_gate],
+        ["Execution Scope", artifact.split_readiness.execution_scope],
+        ["V1 Freeze State", "bug-fix-only maintenance mode"],
         ["Warning Items", artifact.split_readiness.warning_items.length],
         ["Blocking Issues", artifact.split_readiness.blocking_issues.length],
         ["Failure Code", artifact.failure?.code ?? null],
@@ -304,6 +307,8 @@ export function createSplitReport(artifact: SplitArtifact): string {
         : "- none",
     ]),
     renderSection("Split Diagnostics", [
+      "split_diagnostics explains the warning, blocking, and partial-output context behind the later-step gate without replacing the durable split artifact and report.",
+      "",
       ...renderKeyValueLines([
         ["Usability Status", artifact.split_diagnostics.usability_status],
         ["Warning Items", artifact.split_diagnostics.warning_items.length],
@@ -330,6 +335,8 @@ export function createSplitReport(artifact: SplitArtifact): string {
         : "- none",
     ]),
     renderSection("Split Readiness", [
+      "split_readiness is the authoritative later-step gate for Step 5 and later consumers; it stays aligned with warning, blocking, and carried-forward constraint detail.",
+      "",
       ...renderReadinessLines(artifact),
       "",
       ...renderKeyValueLines([
@@ -363,7 +370,9 @@ export function createSplitReport(artifact: SplitArtifact): string {
     renderSection("Disallowed Capabilities", [renderList([...artifact.writePolicy.disallowedCapabilities])]),
     renderSection("Output Files", [
       "split.json and reports/split-report.md are the durable Step 4 outputs.",
+      "split.json and reports/split-report.md remain the authoritative Step 4 outputs.",
       "Debug files are optional internal mirrors and are only written when FORGE_SPLIT_DEBUG=1.",
+      "Debug files are optional internal mirrors and never replace the durable Step 4 outputs.",
       "",
       ...renderKeyValueLines([
         ["Requested Output Root", artifact.requestedOutputRoot],
