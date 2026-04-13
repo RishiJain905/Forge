@@ -78,6 +78,8 @@ function buildSplitBoundaryNotes(foundation: SplitFoundationResult): string[] {
     "Step 4 is frozen for V1 except for future bug fixes.",
     "Only bug-fix work should remain in Step 4; future feature work belongs in the Step 5 handoff and later stages.",
     "Treat split.json and reports/split-report.md as the authoritative Step 4 outputs while debug files remain optional internal mirrors.",
+    "Step 5 should consume split.json directly instead of rebuilding workstreams from verify output.",
+    "Step 5 should treat split_readiness, merge_order, blocked_items, and carried_forward_constraints as the authoritative execution-partition inputs from Step 4.",
   ]);
 }
 

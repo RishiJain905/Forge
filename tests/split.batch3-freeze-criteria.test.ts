@@ -298,8 +298,10 @@ await runScenario(
       assert.match(progress, /Step 4 Batch 3 Part 2 is complete/i);
       assert.match(progress, /Step 4 Batch 3 Part 3 is complete/i);
       assert.match(progress, /Step 4 Batch 3 Part 4 is complete/i);
+      assert.match(progress, /Step 4 Batch 3 Part 5 is complete/i);
       assert.match(progress, /Step 4 Batch 3 is complete/i);
-      assert.match(progress, /Next Step 4 target: Batch 3 Part 5/i);
+      assert.match(progress, /Step 4 is complete for V1 and frozen except for future bug fixes/i);
+      assert.match(progress, /Next major target: Step 5 execute implementation work/i);
     } finally {
       await disposeTempRepo(repoRoot);
     }

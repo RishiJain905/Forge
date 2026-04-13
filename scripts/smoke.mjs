@@ -363,6 +363,7 @@ async function main() {
     assert.ok(splitArtifact.boundaryNotes.some((entry) => /Step 5 can consume stable split outputs without guesswork/i.test(entry)));
     assert.ok(splitArtifact.boundaryNotes.some((entry) => /Step 4 is frozen for V1 except for future bug fixes/i.test(entry)));
     assert.ok(splitArtifact.boundaryNotes.some((entry) => /Only bug-fix work should remain in Step 4/i.test(entry)));
+    assert.ok(splitArtifact.boundaryNotes.some((entry) => /Step 5 should consume split\.json directly instead of rebuilding workstreams from verify output/i.test(entry)));
     assert.ok(Array.isArray(splitArtifact.workstreams));
     assert.ok(Array.isArray(splitArtifact.dependency_edges));
     assert.ok(Array.isArray(splitArtifact.merge_order));
@@ -410,6 +411,8 @@ async function main() {
     assert.match(splitReport, /split\.json and reports\/split-report\.md are the durable Step 4 outputs\./);
     assert.match(splitReport, /split\.json and reports\/split-report\.md remain the authoritative Step 4 outputs\./);
     assert.match(splitReport, /Debug files are optional internal mirrors and never replace the durable Step 4 outputs\./);
+    assert.match(splitReport, /Forge Execute Gate:/);
+    assert.match(splitReport, /Step 5 should consume split\.json directly instead of rebuilding workstreams from verify output\./);
     assert.match(splitReport, /Execution Scope:/);
     assert.match(splitReport, /Blocked Workstream Count:/);
     assert.match(splitReport, /Partially Blocked Item Count:/);

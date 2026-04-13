@@ -58,10 +58,25 @@ function renderFailureDetails(
   ]);
 }
 
+function describeExecuteGate(artifact: SplitArtifact): string {
+  if (artifact.failure) {
+    return "diagnostics only";
+  }
+
+  if (!artifact.split_readiness.ready) {
+    return "blocked";
+  }
+
+  return artifact.split_readiness.status === "ready_with_warnings"
+    ? "can proceed with warnings"
+    : "can proceed";
+}
+
 function renderReadinessLines(artifact: SplitArtifact): string[] {
   const laterExecutionMustHonor = artifact.split_readiness.recommended_user_actions;
 
   return [
+    `- Forge Execute Gate: ${describeExecuteGate(artifact)}`,
     `- Can Proceed: ${artifact.split_readiness.ready ? "yes" : "no"}`,
     `- Later-Step Gate: ${artifact.split_readiness.later_step_gate}`,
     `- All Items Safely Assigned: ${artifact.split_readiness.execution_scope === "all_streams" ? "yes" : "no"}`,

@@ -283,6 +283,7 @@ await runScenario(
       assert.ok(sectionBody(report, "Overview").join("\n").includes("Later-Step Gate:"));
       assert.ok(sectionBody(report, "Overview").join("\n").includes("Execution Scope:"));
       assert.ok(sectionBody(report, "Overview").join("\n").includes("V1 Freeze State: bug-fix-only maintenance mode"));
+      assert.ok(sectionBody(report, "Split Readiness").join("\n").includes("Forge Execute Gate:"));
       assert.ok(sectionBody(report, "Split Readiness").join("\n").includes("Later-Step Gate:"));
       assert.ok(sectionBody(report, "Split Readiness").join("\n").includes("Material Execution Limits:"));
       assert.ok(sectionBody(report, "Split Readiness").join("\n").includes("split_readiness is the authoritative later-step gate"));
@@ -292,6 +293,7 @@ await runScenario(
       assert.ok(sectionBody(report, "Boundary Notes").length > 0);
       assert.ok(sectionBody(report, "Boundary Notes").join("\n").includes("Step 4 is frozen for V1 except for future bug fixes."));
       assert.ok(sectionBody(report, "Boundary Notes").join("\n").includes("Only bug-fix work should remain in Step 4; future feature work belongs in the Step 5 handoff and later stages."));
+      assert.ok(sectionBody(report, "Boundary Notes").join("\n").includes("Step 5 should consume split.json directly instead of rebuilding workstreams from verify output."));
       assert.ok(sectionBody(report, "Deferred Capabilities").length > 0);
       assert.ok(sectionBody(report, "Allowed Side Effects").length > 0);
       assert.ok(sectionBody(report, "Disallowed Capabilities").length > 0);

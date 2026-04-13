@@ -584,6 +584,8 @@ Step 4 Batch 3 Part 3 hardens the actual Step 4 outputs so later stages can cons
 
 Step 4 Batch 3 Part 4 closes the Step 4 freeze pass with final report/output polish, stronger freeze-oriented regression coverage, and explicit frozen-runtime documentation instead of reopening split architecture or sneaking Step 5 behavior forward. `forge split` now states more clearly that `split.json` and `split-report.md` are the authoritative durable outputs, keeps debug mirrors explicitly secondary, carries an explicit frozen-for-V1 boundary note in the shipped artifact/report, and treats the Step 4 runtime surface as being in bug-fix-only maintenance mode after Batch 3 Part 4.
 
+Step 4 Batch 3 Part 5 finishes the Step 4-to-Step 5 handoff contract without implementing `forge execute`. `forge split` now makes the execute-facing contract more explicit by stating that Step 5 should consume `split.json` directly instead of rebuilding workstreams from `verify.json`, by exposing a human-readable `Forge Execute Gate` in `split-report.md`, and by proving through a dedicated regression that grounded, warning-heavy, blocked, and fallback-output runs already provide the workstream, merge-order, blocked-item, carried-forward-constraint, and readiness story that Step 5 needs.
+
 ---
 
 # Repository Intent
