@@ -32,20 +32,26 @@ forge verify --plan ./my-custom-plan.json
 - Share plans for team review: teammate sends a plan.json, you verify it independently
 - Do a quick coordination sanity check before implementing
 
-### CLI Options
+### CLI Options (V1 — What Works Today)
 
 ```bash
 # Basic standalone verify
 forge verify --plan ./path/to/plan.json
 
+# With explicit output directory
+forge verify --plan ./path/to/plan.json --output-dir ./my-verify-output
+```
+
+### Proposed Future CLI Options (Not Yet Implemented)
+
+These are planned enhancements, not yet built in V1:
+
+```bash
 # With notes/constraints override
 forge verify --plan ./path/to/plan.json --notes constraints.md
 
 # With LLM assist (enrich the verification analysis)
 forge verify --plan ./path/to/plan.json --llm-assist
-
-# With explicit output directory
-forge verify --plan ./path/to/plan.json --output-dir ./my-verify-output
 
 # Dry run — show what would be verified without running TLC
 forge verify --plan ./path/to/plan.json --dry-run
@@ -53,12 +59,14 @@ forge verify --plan ./path/to/plan.json --dry-run
 # Verbose — show detailed TLA+ specs and TLC output
 forge verify --plan ./path/to/plan.json --verbose
 
-# Specific lanes only (skip structural, run formal only)
+# Specific lanes only (structural OR formal) — NOT IMPLEMENTED
 forge verify --plan ./path/to/plan.json --lanes formal
 
-# Specific plan items only
+# Specific plan items only — NOT IMPLEMENTED
 forge verify --plan ./path/to/plan.json --target pi-rate-limiter,pi-auth-middleware
 ```
+
+> **Current Behavior:** Both lanes (structural + formal) run unconditionally on every verify invocation. The `lanes` field on verification cases/targets defines the type system and traceability, not runtime filtering.
 
 ### Input Resolution (Standalone Mode)
 
@@ -66,9 +74,8 @@ When running standalone:
 
 ```
 1. --plan flag → load this plan.json (required)
-2. --notes flag → optional override constraints
-3. --config flag → optional Forge config
-4. [synthetic carry_forward] → if no intake.json exists, create minimal context
+2. --output-dir flag → custom output directory (optional)
+3. [synthetic carry_forward] → if no intake.json exists, create minimal context
 
 No .forge/intake.json required.
 No .forge/plan.json required (uses the one from --plan flag).
