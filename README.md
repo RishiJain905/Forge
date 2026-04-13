@@ -578,6 +578,8 @@ Step 4 Batch 2 Part 5 closes the runnable milestone and default verification gat
 
 Step 4 Batch 3 Part 1 is the finish-and-freeze framing pass over that already real split runtime. It makes the Step 4 freeze goal explicit in code, adds explicit finish-line and do-not-touch boundary metadata to the Step 4 boundary contract, reframes conservative regrouping as hardening the already-shipped aggressive regrouping behavior rather than reinventing it, adds dedicated Batch 3 Part 1 freeze coverage for grounded, warning-heavy, repeated-run, and debug-output split runs, and keeps the public `forge split` CLI plus top-level `split.json` / `split-report.md` contracts stable.
 
+Step 4 Batch 3 Part 2 hardens the real regrouping, blocking, and merge-order semantics without reopening the frozen top-level split contract. `forge split` now preserves structured regrouping rationale and member-level traceability inside `stream_constraint_details`, exposes first-class structured blocking status that distinguishes blocked versus partially blocked grouped work while keeping constraining findings/constraints/concerns inspectable, and carries explicit nested merge-order status plus source-linked rule kinds through the artifact, report, and debug outputs. The default test gate now includes a dedicated Batch 3 Part 2 regression alongside stronger workstream-model and report coverage.
+
 ---
 
 # Repository Intent

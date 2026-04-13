@@ -197,6 +197,53 @@ export interface SplitBlockedItem {
   partialMetadataAvailable: boolean;
 }
 
+export type SplitRegroupingGroupKind = "single" | "direct_dependency_test_pair" | "same_surface_siblings";
+export type SplitBlockingStatus = "unblocked" | "partially_blocked" | "blocked";
+export type SplitMergeOrderStatus = "none" | "constrained";
+export type SplitMergeOrderRuleKind = "serial" | "dependency" | "protected_merge";
+
+export interface SplitRegroupingMemberDetail {
+  planItemId: string;
+  title: string;
+  category: PlanArtifact["plan_items"][number]["category"];
+  likelyAffectedPaths: string[];
+  blockedStatus: "unblocked" | "blocked";
+  blockedReason: string | null;
+  sourceVerificationCaseIds: string[];
+  sourceFindingIds: string[];
+  sourceConstraintIds: string[];
+  sourceConcernIds: string[];
+}
+
+export interface SplitRegroupingDetail {
+  grouped: boolean;
+  groupKind: SplitRegroupingGroupKind;
+  rationale: string;
+  note: string | null;
+  dominantSurfaceKey: string | null;
+  preservedSourcePlanItemIds: string[];
+  memberDetails: SplitRegroupingMemberDetail[];
+}
+
+export interface SplitBlockingDetail {
+  status: SplitBlockingStatus;
+  blockedMemberPlanItemIds: string[];
+  blockedUpstreamWorkstreamIds: string[];
+  constrainingFindingIds: string[];
+  constrainingConstraintIds: string[];
+  constrainingConcernIds: string[];
+  canProceedWithConstraints: boolean;
+  requiresResolutionBeforeExecution: boolean;
+}
+
+export interface SplitMergeOrderDetail {
+  status: SplitMergeOrderStatus;
+  ruleKinds: SplitMergeOrderRuleKind[];
+  hardPrerequisiteWorkstreamIds: string[];
+  sourceConstraintIds: string[];
+  sourceConcernIds: string[];
+}
+
 export interface SplitStreamConstraintDetail {
   workstreamId: string;
   baseCategory: SplitStreamCategory;
@@ -222,6 +269,9 @@ export interface SplitStreamConstraintDetail {
   blockedItemIds: string[];
   mergeOrderRequirements: string[];
   blockedReason: string | null;
+  regrouping: SplitRegroupingDetail;
+  blocking: SplitBlockingDetail;
+  mergeOrder: SplitMergeOrderDetail;
 }
 
 export interface SplitWorkstreamBuildResult {

@@ -546,6 +546,48 @@ const splitBlockedItemSchema = z.object({
   partialMetadataAvailable: z.boolean(),
 }).strict();
 
+const splitRegroupingMemberDetailSchema = z.object({
+  planItemId: z.string().min(1),
+  title: z.string().min(1),
+  category: planArtifactSchema.shape.plan_items.element.shape.category,
+  likelyAffectedPaths: z.array(z.string().min(1)),
+  blockedStatus: z.enum(["unblocked", "blocked"]),
+  blockedReason: z.string().min(1).nullable(),
+  sourceVerificationCaseIds: z.array(z.string().min(1)),
+  sourceFindingIds: z.array(z.string().min(1)),
+  sourceConstraintIds: z.array(z.string().min(1)),
+  sourceConcernIds: z.array(z.string().min(1)),
+}).strict();
+
+const splitRegroupingDetailSchema = z.object({
+  grouped: z.boolean(),
+  groupKind: z.enum(["single", "direct_dependency_test_pair", "same_surface_siblings"]),
+  rationale: z.string().min(1),
+  note: z.string().min(1).nullable(),
+  dominantSurfaceKey: z.string().min(1).nullable(),
+  preservedSourcePlanItemIds: z.array(z.string().min(1)),
+  memberDetails: z.array(splitRegroupingMemberDetailSchema),
+}).strict();
+
+const splitBlockingDetailSchema = z.object({
+  status: z.enum(["unblocked", "partially_blocked", "blocked"]),
+  blockedMemberPlanItemIds: z.array(z.string().min(1)),
+  blockedUpstreamWorkstreamIds: z.array(z.string().min(1)),
+  constrainingFindingIds: z.array(z.string().min(1)),
+  constrainingConstraintIds: z.array(z.string().min(1)),
+  constrainingConcernIds: z.array(z.string().min(1)),
+  canProceedWithConstraints: z.boolean(),
+  requiresResolutionBeforeExecution: z.boolean(),
+}).strict();
+
+const splitMergeOrderDetailSchema = z.object({
+  status: z.enum(["none", "constrained"]),
+  ruleKinds: z.array(z.enum(["serial", "dependency", "protected_merge"])),
+  hardPrerequisiteWorkstreamIds: z.array(z.string().min(1)),
+  sourceConstraintIds: z.array(z.string().min(1)),
+  sourceConcernIds: z.array(z.string().min(1)),
+}).strict();
+
 const splitStreamConstraintDetailSchema = z.object({
   workstreamId: z.string().min(1),
   baseCategory: z.enum(SPLIT_STREAM_CATEGORIES),
@@ -571,6 +613,9 @@ const splitStreamConstraintDetailSchema = z.object({
   blockedItemIds: z.array(z.string().min(1)),
   mergeOrderRequirements: z.array(z.string().min(1)),
   blockedReason: z.string().min(1).nullable(),
+  regrouping: splitRegroupingDetailSchema,
+  blocking: splitBlockingDetailSchema,
+  mergeOrder: splitMergeOrderDetailSchema,
 }).strict();
 
 const splitArtifactFilesSchema = z.object({

@@ -143,6 +143,36 @@ type SplitArtifact = {
       blockedPlanItemIds: string[];
       mergeOrderRuleIds: string[];
       blockedItemIds: string[];
+      regrouping: {
+        grouped: boolean;
+        groupKind: string;
+        rationale: string;
+        preservedSourcePlanItemIds: string[];
+        memberDetails: Array<{
+          planItemId: string;
+          blockedStatus: string;
+          blockedReason: string | null;
+          sourceConstraintIds: string[];
+          sourceConcernIds: string[];
+        }>;
+      };
+      blocking: {
+        status: string;
+        blockedMemberPlanItemIds: string[];
+        blockedUpstreamWorkstreamIds: string[];
+        constrainingFindingIds: string[];
+        constrainingConstraintIds: string[];
+        constrainingConcernIds: string[];
+        canProceedWithConstraints: boolean;
+        requiresResolutionBeforeExecution: boolean;
+      };
+      mergeOrder: {
+        status: string;
+        ruleKinds: string[];
+        hardPrerequisiteWorkstreamIds: string[];
+        sourceConstraintIds: string[];
+        sourceConcernIds: string[];
+      };
     }>;
   };
 };
@@ -220,12 +250,33 @@ await runScenario(
           Array.isArray(detail.blockedUpstreamWorkstreamIds) &&
           Array.isArray(detail.blockedPlanItemIds) &&
           Array.isArray(detail.mergeOrderRuleIds) &&
-          Array.isArray(detail.blockedItemIds),
+          Array.isArray(detail.blockedItemIds) &&
+          typeof detail.regrouping?.grouped === "boolean" &&
+          detail.regrouping.groupKind.length > 0 &&
+          detail.regrouping.rationale.length > 0 &&
+          Array.isArray(detail.regrouping.preservedSourcePlanItemIds) &&
+          Array.isArray(detail.regrouping.memberDetails) &&
+          detail.blocking.status.length > 0 &&
+          Array.isArray(detail.blocking.blockedMemberPlanItemIds) &&
+          Array.isArray(detail.blocking.blockedUpstreamWorkstreamIds) &&
+          Array.isArray(detail.blocking.constrainingFindingIds) &&
+          Array.isArray(detail.blocking.constrainingConstraintIds) &&
+          Array.isArray(detail.blocking.constrainingConcernIds) &&
+          typeof detail.blocking.canProceedWithConstraints === "boolean" &&
+          typeof detail.blocking.requiresResolutionBeforeExecution === "boolean" &&
+          detail.mergeOrder.status.length > 0 &&
+          Array.isArray(detail.mergeOrder.ruleKinds) &&
+          Array.isArray(detail.mergeOrder.hardPrerequisiteWorkstreamIds) &&
+          Array.isArray(detail.mergeOrder.sourceConstraintIds) &&
+          Array.isArray(detail.mergeOrder.sourceConcernIds),
         ),
       );
       assert.ok(sectionBody(report, "Carried-Forward Constraints").join("\n").includes("Base Category:"));
       assert.ok(sectionBody(report, "Carried-Forward Constraints").join("\n").includes("Category Reasons:"));
       assert.ok(sectionBody(report, "Carried-Forward Constraints").join("\n").includes("Blocked Plan Item IDs:"));
+      assert.ok(sectionBody(report, "Carried-Forward Constraints").join("\n").includes("Regrouping Kind:"));
+      assert.ok(sectionBody(report, "Carried-Forward Constraints").join("\n").includes("Blocking Status:"));
+      assert.ok(sectionBody(report, "Carried-Forward Constraints").join("\n").includes("Merge-Order Status:"));
       assert.ok(sectionBody(report, "Split Diagnostics").length > 0);
       assert.ok(sectionBody(report, "Split Readiness").length > 0);
       assert.ok(sectionBody(report, "Boundary Notes").length > 0);

@@ -1353,6 +1353,110 @@ await runScenario(
 );
 
 await runScenario(
+  "buildSplitWorkstreams emits structured regrouping, blocking, and merge-order detail for grouped and partially blocked streams",
+  () => {
+    const foundation = createFoundationFixture();
+
+    foundation.splitInput.context.dependencyGraph = [
+      ...foundation.splitInput.context.dependencyGraph,
+      {
+        planItemId: "plan-after",
+        dependsOnPlanItemId: "plan-blocked",
+        type: "hard",
+        reason: "The test follow-up also waits for the blocked ownership repair to finish.",
+      },
+    ];
+    const planAfter = foundation.splitInput.context.planItems.find((planItem) => planItem.id === "plan-after");
+    if (!planAfter) {
+      throw new Error("Expected the fixture to include the grouped test plan item.");
+    }
+
+    planAfter.dependencies = [
+      ...planAfter.dependencies,
+      {
+        planItemId: "plan-blocked",
+        type: "hard",
+        reason: "The test follow-up also waits for the blocked ownership repair to finish.",
+      },
+    ];
+    refreshPlanItemEvidence(foundation);
+
+    const result = buildSplitWorkstreams({ foundation }) as unknown as {
+      streamConstraintDetails: Array<{
+        workstreamId: string;
+        regrouping: {
+          grouped: boolean;
+          groupKind: string;
+          rationale: string;
+          preservedSourcePlanItemIds: string[];
+          memberDetails: Array<{
+            planItemId: string;
+            blockedStatus: string;
+            blockedReason: string | null;
+            sourceConstraintIds: string[];
+            sourceConcernIds: string[];
+          }>;
+        };
+        blocking: {
+          status: string;
+          blockedMemberPlanItemIds: string[];
+          blockedUpstreamWorkstreamIds: string[];
+          constrainingFindingIds: string[];
+          constrainingConstraintIds: string[];
+          constrainingConcernIds: string[];
+          canProceedWithConstraints: boolean;
+          requiresResolutionBeforeExecution: boolean;
+        };
+        mergeOrder: {
+          status: string;
+          ruleKinds: string[];
+          hardPrerequisiteWorkstreamIds: string[];
+          sourceConstraintIds: string[];
+          sourceConcernIds: string[];
+        };
+      }>;
+    };
+
+    const groupedTestDetail = result.streamConstraintDetails.find((detail) => detail.workstreamId === "ws-plan-safe__plan-after");
+    assert.ok(groupedTestDetail, "expected the grouped source/test stream detail to exist");
+    assert.equal(groupedTestDetail?.regrouping.grouped, true);
+    assert.equal(groupedTestDetail?.regrouping.groupKind, "direct_dependency_test_pair");
+    assert.ok(groupedTestDetail?.regrouping.rationale.length);
+    assert.deepEqual(groupedTestDetail?.regrouping.preservedSourcePlanItemIds, ["plan-safe", "plan-after"]);
+    assert.ok(
+      groupedTestDetail?.regrouping.memberDetails.some((member) =>
+        member.planItemId === "plan-after" &&
+        member.blockedStatus === "blocked" &&
+        /ownership repair/i.test(member.blockedReason ?? "")
+      ),
+      "expected regrouped member details to keep the blocked grouped member explicit",
+    );
+    assert.equal(groupedTestDetail?.blocking.status, "partially_blocked");
+    assert.deepEqual(groupedTestDetail?.blocking.blockedMemberPlanItemIds, ["plan-after"]);
+    assert.ok(groupedTestDetail?.blocking.blockedUpstreamWorkstreamIds.includes("ws-plan-blocked"));
+    assert.ok(groupedTestDetail?.blocking.constrainingFindingIds.includes("finding-blocked"));
+    assert.ok(groupedTestDetail?.blocking.constrainingConstraintIds.includes("constraint-blocked"));
+    assert.ok(groupedTestDetail?.blocking.constrainingConcernIds.includes("concern-blocked"));
+    assert.equal(groupedTestDetail?.blocking.canProceedWithConstraints, true);
+    assert.equal(groupedTestDetail?.blocking.requiresResolutionBeforeExecution, false);
+    assert.equal(groupedTestDetail?.mergeOrder.status, "constrained");
+    assert.ok(groupedTestDetail?.mergeOrder.ruleKinds.includes("dependency"));
+    assert.ok(groupedTestDetail?.mergeOrder.hardPrerequisiteWorkstreamIds.includes("ws-plan-serial"));
+
+    const groupedSharedDetail = result.streamConstraintDetails.find((detail) => detail.workstreamId === "ws-plan-shared-a__plan-shared-b");
+    assert.ok(groupedSharedDetail, "expected the same-surface sibling stream detail to exist");
+    assert.equal(groupedSharedDetail?.regrouping.grouped, true);
+    assert.equal(groupedSharedDetail?.regrouping.groupKind, "same_surface_siblings");
+    assert.deepEqual(groupedSharedDetail?.regrouping.preservedSourcePlanItemIds, ["plan-shared-a", "plan-shared-b"]);
+    assert.equal(groupedSharedDetail?.blocking.status, "unblocked");
+    assert.equal(groupedSharedDetail?.mergeOrder.status, "constrained");
+    assert.ok(groupedSharedDetail?.mergeOrder.ruleKinds.includes("protected_merge"));
+    assert.ok(groupedSharedDetail?.mergeOrder.sourceConstraintIds.includes("constraint-shared-a"));
+    assert.ok(groupedSharedDetail?.mergeOrder.sourceConstraintIds.includes("constraint-shared-b"));
+  },
+);
+
+await runScenario(
   "buildSplitWorkstreams surfaces blocked-workstream warning context and stream-constraint detail on actionable input",
   () => {
     const result = buildSplitWorkstreams({ foundation: createFoundationFixture() });
