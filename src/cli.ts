@@ -8,6 +8,8 @@ import { runSplitCommand } from "./split/runner.js";
 import type { SplitCommandResult } from "./split/types.js";
 import { runVerifyCommand } from "./verify/runner.js";
 import type { VerifyCommandResult } from "./verify/types.js";
+import { runExecuteCommand } from "./execute/cli.js";
+import type { ExecuteCommandResult } from "./execute/types.js";
 
 function hasFlag(argv: string[], flag: string): boolean {
   return argv.includes(flag);
@@ -59,6 +61,18 @@ export function formatSplitCommandOutput(result: SplitCommandResult): string {
     result.outputRoot ? `Output root: ${result.outputRoot}` : null,
     result.artifactPath ? `Artifact: ${result.artifactPath}` : null,
     result.reportPath ? `Report: ${result.reportPath}` : null,
+    result.failure ? `Failure: [${result.failure.code}] ${result.failure.message}` : null,
+  ].filter((line): line is string => Boolean(line));
+
+  return `${lines.join("\n")}\n`;
+}
+
+export function formatExecuteCommandOutput(result: ExecuteCommandResult): string {
+  const lines = [
+    `Status: ${result.status}`,
+    `Summary: ${result.summary}`,
+    result.outputRoot ? `Output root: ${result.outputRoot}` : null,
+    result.artifactPath ? `Artifact: ${result.artifactPath}` : null,
     result.failure ? `Failure: [${result.failure.code}] ${result.failure.message}` : null,
   ].filter((line): line is string => Boolean(line));
 
@@ -210,6 +224,30 @@ export async function runCli(argv: string[]): Promise<number> {
     }) => {
       const result = await runSplitCommand(options);
       const output = formatSplitCommandOutput(result);
+
+      if (result.status !== "ready") {
+        process.stderr.write(output);
+        exitCode = 1;
+        return;
+      }
+
+      process.stdout.write(output);
+    });
+
+  program
+    .command("execute")
+    .description("Run the Step 5 execute stage — track workstream execution interactively.")
+    .option("--repo <path>", "Target repo root. Defaults to the current directory.")
+    .option(
+      "--output-dir <path>",
+      "Custom repo-internal output directory. Defaults to .forge.",
+    )
+    .action(async (options: {
+      repo?: string;
+      outputDir?: string;
+    }) => {
+      const result = await runExecuteCommand(options);
+      const output = formatExecuteCommandOutput(result);
 
       if (result.status !== "ready") {
         process.stderr.write(output);
