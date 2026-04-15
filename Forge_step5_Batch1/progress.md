@@ -120,6 +120,7 @@ Phase 3 initial implementation used wrong signature: `(state, outputPath)`. Fixe
 | File | Change |
 |------|--------|
 | `src/cli.ts` | Added `execute` subcommand, `runExecuteCommand` import, `formatExecuteCommandOutput()` |
+| `src/execute/index.ts` | Added `export { runExecuteCommand } from './cli.js'` barrel export |
 
 ### Verification
 
