@@ -143,6 +143,7 @@ await runScenario("ExecuteArtifactSchema parses a valid artifact", () => {
       failed: 0,
       blocked: 0,
     },
+    transitions: [],
   };
   const result = ExecuteArtifactSchema.parse(artifact);
   assert.equal(result.schemaVersion, "1.0.0");
@@ -202,6 +203,7 @@ await runScenario("validateExecuteArtifact returns the artifact on valid input",
       failed: 0,
       blocked: 0,
     },
+    transitions: [],
   };
   const result = validateExecuteArtifact(artifact);
   assert.equal(result.schemaVersion, "1.0.0");

@@ -33,6 +33,7 @@ export interface ExecuteArtifact {
     failed: number;
     blocked: number;
   };
+  transitions: StateTransition[];
 }
 
 // State transition event for the log

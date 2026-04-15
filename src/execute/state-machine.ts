@@ -93,6 +93,15 @@ export function transitionState(
     const unmet = requirements.filter((req) => !state.mergedWorkstreams.has(req));
 
     if (unmet.length > 0) {
+      ws.mergeOrderViolations = unmet;
+      const now = new Date().toISOString();
+      state.transitions.push({
+        workstreamId: id,
+        from: oldState,
+        to: newState,
+        timestamp: now,
+        reason: `Blocked: merge order not satisfied (${unmet.join(', ')})`,
+      });
       return {
         success: false,
         error: `Merge order requirements not met: ${unmet.join(", ")}`,
@@ -215,5 +224,6 @@ export function buildExecuteArtifact(
     workstreams,
     mergeOrderGates,
     summary,
+    transitions: [...state.transitions],
   };
 }

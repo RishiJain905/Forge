@@ -1,29 +1,482 @@
 {
   "schemaVersion": "2.0.0",
+  "command": "forge split",
+  "stage": "step4",
+  "status": "ready",
+  "purpose": "Finish forge split as a V1-complete split stage and freeze it except for future bug fixes by transforming verified planning output into stable execution-ready workstreams that preserve dependency, verification, blocking, and merge-order constraints for clean Step 5 consumption.",
+  "repoRoot": "/home/trjxter/Forge/tests/fixtures",
+  "requestedOutputRoot": null,
+  "outputRoot": "/home/trjxter/Forge/tests/fixtures/.forge",
+  "writePolicy": {
+    "mode": "output-root-only",
+    "repoReadOnlyOutsideOutputRoot": true,
+    "allowedRoot": "/home/trjxter/Forge/tests/fixtures/.forge",
+    "allowedSideEffects": [
+      "read the Step 3 verify artifact",
+      "read the Step 2 plan artifact referenced by Step 3",
+      "validate the Step 3 handoff contract before split continues",
+      "write split outputs inside the resolved output root",
+      "optionally write internal split debug artifacts inside the resolved output root when FORGE_SPLIT_DEBUG=1"
+    ],
+    "deferredCapabilities": [
+      "forge execute",
+      "forge integrate",
+      "interactive slash-command mode",
+      "memory backends",
+      "unrelated execution platform abstractions",
+      "execution-packet prompt generation"
+    ],
+    "disallowedCapabilities": [
+      "execute code",
+      "implement actual execution logic",
+      "implement forge execute",
+      "implement forge integrate",
+      "modify code",
+      "modify code as part of splitting",
+      "edit source files directly",
+      "create code-edit prompts or packets",
+      "rewrite planning logic",
+      "redo verification",
+      "ignore verification constraints",
+      "ignore TLC-backed failures or mitigations",
+      "hide blocked work",
+      "hide unresolved risk inside broad stream descriptions",
+      "treat regrouping as a new experimental design space",
+      "destabilize grouping semantics with experimental regrouping logic",
+      "rename files for aesthetics only",
+      "introduce large new abstractions",
+      "reopen the Step 4 orchestrator shape without strong reason",
+      "redesign Step 4 architecture without strong reason"
+    ]
+  },
+  "files": {
+    "artifactPath": "/home/trjxter/Forge/tests/fixtures/.forge/split.json",
+    "reportPath": "/home/trjxter/Forge/tests/fixtures/.forge/reports/split-report.md",
+    "debugArtifactPath": "/home/trjxter/Forge/tests/fixtures/.forge/split-debug.json",
+    "debugWorkstreamsPath": "/home/trjxter/Forge/tests/fixtures/.forge/workstreams.json",
+    "debugMergeOrderPath": "/home/trjxter/Forge/tests/fixtures/.forge/merge-order.json",
+    "debugBlockedItemsPath": "/home/trjxter/Forge/tests/fixtures/.forge/blocked-items.json",
+    "debugStreamConstraintsPath": "/home/trjxter/Forge/tests/fixtures/.forge/stream-constraints.json",
+    "debugReadinessPath": "/home/trjxter/Forge/tests/fixtures/.forge/split-readiness.json"
+  },
+  "startedAt": "2026-04-15T22:00:00.000Z",
+  "finishedAt": "2026-04-15T22:01:00.000Z",
+  "summary": "Split completed successfully with 4 workstreams ready for execution.",
+  "boundaryNotes": [
+    "Consume the persisted Step 3 verify artifact instead of re-running broad verification logic.",
+    "Load the referenced Step 2 plan artifact only as supporting structure for plan items, dependencies, conflict zones, test obligations, and parallelization signals.",
+    "Treat Step 3 findings, constraints, carried-forward uncertainty, and split-readiness signals as authoritative safety inputs.",
+    "Keep one real orchestration path from persisted Step 3 plus Step 2 output to persisted split outputs.",
+    "Treat Batch 3 as the finish-and-freeze pass over the existing Step 4 runtime instead of a reason to start Step 5 behavior early.",
+    "Keep the already-shipped stronger regrouping where it clearly improves execution readiness instead of reverting to placeholder one-stream-per-plan-item output.",
+    "Keep source traceability and grouping rationale explicit so regrouped work stays auditable.",
+    "Keep blocked and constrained work explicit instead of burying it inside broad stream descriptions.",
+    "Harden aggressive regrouping semantics rather than widening them with new unstable experiments right before freeze.",
+    "Keep the Step 4 finish-and-freeze line explicit so Step 5 can consume stable split outputs without guesswork while the top-level split contract stays frozen.",
+    "Step 4 is frozen for V1 except for future bug fixes.",
+    "Only bug-fix work should remain in Step 4; future feature work belongs in the Step 5 handoff and later stages.",
+    "Treat split.json and reports/split-report.md as the authoritative Step 4 outputs while debug files remain optional internal mirrors.",
+    "Step 5 should consume split.json directly instead of rebuilding workstreams from verify output.",
+    "Step 5 should treat split_readiness, merge_order, blocked_items, and carried_forward_constraints as the authoritative execution-partition inputs from Step 4."
+  ],
+  "source_verify": {
+    "artifactPath": "/home/trjxter/Forge/tests/fixtures/.forge/verify.json",
+    "command": "forge verify",
+    "repoRoot": "/home/trjxter/Forge/tests/fixtures",
+    "status": "ready",
+    "summary": "Verification completed successfully",
+    "readyForSplit": true,
+    "verificationDiagnostics": {},
+    "verificationReadinessStatus": "ready",
+    "verificationReadiness": {
+      "ready": true,
+      "status": "ready",
+      "summary": "Verification readiness confirmed"
+    },
+    "failure": null
+  },
+  "source_plan": {
+    "artifactPath": "/home/trjxter/Forge/tests/fixtures/.forge/plan.json",
+    "command": "forge plan",
+    "repoRoot": "/home/trjxter/Forge/tests/fixtures",
+    "status": "ready",
+    "summary": "Planning completed successfully",
+    "readyForVerification": true,
+    "planningDiagnostics": {},
+    "planningReadiness": {
+      "ready": true,
+      "status": "ready",
+      "summary": "Planning readiness confirmed"
+    },
+    "failure": null
+  },
+  "workstream_contract": {
+    "requiredFields": ["id", "title", "description", "category", "sourcePlanItemIds", "sourceVerificationCaseIds", "sourceFindingIds", "likelyAffectedPaths", "streamDependencies", "mergeOrderRequirements", "constraints", "blockedReason"],
+    "categories": ["serial", "safe_parallel", "parallel_after_dependency", "protected_merge", "blocked"],
+    "constraintSources": ["dependency_graph", "conflict_zone", "test_obligation", "verification_target", "verification_case", "structural_finding", "formal_finding", "verification_constraint", "carry_forward_concern", "planning_readiness", "verification_readiness"]
+  },
   "workstreams": [
     {
       "id": "ws-1",
       "title": "Authentication",
-      "category": "implementation",
-      "mergeOrderAfter": []
+      "description": "Implement authentication workstream",
+      "category": "safe_parallel",
+      "sourcePlanItemIds": [],
+      "sourceVerificationCaseIds": [],
+      "sourceFindingIds": [],
+      "likelyAffectedPaths": [],
+      "streamDependencies": [],
+      "mergeOrderRequirements": [],
+      "constraints": [],
+      "blockedReason": null
     },
     {
       "id": "ws-2",
       "title": "API Layer",
-      "category": "implementation",
-      "mergeOrderAfter": ["ws-1"]
+      "description": "Implement API layer workstream",
+      "category": "safe_parallel",
+      "sourcePlanItemIds": [],
+      "sourceVerificationCaseIds": [],
+      "sourceFindingIds": [],
+      "likelyAffectedPaths": [],
+      "streamDependencies": ["ws-1"],
+      "mergeOrderRequirements": ["ws-1"],
+      "constraints": [],
+      "blockedReason": null
     },
     {
       "id": "ws-3",
       "title": "Frontend",
-      "category": "implementation",
-      "mergeOrderAfter": ["ws-1"]
+      "description": "Implement frontend workstream",
+      "category": "safe_parallel",
+      "sourcePlanItemIds": [],
+      "sourceVerificationCaseIds": [],
+      "sourceFindingIds": [],
+      "likelyAffectedPaths": [],
+      "streamDependencies": ["ws-1"],
+      "mergeOrderRequirements": ["ws-1"],
+      "constraints": [],
+      "blockedReason": null
     },
     {
       "id": "ws-4",
       "title": "Integration",
-      "category": "implementation",
-      "mergeOrderAfter": ["ws-2", "ws-3"]
+      "description": "Implement integration workstream",
+      "category": "safe_parallel",
+      "sourcePlanItemIds": [],
+      "sourceVerificationCaseIds": [],
+      "sourceFindingIds": [],
+      "likelyAffectedPaths": [],
+      "streamDependencies": ["ws-2", "ws-3"],
+      "mergeOrderRequirements": ["ws-2", "ws-3"],
+      "constraints": [],
+      "blockedReason": null
     }
-  ]
+  ],
+  "dependency_edges": [
+    {
+      "upstreamWorkstreamId": "ws-1",
+      "downstreamWorkstreamId": "ws-2",
+      "reason": "API Layer depends on Authentication"
+    },
+    {
+      "upstreamWorkstreamId": "ws-1",
+      "downstreamWorkstreamId": "ws-3",
+      "reason": "Frontend depends on Authentication"
+    },
+    {
+      "upstreamWorkstreamId": "ws-2",
+      "downstreamWorkstreamId": "ws-4",
+      "reason": "Integration depends on API Layer"
+    },
+    {
+      "upstreamWorkstreamId": "ws-3",
+      "downstreamWorkstreamId": "ws-4",
+      "reason": "Integration depends on Frontend"
+    }
+  ],
+  "merge_order": [
+    {
+      "id": "mo-1",
+      "workstreamId": "ws-2",
+      "order": 1,
+      "ruleType": "dependency",
+      "mustMergeAfterWorkstreamIds": ["ws-1"],
+      "reason": "API Layer must merge after Authentication",
+      "sourceDependencyIds": [],
+      "sourceConstraintIds": [],
+      "sourceConcernIds": []
+    },
+    {
+      "id": "mo-2",
+      "workstreamId": "ws-3",
+      "order": 1,
+      "ruleType": "dependency",
+      "mustMergeAfterWorkstreamIds": ["ws-1"],
+      "reason": "Frontend must merge after Authentication",
+      "sourceDependencyIds": [],
+      "sourceConstraintIds": [],
+      "sourceConcernIds": []
+    },
+    {
+      "id": "mo-3",
+      "workstreamId": "ws-4",
+      "order": 2,
+      "ruleType": "dependency",
+      "mustMergeAfterWorkstreamIds": ["ws-2", "ws-3"],
+      "reason": "Integration must merge after API Layer and Frontend",
+      "sourceDependencyIds": [],
+      "sourceConstraintIds": [],
+      "sourceConcernIds": []
+    }
+  ],
+  "blocked_items": [],
+  "carried_forward_constraints": {
+    "findings": [],
+    "constraints": [],
+    "plan_concerns": [],
+    "planning_readiness": {
+      "ready": true,
+      "status": "ready",
+      "summary": "Planning readiness confirmed"
+    },
+    "verification_readiness": {
+      "ready": true,
+      "status": "ready",
+      "summary": "Verification readiness confirmed"
+    },
+    "stream_constraint_details": [
+      {
+        "workstreamId": "ws-1",
+        "baseCategory": "safe_parallel",
+        "category": "safe_parallel",
+        "appliedRules": [],
+        "categoryReasons": ["Workstream has no upstream dependencies"],
+        "mergeOrderReasons": [],
+        "blockingReasons": [],
+        "warningNotes": [],
+        "mitigationSummaries": [],
+        "sourceDependencyIds": [],
+        "sourceConflictZoneIds": [],
+        "sourceTestObligationIds": [],
+        "sourceVerificationTargetIds": [],
+        "sourceVerificationCaseIds": [],
+        "sourceFindingIds": [],
+        "sourceConstraintIds": [],
+        "sourceConcernIds": [],
+        "sourceReadinessIds": [],
+        "blockedUpstreamWorkstreamIds": [],
+        "blockedPlanItemIds": [],
+        "mergeOrderRuleIds": [],
+        "blockedItemIds": [],
+        "mergeOrderRequirements": [],
+        "blockedReason": null,
+        "regrouping": {
+          "grouped": false,
+          "groupKind": "single",
+          "rationale": "Single workstream with no dependencies",
+          "note": null,
+          "dominantSurfaceKey": null,
+          "preservedSourcePlanItemIds": [],
+          "memberDetails": []
+        },
+        "blocking": {
+          "status": "unblocked",
+          "blockedMemberPlanItemIds": [],
+          "blockedUpstreamWorkstreamIds": [],
+          "constrainingFindingIds": [],
+          "constrainingConstraintIds": [],
+          "constrainingConcernIds": [],
+          "canProceedWithConstraints": true,
+          "requiresResolutionBeforeExecution": false
+        },
+        "mergeOrder": {
+          "status": "none",
+          "ruleKinds": [],
+          "hardPrerequisiteWorkstreamIds": [],
+          "sourceConstraintIds": [],
+          "sourceConcernIds": []
+        }
+      },
+      {
+        "workstreamId": "ws-2",
+        "baseCategory": "safe_parallel",
+        "category": "safe_parallel",
+        "appliedRules": [],
+        "categoryReasons": ["Workstream depends on ws-1 but can execute in parallel after its completion"],
+        "mergeOrderReasons": ["Must merge after ws-1 completes"],
+        "blockingReasons": [],
+        "warningNotes": [],
+        "mitigationSummaries": [],
+        "sourceDependencyIds": [],
+        "sourceConflictZoneIds": [],
+        "sourceTestObligationIds": [],
+        "sourceVerificationTargetIds": [],
+        "sourceVerificationCaseIds": [],
+        "sourceFindingIds": [],
+        "sourceConstraintIds": [],
+        "sourceConcernIds": [],
+        "sourceReadinessIds": [],
+        "blockedUpstreamWorkstreamIds": [],
+        "blockedPlanItemIds": [],
+        "mergeOrderRuleIds": ["mo-1"],
+        "blockedItemIds": [],
+        "mergeOrderRequirements": ["ws-1"],
+        "blockedReason": null,
+        "regrouping": {
+          "grouped": false,
+          "groupKind": "single",
+          "rationale": "Single workstream with dependency on ws-1",
+          "note": null,
+          "dominantSurfaceKey": null,
+          "preservedSourcePlanItemIds": [],
+          "memberDetails": []
+        },
+        "blocking": {
+          "status": "unblocked",
+          "blockedMemberPlanItemIds": [],
+          "blockedUpstreamWorkstreamIds": [],
+          "constrainingFindingIds": [],
+          "constrainingConstraintIds": [],
+          "constrainingConcernIds": [],
+          "canProceedWithConstraints": true,
+          "requiresResolutionBeforeExecution": false
+        },
+        "mergeOrder": {
+          "status": "constrained",
+          "ruleKinds": ["dependency"],
+          "hardPrerequisiteWorkstreamIds": ["ws-1"],
+          "sourceConstraintIds": [],
+          "sourceConcernIds": []
+        }
+      },
+      {
+        "workstreamId": "ws-3",
+        "baseCategory": "safe_parallel",
+        "category": "safe_parallel",
+        "appliedRules": [],
+        "categoryReasons": ["Workstream depends on ws-1 but can execute in parallel after its completion"],
+        "mergeOrderReasons": ["Must merge after ws-1 completes"],
+        "blockingReasons": [],
+        "warningNotes": [],
+        "mitigationSummaries": [],
+        "sourceDependencyIds": [],
+        "sourceConflictZoneIds": [],
+        "sourceTestObligationIds": [],
+        "sourceVerificationTargetIds": [],
+        "sourceVerificationCaseIds": [],
+        "sourceFindingIds": [],
+        "sourceConstraintIds": [],
+        "sourceConcernIds": [],
+        "sourceReadinessIds": [],
+        "blockedUpstreamWorkstreamIds": [],
+        "blockedPlanItemIds": [],
+        "mergeOrderRuleIds": ["mo-2"],
+        "blockedItemIds": [],
+        "mergeOrderRequirements": ["ws-1"],
+        "blockedReason": null,
+        "regrouping": {
+          "grouped": false,
+          "groupKind": "single",
+          "rationale": "Single workstream with dependency on ws-1",
+          "note": null,
+          "dominantSurfaceKey": null,
+          "preservedSourcePlanItemIds": [],
+          "memberDetails": []
+        },
+        "blocking": {
+          "status": "unblocked",
+          "blockedMemberPlanItemIds": [],
+          "blockedUpstreamWorkstreamIds": [],
+          "constrainingFindingIds": [],
+          "constrainingConstraintIds": [],
+          "constrainingConcernIds": [],
+          "canProceedWithConstraints": true,
+          "requiresResolutionBeforeExecution": false
+        },
+        "mergeOrder": {
+          "status": "constrained",
+          "ruleKinds": ["dependency"],
+          "hardPrerequisiteWorkstreamIds": ["ws-1"],
+          "sourceConstraintIds": [],
+          "sourceConcernIds": []
+        }
+      },
+      {
+        "workstreamId": "ws-4",
+        "baseCategory": "safe_parallel",
+        "category": "safe_parallel",
+        "appliedRules": [],
+        "categoryReasons": ["Workstream depends on ws-2 and ws-3 but can execute in parallel after their completion"],
+        "mergeOrderReasons": ["Must merge after ws-2 and ws-3 complete"],
+        "blockingReasons": [],
+        "warningNotes": [],
+        "mitigationSummaries": [],
+        "sourceDependencyIds": [],
+        "sourceConflictZoneIds": [],
+        "sourceTestObligationIds": [],
+        "sourceVerificationTargetIds": [],
+        "sourceVerificationCaseIds": [],
+        "sourceFindingIds": [],
+        "sourceConstraintIds": [],
+        "sourceConcernIds": [],
+        "sourceReadinessIds": [],
+        "blockedUpstreamWorkstreamIds": [],
+        "blockedPlanItemIds": [],
+        "mergeOrderRuleIds": ["mo-3"],
+        "blockedItemIds": [],
+        "mergeOrderRequirements": ["ws-2", "ws-3"],
+        "blockedReason": null,
+        "regrouping": {
+          "grouped": false,
+          "groupKind": "single",
+          "rationale": "Single workstream with dependencies on ws-2 and ws-3",
+          "note": null,
+          "dominantSurfaceKey": null,
+          "preservedSourcePlanItemIds": [],
+          "memberDetails": []
+        },
+        "blocking": {
+          "status": "unblocked",
+          "blockedMemberPlanItemIds": [],
+          "blockedUpstreamWorkstreamIds": [],
+          "constrainingFindingIds": [],
+          "constrainingConstraintIds": [],
+          "constrainingConcernIds": [],
+          "canProceedWithConstraints": true,
+          "requiresResolutionBeforeExecution": false
+        },
+        "mergeOrder": {
+          "status": "constrained",
+          "ruleKinds": ["dependency"],
+          "hardPrerequisiteWorkstreamIds": ["ws-2", "ws-3"],
+          "sourceConstraintIds": [],
+          "sourceConcernIds": []
+        }
+      }
+    ]
+  },
+  "split_diagnostics": {
+    "usability_status": "actionable",
+    "warning_items": [],
+    "blocking_items": [],
+    "partial_output": null
+  },
+  "split_readiness": {
+    "ready": true,
+    "status": "ready",
+    "summary": "Split completed successfully. All workstreams are ready for execution.",
+    "execution_scope": "all_streams",
+    "blocked_workstream_count": 0,
+    "partially_blocked_item_count": 0,
+    "merge_order_rule_count": 3,
+    "later_step_gate": "proceed",
+    "material_execution_limits": [],
+    "warning_items": [],
+    "blocking_issues": [],
+    "partial_output": null,
+    "constraining_concern_ids": [],
+    "recommended_user_actions": []
+  },
+  "failure": null
 }

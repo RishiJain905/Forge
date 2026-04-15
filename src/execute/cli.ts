@@ -5,8 +5,6 @@ import readline from "node:readline";
 import {
   createExecuteState,
   transitionState,
-  getBlockedWorkstreams,
-  getExecutableWorkstreams,
   buildExecuteArtifact,
 } from "./state-machine.js";
 import { validateSplitArtifact } from "../split/schema.js";
@@ -22,24 +20,7 @@ function getWorkstreamIndex(state: ExecuteState, id: string): number {
   return Array.from(state.workstreams.keys()).indexOf(id);
 }
 
-function getUnmetRequirements(
-  id: string,
-  state: ExecuteState
-): string[] {
-  const ws = state.workstreams.get(id);
-  if (!ws) return [];
-
-  // We need to check the merge order requirements from the split artifact
-  // For now, we track this via the mergedWorkstreams set
-  // The mergeOrderRequirements are stored per-workstream in the state
-  // We need to get them from the state machine's internal map
-  // Since we can't access the WeakMap directly, we'll use the state.workstreams
-  // The requirements are stored in the workstream's mergeOrderViolations when failed
-  // For queued workstreams, we check against mergedWorkstreams
-  return [];
-}
-
-function printDashboard(state: ExecuteState): void {
+function printDashboard(state: ExecuteState, mergeOrderMap: Map<string, string[]>): void {
   console.log("\n=== Workstream Status ===");
   console.log("[id] workstream_id    state       blocked by / merge order");
 
@@ -49,7 +30,7 @@ function printDashboard(state: ExecuteState): void {
 
     if (ws.state === "queued") {
       // Check if ready based on merge order requirements
-      const requirements = getQueuedWorkstreamRequirements(id, state);
+      const requirements = getQueuedWorkstreamRequirements(id, mergeOrderMap);
       const unmet = requirements.filter((req) => !state.mergedWorkstreams.has(req));
 
       if (unmet.length === 0) {
@@ -76,25 +57,9 @@ function printDashboard(state: ExecuteState): void {
 
 function getQueuedWorkstreamRequirements(
   id: string,
-  state: ExecuteState
+  mergeOrderMap: Map<string, string[]>
 ): string[] {
-  // Get the merge order requirements from the workstream
-  // We need to look at the original split artifact requirements
-  // Since the state machine stores these internally, we derive them
-  // from checking what workstreams have been merged
-  // For now, we reconstruct from the split artifact stored in state
-  const ws = state.workstreams.get(id);
-  if (!ws) return [];
-
-  // The requirements are the inverse of what was merged that blocks this
-  // We need to track this - for now, we'll use an empty array
-  // The state machine's transitionState handles this
-  // For the display, we show what workstreams are not yet merged
-  const allIds = Array.from(state.workstreams.keys());
-  // Return all other workstream ids as potential blockers if not merged
-  // But this is per-workstream specific
-  // For a simple implementation, we show all merged as ready
-  return [];
+  return mergeOrderMap.get(id) ?? [];
 }
 
 function buildSummary(state: ExecuteState): string {
@@ -123,16 +88,41 @@ export async function runExecuteCommand(
     const content = await fs.readFile(splitJsonPath, "utf-8");
     const parsed = JSON.parse(content);
     splitArtifact = validateSplitArtifact(parsed);
-  } catch {
-    console.log("No split.json found. Run 'forge split' first.");
+  } catch (err: unknown) {
+    if (typeof err === "object" && err !== null && "code" in err && (err as { code: string }).code === "ENOENT") {
+      return {
+        status: "failed",
+        summary: "split.json not found. Run 'forge split' first.",
+        artifactPath: "",
+        outputRoot: repoRoot,
+        failure: {
+          code: "NO_SPLIT_ARTIFACT",
+          message: "split.json not found. Run 'forge split' first.",
+        },
+      };
+    }
+    // Parse/validation error
+    if (err instanceof Error) {
+      return {
+        status: "failed",
+        summary: `Invalid split.json: ${err.message}`,
+        artifactPath: "",
+        outputRoot: repoRoot,
+        failure: {
+          code: "INVALID_SPLIT_ARTIFACT",
+          message: err.message,
+        },
+      };
+    }
+    // Generic error
     return {
       status: "failed",
-      summary: "No split.json found. Run 'forge split' first.",
+      summary: "Failed to read split.json",
       artifactPath: "",
       outputRoot: repoRoot,
       failure: {
-        code: "NO_SPLIT_ARTIFACT",
-        message: "split.json not found. Run 'forge split' first.",
+        code: "INVALID_SPLIT_ARTIFACT",
+        message: String(err),
       },
     };
   }
@@ -151,7 +141,7 @@ export async function runExecuteCommand(
   }
 
   // 3. Show welcome banner and initial dashboard
-  printDashboard(state);
+  printDashboard(state, mergeOrderMap);
 
   console.log("\nCommands: run <id> | done <id> | fail <id> [reason] | status | exit");
 
@@ -185,21 +175,6 @@ export async function runExecuteCommand(
     return requirements.filter((req) => !state.mergedWorkstreams.has(req));
   }
 
-  // Helper to print newly unblocked workstreams
-  function printNewlyUnblocked(completedId: string): void {
-    const newlyUnblocked: string[] = [];
-    for (const [id, ws] of state.workstreams) {
-      if (ws.state !== "queued") continue;
-      const unmet = getUnmet(id);
-      if (unmet.length === 0) {
-        newlyUnblocked.push(id);
-      }
-    }
-    if (newlyUnblocked.length > 0) {
-      console.log(`Newly unblocked: ${newlyUnblocked.join(", ")}`);
-    }
-  }
-
   // Helper to get index display string for workstream
   function getIndexForId(id: string): number {
     return Array.from(state.workstreams.keys()).indexOf(id) + 1;
@@ -218,7 +193,7 @@ export async function runExecuteCommand(
     }
 
     if (cmd === "status") {
-      printDashboard(state);
+      printDashboard(state, mergeOrderMap);
       return false;
     }
 
@@ -234,7 +209,7 @@ export async function runExecuteCommand(
         console.log(result.error);
       } else {
         console.log(`✓ ${found.ws.workstreamId} STARTED`);
-        printDashboard(state);
+        printDashboard(state, mergeOrderMap);
       }
       return false;
     }
@@ -244,6 +219,14 @@ export async function runExecuteCommand(
       if (!found || !found.ws) {
         console.log(`Unknown workstream: ${parts[1]}`);
         return false;
+      }
+
+      // Snapshot which queued workstreams are currently blocked (unmet.length>0)
+      const previouslyBlocked: string[] = [];
+      for (const [id, ws] of state.workstreams) {
+        if (ws.state === "queued" && getUnmet(id).length > 0) {
+          previouslyBlocked.push(id);
+        }
       }
 
       const result = transitionState(found.id, "completed", state);
@@ -264,8 +247,18 @@ export async function runExecuteCommand(
         }
       } else {
         console.log(`✓ ${found.ws.workstreamId} COMPLETED and MERGED`);
-        printNewlyUnblocked(found.id);
-        printDashboard(state);
+        // Compute newly unblocked (was blocked before, now not)
+        const currentlyBlocked: string[] = [];
+        for (const [id, ws] of state.workstreams) {
+          if (ws.state === "queued" && getUnmet(id).length > 0) {
+            currentlyBlocked.push(id);
+          }
+        }
+        const newlyUnblocked = previouslyBlocked.filter(id => !currentlyBlocked.includes(id));
+        if (newlyUnblocked.length > 0) {
+          console.log(`Newly unblocked: ${newlyUnblocked.join(", ")}`);
+        }
+        printDashboard(state, mergeOrderMap);
       }
       return false;
     }
@@ -283,7 +276,7 @@ export async function runExecuteCommand(
         console.log(result.error);
       } else {
         console.log(`✗ ${found.ws.workstreamId} FAILED${reason ? `: ${reason}` : ""}`);
-        printDashboard(state);
+        printDashboard(state, mergeOrderMap);
       }
       return false;
     }
@@ -303,6 +296,7 @@ export async function runExecuteCommand(
   // Main interactive loop
   while (!completed) {
     try {
+      rl.prompt();
       const input = await question("");
       completed = await processLine(input);
     } catch (err) {
@@ -319,7 +313,7 @@ export async function runExecuteCommand(
   // Ensure output directory exists
   await fs.mkdir(outputDir, { recursive: true });
 
-  const artifact = buildExecuteArtifact(state, "1.0.0", "0.0.1");
+  const artifact = buildExecuteArtifact(state, SCHEMA_VERSION, FORGE_VERSION);
   await writeExecuteArtifact(artifactPath, artifact);
 
   const summary = buildSummary(state);

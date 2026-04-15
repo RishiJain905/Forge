@@ -23,12 +23,20 @@ export const ExecuteWorkstreamSchema = z.object({
   failedAt: z.string().optional(),
   error: z.string().optional(),
   mergeOrderViolations: z.array(z.string()).optional(),
-});
+}).strict();
 
 export const MergeOrderGateSchema = z.object({
   workstreamId: z.string(),
   prerequisites: z.array(z.string()),
   prerequisitesMet: z.boolean(),
+}).strict();
+
+export const StateTransitionSchema = z.object({
+  workstreamId: z.string(),
+  from: ExecuteWorkstreamStateSchema,
+  to: ExecuteWorkstreamStateSchema,
+  timestamp: z.string(),
+  reason: z.string().optional(),
 });
 
 export const ExecuteArtifactSchema = z
@@ -47,16 +55,9 @@ export const ExecuteArtifactSchema = z
       failed: z.number(),
       blocked: z.number(),
     }),
+    transitions: z.array(StateTransitionSchema),
   })
   .strict();
-
-export const StateTransitionSchema = z.object({
-  workstreamId: z.string(),
-  from: ExecuteWorkstreamStateSchema,
-  to: ExecuteWorkstreamStateSchema,
-  timestamp: z.string(),
-  reason: z.string().optional(),
-});
 
 export function validateExecuteArtifact(artifact: unknown): ExecuteArtifact {
   return ExecuteArtifactSchema.parse(artifact) as ExecuteArtifact;
