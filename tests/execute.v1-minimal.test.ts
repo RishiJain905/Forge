@@ -217,7 +217,8 @@ await runScenario("writeExecuteArtifact writes valid JSON to temp file", async (
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-execute-test-"));
   const artifactPath = path.join(tmpDir, "execute.json");
 
-  await writeExecuteArtifact(state, artifactPath);
+  const artifact = buildExecuteArtifact(state, "1.0.0", "0.0.1");
+  await writeExecuteArtifact(artifactPath, artifact);
 
   // Verify file exists
   const exists = await fs.access(artifactPath).then(() => true).catch(() => false);
@@ -375,7 +376,8 @@ await runScenario("runExecuteCommand writes execute.json artifact on exit", asyn
 
   // Simulate what runExecuteCommand does on exit - write artifact
   const artifactPath = path.join(forgeDir, "execute.json");
-  await writeExecuteArtifact(state, artifactPath);
+  const artifact = buildExecuteArtifact(state, "1.0.0", "0.0.1");
+  await writeExecuteArtifact(artifactPath, artifact);
 
   // Verify artifact was written
   const exists = await fs.access(artifactPath).then(() => true).catch(() => false);
@@ -383,12 +385,12 @@ await runScenario("runExecuteCommand writes execute.json artifact on exit", asyn
 
   // Verify content
   const artifactContent = await fs.readFile(artifactPath, "utf-8");
-  const artifact = JSON.parse(artifactContent);
+  const artifactJson = JSON.parse(artifactContent);
 
-  assert.equal(artifact.schemaVersion, "1.0.0");
-  assert.equal(artifact.workstreams.length, 2);
-  assert.equal(artifact.summary.completed, 1);
-  assert.equal(artifact.summary.queued, 1);
+  assert.equal(artifactJson.schemaVersion, "1.0.0");
+  assert.equal(artifactJson.workstreams.length, 2);
+  assert.equal(artifactJson.summary.completed, 1);
+  assert.equal(artifactJson.summary.queued, 1);
 
   // Clean up
   await fs.rm(tmpDir, { recursive: true, force: true });

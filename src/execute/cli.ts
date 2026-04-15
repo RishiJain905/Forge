@@ -319,7 +319,8 @@ export async function runExecuteCommand(
   // Ensure output directory exists
   await fs.mkdir(outputDir, { recursive: true });
 
-  await writeExecuteArtifact(state, artifactPath);
+  const artifact = buildExecuteArtifact(state, "1.0.0", "0.0.1");
+  await writeExecuteArtifact(artifactPath, artifact);
 
   const summary = buildSummary(state);
   return {
