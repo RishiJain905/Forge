@@ -15,6 +15,7 @@ import {
   splitDebugArtifactPath,
   splitMergeOrderPath,
   splitReportPath,
+  splitReadinessPath,
   splitStreamConstraintsPath,
   splitWorkstreamsPath,
   writeRepoFile,
@@ -91,6 +92,7 @@ await runScenario(
       assert.equal(await fileExists(splitMergeOrderPath(repoRoot)), false);
       assert.equal(await fileExists(splitBlockedItemsPath(repoRoot)), false);
       assert.equal(await fileExists(splitStreamConstraintsPath(repoRoot)), false);
+      assert.equal(await fileExists(splitReadinessPath(repoRoot)), false);
     } finally {
       await disposeTempRepo(repoRoot);
     }
@@ -134,6 +136,7 @@ await runScenario(
       assert.equal(await fileExists(splitMergeOrderPath(repoRoot)), true);
       assert.equal(await fileExists(splitBlockedItemsPath(repoRoot)), true);
       assert.equal(await fileExists(splitStreamConstraintsPath(repoRoot)), true);
+      assert.equal(await fileExists(splitReadinessPath(repoRoot)), true);
 
       const splitArtifact = await readJsonFile<{
         workstream_contract: {
@@ -144,6 +147,8 @@ await runScenario(
           blocked_workstream_count: number;
           partially_blocked_item_count: number;
           merge_order_rule_count: number;
+          later_step_gate: string;
+          material_execution_limits: string[];
         };
       }>(splitArtifactPath(repoRoot));
       const splitDebugArtifact = await readJsonFile<{
@@ -152,6 +157,8 @@ await runScenario(
           blocked_workstream_count: number;
           partially_blocked_item_count: number;
           merge_order_rule_count: number;
+          later_step_gate: string;
+          material_execution_limits: string[];
         };
       }>(splitDebugArtifactPath(repoRoot));
       const workstreamsDebug = await readJsonFile<{ workstreams: Array<{ id: string; category: string }> }>(
@@ -171,6 +178,15 @@ await runScenario(
           blockedItemIds: string[];
         }>;
       }>(splitStreamConstraintsPath(repoRoot));
+      const readinessDebug = await readJsonFile<{
+        split_diagnostics: {
+          usability_status: string;
+        };
+        split_readiness: {
+          later_step_gate: string;
+          material_execution_limits: string[];
+        };
+      }>(splitReadinessPath(repoRoot));
 
       assert.ok(workstreamsDebug.workstreams.length > 0);
       assert.ok(
@@ -210,6 +226,12 @@ await runScenario(
       assert.equal(
         splitDebugArtifact.split_readiness.merge_order_rule_count,
         splitArtifact.split_readiness.merge_order_rule_count,
+      );
+      assert.equal(readinessDebug.split_diagnostics.usability_status, "actionable");
+      assert.equal(readinessDebug.split_readiness.later_step_gate, splitArtifact.split_readiness.later_step_gate);
+      assert.deepEqual(
+        readinessDebug.split_readiness.material_execution_limits,
+        splitArtifact.split_readiness.material_execution_limits,
       );
     } finally {
       await disposeTempRepo(repoRoot);

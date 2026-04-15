@@ -58,16 +58,33 @@ function renderFailureDetails(
   ]);
 }
 
+function describeExecuteGate(artifact: SplitArtifact): string {
+  if (artifact.failure) {
+    return "diagnostics only";
+  }
+
+  if (!artifact.split_readiness.ready) {
+    return "blocked";
+  }
+
+  return artifact.split_readiness.status === "ready_with_warnings"
+    ? "can proceed with warnings"
+    : "can proceed";
+}
+
 function renderReadinessLines(artifact: SplitArtifact): string[] {
   const laterExecutionMustHonor = artifact.split_readiness.recommended_user_actions;
 
   return [
+    `- Forge Execute Gate: ${describeExecuteGate(artifact)}`,
     `- Can Proceed: ${artifact.split_readiness.ready ? "yes" : "no"}`,
+    `- Later-Step Gate: ${artifact.split_readiness.later_step_gate}`,
     `- All Items Safely Assigned: ${artifact.split_readiness.execution_scope === "all_streams" ? "yes" : "no"}`,
     `- Execution Scope: ${artifact.split_readiness.execution_scope}`,
     `- Blocked Workstream Count: ${artifact.split_readiness.blocked_workstream_count}`,
     `- Partially Blocked Item Count: ${artifact.split_readiness.partially_blocked_item_count}`,
     `- Merge-Order Rule Count: ${artifact.split_readiness.merge_order_rule_count}`,
+    `- Material Execution Limits: ${artifact.split_readiness.material_execution_limits.join(", ") || "none"}`,
     `- Later Execution Must Honor: ${laterExecutionMustHonor.join("; ") || "none"}`,
   ];
 }
@@ -158,6 +175,9 @@ export function createSplitReport(artifact: SplitArtifact): string {
         ["Report Path", artifact.files.reportPath],
         ["Split Readiness Status", artifact.split_readiness.status],
         ["Split Usability", artifact.split_diagnostics.usability_status],
+        ["Later-Step Gate", artifact.split_readiness.later_step_gate],
+        ["Execution Scope", artifact.split_readiness.execution_scope],
+        ["V1 Freeze State", "bug-fix-only maintenance mode"],
         ["Warning Items", artifact.split_readiness.warning_items.length],
         ["Blocking Issues", artifact.split_readiness.blocking_issues.length],
         ["Failure Code", artifact.failure?.code ?? null],
@@ -281,10 +301,29 @@ export function createSplitReport(artifact: SplitArtifact): string {
             `  - Merge Order Rule IDs: ${detail.mergeOrderRuleIds.join(", ") || "none"}`,
             `  - Blocked Item IDs: ${detail.blockedItemIds.join(", ") || "none"}`,
             `  - Blocked Reason: ${detail.blockedReason ?? "none"}`,
+            `  - Regrouping Kind: ${detail.regrouping.groupKind}`,
+            `  - Regrouping Rationale: ${detail.regrouping.rationale}`,
+            `  - Regrouping Note: ${detail.regrouping.note ?? "none"}`,
+            `  - Regrouping Preserved Source Plan Item IDs: ${detail.regrouping.preservedSourcePlanItemIds.join(", ") || "none"}`,
+            `  - Regrouping Member Details: ${detail.regrouping.memberDetails.map((member) => `${member.planItemId}:${member.blockedStatus}`).join(", ") || "none"}`,
+            `  - Blocking Status: ${detail.blocking.status}`,
+            `  - Blocking Blocked Member Plan Item IDs: ${detail.blocking.blockedMemberPlanItemIds.join(", ") || "none"}`,
+            `  - Blocking Constraining Finding IDs: ${detail.blocking.constrainingFindingIds.join(", ") || "none"}`,
+            `  - Blocking Constraining Constraint IDs: ${detail.blocking.constrainingConstraintIds.join(", ") || "none"}`,
+            `  - Blocking Constraining Concern IDs: ${detail.blocking.constrainingConcernIds.join(", ") || "none"}`,
+            `  - Blocking Can Proceed With Constraints: ${detail.blocking.canProceedWithConstraints}`,
+            `  - Blocking Requires Resolution Before Execution: ${detail.blocking.requiresResolutionBeforeExecution}`,
+            `  - Merge-Order Status: ${detail.mergeOrder.status}`,
+            `  - Merge-Order Rule Kinds: ${detail.mergeOrder.ruleKinds.join(", ") || "none"}`,
+            `  - Merge-Order Hard Prerequisite Workstream IDs: ${detail.mergeOrder.hardPrerequisiteWorkstreamIds.join(", ") || "none"}`,
+            `  - Merge-Order Source Constraint IDs: ${detail.mergeOrder.sourceConstraintIds.join(", ") || "none"}`,
+            `  - Merge-Order Source Concern IDs: ${detail.mergeOrder.sourceConcernIds.join(", ") || "none"}`,
           ].join("\n")).join("\n")
         : "- none",
     ]),
     renderSection("Split Diagnostics", [
+      "split_diagnostics explains the warning, blocking, and partial-output context behind the later-step gate without replacing the durable split artifact and report.",
+      "",
       ...renderKeyValueLines([
         ["Usability Status", artifact.split_diagnostics.usability_status],
         ["Warning Items", artifact.split_diagnostics.warning_items.length],
@@ -311,6 +350,8 @@ export function createSplitReport(artifact: SplitArtifact): string {
         : "- none",
     ]),
     renderSection("Split Readiness", [
+      "split_readiness is the authoritative later-step gate for Step 5 and later consumers; it stays aligned with warning, blocking, and carried-forward constraint detail.",
+      "",
       ...renderReadinessLines(artifact),
       "",
       ...renderKeyValueLines([
@@ -320,6 +361,8 @@ export function createSplitReport(artifact: SplitArtifact): string {
         ["Blocked Workstream Count", artifact.split_readiness.blocked_workstream_count],
         ["Partially Blocked Item Count", artifact.split_readiness.partially_blocked_item_count],
         ["Merge-Order Rule Count", artifact.split_readiness.merge_order_rule_count],
+        ["Later-Step Gate", artifact.split_readiness.later_step_gate],
+        ["Material Execution Limits", artifact.split_readiness.material_execution_limits.join(", ") || null],
         ["Partial Output", artifact.split_readiness.partial_output?.code ?? null],
         ["Constraining Concern IDs", artifact.split_readiness.constraining_concern_ids.join(", ") || null],
       ]),
@@ -342,7 +385,9 @@ export function createSplitReport(artifact: SplitArtifact): string {
     renderSection("Disallowed Capabilities", [renderList([...artifact.writePolicy.disallowedCapabilities])]),
     renderSection("Output Files", [
       "split.json and reports/split-report.md are the durable Step 4 outputs.",
+      "split.json and reports/split-report.md remain the authoritative Step 4 outputs.",
       "Debug files are optional internal mirrors and are only written when FORGE_SPLIT_DEBUG=1.",
+      "Debug files are optional internal mirrors and never replace the durable Step 4 outputs.",
       "",
       ...renderKeyValueLines([
         ["Requested Output Root", artifact.requestedOutputRoot],
@@ -355,6 +400,7 @@ export function createSplitReport(artifact: SplitArtifact): string {
         ["Debug Merge Order Path", artifact.files.debugMergeOrderPath],
         ["Debug Blocked Items Path", artifact.files.debugBlockedItemsPath],
         ["Debug Stream Constraints Path", artifact.files.debugStreamConstraintsPath],
+        ["Debug Split Readiness Path", artifact.files.debugReadinessPath],
       ]),
     ]),
     renderSection("Failure", [renderFailureDetails(artifact.failure)]),

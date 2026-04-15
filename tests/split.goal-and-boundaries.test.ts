@@ -442,55 +442,89 @@ await runScenario(
 );
 
 await runScenario(
-  "step 4 boundary policy explicitly prohibits later-step drift and keeps regrouping conservative",
+  "step 4 boundary policy explicitly frames the Batch 3 finish-and-freeze line without drifting into Step 5",
   async () => {
-    assert.match(STEP4_BOUNDARY_POLICY.purpose, /execution-ready workstreams/i);
+    assert.match(STEP4_BOUNDARY_POLICY.purpose, /V1-complete split stage/i);
+    assert.match(STEP4_BOUNDARY_POLICY.purpose, /future bug fixes/i);
+    assert.match(STEP4_BOUNDARY_POLICY.purpose, /Step 5 consumption/i);
     assert.ok(STEP4_BOUNDARY_POLICY.authoritativeInputs.includes(".forge/verify.json"));
-    assert.match(
-      STEP4_BOUNDARY_POLICY.batch2Mission,
-      /real Step 4 pipeline and produce usable split outputs/i,
+    assert.equal(
+      STEP4_BOUNDARY_POLICY.freezeGoal,
+      "Finish Step 4 as a V1-complete split stage and freeze it except for future bug fixes.",
     );
+    assert.deepEqual(STEP4_BOUNDARY_POLICY.finishLine, [
+      "`forge split` works reliably",
+      "`.forge/split.json` is contract-stable",
+      "`.forge/reports/split-report.md` is useful and consistent",
+      "debug split artifacts can be emitted in a stable way",
+      "warning/failure/readiness behavior is predictable",
+      "aggressive regrouping remains auditable and traceable",
+      "merge-order, blocked, and partially blocked semantics are stable",
+      "tests are strong enough that only bug-fix work should remain",
+      "Step 5 can consume Step 4 output without guessing",
+    ]);
     assert.deepEqual(STEP4_BOUNDARY_POLICY.implementationPriorities, [
-      "verify-artifact consumption",
-      "workstream construction",
-      "stream categories and safety application",
-      "merge-order and blocking logic",
-      "machine-readable artifact generation",
-      "human-readable split report",
-      "stable split orchestration",
-      "real tests for implemented behavior",
+      "close remaining Step 4 gaps",
+      "harden warnings, failures, readiness, and debug visibility",
+      "harden regrouping semantics",
+      "harden merge-order and blocking semantics",
+      "align outputs for clean Step 5 consumption",
+      "harden tests and freeze criteria",
     ]);
     assert.deepEqual(STEP4_BOUNDARY_POLICY.requiredImplementationTasks, [
-      "align current Step 4 code with the locked split contract",
-      "ensure one real orchestration path exists",
-      "build workstream construction first",
-      "stabilize stream categorization and safety application",
-      "implement merge-order and blocking logic",
-      "build real artifact/report output",
-      "wire the command and harden with tests",
+      "close remaining Step 4 gaps",
+      "harden warnings, failures, readiness, and debug visibility",
+      "harden regrouping semantics",
+      "harden merge-order and blocking semantics",
+      "align outputs for clean Step 5 consumption",
+      "harden tests and freeze criteria",
     ]);
-    assert.ok(STEP4_BOUNDARY_POLICY.requiredCodeSurfaces.includes("Step 4 runner/orchestrator"));
-    assert.ok(STEP4_BOUNDARY_POLICY.requiredCodeSurfaces.includes("CLI wiring"));
-    assert.ok(STEP4_BOUNDARY_POLICY.requiredCodeSurfaces.includes("Step 4 tests"));
     assert.equal(STEP4_BOUNDARY_POLICY.deterministicFirst, true);
     assert.equal(STEP4_BOUNDARY_POLICY.conservativeRegrouping, true);
+    assert.ok(
+      STEP4_BOUNDARY_POLICY.deterministicFirstNotes.some((entry) => /finish-and-freeze pass/i.test(entry)),
+    );
+    assert.ok(
+      STEP4_BOUNDARY_POLICY.conservativeRegroupingNotes.some((entry) => /Harden aggressive regrouping semantics/i.test(entry)),
+    );
+    assert.ok(
+      STEP4_BOUNDARY_POLICY.allowedSideEffects.some(
+        (entry) => entry.includes("FORGE_SPLIT_DEBUG=1") && entry.includes("debug artifacts"),
+      ),
+    );
+    assert.ok(STEP4_BOUNDARY_POLICY.deferredCapabilities.includes("forge execute"));
+    assert.ok(STEP4_BOUNDARY_POLICY.deferredCapabilities.includes("forge integrate"));
+    assert.ok(STEP4_BOUNDARY_POLICY.deferredCapabilities.includes("interactive slash-command mode"));
+    assert.ok(STEP4_BOUNDARY_POLICY.deferredCapabilities.includes("memory backends"));
+    assert.ok(
+      STEP4_BOUNDARY_POLICY.deferredCapabilities.includes("unrelated execution platform abstractions"),
+    );
     assert.ok(STEP4_BOUNDARY_POLICY.disallowedCapabilities.includes("execute code"));
-    assert.ok(STEP4_BOUNDARY_POLICY.disallowedCapabilities.includes("rewrite planning logic"));
-    assert.ok(STEP4_BOUNDARY_POLICY.disallowedCapabilities.includes("redo verification"));
-    assert.ok(STEP4_BOUNDARY_POLICY.disallowedCapabilities.includes("hide blocked work"));
     assert.ok(STEP4_BOUNDARY_POLICY.disallowedCapabilities.includes("implement actual execution logic"));
+    assert.ok(STEP4_BOUNDARY_POLICY.disallowedCapabilities.includes("implement forge execute"));
+    assert.ok(STEP4_BOUNDARY_POLICY.disallowedCapabilities.includes("implement forge integrate"));
     assert.ok(STEP4_BOUNDARY_POLICY.disallowedCapabilities.includes("create code-edit prompts or packets"));
     assert.ok(STEP4_BOUNDARY_POLICY.disallowedCapabilities.includes("modify code as part of splitting"));
+    assert.ok(STEP4_BOUNDARY_POLICY.disallowedCapabilities.includes("redo verification"));
     assert.ok(STEP4_BOUNDARY_POLICY.disallowedCapabilities.includes("ignore verification constraints"));
+    assert.ok(STEP4_BOUNDARY_POLICY.disallowedCapabilities.includes("hide blocked work"));
+    assert.ok(
+      STEP4_BOUNDARY_POLICY.disallowedCapabilities.includes(
+        "destabilize grouping semantics with experimental regrouping logic",
+      ),
+    );
+    assert.ok(STEP4_BOUNDARY_POLICY.disallowedCapabilities.includes("rename files for aesthetics only"));
+    assert.ok(STEP4_BOUNDARY_POLICY.disallowedCapabilities.includes("introduce large new abstractions"));
+    assert.ok(
+      STEP4_BOUNDARY_POLICY.disallowedCapabilities.includes(
+        "reopen the Step 4 orchestrator shape without strong reason",
+      ),
+    );
     assert.ok(
       STEP4_BOUNDARY_POLICY.disallowedCapabilities.includes(
         "redesign Step 4 architecture without strong reason",
       ),
     );
-    assert.ok(STEP4_BOUNDARY_POLICY.deferredCapabilities.includes("forge execute"));
-    assert.ok(STEP4_BOUNDARY_POLICY.deferredCapabilities.includes("forge integrate"));
-    assert.ok(STEP4_BOUNDARY_POLICY.conservativeRegroupingNotes.length > 0);
-    assert.ok(STEP4_BOUNDARY_POLICY.deterministicFirstNotes.length > 0);
   },
 );
 

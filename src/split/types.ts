@@ -16,6 +16,14 @@ export type SplitConstraintSource = typeof SPLIT_CONSTRAINT_SOURCES[number];
 export type SplitFoundationStatus = "ready" | "blocked" | "failed";
 export type SplitCommandStatus = SplitFoundationStatus;
 export type SplitReadinessStatus = "ready" | "ready_with_warnings" | "blocked";
+export type SplitLaterStepGate = "proceed" | "proceed_with_caution" | "blocked";
+export type SplitMaterialExecutionLimit =
+  | "upstream_blockers_present"
+  | "blocked_workstreams_present"
+  | "partially_blocked_items_present"
+  | "merge_order_constraints_present"
+  | "warning_context_present"
+  | "partial_output_present";
 
 export interface SplitFoundationOptions {
   repo?: string;
@@ -42,6 +50,7 @@ export interface SplitResolvedOutputPaths {
   debugMergeOrderPath?: string;
   debugBlockedItemsPath?: string;
   debugStreamConstraintsPath?: string;
+  debugReadinessPath?: string;
 }
 
 export interface SplitVerifyReference {
@@ -197,6 +206,53 @@ export interface SplitBlockedItem {
   partialMetadataAvailable: boolean;
 }
 
+export type SplitRegroupingGroupKind = "single" | "direct_dependency_test_pair" | "same_surface_siblings";
+export type SplitBlockingStatus = "unblocked" | "partially_blocked" | "blocked";
+export type SplitMergeOrderStatus = "none" | "constrained";
+export type SplitMergeOrderRuleKind = "serial" | "dependency" | "protected_merge";
+
+export interface SplitRegroupingMemberDetail {
+  planItemId: string;
+  title: string;
+  category: PlanArtifact["plan_items"][number]["category"];
+  likelyAffectedPaths: string[];
+  blockedStatus: "unblocked" | "blocked";
+  blockedReason: string | null;
+  sourceVerificationCaseIds: string[];
+  sourceFindingIds: string[];
+  sourceConstraintIds: string[];
+  sourceConcernIds: string[];
+}
+
+export interface SplitRegroupingDetail {
+  grouped: boolean;
+  groupKind: SplitRegroupingGroupKind;
+  rationale: string;
+  note: string | null;
+  dominantSurfaceKey: string | null;
+  preservedSourcePlanItemIds: string[];
+  memberDetails: SplitRegroupingMemberDetail[];
+}
+
+export interface SplitBlockingDetail {
+  status: SplitBlockingStatus;
+  blockedMemberPlanItemIds: string[];
+  blockedUpstreamWorkstreamIds: string[];
+  constrainingFindingIds: string[];
+  constrainingConstraintIds: string[];
+  constrainingConcernIds: string[];
+  canProceedWithConstraints: boolean;
+  requiresResolutionBeforeExecution: boolean;
+}
+
+export interface SplitMergeOrderDetail {
+  status: SplitMergeOrderStatus;
+  ruleKinds: SplitMergeOrderRuleKind[];
+  hardPrerequisiteWorkstreamIds: string[];
+  sourceConstraintIds: string[];
+  sourceConcernIds: string[];
+}
+
 export interface SplitStreamConstraintDetail {
   workstreamId: string;
   baseCategory: SplitStreamCategory;
@@ -222,6 +278,9 @@ export interface SplitStreamConstraintDetail {
   blockedItemIds: string[];
   mergeOrderRequirements: string[];
   blockedReason: string | null;
+  regrouping: SplitRegroupingDetail;
+  blocking: SplitBlockingDetail;
+  mergeOrder: SplitMergeOrderDetail;
 }
 
 export interface SplitWorkstreamBuildResult {
@@ -241,6 +300,7 @@ export interface SplitArtifactFiles {
   debugMergeOrderPath: string;
   debugBlockedItemsPath: string;
   debugStreamConstraintsPath: string;
+  debugReadinessPath: string;
 }
 
 export interface SplitCommandFailure {
@@ -273,6 +333,8 @@ export interface SplitReadiness {
   blocked_workstream_count: number;
   partially_blocked_item_count: number;
   merge_order_rule_count: number;
+  later_step_gate: SplitLaterStepGate;
+  material_execution_limits: SplitMaterialExecutionLimit[];
   warning_items: SplitInputIssue[];
   blocking_issues: SplitInputIssue[];
   partial_output: SplitCommandFailure | null;

@@ -508,20 +508,25 @@ function buildGroupNote(kind: WorkstreamGroupKind): string | null {
   return "Grouped same-surface siblings; keep the pair together as a protected merge unit.";
 }
 
-function buildWorkstreamDescription(group: WorkstreamGroup): string {
+function buildGroupingRationale(group: WorkstreamGroup): string {
   const titles = group.members.map((member) => member.evidence.planItem.title);
   if (group.kind === "single") {
-    return buildDescription(group.members[0].evidence.planItem);
+    return "Kept as a standalone workstream so its Step 2 and Step 3 traceability remains explicit.";
   }
 
   const joinedTitles = titles.join(" and ");
   const surfaceSuffix = group.dominantSurfaceKey ? ` on the ${group.dominantSurfaceKey} surface` : "";
-  const groupingReason =
-    group.kind === "direct_dependency_test_pair"
-      ? `Grouped from ${joinedTitles} because the test item depends directly on the source change${surfaceSuffix}.`
-      : `Grouped from ${joinedTitles} because the sibling updates share the same surface context${surfaceSuffix}.`;
+  return group.kind === "direct_dependency_test_pair"
+    ? `Grouped from ${joinedTitles} because the test item depends directly on the source change${surfaceSuffix}.`
+    : `Grouped from ${joinedTitles} because the sibling updates share the same surface context${surfaceSuffix}.`;
+}
 
-  return `${groupingReason} Step 4 keeps the grouped workstream explicitly traceable to each member plan item.`;
+function buildWorkstreamDescription(group: WorkstreamGroup): string {
+  if (group.kind === "single") {
+    return buildDescription(group.members[0].evidence.planItem);
+  }
+
+  return `${buildGroupingRationale(group)} Step 4 keeps the grouped workstream explicitly traceable to each member plan item.`;
 }
 
 function buildGroupAppliedRules(group: WorkstreamGroup): string[] {
@@ -1043,6 +1048,52 @@ function buildGroupMitigationSummaries(group: WorkstreamGroup): string[] {
   );
 }
 
+function collectUpstreamBlockedEvidence(params: {
+  groups: WorkstreamGroup[];
+  blockedUpstreamWorkstreamIds: string[];
+}): {
+  findingIds: string[];
+  constraintIds: string[];
+  concernIds: string[];
+} {
+  const upstreamGroups = params.groups.filter((group) =>
+    params.blockedUpstreamWorkstreamIds.includes(group.id)
+  );
+
+  return {
+    findingIds: dedupeStrings(
+      upstreamGroups.flatMap((group) =>
+        group.members.flatMap((member) => member.evidence.findings.map((finding) => finding.id))
+      )
+    ),
+    constraintIds: dedupeStrings(
+      upstreamGroups.flatMap((group) =>
+        group.members.flatMap((member) => member.evidence.constraints.map((constraint) => constraint.id))
+      )
+    ),
+    concernIds: dedupeStrings(
+      upstreamGroups.flatMap((group) =>
+        group.members.flatMap((member) => member.evidence.concerns.map((concern) => concern.id))
+      )
+    ),
+  };
+}
+
+function buildRegroupingMemberDetails(blockedMemberStates: BlockedMemberState[]) {
+  return blockedMemberStates.map((state) => ({
+    planItemId: state.member.evidence.planItem.id,
+    title: state.member.evidence.planItem.title,
+    category: state.member.evidence.planItem.category,
+    likelyAffectedPaths: [...state.member.evidence.planItem.likelyAffectedPaths],
+    blockedStatus: state.blockedReason ? "blocked" as const : "unblocked" as const,
+    blockedReason: state.blockedReason,
+    sourceVerificationCaseIds: state.member.evidence.verificationCases.map((verificationCase) => verificationCase.id),
+    sourceFindingIds: state.member.evidence.findings.map((finding) => finding.id),
+    sourceConstraintIds: state.member.evidence.constraints.map((constraint) => constraint.id),
+    sourceConcernIds: state.member.evidence.concerns.map((concern) => concern.id),
+  }));
+}
+
 function analyzeGroup(params: {
   foundation: SplitFoundationResult;
   groups: WorkstreamGroup[];
@@ -1224,6 +1275,37 @@ function analyzeGroup(params: {
   const constraints = dedupeStrings(
     group.members.flatMap((member) => buildSeedConstraintMessages(member)),
   );
+  const upstreamBlockedEvidence = collectUpstreamBlockedEvidence({
+    groups: params.groups,
+    blockedUpstreamWorkstreamIds,
+  });
+  const blockingStatus = category === "blocked"
+    ? "blocked"
+    : blockedPlanItemIds.length > 0
+      ? "partially_blocked"
+      : "unblocked";
+  const mergeOrderRuleKinds = dedupeStrings([
+    requiresDependencyMergeOrder || streamDependencies.length > 0 ? "dependency" : "",
+    category === "serial" ? "serial" : "",
+    category === "protected_merge" ? "protected_merge" : "",
+  ]) as Array<"serial" | "dependency" | "protected_merge">;
+  const mergeOrderStatus = mergeOrderRuleKinds.length > 0 ? "constrained" : "none";
+  const regroupingMemberDetails = buildRegroupingMemberDetails(blockedMemberStates);
+  const constrainingFindingIds = dedupeStrings([
+    ...(blockingStatus === "blocked" ? sourceFindingIds : []),
+    ...partiallyBlockedMembers.flatMap((state) => state.member.evidence.findings.map((finding) => finding.id)),
+    ...upstreamBlockedEvidence.findingIds,
+  ]);
+  const constrainingConstraintIds = dedupeStrings([
+    ...(blockingStatus === "blocked" ? sourceConstraintIds : []),
+    ...partiallyBlockedMembers.flatMap((state) => state.member.evidence.constraints.map((constraint) => constraint.id)),
+    ...upstreamBlockedEvidence.constraintIds,
+  ]);
+  const constrainingConcernIds = dedupeStrings([
+    ...(blockingStatus === "blocked" ? sourceConcernIds : []),
+    ...partiallyBlockedMembers.flatMap((state) => state.member.evidence.concerns.map((concern) => concern.id)),
+    ...upstreamBlockedEvidence.concernIds,
+  ]);
   const workstream = {
     id: group.id,
     title:
@@ -1270,6 +1352,32 @@ function analyzeGroup(params: {
       blockedItemIds: [],
       mergeOrderRequirements,
       blockedReason,
+      regrouping: {
+        grouped: group.kind !== "single",
+        groupKind: group.kind,
+        rationale: buildGroupingRationale(group),
+        note: group.note,
+        dominantSurfaceKey: group.dominantSurfaceKey,
+        preservedSourcePlanItemIds: sourcePlanItemIds,
+        memberDetails: regroupingMemberDetails,
+      },
+      blocking: {
+        status: blockingStatus,
+        blockedMemberPlanItemIds: blockedPlanItemIds,
+        blockedUpstreamWorkstreamIds,
+        constrainingFindingIds,
+        constrainingConstraintIds,
+        constrainingConcernIds,
+        canProceedWithConstraints: blockingStatus !== "blocked",
+        requiresResolutionBeforeExecution: blockingStatus === "blocked",
+      },
+      mergeOrder: {
+        status: mergeOrderStatus,
+        ruleKinds: mergeOrderRuleKinds,
+        hardPrerequisiteWorkstreamIds: [...streamDependencies],
+        sourceConstraintIds: mergeOrderStatus === "constrained" ? sourceConstraintIds : [],
+        sourceConcernIds: mergeOrderStatus === "constrained" ? sourceConcernIds : [],
+      },
     },
   };
 }

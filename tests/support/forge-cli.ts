@@ -184,6 +184,10 @@ export function splitStreamConstraintsPath(repoRoot: string, outputDir = ".forge
   return splitDebugPath(repoRoot, "stream-constraints.json", outputDir);
 }
 
+export function splitReadinessPath(repoRoot: string, outputDir = ".forge"): string {
+  return splitDebugPath(repoRoot, "split-readiness.json", outputDir);
+}
+
 const VERIFY_REPORT_HEADING_MARKERS = [
   "# Forge Verify Report",
   "## Overview",

@@ -74,7 +74,12 @@ function buildSplitBoundaryNotes(foundation: SplitFoundationResult): string[] {
   return dedupeStrings([
     ...foundation.boundaryPolicy.deterministicFirstNotes,
     ...foundation.boundaryPolicy.conservativeRegroupingNotes,
-    "Batch 2 Part 3 applies explicit stream categories, safety constraints, merge-order expectations, and blocking visibility from persisted Step 2 and Step 3 inputs while keeping the Step 4 top-level contract stable.",
+    "Keep the Step 4 finish-and-freeze line explicit so Step 5 can consume stable split outputs without guesswork while the top-level split contract stays frozen.",
+    "Step 4 is frozen for V1 except for future bug fixes.",
+    "Only bug-fix work should remain in Step 4; future feature work belongs in the Step 5 handoff and later stages.",
+    "Treat split.json and reports/split-report.md as the authoritative Step 4 outputs while debug files remain optional internal mirrors.",
+    "Step 5 should consume split.json directly instead of rebuilding workstreams from verify output.",
+    "Step 5 should treat split_readiness, merge_order, blocked_items, and carried_forward_constraints as the authoritative execution-partition inputs from Step 4.",
   ]);
 }
 
@@ -101,6 +106,7 @@ function buildSplitFiles(paths: SplitResolvedOutputPaths): SplitArtifact["files"
       paths.debugStreamConstraintsPath,
       "debugStreamConstraintsPath",
     ),
+    debugReadinessPath: requireOutputPath(paths.debugReadinessPath, "debugReadinessPath"),
   };
 }
 

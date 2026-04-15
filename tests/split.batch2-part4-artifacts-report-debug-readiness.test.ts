@@ -215,6 +215,13 @@ function makePartiallyBlockedArtifact(baseArtifact: SplitArtifactSnapshot): Spli
       blocked_workstream_count: 1,
       partially_blocked_item_count: 1,
       merge_order_rule_count: baseArtifact.merge_order.length + 1,
+      later_step_gate: "proceed_with_caution",
+      material_execution_limits: [
+        "blocked_workstreams_present",
+        "partially_blocked_items_present",
+        "merge_order_constraints_present",
+        "warning_context_present",
+      ],
     },
   };
 }

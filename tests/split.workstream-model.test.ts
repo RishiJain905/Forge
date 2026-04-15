@@ -875,46 +875,44 @@ function createFoundationFixture(): SplitFoundationResult {
     boundaryPolicy: {
       command: "forge split",
       stage: "step4",
-      purpose: "Transform verified planning output into safe execution-ready workstreams.",
-      batch2Mission: "Make forge split run through the real Step 4 pipeline and produce usable split outputs.",
+      purpose:
+        "Finish forge split as a V1-complete split stage and freeze it except for future bug fixes by transforming verified planning output into stable execution-ready workstreams that preserve dependency, verification, blocking, and merge-order constraints for clean Step 5 consumption.",
+      freezeGoal: "Finish Step 4 as a V1-complete split stage and freeze it except for future bug fixes.",
+      finishLine: [
+        "`forge split` works reliably",
+        "`.forge/split.json` is contract-stable",
+        "`.forge/reports/split-report.md` is useful and consistent",
+        "debug split artifacts can be emitted in a stable way",
+        "warning/failure/readiness behavior is predictable",
+        "aggressive regrouping remains auditable and traceable",
+        "merge-order, blocked, and partially blocked semantics are stable",
+        "tests are strong enough that only bug-fix work should remain",
+        "Step 5 can consume Step 4 output without guessing",
+      ],
       implementationPriorities: [
-        "verify-artifact consumption",
-        "workstream construction",
-        "stream categories and safety application",
-        "merge-order and blocking logic",
-        "machine-readable artifact generation",
-        "human-readable split report",
-        "stable split orchestration",
-        "real tests for implemented behavior",
+        "close remaining Step 4 gaps",
+        "harden warnings, failures, readiness, and debug visibility",
+        "harden regrouping semantics",
+        "harden merge-order and blocking semantics",
+        "align outputs for clean Step 5 consumption",
+        "harden tests and freeze criteria",
       ],
       requiredImplementationTasks: [
-        "align current Step 4 code with the locked split contract",
-        "ensure one real orchestration path exists",
-        "build workstream construction first",
-        "stabilize stream categorization and safety application",
-        "implement merge-order and blocking logic",
-        "build real artifact/report output",
-        "wire the command and harden with tests",
-      ],
-      requiredCodeSurfaces: [
-        "Step 4 shared types/contracts",
-        "Step 3 artifact consumption layer",
-        "workstream construction",
-        "stream-category logic",
-        "merge-order logic",
-        "blocking logic",
-        "carried-constraint logic",
-        "artifact/report builders",
-        "persistence",
-        "Step 4 runner/orchestrator",
-        "CLI wiring",
-        "Step 4 tests",
+        "close remaining Step 4 gaps",
+        "harden warnings, failures, readiness, and debug visibility",
+        "harden regrouping semantics",
+        "harden merge-order and blocking semantics",
+        "align outputs for clean Step 5 consumption",
+        "harden tests and freeze criteria",
       ],
       authoritativeInputs: [".forge/verify.json", "source_plan.artifactPath"],
       deterministicFirst: true,
       conservativeRegrouping: true,
-      deterministicFirstNotes: ["deterministic-first"],
-      conservativeRegroupingNotes: ["one-stream-per-plan-item"],
+      deterministicFirstNotes: ["deterministic-first", "finish-and-freeze pass"],
+      conservativeRegroupingNotes: [
+        "keep stronger regrouping auditable",
+        "Harden aggressive regrouping semantics rather than widening them with new unstable experiments right before freeze.",
+      ],
       allowedSideEffects: ["read persisted artifacts", "write split outputs"],
       deferredCapabilities: ["forge execute"],
       disallowedCapabilities: ["modify code"],
@@ -1351,6 +1349,110 @@ await runScenario(
       ),
       "expected blocked streams to retain test-obligation traceability and blocked-item linkage",
     );
+  },
+);
+
+await runScenario(
+  "buildSplitWorkstreams emits structured regrouping, blocking, and merge-order detail for grouped and partially blocked streams",
+  () => {
+    const foundation = createFoundationFixture();
+
+    foundation.splitInput.context.dependencyGraph = [
+      ...foundation.splitInput.context.dependencyGraph,
+      {
+        planItemId: "plan-after",
+        dependsOnPlanItemId: "plan-blocked",
+        type: "hard",
+        reason: "The test follow-up also waits for the blocked ownership repair to finish.",
+      },
+    ];
+    const planAfter = foundation.splitInput.context.planItems.find((planItem) => planItem.id === "plan-after");
+    if (!planAfter) {
+      throw new Error("Expected the fixture to include the grouped test plan item.");
+    }
+
+    planAfter.dependencies = [
+      ...planAfter.dependencies,
+      {
+        planItemId: "plan-blocked",
+        type: "hard",
+        reason: "The test follow-up also waits for the blocked ownership repair to finish.",
+      },
+    ];
+    refreshPlanItemEvidence(foundation);
+
+    const result = buildSplitWorkstreams({ foundation }) as unknown as {
+      streamConstraintDetails: Array<{
+        workstreamId: string;
+        regrouping: {
+          grouped: boolean;
+          groupKind: string;
+          rationale: string;
+          preservedSourcePlanItemIds: string[];
+          memberDetails: Array<{
+            planItemId: string;
+            blockedStatus: string;
+            blockedReason: string | null;
+            sourceConstraintIds: string[];
+            sourceConcernIds: string[];
+          }>;
+        };
+        blocking: {
+          status: string;
+          blockedMemberPlanItemIds: string[];
+          blockedUpstreamWorkstreamIds: string[];
+          constrainingFindingIds: string[];
+          constrainingConstraintIds: string[];
+          constrainingConcernIds: string[];
+          canProceedWithConstraints: boolean;
+          requiresResolutionBeforeExecution: boolean;
+        };
+        mergeOrder: {
+          status: string;
+          ruleKinds: string[];
+          hardPrerequisiteWorkstreamIds: string[];
+          sourceConstraintIds: string[];
+          sourceConcernIds: string[];
+        };
+      }>;
+    };
+
+    const groupedTestDetail = result.streamConstraintDetails.find((detail) => detail.workstreamId === "ws-plan-safe__plan-after");
+    assert.ok(groupedTestDetail, "expected the grouped source/test stream detail to exist");
+    assert.equal(groupedTestDetail?.regrouping.grouped, true);
+    assert.equal(groupedTestDetail?.regrouping.groupKind, "direct_dependency_test_pair");
+    assert.ok(groupedTestDetail?.regrouping.rationale.length);
+    assert.deepEqual(groupedTestDetail?.regrouping.preservedSourcePlanItemIds, ["plan-safe", "plan-after"]);
+    assert.ok(
+      groupedTestDetail?.regrouping.memberDetails.some((member) =>
+        member.planItemId === "plan-after" &&
+        member.blockedStatus === "blocked" &&
+        /ownership repair/i.test(member.blockedReason ?? "")
+      ),
+      "expected regrouped member details to keep the blocked grouped member explicit",
+    );
+    assert.equal(groupedTestDetail?.blocking.status, "partially_blocked");
+    assert.deepEqual(groupedTestDetail?.blocking.blockedMemberPlanItemIds, ["plan-after"]);
+    assert.ok(groupedTestDetail?.blocking.blockedUpstreamWorkstreamIds.includes("ws-plan-blocked"));
+    assert.ok(groupedTestDetail?.blocking.constrainingFindingIds.includes("finding-blocked"));
+    assert.ok(groupedTestDetail?.blocking.constrainingConstraintIds.includes("constraint-blocked"));
+    assert.ok(groupedTestDetail?.blocking.constrainingConcernIds.includes("concern-blocked"));
+    assert.equal(groupedTestDetail?.blocking.canProceedWithConstraints, true);
+    assert.equal(groupedTestDetail?.blocking.requiresResolutionBeforeExecution, false);
+    assert.equal(groupedTestDetail?.mergeOrder.status, "constrained");
+    assert.ok(groupedTestDetail?.mergeOrder.ruleKinds.includes("dependency"));
+    assert.ok(groupedTestDetail?.mergeOrder.hardPrerequisiteWorkstreamIds.includes("ws-plan-serial"));
+
+    const groupedSharedDetail = result.streamConstraintDetails.find((detail) => detail.workstreamId === "ws-plan-shared-a__plan-shared-b");
+    assert.ok(groupedSharedDetail, "expected the same-surface sibling stream detail to exist");
+    assert.equal(groupedSharedDetail?.regrouping.grouped, true);
+    assert.equal(groupedSharedDetail?.regrouping.groupKind, "same_surface_siblings");
+    assert.deepEqual(groupedSharedDetail?.regrouping.preservedSourcePlanItemIds, ["plan-shared-a", "plan-shared-b"]);
+    assert.equal(groupedSharedDetail?.blocking.status, "unblocked");
+    assert.equal(groupedSharedDetail?.mergeOrder.status, "constrained");
+    assert.ok(groupedSharedDetail?.mergeOrder.ruleKinds.includes("protected_merge"));
+    assert.ok(groupedSharedDetail?.mergeOrder.sourceConstraintIds.includes("constraint-shared-a"));
+    assert.ok(groupedSharedDetail?.mergeOrder.sourceConstraintIds.includes("constraint-shared-b"));
   },
 );
 

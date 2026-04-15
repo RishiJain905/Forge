@@ -143,6 +143,36 @@ type SplitArtifact = {
       blockedPlanItemIds: string[];
       mergeOrderRuleIds: string[];
       blockedItemIds: string[];
+      regrouping: {
+        grouped: boolean;
+        groupKind: string;
+        rationale: string;
+        preservedSourcePlanItemIds: string[];
+        memberDetails: Array<{
+          planItemId: string;
+          blockedStatus: string;
+          blockedReason: string | null;
+          sourceConstraintIds: string[];
+          sourceConcernIds: string[];
+        }>;
+      };
+      blocking: {
+        status: string;
+        blockedMemberPlanItemIds: string[];
+        blockedUpstreamWorkstreamIds: string[];
+        constrainingFindingIds: string[];
+        constrainingConstraintIds: string[];
+        constrainingConcernIds: string[];
+        canProceedWithConstraints: boolean;
+        requiresResolutionBeforeExecution: boolean;
+      };
+      mergeOrder: {
+        status: string;
+        ruleKinds: string[];
+        hardPrerequisiteWorkstreamIds: string[];
+        sourceConstraintIds: string[];
+        sourceConcernIds: string[];
+      };
     }>;
   };
 };
@@ -220,15 +250,50 @@ await runScenario(
           Array.isArray(detail.blockedUpstreamWorkstreamIds) &&
           Array.isArray(detail.blockedPlanItemIds) &&
           Array.isArray(detail.mergeOrderRuleIds) &&
-          Array.isArray(detail.blockedItemIds),
+          Array.isArray(detail.blockedItemIds) &&
+          typeof detail.regrouping?.grouped === "boolean" &&
+          detail.regrouping.groupKind.length > 0 &&
+          detail.regrouping.rationale.length > 0 &&
+          Array.isArray(detail.regrouping.preservedSourcePlanItemIds) &&
+          Array.isArray(detail.regrouping.memberDetails) &&
+          detail.blocking.status.length > 0 &&
+          Array.isArray(detail.blocking.blockedMemberPlanItemIds) &&
+          Array.isArray(detail.blocking.blockedUpstreamWorkstreamIds) &&
+          Array.isArray(detail.blocking.constrainingFindingIds) &&
+          Array.isArray(detail.blocking.constrainingConstraintIds) &&
+          Array.isArray(detail.blocking.constrainingConcernIds) &&
+          typeof detail.blocking.canProceedWithConstraints === "boolean" &&
+          typeof detail.blocking.requiresResolutionBeforeExecution === "boolean" &&
+          detail.mergeOrder.status.length > 0 &&
+          Array.isArray(detail.mergeOrder.ruleKinds) &&
+          Array.isArray(detail.mergeOrder.hardPrerequisiteWorkstreamIds) &&
+          Array.isArray(detail.mergeOrder.sourceConstraintIds) &&
+          Array.isArray(detail.mergeOrder.sourceConcernIds),
         ),
       );
       assert.ok(sectionBody(report, "Carried-Forward Constraints").join("\n").includes("Base Category:"));
       assert.ok(sectionBody(report, "Carried-Forward Constraints").join("\n").includes("Category Reasons:"));
       assert.ok(sectionBody(report, "Carried-Forward Constraints").join("\n").includes("Blocked Plan Item IDs:"));
+      assert.ok(sectionBody(report, "Carried-Forward Constraints").join("\n").includes("Regrouping Kind:"));
+      assert.ok(sectionBody(report, "Carried-Forward Constraints").join("\n").includes("Blocking Status:"));
+      assert.ok(sectionBody(report, "Carried-Forward Constraints").join("\n").includes("Merge-Order Status:"));
       assert.ok(sectionBody(report, "Split Diagnostics").length > 0);
+      assert.ok(sectionBody(report, "Split Diagnostics").join("\n").includes("split_diagnostics explains the warning, blocking, and partial-output context"));
       assert.ok(sectionBody(report, "Split Readiness").length > 0);
+      assert.ok(sectionBody(report, "Overview").join("\n").includes("Later-Step Gate:"));
+      assert.ok(sectionBody(report, "Overview").join("\n").includes("Execution Scope:"));
+      assert.ok(sectionBody(report, "Overview").join("\n").includes("V1 Freeze State: bug-fix-only maintenance mode"));
+      assert.ok(sectionBody(report, "Split Readiness").join("\n").includes("Forge Execute Gate:"));
+      assert.ok(sectionBody(report, "Split Readiness").join("\n").includes("Later-Step Gate:"));
+      assert.ok(sectionBody(report, "Split Readiness").join("\n").includes("Material Execution Limits:"));
+      assert.ok(sectionBody(report, "Split Readiness").join("\n").includes("split_readiness is the authoritative later-step gate"));
+      assert.ok(sectionBody(report, "Output Files").join("\n").includes("split.json and reports/split-report.md remain the authoritative Step 4 outputs."));
+      assert.ok(sectionBody(report, "Output Files").join("\n").includes("Debug files are optional internal mirrors and never replace the durable Step 4 outputs."));
+      assert.ok(sectionBody(report, "Output Files").join("\n").includes("Debug Split Readiness Path:"));
       assert.ok(sectionBody(report, "Boundary Notes").length > 0);
+      assert.ok(sectionBody(report, "Boundary Notes").join("\n").includes("Step 4 is frozen for V1 except for future bug fixes."));
+      assert.ok(sectionBody(report, "Boundary Notes").join("\n").includes("Only bug-fix work should remain in Step 4; future feature work belongs in the Step 5 handoff and later stages."));
+      assert.ok(sectionBody(report, "Boundary Notes").join("\n").includes("Step 5 should consume split.json directly instead of rebuilding workstreams from verify output."));
       assert.ok(sectionBody(report, "Deferred Capabilities").length > 0);
       assert.ok(sectionBody(report, "Allowed Side Effects").length > 0);
       assert.ok(sectionBody(report, "Disallowed Capabilities").length > 0);

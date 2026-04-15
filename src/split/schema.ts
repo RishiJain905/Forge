@@ -105,10 +105,10 @@ const splitBoundaryPolicySchema = z.object({
   command: z.literal(`forge ${FORGE_SPLIT_COMMAND}`),
   stage: z.literal(FORGE_SPLIT_STAGE),
   purpose: z.string().min(1),
-  batch2Mission: z.string().min(1),
+  freezeGoal: z.string().min(1),
+  finishLine: z.array(z.string().min(1)).min(1),
   implementationPriorities: z.array(z.string().min(1)).min(1),
   requiredImplementationTasks: z.array(z.string().min(1)).min(1),
-  requiredCodeSurfaces: z.array(z.string().min(1)).min(1),
   authoritativeInputs: z.array(z.string().min(1)).min(1),
   deterministicFirst: z.literal(true),
   conservativeRegrouping: z.literal(true),
@@ -269,6 +269,78 @@ export const splitFoundationSchema = z.object({
       code: z.ZodIssueCode.custom,
       message: "Boundary policy command drifted from the Step 4 contract.",
       path: ["boundaryPolicy", "command"],
+    });
+  }
+
+  if (value.boundaryPolicy.freezeGoal !== STEP4_BOUNDARY_POLICY.freezeGoal) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Boundary policy freeze goal drifted from the Step 4 contract.",
+      path: ["boundaryPolicy", "freezeGoal"],
+    });
+  }
+
+  if (!isDeepStrictEqual(value.boundaryPolicy.finishLine, STEP4_BOUNDARY_POLICY.finishLine)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Boundary policy finish line drifted from the Step 4 contract.",
+      path: ["boundaryPolicy", "finishLine"],
+    });
+  }
+
+  if (!isDeepStrictEqual(value.boundaryPolicy.requiredImplementationTasks, STEP4_BOUNDARY_POLICY.requiredImplementationTasks)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Boundary policy required implementation tasks drifted from the Step 4 contract.",
+      path: ["boundaryPolicy", "requiredImplementationTasks"],
+    });
+  }
+
+  if (!isDeepStrictEqual(value.boundaryPolicy.authoritativeInputs, STEP4_BOUNDARY_POLICY.authoritativeInputs)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Boundary policy authoritative inputs drifted from the Step 4 contract.",
+      path: ["boundaryPolicy", "authoritativeInputs"],
+    });
+  }
+
+  if (!isDeepStrictEqual(value.boundaryPolicy.deferredCapabilities, STEP4_BOUNDARY_POLICY.deferredCapabilities)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Boundary policy deferred capabilities drifted from the Step 4 contract.",
+      path: ["boundaryPolicy", "deferredCapabilities"],
+    });
+  }
+
+  if (!isDeepStrictEqual(value.boundaryPolicy.disallowedCapabilities, STEP4_BOUNDARY_POLICY.disallowedCapabilities)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Boundary policy disallowed capabilities drifted from the Step 4 contract.",
+      path: ["boundaryPolicy", "disallowedCapabilities"],
+    });
+  }
+
+  if (!isDeepStrictEqual(value.workstreamContract.requiredFields, SPLIT_WORKSTREAM_REQUIRED_FIELDS)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Workstream contract required fields drifted from the Step 4 contract.",
+      path: ["workstreamContract", "requiredFields"],
+    });
+  }
+
+  if (!isDeepStrictEqual(value.workstreamContract.categories, SPLIT_STREAM_CATEGORIES)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Workstream contract categories drifted from the Step 4 contract.",
+      path: ["workstreamContract", "categories"],
+    });
+  }
+
+  if (!isDeepStrictEqual(value.workstreamContract.constraintSources, SPLIT_CONSTRAINT_SOURCES)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Workstream contract constraint sources drifted from the Step 4 contract.",
+      path: ["workstreamContract", "constraintSources"],
     });
   }
 
@@ -474,6 +546,48 @@ const splitBlockedItemSchema = z.object({
   partialMetadataAvailable: z.boolean(),
 }).strict();
 
+const splitRegroupingMemberDetailSchema = z.object({
+  planItemId: z.string().min(1),
+  title: z.string().min(1),
+  category: planArtifactSchema.shape.plan_items.element.shape.category,
+  likelyAffectedPaths: z.array(z.string().min(1)),
+  blockedStatus: z.enum(["unblocked", "blocked"]),
+  blockedReason: z.string().min(1).nullable(),
+  sourceVerificationCaseIds: z.array(z.string().min(1)),
+  sourceFindingIds: z.array(z.string().min(1)),
+  sourceConstraintIds: z.array(z.string().min(1)),
+  sourceConcernIds: z.array(z.string().min(1)),
+}).strict();
+
+const splitRegroupingDetailSchema = z.object({
+  grouped: z.boolean(),
+  groupKind: z.enum(["single", "direct_dependency_test_pair", "same_surface_siblings"]),
+  rationale: z.string().min(1),
+  note: z.string().min(1).nullable(),
+  dominantSurfaceKey: z.string().min(1).nullable(),
+  preservedSourcePlanItemIds: z.array(z.string().min(1)),
+  memberDetails: z.array(splitRegroupingMemberDetailSchema),
+}).strict();
+
+const splitBlockingDetailSchema = z.object({
+  status: z.enum(["unblocked", "partially_blocked", "blocked"]),
+  blockedMemberPlanItemIds: z.array(z.string().min(1)),
+  blockedUpstreamWorkstreamIds: z.array(z.string().min(1)),
+  constrainingFindingIds: z.array(z.string().min(1)),
+  constrainingConstraintIds: z.array(z.string().min(1)),
+  constrainingConcernIds: z.array(z.string().min(1)),
+  canProceedWithConstraints: z.boolean(),
+  requiresResolutionBeforeExecution: z.boolean(),
+}).strict();
+
+const splitMergeOrderDetailSchema = z.object({
+  status: z.enum(["none", "constrained"]),
+  ruleKinds: z.array(z.enum(["serial", "dependency", "protected_merge"])),
+  hardPrerequisiteWorkstreamIds: z.array(z.string().min(1)),
+  sourceConstraintIds: z.array(z.string().min(1)),
+  sourceConcernIds: z.array(z.string().min(1)),
+}).strict();
+
 const splitStreamConstraintDetailSchema = z.object({
   workstreamId: z.string().min(1),
   baseCategory: z.enum(SPLIT_STREAM_CATEGORIES),
@@ -499,6 +613,9 @@ const splitStreamConstraintDetailSchema = z.object({
   blockedItemIds: z.array(z.string().min(1)),
   mergeOrderRequirements: z.array(z.string().min(1)),
   blockedReason: z.string().min(1).nullable(),
+  regrouping: splitRegroupingDetailSchema,
+  blocking: splitBlockingDetailSchema,
+  mergeOrder: splitMergeOrderDetailSchema,
 }).strict();
 
 const splitArtifactFilesSchema = z.object({
@@ -509,6 +626,7 @@ const splitArtifactFilesSchema = z.object({
   debugMergeOrderPath: z.string().min(1),
   debugBlockedItemsPath: z.string().min(1),
   debugStreamConstraintsPath: z.string().min(1),
+  debugReadinessPath: z.string().min(1),
 }).strict();
 
 const splitWritePolicySchema = z.object({
@@ -548,6 +666,15 @@ const splitReadinessSchema = z.object({
   blocked_workstream_count: z.number().int().nonnegative(),
   partially_blocked_item_count: z.number().int().nonnegative(),
   merge_order_rule_count: z.number().int().nonnegative(),
+  later_step_gate: z.enum(["proceed", "proceed_with_caution", "blocked"]),
+  material_execution_limits: z.array(z.enum([
+    "upstream_blockers_present",
+    "blocked_workstreams_present",
+    "partially_blocked_items_present",
+    "merge_order_constraints_present",
+    "warning_context_present",
+    "partial_output_present",
+  ])),
   warning_items: z.array(splitInputIssueSchema),
   blocking_issues: z.array(splitInputIssueSchema),
   partial_output: z.object({
@@ -630,6 +757,38 @@ export const splitArtifactSchema = z.object({
     fallbackReason: z.string().min(1).optional(),
   }).strict().nullable(),
 }).strict().superRefine((value, context) => {
+  if (value.purpose !== STEP4_BOUNDARY_POLICY.purpose) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Split artifact purpose drifted from the Step 4 contract.",
+      path: ["purpose"],
+    });
+  }
+
+  if (!isDeepStrictEqual(value.workstream_contract.requiredFields, SPLIT_WORKSTREAM_REQUIRED_FIELDS)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Split artifact workstream required fields drifted from the Step 4 contract.",
+      path: ["workstream_contract", "requiredFields"],
+    });
+  }
+
+  if (!isDeepStrictEqual(value.workstream_contract.categories, SPLIT_STREAM_CATEGORIES)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Split artifact workstream categories drifted from the Step 4 contract.",
+      path: ["workstream_contract", "categories"],
+    });
+  }
+
+  if (!isDeepStrictEqual(value.workstream_contract.constraintSources, SPLIT_CONSTRAINT_SOURCES)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Split artifact workstream constraint sources drifted from the Step 4 contract.",
+      path: ["workstream_contract", "constraintSources"],
+    });
+  }
+
   const diagnosticWarnings = value.split_diagnostics.warning_items;
   const readinessWarnings = value.split_readiness.warning_items;
   if (
@@ -716,6 +875,37 @@ export const splitArtifactSchema = z.object({
       code: z.ZodIssueCode.custom,
       message: "Split readiness execution scope must match the ready and blocked-item state.",
       path: ["split_readiness", "execution_scope"],
+    });
+  }
+
+  const expectedMaterialExecutionLimits = [
+    !value.split_readiness.ready || readinessBlockingIssues.length > 0 ? "upstream_blockers_present" : "",
+    value.split_readiness.blocked_workstream_count > 0 ? "blocked_workstreams_present" : "",
+    value.split_readiness.partially_blocked_item_count > 0 ? "partially_blocked_items_present" : "",
+    value.split_readiness.merge_order_rule_count > 0 ? "merge_order_constraints_present" : "",
+    readinessWarnings.length > 0 || value.split_readiness.constraining_concern_ids.length > 0
+      ? "warning_context_present"
+      : "",
+    value.split_readiness.partial_output !== null ? "partial_output_present" : "",
+  ].filter((limit): limit is typeof value.split_readiness.material_execution_limits[number] => Boolean(limit));
+  if (!isDeepStrictEqual(value.split_readiness.material_execution_limits, expectedMaterialExecutionLimits)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Split readiness material_execution_limits must match the resolved readiness constraints.",
+      path: ["split_readiness", "material_execution_limits"],
+    });
+  }
+
+  const expectedLaterStepGate = !value.split_readiness.ready
+    ? "blocked"
+    : expectedMaterialExecutionLimits.length > 0
+      ? "proceed_with_caution"
+      : "proceed";
+  if (value.split_readiness.later_step_gate !== expectedLaterStepGate) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Split readiness later_step_gate must match the resolved readiness constraints.",
+      path: ["split_readiness", "later_step_gate"],
     });
   }
 

@@ -91,6 +91,7 @@ export function createSplitDebugArtifact(
         paths.debugStreamConstraintsPath,
         "debugStreamConstraintsPath",
       ),
+      debugReadinessPath: requireDebugPath(paths.debugReadinessPath, "debugReadinessPath"),
     },
     source_verify: artifact.source_verify,
     source_plan: artifact.source_plan,
@@ -144,6 +145,14 @@ export function createSplitDebugWrites(params: {
         carried_forward_constraints: params.artifact.carried_forward_constraints,
         split_diagnostics: params.artifact.split_diagnostics,
         split_readiness: params.artifact.split_readiness,
+      }),
+    },
+    {
+      filePath: requireDebugPath(params.paths.debugReadinessPath, "debugReadinessPath"),
+      contents: stringifyJson({
+        split_diagnostics: params.artifact.split_diagnostics,
+        split_readiness: params.artifact.split_readiness,
+        failure: params.artifact.failure,
       }),
     },
   ];
