@@ -130,18 +130,30 @@ Phase 3 initial implementation used wrong signature: `(state, outputPath)`. Fixe
 ## Task 6 — Tests
 
 **Status:** Complete
-**Completed:** 2025-04-15
+**Completed:** 2025-04-15 (initial), 2025-04-15 (gap-fill: 3 tests + fixture)
 
 ### Files Created
 
 | File | Description |
 |------|-------------|
-| `tests/execute.v1-minimal.test.ts` | 6 test scenarios |
+| `tests/execute.v1-minimal.test.ts` | 9 test scenarios (6 original + 3 gap-fill for spec coverage) |
+| `tests/fixtures/split.json` | Mock split.json fixture (4 workstreams with merge_order chains) |
+| `S5-B1-Done/p6-done.md` | Task 6 completion marker |
+
+### Gap-Fill Details
+
+Original implementation had 6 scenarios but was missing 3 explicit state machine tests required by task-6-tests.md spec:
+- Scenario 7: initializes all workstreams to queued
+- Scenario 8: allows queued→running transition
+- Scenario 9: allows running→failed always
+
+Also created `tests/fixtures/split.json` per spec requirement for a mock split.json fixture.
 
 ### Verification
 
-- 6/6 tests — PASS
+- 9/9 execute.v1-minimal tests — PASS
+- 13/13 execute-state-machine tests — PASS (no regression)
+- 16/16 execute-types tests — PASS (no regression)
 - `npm run typecheck` — PASS
 - `npm run build` — PASS
-- Prior tests (13 state-machine + 16 types) — PASS (no regression)
 

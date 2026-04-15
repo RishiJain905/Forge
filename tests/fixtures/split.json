@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "2.0.0",
+  "workstreams": [
+    {
+      "id": "ws-1",
+      "title": "Authentication",
+      "category": "implementation",
+      "mergeOrderAfter": []
+    },
+    {
+      "id": "ws-2",
+      "title": "API Layer",
+      "category": "implementation",
+      "mergeOrderAfter": ["ws-1"]
+    },
+    {
+      "id": "ws-3",
+      "title": "Frontend",
+      "category": "implementation",
+      "mergeOrderAfter": ["ws-1"]
+    },
+    {
+      "id": "ws-4",
+      "title": "Integration",
+      "category": "implementation",
+      "mergeOrderAfter": ["ws-2", "ws-3"]
+    }
+  ]
+}

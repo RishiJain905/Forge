@@ -395,3 +395,78 @@ await runScenario("runExecuteCommand writes execute.json artifact on exit", asyn
   // Clean up
   await fs.rm(tmpDir, { recursive: true, force: true });
 });
+
+// -------------------------------------------------------------------------------------
+// Scenario 7: initializes all workstreams to queued
+// -------------------------------------------------------------------------------------
+
+await runScenario("initializes all workstreams to queued", () => {
+  const splitArtifact = makeSplitArtifact({
+    workstreams: [
+      makeSplitWorkstream({ id: "ws-1", title: "Authentication" }),
+      makeSplitWorkstream({
+        id: "ws-2",
+        title: "API Layer",
+        mergeOrderRequirements: ["ws-1"],
+      }),
+      makeSplitWorkstream({
+        id: "ws-3",
+        title: "Frontend",
+        mergeOrderRequirements: ["ws-1"],
+      }),
+      makeSplitWorkstream({
+        id: "ws-4",
+        title: "Integration",
+        mergeOrderRequirements: ["ws-2", "ws-3"],
+      }),
+    ],
+  });
+
+  const state = createExecuteState(splitArtifact, ".forge/split.json");
+
+  assert.equal(state.workstreams.size, 4, "should have 4 workstreams");
+  assert.equal(state.workstreams.get("ws-1")?.state, "queued");
+  assert.equal(state.workstreams.get("ws-2")?.state, "queued");
+  assert.equal(state.workstreams.get("ws-3")?.state, "queued");
+  assert.equal(state.workstreams.get("ws-4")?.state, "queued");
+});
+
+// -------------------------------------------------------------------------------------
+// Scenario 8: allows queued → running transition
+// -------------------------------------------------------------------------------------
+
+await runScenario("allows queued → running transition", () => {
+  const splitArtifact = makeSplitArtifact({
+    workstreams: [
+      makeSplitWorkstream({ id: "ws-1", title: "Auth" }),
+    ],
+  });
+
+  const state = createExecuteState(splitArtifact, ".forge/split.json");
+  const result = transitionState("ws-1", "running", state);
+
+  assert.equal(result.success, true, "queued→running should succeed");
+  assert.equal(state.workstreams.get("ws-1")?.state, "running");
+  assert.ok(state.workstreams.get("ws-1")?.startedAt, "should have startedAt timestamp");
+});
+
+// -------------------------------------------------------------------------------------
+// Scenario 9: allows running → failed always
+// -------------------------------------------------------------------------------------
+
+await runScenario("allows running → failed always", () => {
+  const splitArtifact = makeSplitArtifact({
+    workstreams: [
+      makeSplitWorkstream({ id: "ws-1", title: "Auth" }),
+    ],
+  });
+
+  const state = createExecuteState(splitArtifact, ".forge/split.json");
+  transitionState("ws-1", "running", state);
+  const result = transitionState("ws-1", "failed", state, "Build error");
+
+  assert.equal(result.success, true, "running→failed should succeed");
+  assert.equal(state.workstreams.get("ws-1")?.state, "failed");
+  assert.equal(state.workstreams.get("ws-1")?.error, "Build error");
+  assert.ok(state.workstreams.get("ws-1")?.failedAt, "should have failedAt timestamp");
+});
