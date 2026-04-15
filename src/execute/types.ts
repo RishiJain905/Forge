@@ -43,3 +43,21 @@ export interface StateTransition {
   timestamp: string;
   reason?: string;
 }
+
+// Options for the execute command
+export interface ExecuteCommandOptions {
+  repo?: string;
+  outputDir?: string;
+}
+
+// Result of the execute command
+export interface ExecuteCommandResult {
+  status: "ready" | "failed";
+  summary: string;
+  artifactPath: string;
+  outputRoot: string;
+  failure?: {
+    code: string;
+    message: string;
+  };
+}
