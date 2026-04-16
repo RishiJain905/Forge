@@ -56,6 +56,7 @@ export interface ExecuteCommandResult {
   status: "ready" | "failed";
   summary: string;
   artifactPath: string;
+  reportPath?: string;
   outputRoot: string;
   failure?: {
     code: string;

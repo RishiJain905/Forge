@@ -11,6 +11,7 @@ import { validateSplitArtifact } from "../split/schema.js";
 import type { ExecuteCommandOptions, ExecuteCommandResult } from "./types.js";
 import type { ExecuteState } from "./state-machine.js";
 import { writeExecuteArtifact } from "./artifact.js";
+import { createExecuteReport } from "./report.js";
 import type { SplitArtifact } from "../split/types.js";
 
 const SCHEMA_VERSION = "1.0.0";
@@ -316,11 +317,18 @@ export async function runExecuteCommand(
   const artifact = buildExecuteArtifact(state, SCHEMA_VERSION, FORGE_VERSION);
   await writeExecuteArtifact(artifactPath, artifact);
 
+  // Write human-readable report
+  const reportPath = path.join(outputDir, "execute-report.md");
+  const report = createExecuteReport(artifact);
+  await fs.writeFile(reportPath, report, "utf-8");
+  console.log(`Report written to ${reportPath}`);
+
   const summary = buildSummary(state);
   return {
     status: "ready",
     summary,
     artifactPath,
+    reportPath,
     outputRoot: outputDir,
   };
 }
