@@ -394,10 +394,40 @@ export async function runExecuteCommand(
     return false;
   }
 
-  // promisify the rl.question for async/await
-  const question = (prompt: string): Promise<string> => {
-    return new Promise((resolve) => {
-      rl.question(prompt, resolve);
+  // Use line/close event pattern instead of rl.question for reliable piped-stdin handling.
+  // rl.question() can leave unsettled promises when stdin closes mid-question,
+  // causing Node.js exit code 13 ("unsettled top-level await").
+  // The line event fires once per newline-delimited input; close fires after all
+  // lines are processed, so we never miss buffered input.
+  const lineQueue: Array<string | undefined> = [];
+  let lineResolve: ((value: string | undefined) => void) | null = null;
+
+  rl.on("line", (line: string) => {
+    if (lineResolve) {
+      const resolve = lineResolve;
+      lineResolve = null;
+      resolve(line);
+    } else {
+      lineQueue.push(line);
+    }
+  });
+
+  rl.on("close", () => {
+    // Signal EOF: push undefined sentinel and resolve any pending waiter
+    lineQueue.push(undefined);
+    if (lineResolve) {
+      const resolve = lineResolve;
+      lineResolve = null;
+      resolve(undefined);
+    }
+  });
+
+  const nextLine = (): Promise<string | undefined> => {
+    if (lineQueue.length > 0) {
+      return Promise.resolve(lineQueue.shift());
+    }
+    return new Promise<string | undefined>((resolve) => {
+      lineResolve = resolve;
     });
   };
 
@@ -405,8 +435,13 @@ export async function runExecuteCommand(
   while (!completed) {
     try {
       rl.prompt();
-      const input = await question("");
-      completed = await processLine(input);
+      const input = await nextLine();
+      // input is undefined when stdin closes (EOF) — treat as implicit "exit"
+      if (input === undefined || input === null) {
+        completed = true;
+      } else {
+        completed = await processLine(input);
+      }
     } catch (err) {
       console.error("Error processing input:", err);
     }

@@ -15,7 +15,7 @@ const rmSync = fsSync.rmSync;
 const fs = fsSync.promises;
 const systemTmpdir = os.tmpdir();
 
-// Helper: create a temp dir with a minimal split.json
+// Helper: create a temp dir with a v2.0.0 schema-compliant split.json
 function makeTmpWithSplit(workstreams: Array<{
   id: string;
   title: string;
@@ -30,7 +30,7 @@ function makeTmpWithSplit(workstreams: Array<{
     command: "forge split",
     stage: "step4",
     status: "ready",
-    purpose: "test",
+    purpose: "Finish forge split as a V1-complete split stage and freeze it except for future bug fixes by transforming verified planning output into stable execution-ready workstreams that preserve dependency, verification, blocking, and merge-order constraints for clean Step 5 consumption.",
     repoRoot: dir,
     requestedOutputRoot: null,
     outputRoot: forgeDir,
@@ -38,26 +38,88 @@ function makeTmpWithSplit(workstreams: Array<{
       mode: "output-root-only",
       repoReadOnlyOutsideOutputRoot: true,
       allowedRoot: forgeDir,
-      allowedSideEffects: [],
-      deferredCapabilities: [],
-      disallowedCapabilities: [],
+      allowedSideEffects: ["write split outputs"],
+      deferredCapabilities: ["forge execute"],
+      disallowedCapabilities: ["execute code"],
     },
     files: {
       artifactPath: null,
       reportPath: null,
-      debugArtifactPath: "",
-      debugWorkstreamsPath: "",
-      debugMergeOrderPath: "",
+      debugArtifactPath: `${forgeDir}/debug/split-debug.json`,
+      debugWorkstreamsPath: `${forgeDir}/debug/workstreams.json`,
+      debugMergeOrderPath: `${forgeDir}/debug/merge-order.json`,
+      debugBlockedItemsPath: `${forgeDir}/debug/blocked-items.json`,
+      debugStreamConstraintsPath: `${forgeDir}/debug/stream-constraints.json`,
+      debugReadinessPath: `${forgeDir}/debug/split-readiness.json`,
     },
-    summary: {
-      totalWorkstreams: workstreams.length,
-      safeParallelGroups: 1,
-      sequentialGroups: 0,
-      mergeOrderGroups: workstreams.some(
-        (w) => (w.mergeOrderRequirements?.length ?? 0) > 0,
-      )
-        ? 1
-        : 0,
+    startedAt: "2025-01-01T00:00:00.000Z",
+    finishedAt: "2025-01-01T00:01:00.000Z",
+    summary: "Split completed successfully",
+    boundaryNotes: ["Split completed as a V1-complete stage"],
+    source_verify: {
+      artifactPath: `${dir}/.forge/verify.json`,
+      command: "forge verify",
+      repoRoot: dir,
+      status: "ready",
+      summary: "Verification completed",
+      readyForSplit: true,
+      verificationDiagnostics: {
+        usability_status: "actionable",
+        warning_items: [],
+        blocking_items: [],
+        partial_output: null,
+      },
+      verificationReadinessStatus: "ready",
+      verificationReadiness: {
+        ready: true,
+        status: "ready",
+        summary: "Verification ready for split",
+        warning_items: [],
+        blocking_issues: [],
+        partial_output: null,
+        constraining_concern_ids: [],
+        recommended_user_actions: [],
+      },
+      failure: null,
+    },
+    source_plan: {
+      artifactPath: `${dir}/.forge/plan.json`,
+      command: "forge plan",
+      repoRoot: dir,
+      status: "ready",
+      summary: "Planning completed",
+      readyForVerification: true,
+      planningDiagnostics: {
+        usability_status: "actionable",
+        warning_items: [],
+        blocking_items: [],
+        partial_output: null,
+        planning_assist: {
+          outcome: "not_attempted",
+          attempted: false,
+          used: false,
+          provider: null,
+          warnings: [],
+          ignoredEdits: [],
+          reportNotes: [],
+        },
+      },
+      planningReadiness: {
+        ready: true,
+        status: "ready",
+        summary: "Planning ready for verification",
+        warning_items: [],
+        blocking_issues: [],
+        partial_output: null,
+        constraining_concern_ids: [],
+        recommended_user_actions: [],
+      },
+      failure: null,
+    },
+    workstream_contract: {
+      requiredFields: ["id", "title", "description", "category", "sourcePlanItemIds", "sourceVerificationCaseIds", "sourceFindingIds", "likelyAffectedPaths", "streamDependencies", "mergeOrderRequirements", "constraints", "blockedReason"],
+      categories: ["serial", "safe_parallel", "parallel_after_dependency", "protected_merge", "blocked"],
+      constraintSources: ["dependency_graph", "conflict_zone", "test_obligation", "verification_target", "verification_case", "structural_finding", "formal_finding", "verification_constraint", "carry_forward_concern", "planning_readiness", "verification_readiness"],
     },
     workstreams: workstreams.map((ws) => ({
       id: ws.id,
@@ -73,6 +135,109 @@ function makeTmpWithSplit(workstreams: Array<{
       constraints: [],
       blockedReason: null,
     })),
+    dependency_edges: [],
+    merge_order: [],
+    blocked_items: [],
+    carried_forward_constraints: {
+      findings: [],
+      constraints: [],
+      plan_concerns: [],
+      planning_readiness: {
+        ready: true,
+        status: "ready",
+        summary: "Planning ready for verification",
+        warning_items: [],
+        blocking_issues: [],
+        partial_output: null,
+        constraining_concern_ids: [],
+        recommended_user_actions: [],
+      },
+      verification_readiness: {
+        ready: true,
+        status: "ready",
+        summary: "Verification ready for split",
+        warning_items: [],
+        blocking_issues: [],
+        partial_output: null,
+        constraining_concern_ids: [],
+        recommended_user_actions: [],
+      },
+      stream_constraint_details: workstreams.map((ws) => ({
+        workstreamId: ws.id,
+        baseCategory: "safe_parallel",
+        category: "safe_parallel",
+        appliedRules: [],
+        categoryReasons: [],
+        mergeOrderReasons: [],
+        blockingReasons: [],
+        warningNotes: [],
+        mitigationSummaries: [],
+        sourceDependencyIds: [],
+        sourceConflictZoneIds: [],
+        sourceTestObligationIds: [],
+        sourceVerificationTargetIds: [],
+        sourceVerificationCaseIds: [],
+        sourceFindingIds: [],
+        sourceConstraintIds: [],
+        sourceConcernIds: [],
+        sourceReadinessIds: [],
+        blockedUpstreamWorkstreamIds: [],
+        blockedPlanItemIds: [],
+        mergeOrderRuleIds: [],
+        blockedItemIds: [],
+        mergeOrderRequirements: ws.mergeOrderRequirements ?? [],
+        blockedReason: null,
+        regrouping: {
+          grouped: false,
+          groupKind: "single",
+          rationale: "No regrouping needed",
+          note: null,
+          dominantSurfaceKey: null,
+          preservedSourcePlanItemIds: [],
+          memberDetails: [],
+        },
+        blocking: {
+          status: "unblocked",
+          blockedMemberPlanItemIds: [],
+          blockedUpstreamWorkstreamIds: [],
+          constrainingFindingIds: [],
+          constrainingConstraintIds: [],
+          constrainingConcernIds: [],
+          canProceedWithConstraints: true,
+          requiresResolutionBeforeExecution: false,
+        },
+        mergeOrder: {
+          status: "none",
+          ruleKinds: [],
+          hardPrerequisiteWorkstreamIds: [],
+          sourceConstraintIds: [],
+          sourceConcernIds: [],
+        },
+      })),
+    },
+    split_diagnostics: {
+      usability_status: "actionable",
+      warning_items: [],
+      blocking_items: [],
+      partial_output: null,
+    },
+    split_readiness: {
+      ready: true,
+      status: "ready",
+      summary: "Ready for execution",
+      execution_scope: "all_streams",
+      blocked_workstream_count: 0,
+      partially_blocked_item_count: 0,
+      merge_order_rule_count: 0,
+      later_step_gate: "proceed",
+      material_execution_limits: [],
+      warning_items: [],
+      blocking_issues: [],
+      partial_output: null,
+      constraining_concern_ids: [],
+      recommended_user_actions: [],
+    },
+    failure: null,
   };
 
   fsSync.writeFileSync(
@@ -87,9 +252,10 @@ function runForgeExecute(
   dir: string,
   input = "exit\n",
 ): { exitCode: number; stderr: string; stdout: string } {
-  // Use absolute path to the CLI from the worktree (tests are run from worktree root)
-  const worktreeRoot = path.resolve(__dirname, "..");
-  const cliPath = path.join(worktreeRoot, "dist", "src", "index.js");
+  // Use absolute path to the CLI from the project root
+  // __dirname is dist-tests/tests when compiled, so go up 2 levels to project root
+  const projectRoot = path.resolve(__dirname, "..", "..");
+  const cliPath = path.join(projectRoot, "dist", "src", "index.js");
   try {
     const out = execSync(`node ${cliPath} execute`, {
       cwd: dir,
