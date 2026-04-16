@@ -76,7 +76,7 @@ function buildSummary(state: ExecuteState): string {
   const failed = workstreams.filter((ws) => ws.state === "failed").length;
   const running = workstreams.filter((ws) => ws.state === "running").length;
   const queued = workstreams.filter((ws) => ws.state === "queued").length;
-  const blocked = workstreams.filter((ws) => ws.state === "blocked").length;
+  const blocked = getBlockedWorkstreams(state).length;
 
   return `Total: ${total}, Completed: ${completed}, Failed: ${failed}, Running: ${running}, Queued: ${queued}, Blocked: ${blocked}`;
 }
@@ -145,7 +145,23 @@ export async function runExecuteCommand(
 
   try {
     const existingContent = await fs.readFile(executePath, "utf-8");
-    const existingArtifact = JSON.parse(existingContent) as ExecuteArtifact;
+    let existingArtifact: ExecuteArtifact;
+    try {
+      existingArtifact = JSON.parse(existingContent) as ExecuteArtifact;
+    } catch {
+      // Corrupt execute.json
+      return {
+        status: "failed",
+        summary: `Existing execute.json is corrupt or invalid JSON. Use --force to start over.`,
+        artifactPath: executePath,
+        outputRoot: outputDir,
+        exitCode: 1,
+        failure: {
+          code: "CORRUPT_EXECUTE_ARTIFACT",
+          message: "execute.json exists but contains invalid JSON. Use --force to start over.",
+        },
+      };
+    }
     if (options.resume) {
       state = restoreExecuteState(existingArtifact, splitJsonPath);
       console.log("Resumed from existing execute.json");
@@ -154,11 +170,33 @@ export async function runExecuteCommand(
     } else {
       console.log(`Found existing execute.json from ${existingArtifact.createdAt}`);
       console.log("Use --resume to continue, or --force to start over.");
-      process.exit(1);
+      return {
+        status: "failed",
+        summary: "Found existing execute.json. Use --resume to continue, or --force to start over.",
+        artifactPath: executePath,
+        outputRoot: outputDir,
+        exitCode: 1,
+      };
     }
-  } catch {
-    // No existing execute.json, start fresh
-    state = createExecuteState(splitArtifact, splitJsonPath);
+  } catch (err: unknown) {
+    // Only treat ENOENT as "no existing state, start fresh"
+    if (typeof err === "object" && err !== null && "code" in err && (err as { code: string }).code === "ENOENT") {
+      state = createExecuteState(splitArtifact, splitJsonPath);
+    } else {
+      // Unexpected error reading execute.json
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        status: "failed",
+        summary: `Failed to read execute.json: ${message}`,
+        artifactPath: executePath,
+        outputRoot: outputDir,
+        exitCode: 1,
+        failure: {
+          code: "IO_ERROR",
+          message,
+        },
+      };
+    }
   }
 
   // Get the merge order requirements map from the state
@@ -174,13 +212,30 @@ export async function runExecuteCommand(
   if (state.workstreams.size === 0) {
     console.log("No workstreams to execute. All done.");
     const artifactPath = path.join(outputDir, "execute.json");
-    await fs.mkdir(outputDir, { recursive: true });
-    await writeExecuteArtifact(artifactPath, buildExecuteArtifact(state, SCHEMA_VERSION, FORGE_VERSION));
+    const reportPath = path.join(outputDir, "execute-report.md");
+    const artifact = buildExecuteArtifact(state, SCHEMA_VERSION, FORGE_VERSION);
+
+    try {
+      await fs.mkdir(outputDir, { recursive: true });
+      await writeExecuteArtifact(artifactPath, artifact);
+      await fs.writeFile(reportPath, createExecuteReport(artifact), "utf-8");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        status: "failed",
+        summary: `Failed to write execute outputs: ${message}`,
+        artifactPath,
+        reportPath,
+        outputRoot: outputDir,
+        exitCode: 1,
+      };
+    }
+
     return {
       status: "ready",
       summary: "No workstreams found.",
       artifactPath,
-      reportPath: path.join(outputDir, "execute-report.md"),
+      reportPath,
       outputRoot: outputDir,
       exitCode: 0,
     };
@@ -383,14 +438,14 @@ export async function runExecuteCommand(
   // Ensure output directory exists
   await fs.mkdir(outputDir, { recursive: true });
 
-  // Edge case 5: FORGE_EXECUTE_DEBUG=1
-  if (process.env.FORGE_EXECUTE_DEBUG === "1") {
-    const debugPath = path.join(outputDir, "execute-debug.json");
-    await fs.writeFile(debugPath, JSON.stringify(state, null, 2), "utf-8");
-    console.log(`Debug artifact written to ${debugPath}`);
-  }
-
   try {
+    // Edge case 5: FORGE_EXECUTE_DEBUG=1
+    if (process.env.FORGE_EXECUTE_DEBUG === "1") {
+      const debugPath = path.join(outputDir, "execute-debug.json");
+      await fs.writeFile(debugPath, JSON.stringify(state, null, 2), "utf-8");
+      console.log(`Debug artifact written to ${debugPath}`);
+    }
+
     const artifact = buildExecuteArtifact(state, SCHEMA_VERSION, FORGE_VERSION);
     await writeExecuteArtifact(artifactPath, artifact);
 
@@ -400,7 +455,14 @@ export async function runExecuteCommand(
     console.log(`Report written to ${reportPath}`);
   } catch (err) {
     console.error("Failed to write execute artifact:", err);
-    process.exit(1);
+    return {
+      status: "failed",
+      summary: `Failed to write execute outputs: ${err instanceof Error ? err.message : String(err)}`,
+      artifactPath,
+      reportPath,
+      outputRoot: outputDir,
+      exitCode: 1,
+    };
   }
 
   const summary = buildSummary(state);

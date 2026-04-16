@@ -243,9 +243,13 @@ export async function runCli(argv: string[]): Promise<number> {
       "--output-dir <path>",
       "Custom repo-internal output directory. Defaults to .forge.",
     )
+    .option("--resume", "Resume from an existing execute.json state.")
+    .option("--force", "Force a fresh start even if execute.json exists.")
     .action(async (options: {
       repo?: string;
       outputDir?: string;
+      resume?: boolean;
+      force?: boolean;
     }) => {
       const result = await runExecuteCommand(options);
       const output = formatExecuteCommandOutput(result);

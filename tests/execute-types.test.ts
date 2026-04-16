@@ -110,7 +110,7 @@ await runScenario("MergeOrderGateSchema rejects a gate with invalid structure", 
 
 await runScenario("ExecuteArtifactSchema parses a valid artifact", () => {
   const artifact: ExecuteArtifact = {
-    schemaVersion: "1.0.0",
+    schemaVersion: "2.0.0",
     forgeVersion: "0.1.0",
     createdAt: "2025-01-01T10:00:00.000Z",
     splitSource: ".forge/split.json",
@@ -146,14 +146,14 @@ await runScenario("ExecuteArtifactSchema parses a valid artifact", () => {
     transitions: [],
   };
   const result = ExecuteArtifactSchema.parse(artifact);
-  assert.equal(result.schemaVersion, "1.0.0");
+  assert.equal(result.schemaVersion, "2.0.0");
   assert.equal(result.workstreams.length, 2);
   assert.equal(result.summary.completed, 1);
 });
 
 await runScenario("ExecuteArtifactSchema rejects an artifact missing required summary fields", () => {
   const artifact = {
-    schemaVersion: "1.0.0",
+    schemaVersion: "2.0.0",
     forgeVersion: "0.1.0",
     createdAt: "2025-01-01T10:00:00.000Z",
     splitSource: ".forge/split.json",
@@ -168,7 +168,7 @@ await runScenario("ExecuteArtifactSchema rejects an artifact missing required su
 
 await runScenario("ExecuteArtifactSchema rejects an artifact with extra unknown keys (strict mode)", () => {
   const artifact = {
-    schemaVersion: "1.0.0",
+    schemaVersion: "2.0.0",
     forgeVersion: "0.1.0",
     createdAt: "2025-01-01T10:00:00.000Z",
     splitSource: ".forge/split.json",
@@ -189,7 +189,7 @@ await runScenario("ExecuteArtifactSchema rejects an artifact with extra unknown 
 
 await runScenario("validateExecuteArtifact returns the artifact on valid input", () => {
   const artifact: ExecuteArtifact = {
-    schemaVersion: "1.0.0",
+    schemaVersion: "2.0.0",
     forgeVersion: "0.1.0",
     createdAt: "2025-01-01T10:00:00.000Z",
     splitSource: ".forge/split.json",
@@ -206,7 +206,7 @@ await runScenario("validateExecuteArtifact returns the artifact on valid input",
     transitions: [],
   };
   const result = validateExecuteArtifact(artifact);
-  assert.equal(result.schemaVersion, "1.0.0");
+  assert.equal(result.schemaVersion, "2.0.0");
 });
 
 await runScenario("validateExecuteArtifact throws ZodError on invalid input", () => {

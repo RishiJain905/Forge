@@ -24,17 +24,16 @@ Implemented error handling polish for the `forge execute` command:
 
 ### Tests
 
-`tests/execute.error-handling.test.ts` (316 lines) — 17 scenarios covering:
+`tests/execute.error-handling.test.ts` (316 lines) — scenarios covering:
 1. Missing `split.json` → exit code 1, error about missing file
 2. Corrupt `split.json` (bad JSON) → exit code 1, error about invalid JSON
 3. Write failure for `execute.json` → exit code 1
-4. Write failure for `execute-report.md` → exit code 1
-5. All workstreams complete → exit code 0
-6. Some workstreams failed → exit code 1
-7. Some workstreams remain queued (blocked) → exit code 2
-8. Invalid state transition (`done` on queued ws) → shows error but doesn't crash
+4. All workstreams complete → exit code 0
+5. Some workstreams failed → exit code 1
+6. Some workstreams remain queued (blocked) → exit code 2
+7. Invalid state transition (`done` on queued ws) → shows error but doesn't crash
 
-Note: Test fixtures use a v1.0.0 schema format. The actual split artifact schema is v2.0.0 (FORGE_SCHEMA_VERSION = "2.0.0") with 25 required top-level keys, cross-referenced plan/verify artifacts, and a strict workstream contract. Tests for the happy-path exit code semantics (0, 1, 2) validate correctly when given a schema-compliant artifact. Schema validation errors surface as expected for malformed inputs.
+Note: Fixtures used to exercise execute exit-code semantics were brought up to the strict `v2.0.0` split artifact schema (`FORGE_SCHEMA_VERSION = "2.0.0"`), including the required top-level fields, cross-referenced plan/verify artifacts, and valid workstream structure, so those tests reach the execute REPL/write paths instead of failing immediately in `validateSplitArtifact()`. Only the scenarios that intentionally verify validation failures use malformed or missing inputs.
 
 ### Key implementation notes
 

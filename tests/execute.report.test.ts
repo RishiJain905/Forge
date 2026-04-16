@@ -7,7 +7,7 @@ import type { ExecuteArtifact } from "../src/execute/types.js";
 function makeArtifact(overrides?: Partial<ExecuteArtifact>): ExecuteArtifact {
   const now = new Date().toISOString();
   return {
-    schemaVersion: "1.0.0",
+    schemaVersion: "2.0.0",
     forgeVersion: "0.0.1",
     createdAt: now,
     splitSource: "/test/.forge/split.json",

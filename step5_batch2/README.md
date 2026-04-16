@@ -8,10 +8,10 @@ Hardening batch for the Step 5 execute runtime. Follows the same batch pattern a
 
 | # | Task | Agent | Status |
 |---|------|-------|--------|
-| 1 | Execute Report Generation | MiniMax | Pending |
-| 2 | Error Handling Polish | MiniMax | Pending |
-| 3 | Edge Case Hardening | MiniMax | Pending |
-| 4 | Acceptance Gate + Freeze Criteria | MiniMax | Pending |
+| 1 | Execute Report Generation | MiniMax | Done |
+| 2 | Error Handling Polish | MiniMax | Done |
+| 3 | Edge Case Hardening | MiniMax | Done |
+| 4 | Acceptance Gate + Freeze Criteria | MiniMax | Done |
 
 ## Completion
 

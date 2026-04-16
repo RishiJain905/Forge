@@ -26,7 +26,7 @@ function makeTmpWithSplit(workstreams: Array<{
   fsSync.mkdirSync(forgeDir, { recursive: true });
 
   const splitArtifact = {
-    schemaVersion: "1.0.0",
+    schemaVersion: "2.0.0",
     command: "forge split",
     stage: "step4",
     status: "ready",

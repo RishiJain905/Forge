@@ -36,7 +36,7 @@ function makeSplitWorkstream(
 
 function makeSplitArtifact(overrides?: Partial<SplitArtifact>): SplitArtifact {
   return {
-    schemaVersion: "1.0.0",
+    schemaVersion: "2.0.0",
     command: "forge split",
     stage: "step4",
     status: "ready",
@@ -217,7 +217,7 @@ await runScenario("writeExecuteArtifact writes valid JSON to temp file", async (
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-execute-test-"));
   const artifactPath = path.join(tmpDir, "execute.json");
 
-  const artifact = buildExecuteArtifact(state, "1.0.0", "0.0.1");
+  const artifact = buildExecuteArtifact(state, "2.0.0", "0.0.1");
   await writeExecuteArtifact(artifactPath, artifact);
 
   // Verify file exists
@@ -233,7 +233,7 @@ await runScenario("writeExecuteArtifact writes valid JSON to temp file", async (
   assert.ok(validated, "artifact should pass Zod validation");
 
   // Verify required fields
-  assert.equal(validated.schemaVersion, "1.0.0");
+  assert.equal(validated.schemaVersion, "2.0.0");
   assert.equal(validated.forgeVersion, "0.0.1");
   assert.ok(validated.createdAt, "should have createdAt");
   assert.equal(validated.splitSource, ".forge/split.json");
@@ -271,10 +271,10 @@ await runScenario("execute.json artifact has correct structure", () => {
   transitionState("ws-3", "failed", state, "Build error");
 
   // Build artifact
-  const artifact = buildExecuteArtifact(state, "1.0.0", "0.1.0");
+  const artifact = buildExecuteArtifact(state, "2.0.0", "0.1.0");
 
   // Validate structure
-  assert.equal(artifact.schemaVersion, "1.0.0");
+  assert.equal(artifact.schemaVersion, "2.0.0");
   assert.equal(artifact.forgeVersion, "0.1.0");
   assert.ok(artifact.createdAt, "createdAt should be set");
   assert.equal(artifact.splitSource, ".forge/split.json");
@@ -376,7 +376,7 @@ await runScenario("runExecuteCommand writes execute.json artifact on exit", asyn
 
   // Simulate what runExecuteCommand does on exit - write artifact
   const artifactPath = path.join(forgeDir, "execute.json");
-  const artifact = buildExecuteArtifact(state, "1.0.0", "0.0.1");
+  const artifact = buildExecuteArtifact(state, "2.0.0", "0.0.1");
   await writeExecuteArtifact(artifactPath, artifact);
 
   // Verify artifact was written
@@ -387,7 +387,7 @@ await runScenario("runExecuteCommand writes execute.json artifact on exit", asyn
   const artifactContent = await fs.readFile(artifactPath, "utf-8");
   const artifactJson = JSON.parse(artifactContent);
 
-  assert.equal(artifactJson.schemaVersion, "1.0.0");
+  assert.equal(artifactJson.schemaVersion, "2.0.0");
   assert.equal(artifactJson.workstreams.length, 2);
   assert.equal(artifactJson.summary.completed, 1);
   assert.equal(artifactJson.summary.queued, 1);

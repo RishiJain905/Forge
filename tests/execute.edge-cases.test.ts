@@ -33,7 +33,7 @@ function makeSplitWorkstream(
 
 function makeSplitArtifact(overrides?: Partial<SplitArtifact>): SplitArtifact {
   return {
-    schemaVersion: "1.0.0",
+    schemaVersion: "2.0.0",
     command: "forge split",
     stage: "step4",
     status: "ready",
@@ -132,7 +132,7 @@ await runScenario("restoreExecuteState restores completed workstreams as merged"
   transitionState("ws-1", "running", originalState);
   transitionState("ws-1", "completed", originalState);
   transitionState("ws-2", "running", originalState);
-  const artifact = buildExecuteArtifact(originalState, "1.0.0", "0.0.1");
+  const artifact = buildExecuteArtifact(originalState, "2.0.0", "0.0.1");
 
   const restored = restoreExecuteState(artifact, ".forge/split.json");
 
@@ -154,7 +154,7 @@ await runScenario("restoreExecuteState preserves merge order gates", () => {
     ],
   });
   const originalState = createExecuteState(splitArtifact, ".forge/split.json");
-  const artifact = buildExecuteArtifact(originalState, "1.0.0", "0.0.1");
+  const artifact = buildExecuteArtifact(originalState, "2.0.0", "0.0.1");
 
   const restored = restoreExecuteState(artifact, ".forge/split.json");
 
@@ -175,7 +175,7 @@ await runScenario("restoreExecuteState preserves merge order gates", () => {
 await runScenario("empty workstream artifact has correct structure", () => {
   const splitArtifact = makeSplitArtifact({ workstreams: [] });
   const state = createExecuteState(splitArtifact, ".forge/split.json");
-  const artifact = buildExecuteArtifact(state, "1.0.0", "0.0.1");
+  const artifact = buildExecuteArtifact(state, "2.0.0", "0.0.1");
 
   assert.equal(artifact.workstreams.length, 0);
   assert.equal(artifact.summary.total, 0);
@@ -225,7 +225,7 @@ await runScenario("buildExecuteArtifact summary counts partial completion correc
   transitionState("ws-2", "running", state);
   // ws-3 stays queued
 
-  const artifact = buildExecuteArtifact(state, "1.0.0", "0.0.1");
+  const artifact = buildExecuteArtifact(state, "2.0.0", "0.0.1");
 
   assert.equal(artifact.summary.total, 3);
   assert.equal(artifact.summary.completed, 1);

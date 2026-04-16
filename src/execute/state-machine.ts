@@ -189,17 +189,21 @@ export function buildExecuteArtifact(
   const reqMap = mergeOrderRequirementsMap.get(state);
   const workstreams = Array.from(state.workstreams.values());
 
+  const blockedWorkstreams = getBlockedWorkstreams(state);
+
   const summary = {
     total: workstreams.length,
     queued: 0,
     running: 0,
     completed: 0,
     failed: 0,
-    blocked: 0,
+    blocked: blockedWorkstreams.length,
   };
 
   for (const ws of workstreams) {
-    summary[ws.state]++;
+    if (ws.state in summary && ws.state !== "blocked") {
+      summary[ws.state as keyof typeof summary]++;
+    }
   }
 
   const mergeOrderGates: ExecuteArtifact["mergeOrderGates"] = [];
@@ -240,7 +244,7 @@ export function restoreExecuteState(
     workstreams: new Map(),
     mergedWorkstreams: new Set(),
     transitions: [...artifact.transitions],
-    splitSource: artifact.splitSource,
+    splitSource: splitSourcePath,
   };
 
   // Reconstruct the mergeOrderRequirementsMap
