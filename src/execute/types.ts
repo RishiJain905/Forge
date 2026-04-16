@@ -49,6 +49,8 @@ export interface StateTransition {
 export interface ExecuteCommandOptions {
   repo?: string;
   outputDir?: string;
+  force?: boolean;  // restart even with existing execute.json
+  resume?: boolean; // continue from existing execute.json state
 }
 
 // Result of the execute command
