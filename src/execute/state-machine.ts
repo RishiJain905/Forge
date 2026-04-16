@@ -227,3 +227,34 @@ export function buildExecuteArtifact(
     transitions: [...state.transitions],
   };
 }
+
+/**
+ * Restore an ExecuteState from a previously saved ExecuteArtifact.
+ * Used to resume execution from an existing execute.json.
+ */
+export function restoreExecuteState(
+  artifact: ExecuteArtifact,
+  splitSourcePath: string
+): ExecuteState {
+  const state: ExecuteState = {
+    workstreams: new Map(),
+    mergedWorkstreams: new Set(),
+    transitions: [...artifact.transitions],
+    splitSource: artifact.splitSource,
+  };
+
+  // Reconstruct the mergeOrderRequirementsMap
+  const reqMap = new Map<string, string[]>();
+  mergeOrderRequirementsMap.set(state, reqMap);
+
+  for (const ws of artifact.workstreams) {
+    state.workstreams.set(ws.workstreamId, { ...ws });
+    const gate = artifact.mergeOrderGates.find(g => g.workstreamId === ws.workstreamId);
+    reqMap.set(ws.workstreamId, gate?.prerequisites ?? []);
+    if (ws.state === "completed") {
+      state.mergedWorkstreams.add(ws.workstreamId);
+    }
+  }
+
+  return state;
+}

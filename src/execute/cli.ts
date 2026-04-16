@@ -6,9 +6,15 @@ import {
   createExecuteState,
   transitionState,
   buildExecuteArtifact,
+  getBlockedWorkstreams,
+  restoreExecuteState,
 } from "./state-machine.js";
 import { validateSplitArtifact } from "../split/schema.js";
-import type { ExecuteCommandOptions, ExecuteCommandResult } from "./types.js";
+import type {
+  ExecuteCommandOptions,
+  ExecuteCommandResult,
+  ExecuteArtifact,
+} from "./types.js";
 import type { ExecuteState } from "./state-machine.js";
 import { writeExecuteArtifact } from "./artifact.js";
 import { createExecuteReport } from "./report.js";
@@ -70,8 +76,9 @@ function buildSummary(state: ExecuteState): string {
   const failed = workstreams.filter((ws) => ws.state === "failed").length;
   const running = workstreams.filter((ws) => ws.state === "running").length;
   const queued = workstreams.filter((ws) => ws.state === "queued").length;
+  const blocked = workstreams.filter((ws) => ws.state === "blocked").length;
 
-  return `Total: ${total}, Completed: ${completed}, Failed: ${failed}, Running: ${running}, Queued: ${queued}`;
+  return `Total: ${total}, Completed: ${completed}, Failed: ${failed}, Running: ${running}, Queued: ${queued}, Blocked: ${blocked}`;
 }
 
 export async function runExecuteCommand(
@@ -131,8 +138,28 @@ export async function runExecuteCommand(
   const workstreamCount = splitArtifact.workstreams.length;
   console.log(`Found ${workstreamCount} workstreams.\n`);
 
-  // 2. Initialize state
-  const state = createExecuteState(splitArtifact, splitJsonPath);
+  // 2. Initialize state - check for existing execute.json first
+  const outputDir = options.outputDir ?? path.join(repoRoot, ".forge");
+  const executePath = path.join(outputDir, "execute.json");
+  let state: ExecuteState;
+
+  try {
+    const existingContent = await fs.readFile(executePath, "utf-8");
+    const existingArtifact = JSON.parse(existingContent) as ExecuteArtifact;
+    if (options.resume) {
+      state = restoreExecuteState(existingArtifact, splitJsonPath);
+      console.log("Resumed from existing execute.json");
+    } else if (options.force) {
+      state = createExecuteState(splitArtifact, splitJsonPath);
+    } else {
+      console.log(`Found existing execute.json from ${existingArtifact.createdAt}`);
+      console.log("Use --resume to continue, or --force to start over.");
+      process.exit(1);
+    }
+  } catch {
+    // No existing execute.json, start fresh
+    state = createExecuteState(splitArtifact, splitJsonPath);
+  }
 
   // Get the merge order requirements map from the state
   // We need to track which workstreams are waiting on which
@@ -141,12 +168,37 @@ export async function runExecuteCommand(
     mergeOrderMap.set(sw.id, sw.mergeOrderRequirements);
   }
 
-  // 3. Show welcome banner and initial dashboard
+  // 3. Early edge-case checks before entering REPL
+
+  // Edge case 1: Empty workstream list
+  if (state.workstreams.size === 0) {
+    console.log("No workstreams to execute. All done.");
+    const artifactPath = path.join(outputDir, "execute.json");
+    await fs.mkdir(outputDir, { recursive: true });
+    await writeExecuteArtifact(artifactPath, buildExecuteArtifact(state, SCHEMA_VERSION, FORGE_VERSION));
+    return {
+      status: "ready",
+      summary: "No workstreams found.",
+      artifactPath,
+      reportPath: path.join(outputDir, "execute-report.md"),
+      outputRoot: outputDir,
+      exitCode: 0,
+    };
+  }
+
+  // Edge case 2: All workstreams are blocked
+  const blocked = getBlockedWorkstreams(state);
+  if (blocked.length === state.workstreams.size && state.workstreams.size > 0) {
+    console.error("All workstreams are blocked by merge_order constraints.");
+    console.error("Check that upstream dependencies have been completed first.");
+  }
+
+  // 4. Show welcome banner and initial dashboard
   printDashboard(state, mergeOrderMap);
 
   console.log("\nCommands: run <id> | done <id> | fail <id> [reason] | status | exit");
 
-  // 4. Interactive read-eval-print loop
+  // 5. Interactive read-eval-print loop
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
@@ -325,12 +377,18 @@ export async function runExecuteCommand(
   }
 
   // 6. Exit - write artifact
-  const outputDir = options.outputDir ?? path.join(repoRoot, ".forge");
   const artifactPath = path.join(outputDir, "execute.json");
   const reportPath = path.join(outputDir, "execute-report.md");
 
   // Ensure output directory exists
   await fs.mkdir(outputDir, { recursive: true });
+
+  // Edge case 5: FORGE_EXECUTE_DEBUG=1
+  if (process.env.FORGE_EXECUTE_DEBUG === "1") {
+    const debugPath = path.join(outputDir, "execute-debug.json");
+    await fs.writeFile(debugPath, JSON.stringify(state, null, 2), "utf-8");
+    console.log(`Debug artifact written to ${debugPath}`);
+  }
 
   try {
     const artifact = buildExecuteArtifact(state, SCHEMA_VERSION, FORGE_VERSION);
