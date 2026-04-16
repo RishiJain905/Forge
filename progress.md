@@ -508,6 +508,7 @@
 - `dev` now includes Step 4 Batch 3 Part 4, including final freeze-era report/output polish, explicit frozen-for-V1 boundary notes in the shipped split artifact/report, a dedicated Part 4 regression for deterministic ready runs plus repo closeout tracking, and broader freeze-marker coverage across the Step 4 surface.
 - `dev` now includes Step 4 Batch 3 Part 5, including the explicit Step 5 handoff-contract proof, direct boundary/report wording that tells Step 5 to consume `split.json` without rebuilding workstreams from `verify.json`, a human-readable `Forge Execute Gate`, and dedicated regression coverage for grounded, warning-heavy, blocked, and fallback-output handoffs.
 - `dev` now treats Step 4 as fully complete for V1 and the split runtime surface as frozen except future bug fixes, with Step 5 expected to consume persisted Step 4 split outputs directly rather than re-running broad split logic.
+- `dev` now includes Step 5 Batch 2, including the execute report generation, error handling polish (exit codes, try/catch writes), edge case hardening (empty workstreams, all blocked, partial completion, resume, force, debug), and acceptance gate + freeze criteria — Step 5 execute is now complete and frozen for V1.
 
 ## Verification
 - `npm.cmd test`
@@ -553,4 +554,5 @@
 - Step 4 Batch 3 Part 5 is complete.
 - Step 4 Batch 3 is complete.
 - Step 4 is complete for V1 and frozen except for future bug fixes.
-- Next major target: Step 5 execute implementation work when the next execute-stage spec batch begins.
+- Step 5 Batch 2 is complete and frozen except for future bug fixes.
+- Next major target: Step 6 integrate implementation work.
