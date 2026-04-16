@@ -209,7 +209,7 @@ await runScenario(
     assert.match(progress, /Step 4 Batch 3 Part 4 is complete/i);
     assert.match(progress, /Step 4 Batch 3 is complete/i);
     assert.match(progress, /Step 4 is complete for V1 and frozen except for future bug fixes/i);
-    assert.match(progress, /Next major target: Step 5 execute implementation work/i);
+    assert.match(progress, /Next major target: Step 6 integrate implementation work/i);
     assert.match(doneDoc, /Step 4 Batch 3 Part 4 Done Summary/i);
     assert.match(doneDoc, /frozen for V1 except for future bug fixes/i);
     assert.match(doneDoc, /bug-fix-only maintenance mode/i);
