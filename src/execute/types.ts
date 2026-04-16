@@ -49,6 +49,8 @@ export interface StateTransition {
 export interface ExecuteCommandOptions {
   repo?: string;
   outputDir?: string;
+  force?: boolean;  // restart even with existing execute.json
+  resume?: boolean; // continue from existing execute.json state
 }
 
 // Result of the execute command
@@ -56,7 +58,9 @@ export interface ExecuteCommandResult {
   status: "ready" | "failed";
   summary: string;
   artifactPath: string;
+  reportPath?: string;
   outputRoot: string;
+  exitCode?: number;
   failure?: {
     code: string;
     message: string;

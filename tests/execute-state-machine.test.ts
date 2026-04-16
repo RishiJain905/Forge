@@ -44,7 +44,7 @@ function makeSplitWorkstream(overrides: Partial<SplitWorkstream> & Pick<SplitWor
 
 function makeSplitArtifact(overrides?: Partial<SplitArtifact>): SplitArtifact {
   return {
-    schemaVersion: "1.0.0",
+    schemaVersion: "2.0.0",
     command: "forge split",
     stage: "step4",
     status: "ready",
@@ -473,14 +473,14 @@ await runScenario("buildExecuteArtifact produces valid artifact with correct sum
   transitionState("ws-3", "running", state, "start db");
   transitionState("ws-3", "failed", state, "db crashed");
 
-  const artifact = buildExecuteArtifact(state, "1.0.0", "0.1.0");
+  const artifact = buildExecuteArtifact(state, "2.0.0", "0.1.0");
 
   // Validate with Zod schema — this throws if invalid
   const parsed = ExecuteArtifactSchema.parse(artifact);
   assert.ok(parsed, "artifact should pass Zod validation");
 
   // Check basic fields
-  assert.equal(artifact.schemaVersion, "1.0.0");
+  assert.equal(artifact.schemaVersion, "2.0.0");
   assert.equal(artifact.forgeVersion, "0.1.0");
   assert.equal(artifact.splitSource, ".forge/split.json");
   assert.ok(artifact.createdAt, "createdAt should be set");

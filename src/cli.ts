@@ -73,6 +73,7 @@ export function formatExecuteCommandOutput(result: ExecuteCommandResult): string
     `Summary: ${result.summary}`,
     result.outputRoot ? `Output root: ${result.outputRoot}` : null,
     result.artifactPath ? `Artifact: ${result.artifactPath}` : null,
+    result.reportPath ? `Report: ${result.reportPath}` : null,
     result.failure ? `Failure: [${result.failure.code}] ${result.failure.message}` : null,
   ].filter((line): line is string => Boolean(line));
 
@@ -242,9 +243,13 @@ export async function runCli(argv: string[]): Promise<number> {
       "--output-dir <path>",
       "Custom repo-internal output directory. Defaults to .forge.",
     )
+    .option("--resume", "Resume from an existing execute.json state.")
+    .option("--force", "Force a fresh start even if execute.json exists.")
     .action(async (options: {
       repo?: string;
       outputDir?: string;
+      resume?: boolean;
+      force?: boolean;
     }) => {
       const result = await runExecuteCommand(options);
       const output = formatExecuteCommandOutput(result);
@@ -253,6 +258,10 @@ export async function runCli(argv: string[]): Promise<number> {
         process.stderr.write(output);
         exitCode = 1;
         return;
+      }
+
+      if (result.exitCode !== undefined && result.exitCode !== 0) {
+        exitCode = result.exitCode;
       }
 
       process.stdout.write(output);

@@ -6,11 +6,18 @@ import {
   createExecuteState,
   transitionState,
   buildExecuteArtifact,
+  getBlockedWorkstreams,
+  restoreExecuteState,
 } from "./state-machine.js";
 import { validateSplitArtifact } from "../split/schema.js";
-import type { ExecuteCommandOptions, ExecuteCommandResult } from "./types.js";
+import type {
+  ExecuteCommandOptions,
+  ExecuteCommandResult,
+  ExecuteArtifact,
+} from "./types.js";
 import type { ExecuteState } from "./state-machine.js";
 import { writeExecuteArtifact } from "./artifact.js";
+import { createExecuteReport } from "./report.js";
 import type { SplitArtifact } from "../split/types.js";
 
 const SCHEMA_VERSION = "1.0.0";
@@ -69,8 +76,9 @@ function buildSummary(state: ExecuteState): string {
   const failed = workstreams.filter((ws) => ws.state === "failed").length;
   const running = workstreams.filter((ws) => ws.state === "running").length;
   const queued = workstreams.filter((ws) => ws.state === "queued").length;
+  const blocked = getBlockedWorkstreams(state).length;
 
-  return `Total: ${total}, Completed: ${completed}, Failed: ${failed}, Running: ${running}, Queued: ${queued}`;
+  return `Total: ${total}, Completed: ${completed}, Failed: ${failed}, Running: ${running}, Queued: ${queued}, Blocked: ${blocked}`;
 }
 
 export async function runExecuteCommand(
@@ -130,8 +138,66 @@ export async function runExecuteCommand(
   const workstreamCount = splitArtifact.workstreams.length;
   console.log(`Found ${workstreamCount} workstreams.\n`);
 
-  // 2. Initialize state
-  const state = createExecuteState(splitArtifact, splitJsonPath);
+  // 2. Initialize state - check for existing execute.json first
+  const outputDir = options.outputDir ?? path.join(repoRoot, ".forge");
+  const executePath = path.join(outputDir, "execute.json");
+  let state: ExecuteState;
+
+  try {
+    const existingContent = await fs.readFile(executePath, "utf-8");
+    let existingArtifact: ExecuteArtifact;
+    try {
+      existingArtifact = JSON.parse(existingContent) as ExecuteArtifact;
+    } catch {
+      // Corrupt execute.json
+      return {
+        status: "failed",
+        summary: `Existing execute.json is corrupt or invalid JSON. Use --force to start over.`,
+        artifactPath: executePath,
+        outputRoot: outputDir,
+        exitCode: 1,
+        failure: {
+          code: "CORRUPT_EXECUTE_ARTIFACT",
+          message: "execute.json exists but contains invalid JSON. Use --force to start over.",
+        },
+      };
+    }
+    if (options.resume) {
+      state = restoreExecuteState(existingArtifact, splitJsonPath);
+      console.log("Resumed from existing execute.json");
+    } else if (options.force) {
+      state = createExecuteState(splitArtifact, splitJsonPath);
+    } else {
+      console.log(`Found existing execute.json from ${existingArtifact.createdAt}`);
+      console.log("Use --resume to continue, or --force to start over.");
+      return {
+        status: "failed",
+        summary: "Found existing execute.json. Use --resume to continue, or --force to start over.",
+        artifactPath: executePath,
+        outputRoot: outputDir,
+        exitCode: 1,
+      };
+    }
+  } catch (err: unknown) {
+    // Only treat ENOENT as "no existing state, start fresh"
+    if (typeof err === "object" && err !== null && "code" in err && (err as { code: string }).code === "ENOENT") {
+      state = createExecuteState(splitArtifact, splitJsonPath);
+    } else {
+      // Unexpected error reading execute.json
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        status: "failed",
+        summary: `Failed to read execute.json: ${message}`,
+        artifactPath: executePath,
+        outputRoot: outputDir,
+        exitCode: 1,
+        failure: {
+          code: "IO_ERROR",
+          message,
+        },
+      };
+    }
+  }
 
   // Get the merge order requirements map from the state
   // We need to track which workstreams are waiting on which
@@ -140,12 +206,54 @@ export async function runExecuteCommand(
     mergeOrderMap.set(sw.id, sw.mergeOrderRequirements);
   }
 
-  // 3. Show welcome banner and initial dashboard
+  // 3. Early edge-case checks before entering REPL
+
+  // Edge case 1: Empty workstream list
+  if (state.workstreams.size === 0) {
+    console.log("No workstreams to execute. All done.");
+    const artifactPath = path.join(outputDir, "execute.json");
+    const reportPath = path.join(outputDir, "execute-report.md");
+    const artifact = buildExecuteArtifact(state, SCHEMA_VERSION, FORGE_VERSION);
+
+    try {
+      await fs.mkdir(outputDir, { recursive: true });
+      await writeExecuteArtifact(artifactPath, artifact);
+      await fs.writeFile(reportPath, createExecuteReport(artifact), "utf-8");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        status: "failed",
+        summary: `Failed to write execute outputs: ${message}`,
+        artifactPath,
+        reportPath,
+        outputRoot: outputDir,
+        exitCode: 1,
+      };
+    }
+
+    return {
+      status: "ready",
+      summary: "No workstreams found.",
+      artifactPath,
+      reportPath,
+      outputRoot: outputDir,
+      exitCode: 0,
+    };
+  }
+
+  // Edge case 2: All workstreams are blocked
+  const blocked = getBlockedWorkstreams(state);
+  if (blocked.length === state.workstreams.size && state.workstreams.size > 0) {
+    console.error("All workstreams are blocked by merge_order constraints.");
+    console.error("Check that upstream dependencies have been completed first.");
+  }
+
+  // 4. Show welcome banner and initial dashboard
   printDashboard(state, mergeOrderMap);
 
   console.log("\nCommands: run <id> | done <id> | fail <id> [reason] | status | exit");
 
-  // 4. Interactive read-eval-print loop
+  // 5. Interactive read-eval-print loop
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
@@ -286,10 +394,40 @@ export async function runExecuteCommand(
     return false;
   }
 
-  // promisify the rl.question for async/await
-  const question = (prompt: string): Promise<string> => {
-    return new Promise((resolve) => {
-      rl.question(prompt, resolve);
+  // Use line/close event pattern instead of rl.question for reliable piped-stdin handling.
+  // rl.question() can leave unsettled promises when stdin closes mid-question,
+  // causing Node.js exit code 13 ("unsettled top-level await").
+  // The line event fires once per newline-delimited input; close fires after all
+  // lines are processed, so we never miss buffered input.
+  const lineQueue: Array<string | undefined> = [];
+  let lineResolve: ((value: string | undefined) => void) | null = null;
+
+  rl.on("line", (line: string) => {
+    if (lineResolve) {
+      const resolve = lineResolve;
+      lineResolve = null;
+      resolve(line);
+    } else {
+      lineQueue.push(line);
+    }
+  });
+
+  rl.on("close", () => {
+    // Signal EOF: push undefined sentinel and resolve any pending waiter
+    lineQueue.push(undefined);
+    if (lineResolve) {
+      const resolve = lineResolve;
+      lineResolve = null;
+      resolve(undefined);
+    }
+  });
+
+  const nextLine = (): Promise<string | undefined> => {
+    if (lineQueue.length > 0) {
+      return Promise.resolve(lineQueue.shift());
+    }
+    return new Promise<string | undefined>((resolve) => {
+      lineResolve = resolve;
     });
   };
 
@@ -297,8 +435,13 @@ export async function runExecuteCommand(
   while (!completed) {
     try {
       rl.prompt();
-      const input = await question("");
-      completed = await processLine(input);
+      const input = await nextLine();
+      // input is undefined when stdin closes (EOF) — treat as implicit "exit"
+      if (input === undefined || input === null) {
+        completed = true;
+      } else {
+        completed = await processLine(input);
+      }
     } catch (err) {
       console.error("Error processing input:", err);
     }
@@ -306,21 +449,64 @@ export async function runExecuteCommand(
 
   rl.close();
 
-  // 5. Exit - write artifact
-  const outputDir = options.outputDir ?? path.join(repoRoot, ".forge");
+  // 5. Determine exit code based on final state
+  let exitCode = 0;
+  for (const ws of state.workstreams.values()) {
+    if (ws.state === "failed") {
+      exitCode = 1;
+      break;
+    }
+  }
+  if (exitCode === 0) {
+    for (const ws of state.workstreams.values()) {
+      if (ws.state === "queued") {
+        exitCode = 2;
+        break;
+      }
+    }
+  }
+
+  // 6. Exit - write artifact
   const artifactPath = path.join(outputDir, "execute.json");
+  const reportPath = path.join(outputDir, "execute-report.md");
 
   // Ensure output directory exists
   await fs.mkdir(outputDir, { recursive: true });
 
-  const artifact = buildExecuteArtifact(state, SCHEMA_VERSION, FORGE_VERSION);
-  await writeExecuteArtifact(artifactPath, artifact);
+  try {
+    // Edge case 5: FORGE_EXECUTE_DEBUG=1
+    if (process.env.FORGE_EXECUTE_DEBUG === "1") {
+      const debugPath = path.join(outputDir, "execute-debug.json");
+      await fs.writeFile(debugPath, JSON.stringify(state, null, 2), "utf-8");
+      console.log(`Debug artifact written to ${debugPath}`);
+    }
+
+    const artifact = buildExecuteArtifact(state, SCHEMA_VERSION, FORGE_VERSION);
+    await writeExecuteArtifact(artifactPath, artifact);
+
+    // Write human-readable report
+    const report = createExecuteReport(artifact);
+    await fs.writeFile(reportPath, report, "utf-8");
+    console.log(`Report written to ${reportPath}`);
+  } catch (err) {
+    console.error("Failed to write execute artifact:", err);
+    return {
+      status: "failed",
+      summary: `Failed to write execute outputs: ${err instanceof Error ? err.message : String(err)}`,
+      artifactPath,
+      reportPath,
+      outputRoot: outputDir,
+      exitCode: 1,
+    };
+  }
 
   const summary = buildSummary(state);
   return {
     status: "ready",
     summary,
     artifactPath,
+    reportPath,
     outputRoot: outputDir,
+    exitCode,
   };
 }

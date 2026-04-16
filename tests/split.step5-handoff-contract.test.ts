@@ -372,7 +372,7 @@ await runScenario(
     assert.match(progress, /Batch 3\.05: `part-5-step5-handoff-contract-for-execute\.md` \(Step 4\)/i);
     assert.match(progress, /Step 4 Batch 3 Part 5 is complete/i);
     assert.match(progress, /Step 4 is complete for V1 and frozen except for future bug fixes/i);
-    assert.match(progress, /Next major target: Step 5 execute implementation work/i);
+    assert.match(progress, /Next major target: Step 6 integrate implementation work/i);
     assert.match(doneDoc, /Step 4 Batch 3 Part 5 Done Summary/i);
     assert.match(doneDoc, /Step 4 is complete for V1 and frozen except for future bug fixes/i);
     assert.match(doneDoc, /Step 5 should consume persisted Step 4 split outputs directly/i);

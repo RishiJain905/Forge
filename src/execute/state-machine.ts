@@ -189,17 +189,21 @@ export function buildExecuteArtifact(
   const reqMap = mergeOrderRequirementsMap.get(state);
   const workstreams = Array.from(state.workstreams.values());
 
+  const blockedWorkstreams = getBlockedWorkstreams(state);
+
   const summary = {
     total: workstreams.length,
     queued: 0,
     running: 0,
     completed: 0,
     failed: 0,
-    blocked: 0,
+    blocked: blockedWorkstreams.length,
   };
 
   for (const ws of workstreams) {
-    summary[ws.state]++;
+    if (ws.state in summary && ws.state !== "blocked") {
+      summary[ws.state as keyof typeof summary]++;
+    }
   }
 
   const mergeOrderGates: ExecuteArtifact["mergeOrderGates"] = [];
@@ -226,4 +230,35 @@ export function buildExecuteArtifact(
     summary,
     transitions: [...state.transitions],
   };
+}
+
+/**
+ * Restore an ExecuteState from a previously saved ExecuteArtifact.
+ * Used to resume execution from an existing execute.json.
+ */
+export function restoreExecuteState(
+  artifact: ExecuteArtifact,
+  splitSourcePath: string
+): ExecuteState {
+  const state: ExecuteState = {
+    workstreams: new Map(),
+    mergedWorkstreams: new Set(),
+    transitions: [...artifact.transitions],
+    splitSource: splitSourcePath,
+  };
+
+  // Reconstruct the mergeOrderRequirementsMap
+  const reqMap = new Map<string, string[]>();
+  mergeOrderRequirementsMap.set(state, reqMap);
+
+  for (const ws of artifact.workstreams) {
+    state.workstreams.set(ws.workstreamId, { ...ws });
+    const gate = artifact.mergeOrderGates.find(g => g.workstreamId === ws.workstreamId);
+    reqMap.set(ws.workstreamId, gate?.prerequisites ?? []);
+    if (ws.state === "completed") {
+      state.mergedWorkstreams.add(ws.workstreamId);
+    }
+  }
+
+  return state;
 }
