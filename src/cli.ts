@@ -73,6 +73,7 @@ export function formatExecuteCommandOutput(result: ExecuteCommandResult): string
     `Summary: ${result.summary}`,
     result.outputRoot ? `Output root: ${result.outputRoot}` : null,
     result.artifactPath ? `Artifact: ${result.artifactPath}` : null,
+    result.reportPath ? `Report: ${result.reportPath}` : null,
     result.failure ? `Failure: [${result.failure.code}] ${result.failure.message}` : null,
   ].filter((line): line is string => Boolean(line));
 
@@ -253,6 +254,10 @@ export async function runCli(argv: string[]): Promise<number> {
         process.stderr.write(output);
         exitCode = 1;
         return;
+      }
+
+      if (result.exitCode !== undefined && result.exitCode !== 0) {
+        exitCode = result.exitCode;
       }
 
       process.stdout.write(output);

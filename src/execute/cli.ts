@@ -307,21 +307,43 @@ export async function runExecuteCommand(
 
   rl.close();
 
-  // 5. Exit - write artifact
+  // 5. Determine exit code based on final state
+  let exitCode = 0;
+  for (const ws of state.workstreams.values()) {
+    if (ws.state === "failed") {
+      exitCode = 1;
+      break;
+    }
+  }
+  if (exitCode === 0) {
+    for (const ws of state.workstreams.values()) {
+      if (ws.state === "queued") {
+        exitCode = 2;
+        break;
+      }
+    }
+  }
+
+  // 6. Exit - write artifact
   const outputDir = options.outputDir ?? path.join(repoRoot, ".forge");
   const artifactPath = path.join(outputDir, "execute.json");
+  const reportPath = path.join(outputDir, "execute-report.md");
 
   // Ensure output directory exists
   await fs.mkdir(outputDir, { recursive: true });
 
-  const artifact = buildExecuteArtifact(state, SCHEMA_VERSION, FORGE_VERSION);
-  await writeExecuteArtifact(artifactPath, artifact);
+  try {
+    const artifact = buildExecuteArtifact(state, SCHEMA_VERSION, FORGE_VERSION);
+    await writeExecuteArtifact(artifactPath, artifact);
 
-  // Write human-readable report
-  const reportPath = path.join(outputDir, "execute-report.md");
-  const report = createExecuteReport(artifact);
-  await fs.writeFile(reportPath, report, "utf-8");
-  console.log(`Report written to ${reportPath}`);
+    // Write human-readable report
+    const report = createExecuteReport(artifact);
+    await fs.writeFile(reportPath, report, "utf-8");
+    console.log(`Report written to ${reportPath}`);
+  } catch (err) {
+    console.error("Failed to write execute artifact:", err);
+    process.exit(1);
+  }
 
   const summary = buildSummary(state);
   return {
@@ -330,5 +352,6 @@ export async function runExecuteCommand(
     artifactPath,
     reportPath,
     outputRoot: outputDir,
+    exitCode,
   };
 }

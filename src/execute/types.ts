@@ -58,6 +58,7 @@ export interface ExecuteCommandResult {
   artifactPath: string;
   reportPath?: string;
   outputRoot: string;
+  exitCode?: number;
   failure?: {
     code: string;
     message: string;
