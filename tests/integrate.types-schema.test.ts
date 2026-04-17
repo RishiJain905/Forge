@@ -683,6 +683,31 @@ await runScenario("validateIntegrateArtifact throws ZodError for negative summar
   assert.throws(() => validateIntegrateArtifact(input), z.ZodError);
 });
 
+await runScenario("validateIntegrateArtifact round-trip: JSON serialize then parse yields equal artifact", () => {
+  const original = makeMinimalArtifact({
+    tests: [
+      makeMinimalTestCase({ id: "tc-1", name: "Auth login", status: "passed", durationMs: 200 }),
+      makeMinimalTestCase({ id: "tc-2", name: "Auth logout", status: "failed", error: "Timeout", recommendation: "Increase timeout" }),
+    ],
+    testFiles: [
+      makeMinimalTestFile({ path: "tests/auth.test.ts", testCount: 2 }),
+    ],
+    summary: makeMinimalSummary({ total: 2, passed: 1, failed: 1 }),
+    recommendations: ["Increase timeout"],
+  });
+  // Simulate writing to disk and reading back
+  const json = JSON.stringify(original);
+  const roundTripped = validateIntegrateArtifact(JSON.parse(json));
+  assert.deepEqual(roundTripped, original);
+});
+
+await runScenario("validateIntegrateArtifact round-trip with unknown input: JSON parse then validate rejects unknown keys", () => {
+  const original = makeMinimalArtifact();
+  const withExtra = { ...original, rogueKey: "nope" };
+  const json = JSON.stringify(withExtra);
+  assert.throws(() => validateIntegrateArtifact(JSON.parse(json)), z.ZodError);
+});
+
 // ---------------------------------------------------------------------------
 // Edge cases
 // ---------------------------------------------------------------------------
