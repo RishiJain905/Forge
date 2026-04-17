@@ -1,13 +1,13 @@
 {
   "milestone": "prompt-and-test-runner",
-  "round": 1,
-  "status": "fail",
+  "round": 2,
+  "status": "pass",
   "validatorsRun": {
     "test": {
       "passed": true,
-      "command": "node dist-tests/tests/integrate.types-schema.test.js && node dist-tests/tests/integrate.prompt-builder.test.js && node dist-tests/tests/integrate.test-runner.test.js",
-      "exitCode": 0,
-      "note": "All integrate milestone tests pass. One pre-existing failure in split.batch3-part4-polish-freeze-criteria.test.js (missing docs/S4-B3-Done/p4-done.md) is unrelated to this milestone."
+      "command": "npm run test",
+      "exitCode": 1,
+      "note": "All integrate milestone tests pass. One pre-existing failure in split.batch3-part4-polish-freeze-criteria.test.js (missing docs/S4-B3-Done/p4-done.md) is unrelated to this milestone and documented as a known pre-existing issue in AGENTS.md."
     },
     "typecheck": {
       "passed": true,
@@ -22,73 +22,51 @@
     }
   },
   "reviewsSummary": {
-    "total": 2,
-    "passed": 1,
-    "failed": 1,
-    "failedFeatures": ["integrate-prompt-builder"]
+    "total": 3,
+    "passed": 3,
+    "failed": 0,
+    "failedFeatures": []
   },
-  "blockingIssues": [
-    {
-      "featureId": "integrate-prompt-builder",
-      "severity": "blocking",
-      "description": "Dead code branch in framework override logic (line 191): the ternary expression `ctx.testFramework && ctx.testFramework.length > 0 ? await detectTestFramework(ctx.repoRoot) : await detectTestFramework(ctx.repoRoot)` always calls detectTestFramework regardless of whether a testFramework override is provided. Both branches are identical. When an override IS provided, lines 197-200 replace only the framework name with the override, keeping the detected framework's language and testCommand — producing a mismatch (e.g., testFramework='vitest' detected as jest gives {name: 'vitest', testCommand: 'npx jest'}). The test for this case passes only because it doesn't verify testCommand consistency.",
-      "file": "src/integrate/prompt-builder.ts",
-      "line": 191
-    }
-  ],
+  "blockingIssues": [],
   "nonBlockingIssues": [
     {
       "featureId": "integrate-prompt-builder",
       "severity": "non_blocking",
-      "description": "Unused type imports: ExecuteWorkstream and PlanItem are imported but never referenced.",
+      "description": "Unused type imports: ExecuteWorkstream and PlanItem are imported but never referenced in src/integrate/prompt-builder.ts line 18.",
       "file": "src/integrate/prompt-builder.ts",
       "line": 18
     },
     {
       "featureId": "integrate-prompt-builder",
       "severity": "non_blocking",
-      "description": "PromptBuildContext.testFramework is typed as required string but semantics suggest it should be optional (testFramework?: string). IntegrateCommandOptions correctly uses optional, but PromptBuildContext does not.",
-      "file": "src/integrate/types.ts",
-      "line": 136
-    },
-    {
-      "featureId": "integrate-prompt-builder",
-      "severity": "non_blocking",
-      "description": "extractGoal uses lossy type assertions (planArtifact.carry_forward as { task_spec?: { goal?: string } } | undefined) when PlanArtifactCarryForward is well-typed with required task_spec. Also accesses purpose via (planArtifact as { purpose?: string }).purpose when purpose IS a real property on PlanArtifact.",
+      "description": "extractGoal uses overly broad type assertions (carry_forward cast and purpose cast) in src/integrate/prompt-builder.ts line 245.",
       "file": "src/integrate/prompt-builder.ts",
       "line": 245
     },
     {
       "featureId": "integrate-test-runner",
       "severity": "non_blocking",
-      "description": "Bug in parseTestOutput generic fallback regex: genericFailed[2] ?? genericFailed[1] references capture group 2 from a regex that only has one capturing group. genericFailed[2] is always undefined, so nullish coalescing always falls through to genericFailed[1]. Produces correct result but code is misleading.",
+      "description": "Bug in parseTestOutput generic fallback regex: genericFailed[2] where only group 1 exists. Nullish coalescing produces correct result but code is misleading in src/integrate/test-runner.ts line 150.",
       "file": "src/integrate/test-runner.ts",
       "line": 150
     },
     {
       "featureId": "integrate-test-runner",
       "severity": "non_blocking",
-      "description": "Path traversal concern: path.resolve(repoRoot, tf.path) does not validate that the resolved path stays within repoRoot. A malicious tf.path like '../../etc/passwd' would write outside the repo. Consistent with prompt-builder.ts pattern. Low risk since paths come from AI-generated content, but worth adding defense-in-depth check.",
+      "description": "Path traversal concern: path.resolve(repoRoot, tf.path) does not validate that resolved path stays within repoRoot. Consistent with prompt-builder.ts pattern. Low risk since paths come from AI-generated content.",
       "file": "src/integrate/test-runner.ts",
       "line": 209
     },
     {
-      "featureId": "integrate-test-runner",
+      "featureId": "fix-prompt-builder-framework-override",
       "severity": "non_blocking",
-      "description": "Success logic (runError === undefined && failed === 0 && total > 0) means unparseable output (total=0) yields success: false even if command ran without error. Reasonable design choice but worth documenting.",
-      "file": "src/integrate/test-runner.ts",
-      "line": 245
+      "description": "deriveFrameworkFromOverride heuristic for detecting 'python-like' frameworks via name.includes('py') could produce false positives for frameworks like 'pylint'. Minor since function is only called when user explicitly provides override.",
+      "file": "src/integrate/prompt-builder.ts",
+      "line": 152
     }
   ],
   "appliedUpdates": [],
-  "suggestedGuidanceUpdates": [
-    {
-      "target": "AGENTS.md",
-      "suggestion": "Add note: When overriding test framework detection results, ensure that testCommand and language are consistent with the overridden framework name — don't carry over the detected framework's testCommand if the name is overridden.",
-      "evidence": "integrate-prompt-builder feature has a bug where providing testFramework='vitest' on a project detecting jest produces {name: 'vitest', testCommand: 'npx jest'}, a semantic mismatch (line 191-200 in src/integrate/prompt-builder.ts)",
-      "isSystemic": false
-    }
-  ],
+  "suggestedGuidanceUpdates": [],
   "rejectedObservations": [
     {
       "observation": "The test-runner module documentation was created by the worker in .factory/library/test-runner.md",
@@ -97,7 +75,15 @@
     {
       "observation": "Both prompt-builder and test-runner follow consistent code patterns (module headers, section separators, JSDoc, import type)",
       "reason": "duplicate — this convention is already documented in AGENTS.md"
+    },
+    {
+      "observation": "deriveFrameworkFromOverride uses if-else chain consistent with detectTestFramework above it",
+      "reason": "ambiguous — stylistic observation with no actionable recommendation; the worker followed the local convention"
+    },
+    {
+      "observation": "Backend-worker skill was followed correctly by both workers",
+      "reason": "duplicate — no skill gaps identified, no update needed"
     }
   ],
-  "previousRound": null
+  "previousRound": ".factory/validation/prompt-and-test-runner/scrutiny/synthesis.json"
 }
