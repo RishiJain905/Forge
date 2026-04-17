@@ -599,16 +599,16 @@ await runScenario(
 );
 
 await runScenario(
-  "runIntegrateCommand reuses executeWorkstream from model-connector (no new connector)",
+  "runIntegrateCommand reuses loadModelConfig and callModel from model-connector (no new connector)",
   async () => {
-    // This is a structural assertion: cli.ts imports executeWorkstream from
+    // This is a structural assertion: cli.ts imports loadModelConfig and callModel from
     // ../execute/model-connector.ts rather than creating a new connector.
     // We verify by checking the module's import source at runtime.
     const cliModule = await import("../src/integrate/cli.js");
     assert.ok(typeof cliModule.runIntegrateCommand === "function");
     assert.ok(typeof cliModule.parseTestFilesFromAIResponse === "function");
     // The function exists and can be called — the import path is verified
-    // by the typechecker which confirms executeWorkstream comes from
+    // by the typechecker which confirms loadModelConfig and callModel come from
     // the model-connector module.
   }
 );

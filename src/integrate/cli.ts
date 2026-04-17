@@ -32,7 +32,7 @@ import {
   writeIntegrateArtifact,
 } from "./artifact.js";
 import { createIntegrationReport } from "./report.js";
-import { executeWorkstream } from "../execute/model-connector.js";
+import { loadModelConfig, callModel } from "../execute/model-connector.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -399,7 +399,7 @@ function makeErrorResult(
  *   2. Load plan.json (optional with warning) and verify.json (optional with warning)
  *   3. Check workstreams — fail with NO_WORKSTREAMS if empty, or ALL_WORKSTREAMS_FAILED if all failed
  *   4. Build integration test prompt via buildIntegrationTestPrompt
- *   5. Call AI via executeWorkstream (reused from model-connector — no new connector)
+ *   5. Call AI via loadModelConfig + callModel (reused from model-connector — no new connector)
  *   6. Parse AI response to extract JSON array of test files
  *   7. Run tests via runIntegrationTests
  *   8. Build artifact via buildIntegrateArtifact
@@ -481,15 +481,15 @@ export async function runIntegrateCommand(
     );
   }
 
-  // ---- Step 5: Call AI via executeWorkstream (reused from model-connector) ----
+  // ---- Step 5: Call AI via loadModelConfig + callModel (reused from model-connector) ----
 
   let modelUsed: string;
   let rawResponse: string;
 
   try {
-    const result = await executeWorkstream(prompt, repoRoot);
-    modelUsed = result.modelUsed;
-    rawResponse = result.rawResponse;
+    const config = loadModelConfig();
+    rawResponse = await callModel(prompt, config);
+    modelUsed = `${config.provider}/${config.modelName}`;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return makeErrorResult(
