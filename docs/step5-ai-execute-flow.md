@@ -30,7 +30,7 @@ flowchart TB
         B4(["All Terminal<br/>State Reached"])
         B1 --> B2
         B2 -->|YES| B3
-        B3 -->|state → running| SELECT
+        B3 -->|state → running| B1
         B2 -->|NO| B4
     end
 
