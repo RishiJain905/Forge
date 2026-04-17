@@ -95,3 +95,43 @@ This is a pure TypeScript library module with no services, no browser UI, and no
 - runIntegrationTests: file writing with recursive directory creation, test output parsing, empty testFiles error
 - estimateTestCount: pytest/jest pattern matching, fallback for non-empty content
 - parseTestOutput: jest format, pytest format, generic format, fallback to zeros
+
+## Flow Validator Guidance: cli-wiring
+
+**Surface:** CLI command (`forge integrate`), artifact builder (`src/integrate/artifact.ts`), report generator (`src/integrate/report.ts`), and their integration with model-connector
+
+**Isolation rules:**
+- All validators share the same codebase and run read-only operations
+- No shared mutable state between validators
+- Validators may run concurrently
+- CLI error-case tests create temp directories (via `os.tmpdir()`) that are cleaned up after each test
+- Do NOT modify any source files
+- Do NOT start or stop any services (none needed)
+
+**Constraints:**
+- CLI error cases (NO_EXECUTE_ARTIFACT, NO_WORKSTREAMS, ALL_WORKSTREAMS_FAILED) can be tested by invoking `runIntegrateCommand` from the test file or running the CLI in temp directories without forge artifacts
+- The full happy path (VAL-CLI-004, VAL-CROSS-001) requires an AI model connection — without it, the command fails at AI_GENERATION_FAILED. For validation purposes, the code path can be verified by tracing: the CLI writes `integrate.json` and `integration-report.md` after successful AI call (lines 244-252 of cli.ts)
+- VAL-CROSS-002 can be verified by inspecting the import statements in `src/integrate/cli.ts` — it should import `loadModelConfig` and `callModel` from `../execute/model-connector.js`, NOT `executeWorkstream`
+- VAL-CROSS-003 can be verified by confirming the CLI correctly uses `loadModelConfig` + `callModel` to get a raw AI response, then parses it with `parseTestFilesFromAIResponse`
+
+**Commands to run:**
+- Artifact tests: `node dist-tests/tests/integrate.artifact.test.js`
+- Report tests: `node dist-tests/tests/integrate.report.test.js`
+- CLI tests: `node dist-tests/tests/integrate.cli.test.js`
+- Integration types/schema tests: `node dist-tests/tests/integrate.types-schema.test.js`
+- Prompt builder tests: `node dist-tests/tests/integrate.prompt-builder.test.js`
+- Test runner tests: `node dist-tests/tests/integrate.test-runner.test.js`
+
+**Assertions to validate:**
+- VAL-ARTIFACT-001: buildIntegrateArtifact produces object passing validateIntegrateArtifact
+- VAL-ARTIFACT-002: writeIntegrateArtifact creates 2-space indented JSON with recursive directory creation
+- VAL-REPORT-001: Report includes 'Forge Integration Report' heading
+- VAL-REPORT-002: Report includes all required sections and status icons
+- VAL-CLI-001: forge integrate without execute.json fails with NO_EXECUTE_ARTIFACT
+- VAL-CLI-002: forge integrate with empty workstreams fails with NO_WORKSTREAMS
+- VAL-CLI-003: forge integrate with all failed workstreams fails with ALL_WORKSTREAMS_FAILED
+- VAL-CLI-004: forge integrate with valid inputs produces .forge/integrate.json
+- VAL-CLI-005: Exit code is 0 when summary.failed === 0, 1 when summary.failed > 0
+- VAL-CROSS-001: forge integrate produces integration-report.md alongside artifact
+- VAL-CROSS-002: CLI uses loadModelConfig + callModel (not executeWorkstream)
+- VAL-CROSS-003: CLI correctly integrates with model-connector for AI calls

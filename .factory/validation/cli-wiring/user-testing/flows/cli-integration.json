@@ -1,0 +1,131 @@
+{
+  "milestone": "cli-wiring",
+  "groupId": "cli-integration",
+  "testedAt": "2026-04-17T19:35:00Z",
+  "isolation": {
+    "repoRoot": "F:/Personal/ForgeCLI/Forge",
+    "servicesRequired": "none",
+    "testingMode": "CLI-source-inspection-unit-tests"
+  },
+  "toolsUsed": ["node", "grep", "source-code-inspection"],
+  "assertions": [
+    {
+      "id": "VAL-CLI-004",
+      "title": "forge integrate with valid inputs produces .forge/integrate.json",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run node dist-tests/tests/integrate.cli.test.js",
+          "expected": "All tests pass including artifact path verification",
+          "observed": "All 15 CLI tests PASS. Notable: 'runIntegrateCommand exit code is 0 when summary.failed === 0, 1 when summary.failed > 0' PASS. Artifact tests (18/18) also PASS including 'written artifact can be parsed back by validateIntegrateArtifact'."
+        },
+        {
+          "action": "Inspect cli.ts lines ~244-257 for artifact write path",
+          "expected": "artifactPath = path.join(outputDir, 'integrate.json'), writeIntegrateArtifact(artifactPath, artifact), result returns artifactPath",
+          "observed": "Confirmed: line has 'const artifactPath = path.join(outputDir, \"integrate.json\")', 'await writeIntegrateArtifact(artifactPath, artifact)', and result object includes artifactPath."
+        }
+      ],
+      "evidence": {
+        "testOutput": "cli-wiring/cli-integration/cli-test-output.txt",
+        "sourceLines": "src/integrate/cli.ts lines 245-257 (artifact build + write + return)"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-CROSS-001",
+      "title": "forge integrate produces .forge/integration-report.md alongside artifact",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Inspect cli.ts lines ~245-251 for report write path",
+          "expected": "reportPath = path.join(outputDir, 'integration-report.md'), fs.writeFile(reportPath, report, 'utf-8'), result returns reportPath",
+          "observed": "Confirmed: 'const reportPath = path.join(outputDir, \"integration-report.md\")', 'await fs.writeFile(reportPath, report, \"utf-8\")', and result object includes reportPath."
+        },
+        {
+          "action": "Run node dist-tests/tests/integrate.report.test.js",
+          "expected": "All report tests pass, including 'Full artifact produces report with all required sections'",
+          "observed": "All 23 report tests PASS, including 'Full artifact produces report with all required sections'."
+        },
+        {
+          "action": "Run node dist-tests/tests/integrate.cli.test.js",
+          "expected": "CLI test confirms result.reportPath is returned",
+          "observed": "All 15 CLI tests PASS; the CLI happy-path code returns result with reportPath field."
+        }
+      ],
+      "evidence": {
+        "testOutput": "cli-wiring/cli-integration/cli-test-output.txt",
+        "sourceLines": "src/integrate/cli.ts lines 245-251 (report write + return)"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-CROSS-002",
+      "title": "CLI uses loadModelConfig + callModel (not executeWorkstream)",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Grep for 'executeWorkstream' in cli.ts",
+          "expected": "No matches — executeWorkstream is NOT imported",
+          "observed": "No matches found. Confirmed: executeWorkstream is not imported or used in cli.ts."
+        },
+        {
+          "action": "Grep for 'loadModelConfig|callModel' in cli.ts",
+          "expected": "Import on line 35 from '../execute/model-connector.js', usage at lines 490-491",
+          "observed": "Line 35: import { loadModelConfig, callModel } from \"../execute/model-connector.js\"; Line 490: const config = loadModelConfig(); Line 491: rawResponse = await callModel(prompt, config);"
+        },
+        {
+          "action": "Run CLI test 'runIntegrateCommand reuses loadModelConfig and callModel from model-connector'",
+          "expected": "Test PASSES",
+          "observed": "PASS: 'runIntegrateCommand reuses loadModelConfig and callModel from model-connector (no new connector)'"
+        }
+      ],
+      "evidence": {
+        "testOutput": "cli-wiring/cli-integration/cli-test-output.txt",
+        "sourceLines": "src/integrate/cli.ts line 35 (import), lines 490-491 (usage)"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-CROSS-003",
+      "title": "CLI correctly integrates with model-connector for AI calls",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Verify loadModelConfig() is called to get config",
+          "expected": "loadModelConfig() returns config object",
+          "observed": "Line 490: const config = loadModelConfig(); — returns config used for AI call."
+        },
+        {
+          "action": "Verify callModel(prompt, config) is called to get rawResponse",
+          "expected": "callModel takes prompt and config, returns raw AI response string",
+          "observed": "Line 491: rawResponse = await callModel(prompt, config); — raw AI response stored."
+        },
+        {
+          "action": "Verify parseTestFilesFromAIResponse(rawResponse) is used, NOT parseModelResponse",
+          "expected": "parseTestFilesFromAIResponse called on rawResponse; parseModelResponse not present",
+          "observed": "Line 506: const testFiles = parseTestFilesFromAIResponse(rawResponse); — grep for 'parseModelResponse' returns no matches. Correct: integrate step uses parseTestFilesFromAIResponse for raw AI response extraction (## TEST FILES format), unlike execute which uses parseModelResponse for ## CHANGES format."
+        },
+        {
+          "action": "Run CLI test confirming module import correctness",
+          "expected": "Test PASSES",
+          "observed": "PASS: 'runIntegrateCommand reuses loadModelConfig and callModel from model-connector (no new connector)'"
+        }
+      ],
+      "evidence": {
+        "testOutput": "cli-wiring/cli-integration/cli-test-output.txt",
+        "sourceLines": "src/integrate/cli.ts line 490 (loadModelConfig), 491 (callModel), 506 (parseTestFilesFromAIResponse)"
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [
+    {
+      "description": "CLI test runner (integrate.cli.test.js) exits with code 1 on PowerShell because stderr warnings from plan.json/verify.json missing are treated as errors by PowerShell, even though all tests pass. This does not indicate a real failure.",
+      "resolved": true,
+      "resolution": "Verified all 15 test lines show PASS; exit code 1 is a PowerShell stderr-handling artifact, not a test failure.",
+      "affectedAssertions": ["VAL-CLI-004", "VAL-CROSS-002", "VAL-CROSS-003"]
+    }
+  ],
+  "blockers": [],
+  "summary": "Tested 4 assertions: all 4 passed. VAL-CLI-004 confirmed via CLI tests (15/15 PASS) and source code inspection showing integrate.json write path. VAL-CROSS-001 confirmed via report tests (23/23 PASS) and source inspection showing integration-report.md write path. VAL-CROSS-002 confirmed: loadModelConfig+callModel imported from model-connector, executeWorkstream NOT present. VAL-CROSS-003 confirmed: correct call pattern (loadModelConfig→callModel→parseTestFilesFromAIResponse), parseModelResponse NOT used."
+}

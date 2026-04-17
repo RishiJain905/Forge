@@ -1,0 +1,71 @@
+{
+  "milestone": "cli-wiring",
+  "groupId": "artifact-report",
+  "testedAt": "2026-04-17T19:35:00Z",
+  "isolation": {
+    "repoRoot": "F:/Personal/ForgeCLI/Forge",
+    "testCommand": "node dist-tests/tests/integrate.artifact.test.js and node dist-tests/tests/integrate.report.test.js"
+  },
+  "toolsUsed": ["node", "CLI"],
+  "assertions": [
+    {
+      "id": "VAL-ARTIFACT-001",
+      "title": "buildIntegrateArtifact produces object passing validateIntegrateArtifact",
+      "status": "pass",
+      "steps": [
+        { "action": "Run node dist-tests/tests/integrate.artifact.test.js", "expected": "buildIntegrateArtifact produces a valid IntegrateArtifact - PASS; buildIntegrateArtifact output passes validateIntegrateArtifact - PASS", "observed": "Both tests PASS. All 18 artifact tests completed with exit code 0." }
+      ],
+      "evidence": {
+        "testOutput": "cli-wiring/artifact-report/VAL-ARTIFACT-artifact-test-output.txt",
+        "consoleErrors": "none",
+        "exitCode": 0
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-ARTIFACT-002",
+      "title": "writeIntegrateArtifact creates 2-space indented JSON with recursive directory creation",
+      "status": "pass",
+      "steps": [
+        { "action": "Run node dist-tests/tests/integrate.artifact.test.js", "expected": "writeIntegrateArtifact creates parent directories recursively - PASS; writeIntegrateArtifact writes JSON with 2-space indentation - PASS; written artifact can be parsed back by validateIntegrateArtifact - PASS", "observed": "All three specified tests PASS. All 18 artifact tests completed with exit code 0." }
+      ],
+      "evidence": {
+        "testOutput": "cli-wiring/artifact-report/VAL-ARTIFACT-artifact-test-output.txt",
+        "consoleErrors": "none",
+        "exitCode": 0
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-REPORT-001",
+      "title": "Report includes 'Forge Integration Report' heading",
+      "status": "pass",
+      "steps": [
+        { "action": "Run node dist-tests/tests/integrate.report.test.js", "expected": "Report includes 'Forge Integration Report' heading - PASS", "observed": "Test PASS. All 23 report tests completed with exit code 0." }
+      ],
+      "evidence": {
+        "testOutput": "cli-wiring/artifact-report/VAL-REPORT-report-test-output.txt",
+        "consoleErrors": "none",
+        "exitCode": 0
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-REPORT-002",
+      "title": "Report includes all required sections and status icons",
+      "status": "pass",
+      "steps": [
+        { "action": "Run node dist-tests/tests/integrate.report.test.js", "expected": "Full artifact produces report with all required sections - PASS; Report includes individual test results with correct icons per status - PASS", "observed": "Both specified tests PASS. The full report test confirms all sections present (Overview, Workstreams Summary, Test Results, Test Files, Individual Test Results, Failed Test Errors, AI Recommendations, Next Steps). The icon test confirms ✅/❌/⏭️/⏳ icons per status. All 23 report tests completed with exit code 0." }
+      ],
+      "evidence": {
+        "testOutput": "cli-wiring/artifact-report/VAL-REPORT-report-test-output.txt",
+        "consoleErrors": "none",
+        "exitCode": 0
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [],
+  "blockers": [],
+  "summary": "Tested 4 assertions: 4 passed, 0 failed, 0 blocked. All artifact and report tests pass. buildIntegrateArtifact produces valid artifacts that pass validation, writeIntegrateArtifact correctly creates directories recursively and writes 2-space indented JSON, report includes the required heading and all sections with correct status icons."
+}
