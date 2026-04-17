@@ -403,6 +403,12 @@ export async function runExecuteCommand(
         return false;
       }
 
+      // Populate AI metadata on the workstream
+      ws.aiModelUsed = aiResult.modelUsed;
+      ws.aiChangesCount = aiResult.changes.length;
+      ws.aiLinesAdded = aiResult.changes.reduce((sum, c) => sum + c.linesAdded, 0);
+      ws.aiLinesRemoved = aiResult.changes.reduce((sum, c) => sum + c.linesRemoved, 0);
+
       for (const change of aiResult.changes) {
         const lines = change.linesAdded > 0 ? `+${change.linesAdded} lines` : "";
         const removed = change.linesRemoved > 0 ? `-${change.linesRemoved} lines` : "";
