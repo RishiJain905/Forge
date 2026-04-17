@@ -63,3 +63,35 @@ This is a pure TypeScript library module with no services, no browser UI, and no
 - Type checking: `npm run typecheck` (in project root)
 - Build: `npm run build` (in project root)
 - Schema tests: `node dist-tests/tests/integrate.types-schema.test.js` (after build + test compile)
+
+## Flow Validator Guidance: prompt-and-test-runner
+
+**Surface:** Prompt builder and test runner modules in `src/integrate/prompt-builder.ts` and `src/integrate/test-runner.ts`
+
+**Isolation rules:**
+- All validators share the same codebase and run read-only operations
+- No shared mutable state between validators
+- Validators may run concurrently
+- Each validator should run `node dist-tests/tests/integrate.prompt-builder.test.js` and/or `node dist-tests/tests/integrate.test-runner.test.js` independently
+- Do NOT modify any source files
+- Do NOT start or stop any services (none needed)
+
+**Constraints:**
+- Test files use temp directories (via `os.tmpdir()`) that are cleaned up after each test
+- Prompt builder tests create mock package.json and config files in temp dirs
+- Test runner tests create mock test files in temp dirs and use `echo` as test command
+- All assertions are code-level validations via unit test execution
+
+**Commands to run:**
+- Build: `npm run build` then `tsc -p tsconfig.test.json` (to compile test files)
+- Prompt builder tests: `node dist-tests/tests/integrate.prompt-builder.test.js`
+- Test runner tests: `node dist-tests/tests/integrate.test-runner.test.js`
+- Type checking: `npm run typecheck`
+
+**Key validation points:**
+- detectTestFramework: jest, vitest, mocha from package.json; pytest from pytest.ini/pyproject.toml; npm fallback
+- buildIntegrationTestPrompt: prompt includes goal, workstreams, changed files, framework info; deterministic hash
+- deriveFrameworkFromOverride: correct language/testCommand derivation from framework name
+- runIntegrationTests: file writing with recursive directory creation, test output parsing, empty testFiles error
+- estimateTestCount: pytest/jest pattern matching, fallback for non-empty content
+- parseTestOutput: jest format, pytest format, generic format, fallback to zeros

@@ -1,0 +1,31 @@
+{
+  "milestone": "prompt-and-test-runner",
+  "round": 1,
+  "status": "pass",
+  "assertionsSummary": {
+    "total": 8,
+    "passed": 8,
+    "failed": 0,
+    "blocked": 0
+  },
+  "passedAssertions": [
+    "VAL-PROMPT-001",
+    "VAL-PROMPT-002",
+    "VAL-PROMPT-003",
+    "VAL-PROMPT-004",
+    "VAL-RUNNER-001",
+    "VAL-RUNNER-002",
+    "VAL-RUNNER-003",
+    "VAL-RUNNER-004"
+  ],
+  "failedAssertions": [],
+  "blockedAssertions": [],
+  "appliedUpdates": [
+    {
+      "target": "user-testing.md",
+      "description": "Added Flow Validator Guidance section for prompt-and-test-runner surface with isolation rules, constraints, commands, and key validation points",
+      "source": "setup"
+    }
+  ],
+  "previousRound": null
+}

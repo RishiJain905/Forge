@@ -1,0 +1,90 @@
+{
+  "groupId": "prompt-builder-group",
+  "testedAt": "2026-04-17T16:00:00.000Z",
+  "isolation": {
+    "projectRoot": "F:\\Personal\\ForgeCLI\\Forge",
+    "testingMethod": "CLI / Node.js test execution",
+    "sharedCodebaseAccess": "read-only"
+  },
+  "toolsUsed": ["node", "npx tsc"],
+  "assertions": [
+    {
+      "id": "VAL-PROMPT-001",
+      "title": "detectTestFramework finds jest/vitest/npm/pytest from package.json",
+      "status": "pass",
+      "steps": [
+        { "action": "Compile test file with npx tsc -p tsconfig.test.json", "expected": "Compilation succeeds without errors", "observed": "Compilation succeeded (exit code 0)" },
+        { "action": "Run node dist-tests/tests/integrate.prompt-builder.test.js", "expected": "All detectTestFramework scenarios for jest, vitest, mocha pass", "observed": "7 detectTestFramework tests for framework detection from package.json all passed: jest via test script, jest via devDependencies, jest via dependencies, vitest via test script, vitest via devDependencies, vitest preferred over jest when both present, mocha via test script" },
+        { "action": "Verify jest detection returns name='jest', language='typescript', testCommand='npx jest'", "expected": "Correct framework metadata returned", "observed": "jest detection returns name='jest', language='typescript', testCommand='npx jest'" },
+        { "action": "Verify vitest detection returns name='vitest', language='typescript', testCommand='npx vitest run'", "expected": "Correct framework metadata returned", "observed": "vitest detection returns correct name, language, and testCommand" },
+        { "action": "Verify mocha detection returns name='mocha', language='javascript'", "expected": "Correct framework metadata returned", "observed": "mocha detection returns name='mocha', language='javascript'" }
+      ],
+      "evidence": {
+        "screenshots": [],
+        "consoleErrors": "none",
+        "network": "N/A — no network calls",
+        "testOutput": "prompt-and-test-runner/prompt-builder-group/prompt-builder-test-output.txt"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-PROMPT-002",
+      "title": "detectTestFramework falls back to pytest.ini/pyproject.toml",
+      "status": "pass",
+      "steps": [
+        { "action": "Run test: detectTestFramework finds pytest when pytest.ini exists", "expected": "Returns name='pytest', language='python', testCommand='pytest'", "observed": "PASS — returned name='pytest', language='python', testCommand='pytest'" },
+        { "action": "Run test: detectTestFramework finds pytest when pyproject.toml has [tool.pytest]", "expected": "Returns name='pytest', language='python', testCommand='pytest'", "observed": "PASS — returned name='pytest', language='python', testCommand='pytest'" },
+        { "action": "Run test: pyproject.toml without [tool.pytest] falls back to npm", "expected": "Returns name='npm' (fallback)", "observed": "PASS — returned name='npm'" },
+        { "action": "Run test: prefers package.json over pytest.ini when both present", "expected": "Returns framework from package.json (jest)", "observed": "PASS — returned name='jest'" },
+        { "action": "Run test: prefers package.json over pyproject.toml when both present", "expected": "Returns framework from package.json (vitest)", "observed": "PASS — returned name='vitest'" }
+      ],
+      "evidence": {
+        "screenshots": [],
+        "consoleErrors": "none",
+        "network": "N/A — no network calls",
+        "testOutput": "prompt-and-test-runner/prompt-builder-group/prompt-builder-test-output.txt"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-PROMPT-003",
+      "title": "buildIntegrationTestPrompt includes goal, workstreams, changed files",
+      "status": "pass",
+      "steps": [
+        { "action": "Run test: buildIntegrationTestPrompt returns BuiltPrompt with prompt string containing goal", "expected": "Prompt contains goal text, detectedFramework is populated", "observed": "PASS — prompt contains 'Add user authentication to the application', detectedFramework='jest'" },
+        { "action": "Run test: prompt contains workstream info", "expected": "Prompt includes workstream titles and states", "observed": "PASS — prompt contains 'Implement login endpoint' and 'Add auth middleware', includes 'completed' and 'failed' states" },
+        { "action": "Run test: prompt contains changed files", "expected": "Prompt includes file path references and content", "observed": "PASS — prompt includes 'src/auth.ts' and file content 'export function login() {}'" },
+        { "action": "Run test: includes detected framework info", "expected": "detectedFramework is populated and prompt mentions framework", "observed": "PASS — detectedFramework='vitest' and prompt mentions 'vitest'" },
+        { "action": "Run test: prompt contains plan items and verification constraints", "expected": "Prompt includes plan item titles and constraint summaries", "observed": "PASS — prompt contains 'Add login endpoint' and 'Must validate JWT tokens'" },
+        { "action": "Run test: prompt contains correct section headers", "expected": "All required sections present (System Role, Goal, Workstream Execution Results, Plan Items, Verification Constraints, Changed Files, Test Framework, Your Task)", "observed": "PASS — all 8 section headers confirmed present" }
+      ],
+      "evidence": {
+        "screenshots": [],
+        "consoleErrors": "none",
+        "network": "N/A — no network calls",
+        "testOutput": "prompt-and-test-runner/prompt-builder-group/prompt-builder-test-output.txt"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-PROMPT-004",
+      "title": "buildIntegrationTestPrompt produces deterministic hash",
+      "status": "pass",
+      "steps": [
+        { "action": "Run test: buildIntegrationTestPrompt produces deterministic SHA-256 promptHash for same input", "expected": "Two calls with identical context produce identical promptHash", "observed": "PASS — result1.promptHash === result2.promptHash and result1.prompt === result2.prompt" },
+        { "action": "Run test: SHA-256 hash is different for different inputs", "expected": "Two calls with different context produce different promptHash", "observed": "PASS — result1.promptHash !== result2.promptHash for different workstream titles" },
+        { "action": "Verify promptHash is 64-character hex string (SHA-256)", "expected": "promptHash.length === 64", "observed": "PASS — assertion promptHash.length === 64 confirmed in 'returns BuiltPrompt' test" }
+      ],
+      "evidence": {
+        "screenshots": [],
+        "consoleErrors": "none",
+        "network": "N/A — no network calls",
+        "testOutput": "prompt-and-test-runner/prompt-builder-group/prompt-builder-test-output.txt"
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [],
+  "blockers": [],
+  "summary": "Tested 4 assertions: all 4 passed. Full prompt builder test suite (49 tests) executed successfully with 0 failures. detectTestFramework correctly identifies jest, vitest, mocha from package.json and pytest from pytest.ini/pyproject.toml with proper priority ordering. buildIntegrationTestPrompt correctly includes goal text, workstream details, changed file contents, and detected framework info. Hash determinism confirmed: identical inputs produce identical 64-char SHA-256 hashes, different inputs produce different hashes."
+}

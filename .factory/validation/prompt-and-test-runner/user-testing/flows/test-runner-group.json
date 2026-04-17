@@ -1,0 +1,143 @@
+{
+  "groupId": "test-runner-group",
+  "testedAt": "2026-04-17T16:00:00.000Z",
+  "isolation": {
+    "projectRoot": "F:\\Personal\\ForgeCLI\\Forge",
+    "testCommand": "node dist-tests/tests/integrate.test-runner.test.js",
+    "sharedCodebaseReadOnly": true
+  },
+  "toolsUsed": ["node", "cli-test-execution"],
+  "assertions": [
+    {
+      "id": "VAL-RUNNER-001",
+      "title": "runIntegrationTests writes test files to disk",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run compiled test suite: node dist-tests/tests/integrate.test-runner.test.js",
+          "expected": "File writing scenarios pass — files written to disk at specified paths with recursive directory creation",
+          "observed": "Two relevant tests passed: (1) 'runIntegrationTests writes test files to disk with recursive directory creation' — verified file exists at testFiles[0].path, content matches, nested directory created via fs.mkdir recursive:true; (2) 'runIntegrationTests writes multiple test files' — verified both test files exist at their respective paths with correct content"
+        },
+        {
+          "action": "Inspect source code: src/integrate/test-runner.ts runIntegrationTests function",
+          "expected": "Uses fs.mkdir with recursive:true and fs.writeFile for each test file",
+          "observed": "Code at lines 155-165: path.resolve(repoRoot, tf.path), fs.mkdir(dir, { recursive: true }), fs.writeFile(absolutePath, tf.content, 'utf-8')"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": ["prompt-and-test-runner/test-runner-group/test-runner-output.txt"],
+        "relevantTestScenarios": [
+          "runIntegrationTests writes test files to disk with recursive directory creation",
+          "runIntegrationTests writes multiple test files",
+          "runIntegrationTests returns testFiles reflecting what was written"
+        ],
+        "exitCode": 0
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-RUNNER-002",
+      "title": "Test results are parsed and recorded",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run compiled test suite and verify parseTestOutput and runIntegrationTests result parsing",
+          "expected": "TestRunResult.tests contains entries with status 'passed' for passing tests. TestRunResult.success is true when all tests pass.",
+          "observed": "Multiple tests pass verifying parseTestOutput: jest format parsing (passed/failed/total counts correct), pytest format parsing, generic format parsing. runIntegrationTests: 'returns success when all tests pass' — verifies result.success === true and result.tests.filter(t => t.status === 'passed').length === 2. 'returns failure when some tests fail' — verifies result.success === false with correct pass/fail counts."
+        },
+        {
+          "action": "Inspect source: parseTestOutput function and buildTestCaseResults helper",
+          "expected": "Parses stdout/stderr for pass/fail counts, builds IntegrationTestCase entries with status 'passed'/'failed'",
+          "observed": "parseTestOutput (lines 81-140) handles jest format, pytest format, and generic patterns. buildTestCaseResults (lines 210-245) creates IntegrationTestCase entries distributing passed/failed statuses across files. When all pass, success === true (line 195)."
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": ["prompt-and-test-runner/test-runner-group/test-runner-output.txt"],
+        "relevantTestScenarios": [
+          "parseTestOutput parses jest format with passed/failed",
+          "parseTestOutput parses jest format with variable spacing",
+          "parseTestOutput parses jest format with only passed tests",
+          "parseTestOutput parses pytest format with passed and failed",
+          "parseTestOutput parses pytest format with only passed",
+          "parseTestOutput parses pytest format with errors counted as failures",
+          "parseTestOutput parses generic X passed, Y failed patterns",
+          "parseTestOutput returns zeros for unrecognized output",
+          "parseTestOutput returns zeros for empty output",
+          "runIntegrationTests returns success when all tests pass",
+          "runIntegrationTests returns failure when some tests fail",
+          "runIntegrationTests handles pytest output format"
+        ],
+        "exitCode": 0
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-RUNNER-003",
+      "title": "Error handling when no test files generated",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run compiled test suite and verify empty testFiles error handling",
+          "expected": "Call with testFiles=[] returns success:false with error string 'No test files provided to runIntegrationTests'",
+          "observed": "Test 'runIntegrationTests returns error for empty testFiles array' PASSES — asserts result.success === false, result.error === EMPTY_TEST_FILES_ERROR ('No test files provided to runIntegrationTests'), result.tests.length === 0, result.testFiles.length === 0"
+        },
+        {
+          "action": "Inspect source: early return guard in runIntegrationTests",
+          "expected": "Empty testFiles array triggers immediate return with success:false and error message",
+          "observed": "Lines 143-150: if (!testFiles || testFiles.length === 0) returns { success: false, tests: [], testFiles: [], durationMs, error: EMPTY_TEST_FILES_ERROR }"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": ["prompt-and-test-runner/test-runner-group/test-runner-output.txt"],
+        "relevantTestScenarios": [
+          "runIntegrationTests returns error for empty testFiles array"
+        ],
+        "exitCode": 0
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-RUNNER-004",
+      "title": "Test count estimation from content",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run compiled test suite and verify estimateTestCount scenarios",
+          "expected": "pytest content 'def test_example():' yields testCount >= 1. Jest content 'it('works', () => {' yields testCount >= 1.",
+          "observed": "Multiple tests pass: 'estimateTestCount counts pytest def test_\\w+ patterns' — 3 matches found in sample. 'estimateTestCount counts jest/it( patterns' — 3 matches found. 'estimateTestCount handles python framework name case-insensitively' — 1 match for 'Python'. Also: runIntegrationTests estimates test count when testCount=0 for both jest and pytest frameworks correctly."
+        },
+        {
+          "action": "Inspect source: estimateTestCount function",
+          "expected": "Matches pytest pattern 'def test_\\w+' and jest pattern '\\bit\\(' with fallback to 1 for non-empty content",
+          "observed": "Lines 51-76: For pytest/python: content.match(/def test_\\w+/g), returns match count or 1 for non-empty. For jest/vitest/mocha/javascript/typescript: content.match(/\\bit\\(/g), returns match count or 1 for non-empty. Fallback: returns 1 for unknown frameworks with non-empty content."
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": ["prompt-and-test-runner/test-runner-group/test-runner-output.txt"],
+        "relevantTestScenarios": [
+          "estimateTestCount returns 0 for empty content",
+          "estimateTestCount returns 0 for whitespace-only content",
+          "estimateTestCount counts pytest def test_\\w+ patterns",
+          "estimateTestCount counts pytest patterns with mixed content",
+          "estimateTestCount returns 1 for pytest with no matches but non-empty content",
+          "estimateTestCount counts jest/it( patterns",
+          "estimateTestCount counts vitest it( patterns",
+          "estimateTestCount counts mocha it( patterns",
+          "estimateTestCount returns 1 for jest with no matching patterns but non-empty content",
+          "estimateTestCount handles python framework name case-insensitively",
+          "estimateTestCount handles typescript as jest-like framework",
+          "estimateTestCount handles javascript as jest-like framework",
+          "estimateTestCount returns 1 for unknown framework with non-empty content",
+          "runIntegrationTests estimates test count when testCount is not provided",
+          "runIntegrationTests estimates test count for pytest patterns",
+          "runIntegrationTests uses provided testCount over estimated count"
+        ],
+        "exitCode": 0
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [],
+  "blockers": [],
+  "summary": "Tested 4 assertions: 4 passed, 0 failed. All 36 test scenarios in the test runner suite passed (exit code 0). VAL-RUNNER-001 (file writing) confirmed via 3 passing scenarios. VAL-RUNNER-002 (result parsing) confirmed via 12 passing scenarios covering parseTestOutput and result recording. VAL-RUNNER-003 (empty testFiles error) confirmed via 1 passing scenario. VAL-RUNNER-004 (test count estimation) confirmed via 16 passing scenarios covering estimateTestCount for pytest, jest, vitest, mocha, and edge cases."
+}
