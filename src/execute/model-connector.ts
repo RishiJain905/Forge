@@ -51,6 +51,7 @@ export const AI_ERROR_CODES = {
   FILE_WRITE_ERROR: "FILE_WRITE_ERROR",
   FILE_DELETE_ERROR: "FILE_DELETE_ERROR",
   TIMEOUT: "TIMEOUT",
+  PATH_TRAVERSAL: "PATH_TRAVERSAL",
 } as const;
 
 export type AIErrorCode = (typeof AI_ERROR_CODES)[keyof typeof AI_ERROR_CODES];
@@ -460,7 +461,24 @@ export async function applyChanges(
   const results: ChangeResult[] = [];
 
   for (const change of changes) {
+    // Reject absolute paths before resolving
+    if (path.isAbsolute(change.file)) {
+      throw new AIModelError(
+        AI_ERROR_CODES.PATH_TRAVERSAL,
+        `Path traversal detected: absolute path not allowed: ${change.file}`
+      );
+    }
+
     const absolutePath = path.resolve(repoRoot, change.file);
+
+    // Verify resolved path stays within repoRoot
+    const relativePath = path.relative(repoRoot, absolutePath);
+    if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
+      throw new AIModelError(
+        AI_ERROR_CODES.PATH_TRAVERSAL,
+        `Path traversal detected: "${change.file}" resolves outside repo root to ${absolutePath}`
+      );
+    }
 
     try {
       switch (change.action) {

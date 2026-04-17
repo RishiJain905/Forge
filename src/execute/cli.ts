@@ -142,7 +142,9 @@ async function executeWorkstreamWithAI(
       repoRoot,
     });
 
+    const startTime = Date.now();
     const result = await executeWorkstream(prompt, repoRoot);
+    const executionDurationMs = Date.now() - startTime;
 
     return {
       workstreamId,
@@ -154,6 +156,9 @@ async function executeWorkstreamWithAI(
         linesRemoved: c.linesRemoved,
       })),
       modelUsed: result.modelUsed,
+      promptHash: result.promptHash,
+      provider: process.env.FORGE_MODEL_PROVIDER,
+      executionDurationMs,
     };
   } catch (err) {
     return {
@@ -415,6 +420,16 @@ export async function runExecuteCommand(
       ws.aiChangesCount = aiResult.changes.length;
       ws.aiLinesAdded = aiResult.changes.reduce((sum, c) => sum + c.linesAdded, 0);
       ws.aiLinesRemoved = aiResult.changes.reduce((sum, c) => sum + c.linesRemoved, 0);
+      if (aiResult.promptHash) ws.aiPromptHash = aiResult.promptHash;
+      if (aiResult.provider) ws.aiProvider = aiResult.provider;
+      if (aiResult.executionDurationMs !== undefined) ws.aiExecutionDurationMs = aiResult.executionDurationMs;
+      ws.changesMade = aiResult.changes.map((c) => ({
+        file: c.path.startsWith("/") ? c.path : path.resolve(repoRoot, c.path),
+        action: c.action,
+        diffHash: "",
+        linesAdded: c.linesAdded,
+        linesRemoved: c.linesRemoved,
+      }));
 
       for (const change of aiResult.changes) {
         const lines = change.linesAdded > 0 ? `+${change.linesAdded} lines` : "";
@@ -464,6 +479,16 @@ export async function runExecuteCommand(
       ws.aiChangesCount = aiResult.changes.length;
       ws.aiLinesAdded = aiResult.changes.reduce((sum, c) => sum + c.linesAdded, 0);
       ws.aiLinesRemoved = aiResult.changes.reduce((sum, c) => sum + c.linesRemoved, 0);
+      if (aiResult.promptHash) ws.aiPromptHash = aiResult.promptHash;
+      if (aiResult.provider) ws.aiProvider = aiResult.provider;
+      if (aiResult.executionDurationMs !== undefined) ws.aiExecutionDurationMs = aiResult.executionDurationMs;
+      ws.changesMade = aiResult.changes.map((c) => ({
+        file: c.path.startsWith("/") ? c.path : path.resolve(repoRoot, c.path),
+        action: c.action,
+        diffHash: "",
+        linesAdded: c.linesAdded,
+        linesRemoved: c.linesRemoved,
+      }));
 
       for (const change of aiResult.changes) {
         const lines = change.linesAdded > 0 ? `+${change.linesAdded} lines` : "";
@@ -590,31 +615,57 @@ export async function runExecuteCommand(
   // Auto-execute all unblocked workstreams if enabled
   const shouldAutoExecute = options.auto || !!process.env.FORGE_EXECUTE_AUTO;
   if (shouldAutoExecute) {
-    const executable = getExecutableWorkstreams(state);
+    let executable = getExecutableWorkstreams(state);
     if (executable.length > 0) {
-      console.log(`\n[AI] Auto-executing ${executable.length} unblocked workstreams...`);
-      for (const ws of executable) {
-        console.log(`[AI] Executing: ${ws.workstreamId}...`);
-        const runResult = transitionState(ws.workstreamId, "running", state);
-        if (!runResult.success) {
-          console.log(`Cannot run ${ws.workstreamId}: ${runResult.error}`);
-          continue;
+      console.log(`\n[AI] Auto-executing unblocked workstreams...`);
+      while (executable.length > 0) {
+        for (const ws of executable) {
+          console.log(`[AI] Executing: ${ws.workstreamId}...`);
+          const runResult = transitionState(ws.workstreamId, "running", state);
+          if (!runResult.success) {
+            console.log(`Cannot run ${ws.workstreamId}: ${runResult.error}`);
+            continue;
+          }
+          const aiResult = await executeWorkstreamWithAI(ws.workstreamId, state, repoRoot);
+          if (!aiResult.success) {
+            transitionState(ws.workstreamId, "failed", state, aiResult.error);
+            console.log(`✗ ${ws.workstreamId} FAILED (AI): ${aiResult.error}`);
+            continue;
+          }
+
+          // Populate AI metadata on the workstream
+          ws.aiModelUsed = aiResult.modelUsed;
+          ws.aiChangesCount = aiResult.changes.length;
+          ws.aiLinesAdded = aiResult.changes.reduce((sum, c) => sum + c.linesAdded, 0);
+          ws.aiLinesRemoved = aiResult.changes.reduce((sum, c) => sum + c.linesRemoved, 0);
+          if (aiResult.promptHash) ws.aiPromptHash = aiResult.promptHash;
+          if (aiResult.provider) ws.aiProvider = aiResult.provider;
+          if (aiResult.executionDurationMs !== undefined) ws.aiExecutionDurationMs = aiResult.executionDurationMs;
+          ws.changesMade = aiResult.changes.map((c) => ({
+            file: c.path.startsWith("/") ? c.path : path.resolve(repoRoot, c.path),
+            action: c.action,
+            diffHash: "",
+            linesAdded: c.linesAdded,
+            linesRemoved: c.linesRemoved,
+          }));
+
+          for (const change of aiResult.changes) {
+            const lines = change.linesAdded > 0 ? `+${change.linesAdded} lines` : "";
+            const removed = change.linesRemoved > 0 ? `-${change.linesRemoved} lines` : "";
+            console.log(`[AI] ${change.action}: ${change.path} (${[lines, removed].filter(Boolean).join(", ")})`);
+          }
+          const doneResult = transitionState(ws.workstreamId, "completed", state);
+          if (!doneResult.success) {
+            console.log(`✗ ${ws.workstreamId} COMPLETION REJECTED: ${doneResult.error}`);
+            continue;
+          }
+          const totalChanges = aiResult.changes.length;
+          const totalLines = aiResult.changes.reduce((sum, c) => sum + c.linesAdded, 0);
+          console.log(`✓ ${ws.workstreamId} COMPLETED (AI) — ${totalChanges} files changed, +${totalLines} lines`);
         }
-        const aiResult = await executeWorkstreamWithAI(ws.workstreamId, state, repoRoot);
-        if (!aiResult.success) {
-          transitionState(ws.workstreamId, "failed", state, aiResult.error);
-          console.log(`✗ ${ws.workstreamId} FAILED (AI): ${aiResult.error}`);
-          continue;
-        }
-        for (const change of aiResult.changes) {
-          const lines = change.linesAdded > 0 ? `+${change.linesAdded} lines` : "";
-          const removed = change.linesRemoved > 0 ? `-${change.linesRemoved} lines` : "";
-          console.log(`[AI] ${change.action}: ${change.path} (${[lines, removed].filter(Boolean).join(", ")})`);
-        }
-        transitionState(ws.workstreamId, "completed", state);
-        const totalChanges = aiResult.changes.length;
-        const totalLines = aiResult.changes.reduce((sum, c) => sum + c.linesAdded, 0);
-        console.log(`✓ ${ws.workstreamId} COMPLETED (AI) — ${totalChanges} files changed, +${totalLines} lines`);
+        // Recompute executable workstreams after completing a batch —
+        // previously blocked workstreams may now be unblocked
+        executable = getExecutableWorkstreams(state);
       }
       printDashboard(state, mergeOrderMap);
       completed = true;

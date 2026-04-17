@@ -25,7 +25,7 @@
 1. GLM: Task 1 (AI Prompt Builder) — COMPLETE
 2. GLM: Task 2 (AI Model Connector) — COMPLETE
 3. MiniMax: Task 3 (CLI Integration) — COMPLETE
-4. MiniMax: Task 4 (Types/Schema/Artifact Extension) — pending
+4. MiniMax: Task 4 (Types/Schema/Artifact Extension) — COMPLETE
 
 ## Verification
 

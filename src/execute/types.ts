@@ -51,6 +51,9 @@ export interface AIExecutionResult {
     linesRemoved: number;
   }[];
   modelUsed: string;
+  promptHash?: string;
+  provider?: string;
+  executionDurationMs?: number;
   error?: string;
 }
 
