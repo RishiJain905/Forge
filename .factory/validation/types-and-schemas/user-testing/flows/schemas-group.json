@@ -1,0 +1,316 @@
+{
+  "groupId": "schemas-group",
+  "testedAt": "2026-04-17T14:07:00.000Z",
+  "isolation": {
+    "projectRoot": "F:\\Personal\\ForgeCLI\\Forge",
+    "scope": "read-only source code inspection + unit test execution",
+    "noServices": true,
+    "noSourceModifications": true
+  },
+  "toolsUsed": ["source-code-inspection", "unit-test-execution"],
+  "assertions": [
+    {
+      "id": "VAL-SCHEMA-001",
+      "title": "IntegrationTestStateSchema validates 'pending', 'passed', 'failed', 'skipped'",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Inspect src/integrate/schema.ts for IntegrationTestStateSchema definition",
+          "expected": "z.enum([\"pending\", \"passed\", \"failed\", \"skipped\"])",
+          "observed": "IntegrationTestStateSchema = z.enum([\"pending\", \"passed\", \"failed\", \"skipped\"]) at lines 14-18"
+        },
+        {
+          "action": "Run unit test: IntegrationTestStateSchema parses valid state 'pending'",
+          "expected": "PASS",
+          "observed": "PASS"
+        },
+        {
+          "action": "Run unit test: IntegrationTestStateSchema parses valid state 'passed'",
+          "expected": "PASS",
+          "observed": "PASS"
+        },
+        {
+          "action": "Run unit test: IntegrationTestStateSchema parses valid state 'failed'",
+          "expected": "PASS",
+          "observed": "PASS"
+        },
+        {
+          "action": "Run unit test: IntegrationTestStateSchema parses valid state 'skipped'",
+          "expected": "PASS",
+          "observed": "PASS"
+        },
+        {
+          "action": "Run unit test: IntegrationTestStateSchema rejects invalid state (\"running\")",
+          "expected": "PASS - throws ZodError",
+          "observed": "PASS - ZodError thrown for \"running\""
+        },
+        {
+          "action": "Run unit test: IntegrationTestStateSchema rejects non-string input (42)",
+          "expected": "PASS - throws ZodError",
+          "observed": "PASS - ZodError thrown for number 42"
+        }
+      ],
+      "evidence": {
+        "sourceFile": "src/integrate/schema.ts",
+        "sourceLines": "14-18",
+        "testFile": "tests/integrate.types-schema.test.ts",
+        "testOutput": "evidence/types-and-schemas/schemas-group/test-output.txt",
+        "allTestsPassed": true
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-SCHEMA-002",
+      "title": "IntegrationTestCaseSchema validates id (string), name (string), status (IntegrationTestStateSchema), optional fields; uses .strict(); rejects missing required fields, invalid status, negative durationMs, non-integer durationMs",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Inspect src/integrate/schema.ts for IntegrationTestCaseSchema definition",
+          "expected": "z.object({ id: z.string(), name: z.string(), status: IntegrationTestStateSchema, durationMs: z.number().int().nonnegative().optional(), error: z.string().optional(), recommendation: z.string().optional() }).strict()",
+          "observed": "Exact match at lines 24-35: id (z.string()), name (z.string()), status (IntegrationTestStateSchema), durationMs (z.number().int().nonnegative().optional()), error (z.string().optional()), recommendation (z.string().optional()), with .strict()"
+        },
+        {
+          "action": "Run unit test: IntegrationTestCaseSchema parses valid test case with all fields",
+          "expected": "PASS",
+          "observed": "PASS"
+        },
+        {
+          "action": "Run unit test: IntegrationTestCaseSchema parses test case with only required fields",
+          "expected": "PASS - optional fields absent",
+          "observed": "PASS - durationMs, error, recommendation all undefined"
+        },
+        {
+          "action": "Run unit test: IntegrationTestCaseSchema parses error and recommendation",
+          "expected": "PASS",
+          "observed": "PASS"
+        },
+        {
+          "action": "Run unit test: IntegrationTestCaseSchema rejects missing id",
+          "expected": "PASS - ZodError",
+          "observed": "PASS"
+        },
+        {
+          "action": "Run unit test: IntegrationTestCaseSchema rejects missing name",
+          "expected": "PASS - ZodError",
+          "observed": "PASS"
+        },
+        {
+          "action": "Run unit test: IntegrationTestCaseSchema rejects missing status",
+          "expected": "PASS - ZodError",
+          "observed": "PASS"
+        },
+        {
+          "action": "Run unit test: IntegrationTestCaseSchema rejects invalid status value (\"running\")",
+          "expected": "PASS - ZodError",
+          "observed": "PASS"
+        },
+        {
+          "action": "Run unit test: IntegrationTestCaseSchema rejects negative durationMs (-100)",
+          "expected": "PASS - ZodError",
+          "observed": "PASS"
+        },
+        {
+          "action": "Run unit test: IntegrationTestCaseSchema rejects non-integer durationMs (10.5)",
+          "expected": "PASS - ZodError",
+          "observed": "PASS"
+        },
+        {
+          "action": "Run unit test: IntegrationTestCaseSchema rejects unknown keys with .strict()",
+          "expected": "PASS - ZodError",
+          "observed": "PASS"
+        },
+        {
+          "action": "Run unit test: IntegrationTestCaseSchema allows all four valid states",
+          "expected": "PASS",
+          "observed": "PASS"
+        }
+      ],
+      "evidence": {
+        "sourceFile": "src/integrate/schema.ts",
+        "sourceLines": "24-35",
+        "testFile": "tests/integrate.types-schema.test.ts",
+        "testOutput": "evidence/types-and-schemas/schemas-group/test-output.txt",
+        "allTestsPassed": true
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-SCHEMA-003",
+      "title": "IntegrationTestFileSchema validates path, testCount (int non-negative), language, framework, optional content; uses .strict(); rejects negative testCount, non-integer testCount, missing required fields",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Inspect src/integrate/schema.ts for IntegrationTestFileSchema definition",
+          "expected": "z.object({ path: z.string(), testCount: z.number().int().nonnegative(), language: z.string(), framework: z.string(), content: z.string().optional() }).strict()",
+          "observed": "Exact match at lines 41-50: path (z.string()), testCount (z.number().int().nonnegative()), language (z.string()), framework (z.string()), content (z.string().optional()), with .strict()"
+        },
+        {
+          "action": "Run unit test: IntegrationTestFileSchema parses valid test file with all fields",
+          "expected": "PASS",
+          "observed": "PASS"
+        },
+        {
+          "action": "Run unit test: IntegrationTestFileSchema parses valid test file without optional content",
+          "expected": "PASS - content undefined",
+          "observed": "PASS"
+        },
+        {
+          "action": "Run unit test: IntegrationTestFileSchema rejects missing path",
+          "expected": "PASS - ZodError",
+          "observed": "PASS"
+        },
+        {
+          "action": "Run unit test: IntegrationTestFileSchema rejects missing language",
+          "expected": "PASS - ZodError",
+          "observed": "PASS"
+        },
+        {
+          "action": "Run unit test: IntegrationTestFileSchema rejects missing framework",
+          "expected": "PASS - ZodError",
+          "observed": "PASS"
+        },
+        {
+          "action": "Run unit test: IntegrationTestFileSchema rejects negative testCount (-1)",
+          "expected": "PASS - ZodError",
+          "observed": "PASS"
+        },
+        {
+          "action": "Run unit test: IntegrationTestFileSchema rejects non-integer testCount (1.5)",
+          "expected": "PASS - ZodError",
+          "observed": "PASS"
+        },
+        {
+          "action": "Run unit test: IntegrationTestFileSchema rejects unknown keys with .strict()",
+          "expected": "PASS - ZodError",
+          "observed": "PASS"
+        },
+        {
+          "action": "Run unit test: IntegrationTestFileSchema allows testCount of zero",
+          "expected": "PASS",
+          "observed": "PASS"
+        }
+      ],
+      "evidence": {
+        "sourceFile": "src/integrate/schema.ts",
+        "sourceLines": "41-50",
+        "testFile": "tests/integrate.types-schema.test.ts",
+        "testOutput": "evidence/types-and-schemas/schemas-group/test-output.txt",
+        "allTestsPassed": true
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-SCHEMA-004",
+      "title": "IntegrateArtifactSchema uses .strict() and validates full artifact shape with nested schemas; validateIntegrateArtifact parses and returns artifact or throws ZodError; rejects missing fields, unknown keys, invalid nested objects",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Inspect src/integrate/schema.ts for IntegrateArtifactSchema definition",
+          "expected": "z.object({ schemaVersion, forgeVersion, createdAt, executeSource, planSource, verifySource, goal, workstreamsSummary, tests: z.array(IntegrationTestCaseSchema), testFiles: z.array(IntegrationTestFileSchema), summary: IntegrationSummarySchema, recommendations: z.array(z.string()) }).strict()",
+          "observed": "Exact match at lines 55-85: all required fields present, nested schemas used for tests, testFiles, and summary, .strict() on the object"
+        },
+        {
+          "action": "Inspect src/integrate/schema.ts for validateIntegrateArtifact function",
+          "expected": "Function that calls IntegrateArtifactSchema.parse(input) and returns IntegrateArtifact or throws ZodError",
+          "observed": "validateIntegrateArtifact(input: unknown): IntegrateArtifact { return IntegrateArtifactSchema.parse(input) as IntegrateArtifact; } at line 93"
+        },
+        {
+          "action": "Run unit test: IntegrateArtifactSchema parses valid minimal artifact",
+          "expected": "PASS",
+          "observed": "PASS"
+        },
+        {
+          "action": "Run unit test: IntegrateArtifactSchema parses artifact with populated tests and files",
+          "expected": "PASS",
+          "observed": "PASS"
+        },
+        {
+          "action": "Run unit test: IntegrateArtifactSchema uses .strict() and rejects unknown keys",
+          "expected": "PASS - ZodError on extraTopLevelField",
+          "observed": "PASS"
+        },
+        {
+          "action": "Run unit test: IntegrateArtifactSchema rejects missing schemaVersion",
+          "expected": "PASS - ZodError",
+          "observed": "PASS"
+        },
+        {
+          "action": "Run unit test: IntegrateArtifactSchema rejects missing goal",
+          "expected": "PASS - ZodError",
+          "observed": "PASS"
+        },
+        {
+          "action": "Run unit test: IntegrateArtifactSchema rejects missing summary",
+          "expected": "PASS - ZodError",
+          "observed": "PASS"
+        },
+        {
+          "action": "Run unit test: IntegrateArtifactSchema rejects invalid nested test case status",
+          "expected": "PASS - ZodError on status='running'",
+          "observed": "PASS"
+        },
+        {
+          "action": "Run unit test: IntegrateArtifactSchema rejects invalid nested test file (negative testCount)",
+          "expected": "PASS - ZodError on testCount=-1",
+          "observed": "PASS"
+        },
+        {
+          "action": "Run unit test: IntegrateArtifactSchema rejects invalid nested summary (negative total)",
+          "expected": "PASS - ZodError on total=-1",
+          "observed": "PASS"
+        },
+        {
+          "action": "Run unit test: validateIntegrateArtifact parses and returns valid IntegrateArtifact",
+          "expected": "PASS",
+          "observed": "PASS"
+        },
+        {
+          "action": "Run unit test: validateIntegrateArtifact throws ZodError for missing required fields",
+          "expected": "PASS - ZodError",
+          "observed": "PASS"
+        },
+        {
+          "action": "Run unit test: validateIntegrateArtifact throws ZodError for extra keys",
+          "expected": "PASS - ZodError",
+          "observed": "PASS"
+        },
+        {
+          "action": "Run unit test: validateIntegrateArtifact throws ZodError for invalid test case status",
+          "expected": "PASS - ZodError",
+          "observed": "PASS"
+        },
+        {
+          "action": "Run unit test: validateIntegrateArtifact throws ZodError for negative testCount in test file",
+          "expected": "PASS - ZodError",
+          "observed": "PASS"
+        },
+        {
+          "action": "Run unit test: validateIntegrateArtifact throws ZodError for negative summary total",
+          "expected": "PASS - ZodError",
+          "observed": "PASS"
+        },
+        {
+          "action": "Run unit test: IntegrateArtifactSchema allows empty tests and testFiles arrays",
+          "expected": "PASS",
+          "observed": "PASS"
+        },
+        {
+          "action": "Run unit test: IntegrateArtifactSchema allows non-empty recommendations array",
+          "expected": "PASS",
+          "observed": "PASS"
+        }
+      ],
+      "evidence": {
+        "sourceFile": "src/integrate/schema.ts",
+        "sourceLines": "55-93",
+        "testFile": "tests/integrate.types-schema.test.ts",
+        "testOutput": "evidence/types-and-schemas/schemas-group/test-output.txt",
+        "allTestsPassed": true
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [],
+  "blockers": [],
+  "summary": "Tested 4 assertions: all 4 passed. All 52 unit tests in integrate.types-schema.test.js passed successfully. Source code inspection confirmed each schema matches its contract specification exactly."
+}

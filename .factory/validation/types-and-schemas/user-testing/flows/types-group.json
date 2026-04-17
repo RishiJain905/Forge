@@ -1,0 +1,249 @@
+{
+  "groupId": "types-group",
+  "testedAt": "2026-04-17T14:08:00Z",
+  "isolation": {
+    "projectRoot": "F:\\Personal\\ForgeCLI\\Forge",
+    "testingMethod": "TypeScript type checking (npm run typecheck) and source code inspection",
+    "readOnly": true
+  },
+  "toolsUsed": ["typecheck", "node test runner", "source code inspection"],
+  "assertions": [
+    {
+      "id": "VAL-TYPES-001",
+      "title": "IntegrationTestState = 'pending' | 'passed' | 'failed' | 'skipped'",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Read src/integrate/types.ts",
+          "expected": "IntegrationTestState defined as union of exactly four string literals",
+          "observed": "IntegrationTestState defined as type IntegrationTestState = 'pending' | 'passed' | 'failed' | 'skipped'"
+        },
+        {
+          "action": "Read src/integrate/schema.ts for cross-reference",
+          "expected": "IntegrationTestStateSchema should match the same four values",
+          "observed": "IntegrationTestStateSchema = z.enum(['pending', 'passed', 'failed', 'skipped']) — matches exactly"
+        },
+        {
+          "action": "Run npm run typecheck",
+          "expected": "TypeScript type checking passes without errors",
+          "observed": "typecheck passed with exit code 0, no errors"
+        },
+        {
+          "action": "Run schema tests for IntegrationTestStateSchema",
+          "expected": "All four valid states parse successfully, invalid states rejected",
+          "observed": "PASS IntegrationTestStateSchema parses valid state 'pending', 'passed', 'failed', 'skipped'; PASS rejects invalid state; PASS rejects non-string input"
+        }
+      ],
+      "evidence": {
+        "sourceFile": "src/integrate/types.ts",
+        "lineNumbers": "lines 21-25",
+        "code": "export type IntegrationTestState =\n  | \"pending\"\n  | \"passed\"\n  | \"failed\"\n  | \"skipped\";",
+        "typecheckResult": "passed (exit code 0)",
+        "schemaTestResult": "all 6 IntegrationTestStateSchema tests passed",
+        "evidenceFiles": [
+          "types-and-schemas/types-group/typecheck-output.txt",
+          "types-and-schemas/types-group/schema-test-output.txt"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-TYPES-002",
+      "title": "IntegrationTestCase has required: id, name, status; optional: durationMs, error, recommendation",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Read src/integrate/types.ts, inspect IntegrationTestCase interface",
+          "expected": "id: string (required), name: string (required), status: IntegrationTestState (required), durationMs?: number, error?: string, recommendation?: string",
+          "observed": "id: string, name: string, status: IntegrationTestState (all required); durationMs?: number, error?: string, recommendation?: string (all optional) — matches exactly"
+        },
+        {
+          "action": "Cross-reference with schema.ts IntegrationTestCaseSchema",
+          "expected": "Schema fields match the type definition",
+          "observed": "IntegrationTestCaseSchema has id: z.string(), name: z.string(), status: IntegrationTestStateSchema (required); durationMs: z.number().int().nonnegative().optional(), error: z.string().optional(), recommendation: z.string().optional() — matches"
+        },
+        {
+          "action": "Run npm run typecheck",
+          "expected": "No type errors",
+          "observed": "typecheck passed with exit code 0"
+        },
+        {
+          "action": "Run schema tests for IntegrationTestCaseSchema",
+          "expected": "Tests validate required and optional fields correctly",
+          "observed": "PASS parses valid test case with all fields; PASS parses test case with only required fields; PASS parses error and recommendation; PASS rejects missing id; PASS rejects missing name; PASS rejects missing status; PASS rejects invalid status; PASS rejects negative durationMs; PASS rejects non-integer durationMs; PASS rejects unknown keys with .strict()"
+        }
+      ],
+      "evidence": {
+        "sourceFile": "src/integrate/types.ts",
+        "lineNumbers": "lines 31-41",
+        "code": "export interface IntegrationTestCase {\n  id: string;\n  name: string;\n  status: IntegrationTestState;\n  durationMs?: number;\n  error?: string;\n  recommendation?: string;\n}",
+        "typecheckResult": "passed (exit code 0)",
+        "schemaTestResult": "all 10 IntegrationTestCaseSchema tests passed",
+        "evidenceFiles": [
+          "types-and-schemas/types-group/typecheck-output.txt",
+          "types-and-schemas/types-group/schema-test-output.txt"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-TYPES-003",
+      "title": "IntegrationTestFile has required: path, testCount, language, framework; optional: content",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Read src/integrate/types.ts, inspect IntegrationTestFile interface",
+          "expected": "path: string (required), testCount: number (required), language: string (required), framework: string (required), content?: string (optional)",
+          "observed": "path: string, testCount: number, language: string, framework: string (all required); content?: string (optional) — matches exactly"
+        },
+        {
+          "action": "Cross-reference with schema.ts IntegrationTestFileSchema",
+          "expected": "Schema fields match the type definition",
+          "observed": "IntegrationTestFileSchema has path: z.string(), testCount: z.number().int().nonnegative(), language: z.string(), framework: z.string() (required); content: z.string().optional() — matches"
+        },
+        {
+          "action": "Run npm run typecheck",
+          "expected": "No type errors",
+          "observed": "typecheck passed with exit code 0"
+        },
+        {
+          "action": "Run schema tests for IntegrationTestFileSchema",
+          "expected": "Tests validate required and optional fields correctly",
+          "observed": "PASS parses valid test file with all fields; PASS parses valid test file without optional content; PASS rejects missing path; PASS rejects missing language; PASS rejects missing framework; PASS rejects negative testCount; PASS rejects non-integer testCount; PASS rejects unknown keys with .strict()"
+        }
+      ],
+      "evidence": {
+        "sourceFile": "src/integrate/types.ts",
+        "lineNumbers": "lines 46-57",
+        "code": "export interface IntegrationTestFile {\n  path: string;\n  testCount: number;\n  language: string;\n  framework: string;\n  content?: string;\n}",
+        "typecheckResult": "passed (exit code 0)",
+        "schemaTestResult": "all 8 IntegrationTestFileSchema tests passed",
+        "evidenceFiles": [
+          "types-and-schemas/types-group/typecheck-output.txt",
+          "types-and-schemas/types-group/schema-test-output.txt"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-TYPES-004",
+      "title": "IntegrationSummary has: total, passed, failed, skipped, durationMs, testFilesGenerated, aiModelUsed",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Read src/integrate/types.ts, inspect IntegrationSummary interface",
+          "expected": "total: number, passed: number, failed: number, skipped: number, durationMs: number, testFilesGenerated: number, aiModelUsed: string",
+          "observed": "total: number, passed: number, failed: number, skipped: number, durationMs: number, testFilesGenerated: number, aiModelUsed: string — all fields present with correct types"
+        },
+        {
+          "action": "Cross-reference with schema.ts IntegrationSummarySchema",
+          "expected": "Schema fields match the type definition with runtime validation constraints",
+          "observed": "IntegrationSummarySchema has total: z.number().int().nonnegative(), passed: z.number().int().nonnegative(), failed: z.number().int().nonnegative(), skipped: z.number().int().nonnegative(), durationMs: z.number().int().nonnegative(), testFilesGenerated: z.number().int().nonnegative(), aiModelUsed: z.string() — matches with additional runtime non-negative integer constraints"
+        },
+        {
+          "action": "Run npm run typecheck",
+          "expected": "No type errors",
+          "observed": "typecheck passed with exit code 0"
+        },
+        {
+          "action": "Run schema tests for IntegrationSummarySchema",
+          "expected": "Tests validate all fields correctly",
+          "observed": "PASS parses a valid summary; PASS rejects negative total, passed, failed, skipped, durationMs, testFilesGenerated; PASS rejects non-integer counts; PASS rejects missing aiModelUsed; PASS rejects unknown keys; PASS allows all zero counts"
+        }
+      ],
+      "evidence": {
+        "sourceFile": "src/integrate/types.ts",
+        "lineNumbers": "lines 62-75",
+        "code": "export interface IntegrationSummary {\n  total: number;\n  passed: number;\n  failed: number;\n  skipped: number;\n  durationMs: number;\n  testFilesGenerated: number;\n  aiModelUsed: string;\n}",
+        "typecheckResult": "passed (exit code 0)",
+        "schemaTestResult": "all 9 IntegrationSummarySchema tests passed",
+        "evidenceFiles": [
+          "types-and-schemas/types-group/typecheck-output.txt",
+          "types-and-schemas/types-group/schema-test-output.txt"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-TYPES-005",
+      "title": "IntegrateArtifact has all required fields; PromptBuildContext, BuiltPrompt, TestRunResult, IntegrateCommandOptions, IntegrateCommandResult exist with correct structure",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Read src/integrate/types.ts, inspect IntegrateArtifact interface",
+          "expected": "All required fields present: schemaVersion, forgeVersion, createdAt, executeSource, planSource, verifySource, goal, workstreamsSummary, tests, testFiles, summary, recommendations",
+          "observed": "IntegrateArtifact has: schemaVersion: string, forgeVersion: string, createdAt: string, executeSource: string, planSource: string, verifySource: string, goal: string, workstreamsSummary: string, tests: IntegrationTestCase[], testFiles: IntegrationTestFile[], summary: IntegrationSummary, recommendations: string[] — all 12 required fields present with correct types"
+        },
+        {
+          "action": "Verify PromptBuildContext interface exists with correct structure",
+          "expected": "PromptBuildContext has executeArtifact, planArtifact, verifyArtifact, repoRoot, testFramework",
+          "observed": "PromptBuildContext has executeArtifact: ExecuteArtifact, planArtifact: PlanArtifact, verifyArtifact: VerifyArtifact, repoRoot: string, testFramework: string — all fields present"
+        },
+        {
+          "action": "Verify BuiltPrompt interface exists with correct structure",
+          "expected": "BuiltPrompt has prompt, promptHash, detectedFramework",
+          "observed": "BuiltPrompt has prompt: string, promptHash: string, detectedFramework: string — all fields present"
+        },
+        {
+          "action": "Verify TestRunResult interface exists with correct structure",
+          "expected": "TestRunResult has success, tests, testFiles, durationMs, optional error",
+          "observed": "TestRunResult has success: boolean, tests: IntegrationTestCase[], testFiles: IntegrationTestFile[], durationMs: number, error?: string — all fields present"
+        },
+        {
+          "action": "Verify IntegrateCommandOptions interface exists with correct structure",
+          "expected": "IntegrateCommandOptions has optional repo, outputDir, force, testFramework",
+          "observed": "IntegrateCommandOptions has repo?: string, outputDir?: string, force?: boolean, testFramework?: string — all fields optional with correct types"
+        },
+        {
+          "action": "Verify IntegrateCommandResult interface exists with correct structure",
+          "expected": "IntegrateCommandResult has status, summary, artifactPath, reportPath?, outputRoot, exitCode?, failure?",
+          "observed": "IntegrateCommandResult has status: 'ready' | 'failed', summary: string, artifactPath: string, reportPath?: string, outputRoot: string, exitCode?: number, failure?: { code: string; message: string } — all fields present with correct types"
+        },
+        {
+          "action": "Cross-reference IntegrateArtifact with schema.ts",
+          "expected": "IntegrateArtifactSchema matches the type definition",
+          "observed": "IntegrateArtifactSchema has all 12 fields with matching Zod types, uses .strict(), and includes nested schemas for tests, testFiles, and summary — fully consistent"
+        },
+        {
+          "action": "Run npm run typecheck",
+          "expected": "No type errors",
+          "observed": "typecheck passed with exit code 0"
+        },
+        {
+          "action": "Run schema tests for IntegrateArtifactSchema",
+          "expected": "Tests validate artifact structure correctly",
+          "observed": "PASS parses valid minimal artifact; PASS parses artifact with populated tests and files; PASS uses .strict() and rejects unknown keys; PASS rejects missing schemaVersion, goal, summary; PASS rejects invalid nested test case status, test file, summary; PASS allows empty tests and testFiles arrays; PASS allows non-empty recommendations array"
+        }
+      ],
+      "evidence": {
+        "sourceFile": "src/integrate/types.ts",
+        "lineNumbers": {
+          "IntegrateArtifact": "lines 80-102",
+          "PromptBuildContext": "lines 107-115",
+          "BuiltPrompt": "lines 120-126",
+          "TestRunResult": "lines 131-141",
+          "IntegrateCommandOptions": "lines 146-154",
+          "IntegrateCommandResult": "lines 159-173"
+        },
+        "code": {
+          "IntegrateArtifact": "export interface IntegrateArtifact {\n  schemaVersion: string;\n  forgeVersion: string;\n  createdAt: string;\n  executeSource: string;\n  planSource: string;\n  verifySource: string;\n  goal: string;\n  workstreamsSummary: string;\n  tests: IntegrationTestCase[];\n  testFiles: IntegrationTestFile[];\n  summary: IntegrationSummary;\n  recommendations: string[];\n}",
+          "PromptBuildContext": "export interface PromptBuildContext {\n  executeArtifact: ExecuteArtifact;\n  planArtifact: PlanArtifact;\n  verifyArtifact: VerifyArtifact;\n  repoRoot: string;\n  testFramework: string;\n}",
+          "BuiltPrompt": "export interface BuiltPrompt {\n  prompt: string;\n  promptHash: string;\n  detectedFramework: string;\n}",
+          "TestRunResult": "export interface TestRunResult {\n  success: boolean;\n  tests: IntegrationTestCase[];\n  testFiles: IntegrationTestFile[];\n  durationMs: number;\n  error?: string;\n}",
+          "IntegrateCommandOptions": "export interface IntegrateCommandOptions {\n  repo?: string;\n  outputDir?: string;\n  force?: boolean;\n  testFramework?: string;\n}",
+          "IntegrateCommandResult": "export interface IntegrateCommandResult {\n  status: \"ready\" | \"failed\";\n  summary: string;\n  artifactPath: string;\n  reportPath?: string;\n  outputRoot: string;\n  exitCode?: number;\n  failure?: { code: string; message: string; };\n}"
+        },
+        "typecheckResult": "passed (exit code 0)",
+        "schemaTestResult": "all IntegrateArtifactSchema tests passed",
+        "evidenceFiles": [
+          "types-and-schemas/types-group/typecheck-output.txt",
+          "types-and-schemas/types-group/schema-test-output.txt"
+        ]
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [],
+  "blockers": [],
+  "summary": "Tested 5 assertions: all 5 passed. TypeScript type definitions in src/integrate/types.ts match the validation contract exactly: IntegrationTestState has the correct 4 string literal union values, IntegrationTestCase has the correct required and optional fields, IntegrationTestFile has the correct required and optional fields, IntegrationSummary has all 7 fields with appropriate types (6 numbers + 1 string), and IntegrateArtifact has all 12 required fields plus all 5 supporting interfaces (PromptBuildContext, BuiltPrompt, TestRunResult, IntegrateCommandOptions, IntegrateCommandResult) exist with correct structure. The Zod schemas in schema.ts are fully consistent with the type definitions. Both `npm run typecheck` and the schema test suite pass cleanly."
+}

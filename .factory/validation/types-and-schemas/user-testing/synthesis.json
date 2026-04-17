@@ -1,0 +1,32 @@
+{
+  "milestone": "types-and-schemas",
+  "round": 1,
+  "status": "pass",
+  "assertionsSummary": {
+    "total": 9,
+    "passed": 9,
+    "failed": 0,
+    "blocked": 0
+  },
+  "passedAssertions": [
+    "VAL-TYPES-001",
+    "VAL-TYPES-002",
+    "VAL-TYPES-003",
+    "VAL-TYPES-004",
+    "VAL-TYPES-005",
+    "VAL-SCHEMA-001",
+    "VAL-SCHEMA-002",
+    "VAL-SCHEMA-003",
+    "VAL-SCHEMA-004"
+  ],
+  "failedAssertions": [],
+  "blockedAssertions": [],
+  "appliedUpdates": [
+    {
+      "target": "user-testing.md",
+      "description": "Added Validation Concurrency section (max 3) and Flow Validator Guidance for types-and-schemas surface with isolation rules and commands",
+      "source": "setup"
+    }
+  ],
+  "previousRound": null
+}
