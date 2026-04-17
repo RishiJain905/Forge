@@ -378,7 +378,63 @@ export async function runExecuteCommand(
       return false;
     }
 
-    if ((cmd === "run" || cmd === "aiexecute") && parts[1]) {
+    if (cmd === "run" && parts[1]) {
+      const found = findWorkstreamByIndex(parts[1]);
+      if (!found || !found.ws) {
+        console.log(`Unknown workstream: ${parts[1]}`);
+        return false;
+      }
+
+      const ws = found.ws;
+      const result = transitionState(found.id, "running", state);
+      if (!result.success) {
+        console.log(result.error);
+        return false;
+      }
+
+      // If no model provider is configured, stay in manual mode (just transition to running)
+      if (!process.env.FORGE_MODEL_PROVIDER) {
+        console.log(`✓ ${ws.workstreamId} STARTED (manual mode)`);
+        printDashboard(state, mergeOrderMap);
+        return false;
+      }
+
+      console.log(`[AI] Calling model for workstream: ${ws.workstreamId}...`);
+
+      const aiResult = await executeWorkstreamWithAI(found.id, state, repoRoot);
+
+      if (!aiResult.success) {
+        transitionState(found.id, "failed", state, aiResult.error);
+        console.log(`✗ ${ws.workstreamId} FAILED (AI): ${aiResult.error}`);
+        printDashboard(state, mergeOrderMap);
+        return false;
+      }
+
+      // Populate AI metadata on the workstream
+      ws.aiModelUsed = aiResult.modelUsed;
+      ws.aiChangesCount = aiResult.changes.length;
+      ws.aiLinesAdded = aiResult.changes.reduce((sum, c) => sum + c.linesAdded, 0);
+      ws.aiLinesRemoved = aiResult.changes.reduce((sum, c) => sum + c.linesRemoved, 0);
+
+      for (const change of aiResult.changes) {
+        const lines = change.linesAdded > 0 ? `+${change.linesAdded} lines` : "";
+        const removed = change.linesRemoved > 0 ? `-${change.linesRemoved} lines` : "";
+        console.log(`[AI] ${change.action}: ${change.path} (${[lines, removed].filter(Boolean).join(", ")})`);
+      }
+
+      const doneResult = transitionState(found.id, "completed", state);
+      if (!doneResult.success) {
+        console.log(`Warning: could not mark as completed: ${doneResult.error}`);
+      }
+
+      const totalChanges = aiResult.changes.length;
+      const totalLines = aiResult.changes.reduce((sum, c) => sum + c.linesAdded, 0);
+      console.log(`✓ ${ws.workstreamId} COMPLETED (AI) — ${totalChanges} files changed, +${totalLines} lines`);
+      printDashboard(state, mergeOrderMap);
+      return false;
+    }
+
+    if (cmd === "aiexecute" && parts[1]) {
       const found = findWorkstreamByIndex(parts[1]);
       if (!found || !found.ws) {
         console.log(`Unknown workstream: ${parts[1]}`);
@@ -592,7 +648,7 @@ export async function runExecuteCommand(
   }
   if (exitCode === 0) {
     for (const ws of state.workstreams.values()) {
-      if (ws.state === "queued") {
+      if (ws.state === "queued" || ws.state === "running") {
         exitCode = 2;
         break;
       }
