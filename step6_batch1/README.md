@@ -6,27 +6,25 @@ Step 6 is the final step of the Forge pipeline. After `forge execute` AI-impleme
 
 ## What This Batch Does
 
-Establishes the complete foundation for `forge integrate`:
-1. Core type definitions
-2. Zod schemas for validation
-3. AI-powered integration test prompt builder + test executor
-4. CLI wiring (`forge integrate` command)
+Establishes the complete foundation for `forge integrate` — all implemented in one mission (GLM).
 
-## Batch Status
+## Spec Files
 
-See `progress.md` for current status.
+| File | Purpose |
+|------|---------|
+| `SPEC.md` | Architecture, goals, what this batch is/isn't, file structure, verification checklist |
+| `OVERVIEW.md` | **Complete implementation guide** — all types, schemas, functions, files, code, implementation order, constraints |
+| `progress.md` | Current task status and commit history |
 
-## Spec
+## Quick Start
 
-See `SPEC.md` for full specification.
+1. Read `SPEC.md` for architecture context
+2. Read `OVERVIEW.md` for complete implementation details
+3. Implement `src/integrate/` following the implementation order in OVERVIEW.md
+4. Update `src/cli.ts` to register the `integrate` command
+5. Write TDD tests in `tests/integrate.types-schema.test.ts`
+6. Verify against the checklist in OVERVIEW.md
 
-## Task Specs
+## Completion
 
-- `task_1_TYPES.md` — Core TypeScript types
-- `task_2_SCHEMA.md` — Zod schemas
-- `task_3_PROMPT_BUILDER.md` — AI prompt builder + test runner
-- `task_4_CLI_WIRING.md` — CLI integration
-
-## Verification
-
-All tasks verified against the checklist in `SPEC.md`.
+After all tasks done → create `docs/S6-B1-Done/` with p1-done through p4-done closeout docs.
