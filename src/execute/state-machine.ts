@@ -3,6 +3,7 @@ import type {
   ExecuteWorkstreamState,
   ExecuteArtifact,
   StateTransition,
+  AIModelInfo,
 } from "./types.js";
 import type { SplitArtifact } from "../split/types.js";
 
@@ -44,6 +45,9 @@ export function createExecuteState(
       state: "queued",
       aiModelUsed: undefined,
       aiPromptHash: undefined,
+      aiProvider: undefined,
+      changesMade: undefined,
+      aiExecutionDurationMs: undefined,
       aiChangesCount: undefined,
       aiLinesAdded: undefined,
       aiLinesRemoved: undefined,
@@ -189,7 +193,8 @@ export function getBlockedWorkstreams(
 export function buildExecuteArtifact(
   state: ExecuteState,
   schemaVersion: string,
-  forgeVersion: string
+  forgeVersion: string,
+  aiConfig?: AIModelInfo
 ): ExecuteArtifact {
   const reqMap = mergeOrderRequirementsMap.get(state);
   const workstreams = Array.from(state.workstreams.values());
@@ -203,11 +208,20 @@ export function buildExecuteArtifact(
     completed: 0,
     failed: 0,
     blocked: blockedWorkstreams.length,
+    aiExecutedCount: 0,
+    totalChangesMade: 0,
   };
 
   for (const ws of workstreams) {
     if (ws.state in summary && ws.state !== "blocked") {
       summary[ws.state as keyof typeof summary]++;
+    }
+    // Count AI-executed workstreams and total changes
+    if (ws.aiModelUsed !== undefined) {
+      summary.aiExecutedCount++;
+    }
+    if (ws.changesMade !== undefined) {
+      summary.totalChangesMade += ws.changesMade.length;
     }
   }
 
@@ -234,6 +248,7 @@ export function buildExecuteArtifact(
     mergeOrderGates,
     summary,
     transitions: [...state.transitions],
+    aiConfig,
   };
 }
 

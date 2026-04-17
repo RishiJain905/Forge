@@ -4,6 +4,9 @@ import type {
   ExecuteWorkstream,
   ExecuteWorkstreamState,
   StateTransition,
+  ChangeMade,
+  AIModelInfo,
+  ExecuteArtifactSummary,
 } from "./types.js";
 
 export const ExecuteWorkstreamStateSchema = z.enum([
@@ -13,6 +16,23 @@ export const ExecuteWorkstreamStateSchema = z.enum([
   "failed",
   "blocked",
 ]);
+
+export const ChangeMadeSchema = z.object({
+  file: z.string(),
+  action: z.enum(['create', 'modify', 'delete']),
+  diffHash: z.string(),
+  linesAdded: z.number().int().nonnegative(),
+  linesRemoved: z.number().int().nonnegative(),
+  beforeHash: z.string().optional(),
+  afterHash: z.string().optional().nullable(),
+  error: z.string().optional(),
+}).strict();
+
+export const AIModelInfoSchema = z.object({
+  provider: z.string(),
+  modelName: z.string(),
+  baseUrl: z.string().optional(),
+}).strict();
 
 export const ExecuteWorkstreamSchema = z.object({
   workstreamId: z.string(),
@@ -25,6 +45,9 @@ export const ExecuteWorkstreamSchema = z.object({
   mergeOrderViolations: z.array(z.string()).optional(),
   aiModelUsed: z.string().optional(),
   aiPromptHash: z.string().optional(),
+  aiProvider: z.string().optional(),
+  changesMade: z.array(ChangeMadeSchema).optional(),
+  aiExecutionDurationMs: z.number().optional(),
   aiChangesCount: z.number().optional(),
   aiLinesAdded: z.number().optional(),
   aiLinesRemoved: z.number().optional(),
@@ -44,6 +67,17 @@ export const StateTransitionSchema = z.object({
   reason: z.string().optional(),
 });
 
+export const ExecuteArtifactSummarySchema = z.object({
+  total: z.number(),
+  queued: z.number(),
+  running: z.number(),
+  completed: z.number(),
+  failed: z.number(),
+  blocked: z.number(),
+  aiExecutedCount: z.number().int().nonnegative().optional(),
+  totalChangesMade: z.number().int().nonnegative().optional(),
+});
+
 export const ExecuteArtifactSchema = z
   .object({
     schemaVersion: z.string(),
@@ -52,15 +86,9 @@ export const ExecuteArtifactSchema = z
     splitSource: z.string(),
     workstreams: z.array(ExecuteWorkstreamSchema),
     mergeOrderGates: z.array(MergeOrderGateSchema),
-    summary: z.object({
-      total: z.number(),
-      queued: z.number(),
-      running: z.number(),
-      completed: z.number(),
-      failed: z.number(),
-      blocked: z.number(),
-    }),
+    summary: ExecuteArtifactSummarySchema,
     transitions: z.array(StateTransitionSchema),
+    aiConfig: AIModelInfoSchema.optional(),
   })
   .strict();
 
