@@ -2,7 +2,7 @@
 
 **Task:** CLI Integration (MiniMax)
 **Completed:** 2026-04-17
-**Commit:** 43ea99c
+**Commits:** 43ea99c (initial), 8e33dd6 (metadata fix)
 
 ## Files Created
 
