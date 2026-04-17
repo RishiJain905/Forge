@@ -1,0 +1,57 @@
+{
+  "featureId": "integrate-artifact",
+  "reviewedAt": "2026-04-17T23:30:00.000Z",
+  "commitId": "9689a4f",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "Implementation is solid and well-structured. Two exported functions (buildIntegrateArtifact, writeIntegrateArtifact) fulfill the feature requirements. The code is clean, follows existing project patterns, and is well-tested with 18 test cases. A few non-blocking observations noted below.",
+    "issues": [
+      {
+        "file": "src/integrate/artifact.ts",
+        "line": 45,
+        "severity": "non_blocking",
+        "description": "aiConfig parameter declared in BuildIntegrateArtifactParams but never used inside buildIntegrateArtifact. The feature description lists aiConfig as a parameter, but the function body destructures and ignores it. Either it should be used (e.g., included in the artifact) or removed from the interface to avoid dead code."
+      },
+      {
+        "file": "src/integrate/artifact.ts",
+        "line": 88,
+        "severity": "non_blocking",
+        "description": "Hardcoded source paths (executeSource: '.forge/execute.json', planSource: '.forge/plan.json', verifySource: '.forge/verify.json'). These should arguably be derived from actual paths passed in, but since the feature description doesn't require dynamic resolution and other integrate modules use the same pattern, this is acceptable for now."
+      },
+      {
+        "file": "src/integrate/artifact.ts",
+        "line": 143,
+        "severity": "non_blocking",
+        "description": "extractGoal uses type assertion `as { task_spec?: { goal?: string } } | undefined` to access carry_forward.task_spec.goal. The actual PlanArtifactCarryForward type uses snake_case keys (task_spec, repo_context, etc.) which matches runtime JSON shape, but the TypeScript interface PlanCarryForwardContext uses camelCase (taskSpec). The artifact.ts file accesses the snake_case JSON serialization keys, which is correct for runtime data but the type assertion bypasses TypeScript's structural checking. This pattern is duplicated from prompt-builder.ts and works in practice, but is slightly fragile."
+      },
+      {
+        "file": "src/integrate/artifact.ts",
+        "line": 55,
+        "severity": "non_blocking",
+        "description": "Feature description says 'Derives goal from planArtifact.task.goal or planArtifact.goal', but actual implementation derives from planArtifact.carry_forward.task_spec.goal (with fallbacks to purpose then summary). The implementation is CORRECT per the actual PlanArtifact type structure — the feature description was imprecise. The fallback chain (carry_forward.task_spec.goal → purpose → summary → 'Unknown goal') is sensible and well-tested."
+      },
+      {
+        "file": "src/integrate/artifact.ts",
+        "line": 30,
+        "severity": "non_blocking",
+        "description": "Feature description lists buildIntegrateArtifact with individual positional parameters, but implementation uses a BuildIntegrateArtifactParams object. The object-parameter pattern is better practice for functions with 8+ parameters and matches existing codebase patterns. This is a positive deviation from the spec."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "knowledge",
+      "observation": "PlanArtifact's carry_forward field uses snake_case keys at runtime (task_spec, repo_context, candidate_targets) but the TypeScript interface PlanCarryForwardContext uses camelCase (taskSpec, repoContext, candidateTargets). However, PlanArtifactCarryForward (the actual artifact type) uses snake_case. This means code working with serialized PlanArtifact data must access snake_case keys, but the types.ts interfaces suggest camelCase. The artifact.ts and prompt-builder.ts both work around this with type assertions. This discrepancy between camelCase TypeScript interfaces and snake_case serialized JSON keys should be documented in architecture.md to prevent confusion for future workers.",
+      "evidence": "src/plan/types.ts line 128-138: PlanArtifactCarryForward uses task_spec (snake_case). src/plan/types.ts line 82-91: PlanCarryForwardContext uses taskSpec (camelCase). src/integrate/artifact.ts line 143-146 uses type assertion to access carry_forward.task_spec.goal. src/integrate/prompt-builder.ts line 282-285 uses identical pattern."
+    },
+    {
+      "area": "conventions",
+      "observation": "The project uses a params-object pattern for functions with many parameters (BuildIntegrateArtifactParams, BuildPlanArtifactParams, etc.) rather than positional arguments. This should be documented as a convention in AGENTS.md for consistency, as feature descriptions sometimes list positional parameters.",
+      "evidence": "src/integrate/artifact.ts line 23-42: BuildIntegrateArtifactParams. Similar pattern in src/plan/artifact.ts and src/execute/artifact.ts."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "PASS — The integrate-artifact feature is well-implemented with clean, focused code. buildIntegrateArtifact correctly assembles an IntegrateArtifact from step inputs, derives goal via the carry_forward.task_spec.goal fallback chain, summarizes workstreams, collects recommendations from failed tests, and validates output through the Zod schema. writeIntegrateArtifact correctly creates parent directories and writes 2-space indented JSON. 18 tests provide solid coverage including goal extraction fallbacks, workstream counting, recommendation filtering, directory creation, indentation, round-trip validation, and overwrite behavior. Non-blocking issues: unused aiConfig parameter, hardcoded source paths, and the type-assertion pattern for accessing carry_forward. The implementation correctly deviates from the feature description's imprecise goal path (planArtifact.task.goal → planArtifact.carry_forward.task_spec.goal) which matches the actual PlanArtifact type structure."
+}

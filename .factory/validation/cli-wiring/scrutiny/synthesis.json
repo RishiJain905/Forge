@@ -1,0 +1,59 @@
+{
+  "milestone": "cli-wiring",
+  "round": 1,
+  "status": "fail",
+  "validatorsRun": {
+    "typecheck": { "passed": true, "command": "npm run typecheck", "exitCode": 0 },
+    "build": { "passed": true, "command": "npm run build", "exitCode": 0 },
+    "test": { "passed": true, "command": "npm run test (integrate-specific subsuite)", "exitCode": 0, "note": "All integrate tests pass. Known pre-existing failure in split.batch3-part4-polish-freeze-criteria.test.js (ENOENT for docs/S4-B3-Done/p4-done.md) unrelated to cli-wiring milestone." },
+    "smoke": { "passed": true, "command": "npm run smoke", "exitCode": 0 },
+    "lint": { "passed": true, "command": "N/A", "exitCode": 0, "note": "No lint command configured in this project" }
+  },
+  "reviewsSummary": {
+    "total": 3,
+    "passed": 2,
+    "failed": 1,
+    "failedFeatures": ["integrate-cli"]
+  },
+  "blockingIssues": [
+    {
+      "featureId": "integrate-cli",
+      "severity": "blocking",
+      "description": "executeWorkstream() from model-connector.ts is fundamentally incompatible with the integrate flow. It calls parseModelResponse() which expects '## CHANGES\\n```json [{file, action, content}]```' format and then applyChanges() to write files to disk. The integrate prompt asks the AI to return a plain JSON array of test files [{path, content, language, framework, testCount}]. These formats are incompatible, so any real invocation of forge integrate with a configured AI model will fail with AI_GENERATION_FAILED (PARSE_ERROR). Fix: replace executeWorkstream with direct calls to callModel + loadModelConfig from model-connector.ts, then parse the response with parseTestFilesFromAIResponse."
+    }
+  ],
+  "appliedUpdates": [
+    {
+      "target": "library",
+      "description": "Updated architecture.md: corrected AI integration section to document that executeWorkstream is incompatible and callModel+loadModelConfig should be used instead. Updated component flow diagram. Added Known Type Discrepancies section (snake_case vs camelCase in PlanArtifact carry_forward). Added workstreamsSummary format contract section.",
+      "sourceFeature": "integrate-cli, integrate-artifact, integrate-report"
+    }
+  ],
+  "suggestedGuidanceUpdates": [
+    {
+      "target": "AGENTS.md",
+      "suggestion": "Add convention: project uses params-object pattern for functions with many parameters (BuildIntegrateArtifactParams, BuildPlanArtifactParams, etc.) rather than positional arguments. Feature descriptions sometimes list positional parameters but actual implementations use object parameters.",
+      "evidence": "src/integrate/artifact.ts uses BuildIntegrateArtifactParams. Same pattern in src/plan/artifact.ts and src/execute/artifact.ts.",
+      "isSystemic": true
+    },
+    {
+      "target": "AGENTS.md",
+      "suggestion": "Add boundary: when reusing functions from other modules, workers must verify that the reused function's I/O contract is compatible with the new use case — not just that it's importable. The worker verified executeWorkstream was importable but didn't check if its response parsing format was compatible.",
+      "evidence": "integrate-cli reuses executeWorkstream() which hard-codes ## CHANGES response parsing and file-writing, incompatible with the integrate flow's test-file generation format.",
+      "isSystemic": false
+    },
+    {
+      "target": "AGENTS.md",
+      "suggestion": "Add convention: CLI output formatter functions in src/cli.ts are duplicated across all 6 steps. Consider extracting a shared formatCommandOutput helper to reduce DRY violation. Each new step adds another nearly identical copy.",
+      "evidence": "src/cli.ts has 6 nearly identical formatXCommandOutput functions (lines 27-91).",
+      "isSystemic": true
+    }
+  ],
+  "rejectedObservations": [
+    {
+      "observation": "The backend-worker skill matches what the worker actually did for the integrate-report feature.",
+      "reason": "already-documented — this confirms the skill is working correctly, no action needed"
+    }
+  ],
+  "previousRound": null
+}

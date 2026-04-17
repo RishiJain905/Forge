@@ -1,0 +1,45 @@
+{
+  "featureId": "integrate-report",
+  "reviewedAt": "2026-04-17T23:30:00.000Z",
+  "commitId": "35ce93b",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The integrate-report feature implements createIntegrationReport(artifact) in src/integrate/report.ts as a pure function that generates a well-structured Markdown report from an IntegrateArtifact. The implementation is clean, well-documented, and covers all 9 required sections: title, overview (date/goal/versions), workstreams summary table, test results table, test files table, individual test results with status icons (✅/❌/⏭️/⏳), failed test errors in code blocks, AI recommendations (with deduplication between per-test and artifact-level recommendations), and next steps guidance. The code follows existing Forge patterns (same style as execute/report.ts, verify/report.ts), uses `import type` for type imports as required by AGENTS.md, and handles edge cases gracefully (empty tests/files, unparseable workstreamsSummary, no recommendations). 23 unit tests comprehensively cover all sections, status icons, duration formatting, empty-state handling, and full end-to-end report generation. All tests pass, typecheck passes, and build succeeds.",
+    "issues": [
+      {
+        "file": "src/integrate/report.ts",
+        "line": 12,
+        "severity": "non_blocking",
+        "description": "Unused import: IntegrationTestCase is imported but never referenced in the code body. All access to test case data goes through artifact.tests (which is typed as IntegrationTestCase[] via IntegrateArtifact). Since it's `import type`, it's erased at compile time and has zero runtime impact, but it's technically dead code."
+      },
+      {
+        "file": "src/integrate/report.ts",
+        "line": 251,
+        "severity": "non_blocking",
+        "description": "Minor UX edge case in renderNextSteps: when summary.failed === 0 AND summary.passed === 0 (e.g., all tests are skipped or pending), the function falls through to the 'failures exist' path and says '0 integration test(s) failed', which reads oddly. Ideally it would detect the all-skipped/pending case and provide appropriate guidance. This is a low-priority polish issue."
+      },
+      {
+        "file": "src/integrate/report.ts",
+        "line": 226,
+        "severity": "non_blocking",
+        "description": "Recommendation deduplication uses `existing.endsWith(rec)` which is a heuristic that could incorrectly suppress an artifact-level recommendation if a per-test formatted string (e.g. '**TestName**: some text') happens to end with the artifact-level recommendation string. In practice this is extremely unlikely but the dedup logic is fragile. A more robust approach would track recommendation strings separately before formatting."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "conventions",
+      "observation": "The workstreamsSummary field in IntegrateArtifact is a free-form string that must be parsed by regex in the report generator. This creates tight coupling between artifact.ts (buildWorkstreamsSummary) and report.ts (parseWorkstreamsSummary). If the format changes in artifact.ts, the report will silently fall back to displaying raw text. This coupling is not documented in AGENTS.md or architecture.md.",
+      "evidence": "src/integrate/report.ts parseWorkstreamsSummary() parses 'Total: X, Completed: Y, Failed: Z, Changes: W' format. The format is produced by buildWorkstreamsSummary in src/integrate/artifact.ts but that function is not documented as having a stable format contract."
+    },
+    {
+      "area": "skills",
+      "observation": "The backend-worker skill procedure matches what the worker actually did. Worker followed the procedure correctly: read mission/AGENTS/features, ran baseline tests, implemented the feature, wrote tests, verified with typecheck/build/test, committed. skillFeedback.followedProcedure is true and that's accurate.",
+      "evidence": "Transcript skeleton shows: Skill invocation → Read mission/AGENTS/features → baseline tests → implement → test → verify → commit. Matches skill procedure exactly."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "PASS. The integrate-report feature is well-implemented with clean code, comprehensive tests (23 cases), and proper handling of all required report sections and edge cases. Three non-blocking issues noted: (1) unused type import of IntegrationTestCase, (2) minor UX edge case when all tests are skipped/pending (shows '0 failed' in failure path), and (3) fragile recommendation dedup heuristic (endsWith). None are blocking — the implementation fully satisfies the feature description and all expected behaviors."
+}
