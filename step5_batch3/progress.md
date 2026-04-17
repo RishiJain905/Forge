@@ -3,7 +3,7 @@
 ## Status
 
 - [x] Task 1 (AI Prompt Builder) — **Complete** — GLM
-- [ ] Task 2 (AI Model Connector) — **Pending** — GLM
+- [x] Task 2 (AI Model Connector) — **Complete** — GLM
 - [ ] Task 3 (CLI Integration) — **Pending** — MiniMax
 - [ ] Task 4 (Types/Schema/Artifact Extension) — **Pending** — MiniMax
 ## Commit History
@@ -11,6 +11,7 @@
 | Date | Commit | Description |
 |------|--------|-------------|
 | 2025-04-16 | df5656b | feat(step5-batch3): implement AI prompt builder (task 1) |
+| 2025-04-17 | 0ca8e93 | feat(step5-batch3): implement AI model connector (task 2) |
 
 ## Current Branch
 
