@@ -7,6 +7,7 @@ import {
   transitionState,
   buildExecuteArtifact,
   getBlockedWorkstreams,
+  getExecutableWorkstreams,
   restoreExecuteState,
 } from "./state-machine.js";
 import { validateSplitArtifact } from "../split/schema.js";
@@ -14,11 +15,14 @@ import type {
   ExecuteCommandOptions,
   ExecuteCommandResult,
   ExecuteArtifact,
+  AIExecutionResult,
 } from "./types.js";
 import type { ExecuteState } from "./state-machine.js";
 import { writeExecuteArtifact } from "./artifact.js";
 import { createExecuteReport } from "./report.js";
 import type { SplitArtifact } from "../split/types.js";
+import { buildWorkstreamPrompt } from "./prompt-builder.js";
+import { executeWorkstream } from "./model-connector.js";
 
 const SCHEMA_VERSION = "1.0.0";
 const FORGE_VERSION = "0.0.1";
@@ -36,7 +40,6 @@ function printDashboard(state: ExecuteState, mergeOrderMap: Map<string, string[]
     let blockedInfo: string;
 
     if (ws.state === "queued") {
-      // Check if ready based on merge order requirements
       const requirements = getQueuedWorkstreamRequirements(id, mergeOrderMap);
       const unmet = requirements.filter((req) => !state.mergedWorkstreams.has(req));
 
@@ -50,7 +53,7 @@ function printDashboard(state: ExecuteState, mergeOrderMap: Map<string, string[]
     } else if (ws.state === "failed") {
       blockedInfo = ws.error ? `✗ failed: ${ws.error}` : "✗ failed";
     } else if (ws.state === "running") {
-      blockedInfo = "✓ ready";
+      blockedInfo = ws.aiModelUsed ? `✓ running (AI: ${ws.aiModelUsed})` : "✓ running (AI)";
     } else {
       blockedInfo = "";
     }
@@ -81,13 +84,94 @@ function buildSummary(state: ExecuteState): string {
   return `Total: ${total}, Completed: ${completed}, Failed: ${failed}, Running: ${running}, Queued: ${queued}, Blocked: ${blocked}`;
 }
 
+async function loadPlanArtifact(repoRoot: string): Promise<import("../plan/types.js").PlanArtifact | null> {
+  const planPath = path.join(repoRoot, ".forge", "plan.json");
+  try {
+    const content = await fs.readFile(planPath, "utf-8");
+    return JSON.parse(content) as import("../plan/types.js").PlanArtifact;
+  } catch {
+    return null;
+  }
+}
+
+async function loadVerifyArtifact(repoRoot: string): Promise<import("../verify/types.js").VerifyArtifact | null> {
+  const verifyPath = path.join(repoRoot, ".forge", "verify.json");
+  try {
+    const content = await fs.readFile(verifyPath, "utf-8");
+    return JSON.parse(content) as import("../verify/types.js").VerifyArtifact;
+  } catch {
+    return null;
+  }
+}
+
+async function executeWorkstreamWithAI(
+  workstreamId: string,
+  state: ExecuteState,
+  repoRoot: string
+): Promise<AIExecutionResult> {
+  const ws = state.workstreams.get(workstreamId);
+  if (!ws) {
+    return { workstreamId, success: false, changes: [], modelUsed: "", error: "Workstream not found" };
+  }
+
+  const [planArtifact, verifyArtifact] = await Promise.all([
+    loadPlanArtifact(repoRoot),
+    loadVerifyArtifact(repoRoot),
+  ]);
+
+  if (!planArtifact || !verifyArtifact) {
+    return {
+      workstreamId,
+      success: false,
+      changes: [],
+      modelUsed: "",
+      error: "plan.json or verify.json not found. Run 'forge plan' and 'forge verify' first.",
+    };
+  }
+
+  try {
+    const splitJsonPath = path.join(repoRoot, ".forge", "split.json");
+    const splitContent = await fs.readFile(splitJsonPath, "utf-8");
+    const splitArtifact = JSON.parse(splitContent) as SplitArtifact;
+
+    const { prompt } = await buildWorkstreamPrompt({
+      workstreamId,
+      splitArtifact,
+      planArtifact,
+      verifyArtifact,
+      repoRoot,
+    });
+
+    const result = await executeWorkstream(prompt, repoRoot);
+
+    return {
+      workstreamId,
+      success: true,
+      changes: result.changes.map((c) => ({
+        path: c.path,
+        action: c.action as "create" | "modify" | "delete",
+        linesAdded: c.linesAdded,
+        linesRemoved: c.linesRemoved,
+      })),
+      modelUsed: result.modelUsed,
+    };
+  } catch (err) {
+    return {
+      workstreamId,
+      success: false,
+      changes: [],
+      modelUsed: "",
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
 export async function runExecuteCommand(
   options: ExecuteCommandOptions = {}
 ): Promise<ExecuteCommandResult> {
   const repoRoot = options.repo ?? process.cwd();
   const splitJsonPath = path.join(repoRoot, ".forge", "split.json");
 
-  // 1. Read split.json
   console.log("Welcome to Forge Execute (V1)\n");
   console.log(`Reading split.json from ${splitJsonPath}...`);
 
@@ -109,7 +193,6 @@ export async function runExecuteCommand(
         },
       };
     }
-    // Parse/validation error
     if (err instanceof Error) {
       return {
         status: "failed",
@@ -122,7 +205,6 @@ export async function runExecuteCommand(
         },
       };
     }
-    // Generic error
     return {
       status: "failed",
       summary: "Failed to read split.json",
@@ -138,7 +220,6 @@ export async function runExecuteCommand(
   const workstreamCount = splitArtifact.workstreams.length;
   console.log(`Found ${workstreamCount} workstreams.\n`);
 
-  // 2. Initialize state - check for existing execute.json first
   const outputDir = options.outputDir ?? path.join(repoRoot, ".forge");
   const executePath = path.join(outputDir, "execute.json");
   let state: ExecuteState;
@@ -149,7 +230,6 @@ export async function runExecuteCommand(
     try {
       existingArtifact = JSON.parse(existingContent) as ExecuteArtifact;
     } catch {
-      // Corrupt execute.json
       return {
         status: "failed",
         summary: `Existing execute.json is corrupt or invalid JSON. Use --force to start over.`,
@@ -179,11 +259,9 @@ export async function runExecuteCommand(
       };
     }
   } catch (err: unknown) {
-    // Only treat ENOENT as "no existing state, start fresh"
     if (typeof err === "object" && err !== null && "code" in err && (err as { code: string }).code === "ENOENT") {
       state = createExecuteState(splitArtifact, splitJsonPath);
     } else {
-      // Unexpected error reading execute.json
       const message = err instanceof Error ? err.message : String(err);
       return {
         status: "failed",
@@ -199,16 +277,11 @@ export async function runExecuteCommand(
     }
   }
 
-  // Get the merge order requirements map from the state
-  // We need to track which workstreams are waiting on which
   const mergeOrderMap = new Map<string, string[]>();
   for (const sw of splitArtifact.workstreams) {
     mergeOrderMap.set(sw.id, sw.mergeOrderRequirements);
   }
 
-  // 3. Early edge-case checks before entering REPL
-
-  // Edge case 1: Empty workstream list
   if (state.workstreams.size === 0) {
     console.log("No workstreams to execute. All done.");
     const artifactPath = path.join(outputDir, "execute.json");
@@ -241,19 +314,23 @@ export async function runExecuteCommand(
     };
   }
 
-  // Edge case 2: All workstreams are blocked
   const blocked = getBlockedWorkstreams(state);
   if (blocked.length === state.workstreams.size && state.workstreams.size > 0) {
     console.error("All workstreams are blocked by merge_order constraints.");
     console.error("Check that upstream dependencies have been completed first.");
   }
 
-  // 4. Show welcome banner and initial dashboard
   printDashboard(state, mergeOrderMap);
 
-  console.log("\nCommands: run <id> | done <id> | fail <id> [reason] | status | exit");
+  console.log("\nCommands: run <id> | aiexecute <id> | done <id> | fail <id> [reason] | status | exit");
+  console.log("  run/aiexecute <id>: Execute workstream with AI (builds prompt, calls model, applies changes)");
+  console.log("  done <id>:         Mark workstream as manually completed");
+  console.log("  fail <id> [reason]: Mark workstream as failed");
+  console.log("  status:            Show dashboard");
+  console.log("  exit:              Exit REPL");
+  console.log("\nAI execution requires FORGE_MODEL_PROVIDER and FORGE_MODEL_NAME env vars.");
+  console.log("Optional: FORGE_MODEL_API_KEY, FORGE_MODEL_BASE_URL, FORGE_EXECUTE_AUTO");
 
-  // 5. Interactive read-eval-print loop
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
@@ -263,7 +340,6 @@ export async function runExecuteCommand(
   let completed = false;
   let exitResult: ExecuteCommandResult | null = null;
 
-  // Helper to find workstream by index (1-based)
   function findWorkstreamByIndex(
     indexStr: string
   ): { id: string; ws: ReturnType<typeof state.workstreams.get> } | null {
@@ -277,18 +353,15 @@ export async function runExecuteCommand(
     return { id, ws: state.workstreams.get(id) };
   }
 
-  // Helper to get unmet requirements for a queued workstream
   function getUnmet(id: string): string[] {
     const requirements = mergeOrderMap.get(id) ?? [];
     return requirements.filter((req) => !state.mergedWorkstreams.has(req));
   }
 
-  // Helper to get index display string for workstream
   function getIndexForId(id: string): number {
     return Array.from(state.workstreams.keys()).indexOf(id) + 1;
   }
 
-  // Process a command line
   async function processLine(line: string): Promise<boolean> {
     const trimmed = line.trim();
     if (!trimmed) return false;
@@ -305,20 +378,46 @@ export async function runExecuteCommand(
       return false;
     }
 
-    if (cmd === "run" && parts[1]) {
+    if ((cmd === "run" || cmd === "aiexecute") && parts[1]) {
       const found = findWorkstreamByIndex(parts[1]);
       if (!found || !found.ws) {
         console.log(`Unknown workstream: ${parts[1]}`);
         return false;
       }
 
+      const ws = found.ws;
       const result = transitionState(found.id, "running", state);
       if (!result.success) {
         console.log(result.error);
-      } else {
-        console.log(`✓ ${found.ws.workstreamId} STARTED`);
-        printDashboard(state, mergeOrderMap);
+        return false;
       }
+
+      console.log(`[AI] Calling model for workstream: ${ws.workstreamId}...`);
+
+      const aiResult = await executeWorkstreamWithAI(found.id, state, repoRoot);
+
+      if (!aiResult.success) {
+        transitionState(found.id, "failed", state, aiResult.error);
+        console.log(`✗ ${ws.workstreamId} FAILED (AI): ${aiResult.error}`);
+        printDashboard(state, mergeOrderMap);
+        return false;
+      }
+
+      for (const change of aiResult.changes) {
+        const lines = change.linesAdded > 0 ? `+${change.linesAdded} lines` : "";
+        const removed = change.linesRemoved > 0 ? `-${change.linesRemoved} lines` : "";
+        console.log(`[AI] ${change.action}: ${change.path} (${[lines, removed].filter(Boolean).join(", ")})`);
+      }
+
+      const doneResult = transitionState(found.id, "completed", state);
+      if (!doneResult.success) {
+        console.log(`Warning: could not mark as completed: ${doneResult.error}`);
+      }
+
+      const totalChanges = aiResult.changes.length;
+      const totalLines = aiResult.changes.reduce((sum, c) => sum + c.linesAdded, 0);
+      console.log(`✓ ${ws.workstreamId} COMPLETED (AI) — ${totalChanges} files changed, +${totalLines} lines`);
+      printDashboard(state, mergeOrderMap);
       return false;
     }
 
@@ -329,7 +428,6 @@ export async function runExecuteCommand(
         return false;
       }
 
-      // Snapshot which queued workstreams are currently blocked (unmet.length>0)
       const previouslyBlocked: string[] = [];
       for (const [id, ws] of state.workstreams) {
         if (ws.state === "queued" && getUnmet(id).length > 0) {
@@ -355,7 +453,9 @@ export async function runExecuteCommand(
         }
       } else {
         console.log(`✓ ${found.ws.workstreamId} COMPLETED and MERGED`);
-        // Compute newly unblocked (was blocked before, now not)
+        if (found.ws.aiChangesCount !== undefined) {
+          console.log(`  AI: ${found.ws.aiChangesCount} files changed, +${found.ws.aiLinesAdded ?? 0} lines, -${found.ws.aiLinesRemoved ?? 0} lines`);
+        }
         const currentlyBlocked: string[] = [];
         for (const [id, ws] of state.workstreams) {
           if (ws.state === "queued" && getUnmet(id).length > 0) {
@@ -390,15 +490,10 @@ export async function runExecuteCommand(
     }
 
     console.log(`Unknown command: ${cmd}`);
-    console.log("Commands: run <id> | done <id> | fail <id> [reason] | status | exit");
+    console.log("Commands: run <id> | aiexecute <id> | done <id> | fail <id> [reason] | status | exit");
     return false;
   }
 
-  // Use line/close event pattern instead of rl.question for reliable piped-stdin handling.
-  // rl.question() can leave unsettled promises when stdin closes mid-question,
-  // causing Node.js exit code 13 ("unsettled top-level await").
-  // The line event fires once per newline-delimited input; close fires after all
-  // lines are processed, so we never miss buffered input.
   const lineQueue: Array<string | undefined> = [];
   let lineResolve: ((value: string | undefined) => void) | null = null;
 
@@ -413,7 +508,6 @@ export async function runExecuteCommand(
   });
 
   rl.on("close", () => {
-    // Signal EOF: push undefined sentinel and resolve any pending waiter
     lineQueue.push(undefined);
     if (lineResolve) {
       const resolve = lineResolve;
@@ -431,12 +525,46 @@ export async function runExecuteCommand(
     });
   };
 
-  // Main interactive loop
+  // Auto-execute all unblocked workstreams if enabled
+  const shouldAutoExecute = options.auto || !!process.env.FORGE_EXECUTE_AUTO;
+  if (shouldAutoExecute) {
+    const executable = getExecutableWorkstreams(state);
+    if (executable.length > 0) {
+      console.log(`\n[AI] Auto-executing ${executable.length} unblocked workstreams...`);
+      for (const ws of executable) {
+        console.log(`[AI] Executing: ${ws.workstreamId}...`);
+        const runResult = transitionState(ws.workstreamId, "running", state);
+        if (!runResult.success) {
+          console.log(`Cannot run ${ws.workstreamId}: ${runResult.error}`);
+          continue;
+        }
+        const aiResult = await executeWorkstreamWithAI(ws.workstreamId, state, repoRoot);
+        if (!aiResult.success) {
+          transitionState(ws.workstreamId, "failed", state, aiResult.error);
+          console.log(`✗ ${ws.workstreamId} FAILED (AI): ${aiResult.error}`);
+          continue;
+        }
+        for (const change of aiResult.changes) {
+          const lines = change.linesAdded > 0 ? `+${change.linesAdded} lines` : "";
+          const removed = change.linesRemoved > 0 ? `-${change.linesRemoved} lines` : "";
+          console.log(`[AI] ${change.action}: ${change.path} (${[lines, removed].filter(Boolean).join(", ")})`);
+        }
+        transitionState(ws.workstreamId, "completed", state);
+        const totalChanges = aiResult.changes.length;
+        const totalLines = aiResult.changes.reduce((sum, c) => sum + c.linesAdded, 0);
+        console.log(`✓ ${ws.workstreamId} COMPLETED (AI) — ${totalChanges} files changed, +${totalLines} lines`);
+      }
+      printDashboard(state, mergeOrderMap);
+      completed = true;
+    } else {
+      console.log("No unblocked workstreams to auto-execute.");
+    }
+  }
+
   while (!completed) {
     try {
       rl.prompt();
       const input = await nextLine();
-      // input is undefined when stdin closes (EOF) — treat as implicit "exit"
       if (input === undefined || input === null) {
         completed = true;
       } else {
@@ -449,7 +577,6 @@ export async function runExecuteCommand(
 
   rl.close();
 
-  // 5. Determine exit code based on final state
   let exitCode = 0;
   for (const ws of state.workstreams.values()) {
     if (ws.state === "failed") {
@@ -466,15 +593,12 @@ export async function runExecuteCommand(
     }
   }
 
-  // 6. Exit - write artifact
   const artifactPath = path.join(outputDir, "execute.json");
   const reportPath = path.join(outputDir, "execute-report.md");
 
-  // Ensure output directory exists
   await fs.mkdir(outputDir, { recursive: true });
 
   try {
-    // Edge case 5: FORGE_EXECUTE_DEBUG=1
     if (process.env.FORGE_EXECUTE_DEBUG === "1") {
       const debugPath = path.join(outputDir, "execute-debug.json");
       await fs.writeFile(debugPath, JSON.stringify(state, null, 2), "utf-8");
@@ -484,7 +608,6 @@ export async function runExecuteCommand(
     const artifact = buildExecuteArtifact(state, SCHEMA_VERSION, FORGE_VERSION);
     await writeExecuteArtifact(artifactPath, artifact);
 
-    // Write human-readable report
     const report = createExecuteReport(artifact);
     await fs.writeFile(reportPath, report, "utf-8");
     console.log(`Report written to ${reportPath}`);
@@ -500,10 +623,9 @@ export async function runExecuteCommand(
     };
   }
 
-  const summary = buildSummary(state);
   return {
     status: "ready",
-    summary,
+    summary: buildSummary(state),
     artifactPath,
     reportPath,
     outputRoot: outputDir,

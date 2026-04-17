@@ -11,6 +11,25 @@ export interface ExecuteWorkstream {
   failedAt?: string;        // ISO timestamp when marked failed
   error?: string;           // error message if failed
   mergeOrderViolations?: string[];  // list of prerequisite workstream ids that blocked completion
+  aiModelUsed?: string;       // e.g. "openai/gpt-4o"
+  aiPromptHash?: string;       // SHA256 of the prompt sent
+  aiChangesCount?: number;     // number of files changed
+  aiLinesAdded?: number;       // total lines added
+  aiLinesRemoved?: number;     // total lines removed
+}
+
+// AI execution result for a single workstream
+export interface AIExecutionResult {
+  workstreamId: string;
+  success: boolean;
+  changes: {
+    path: string;
+    action: "create" | "modify" | "delete";
+    linesAdded: number;
+    linesRemoved: number;
+  }[];
+  modelUsed: string;
+  error?: string;
 }
 
 // The execute step artifact
@@ -51,6 +70,7 @@ export interface ExecuteCommandOptions {
   outputDir?: string;
   force?: boolean;  // restart even with existing execute.json
   resume?: boolean; // continue from existing execute.json state
+  auto?: boolean;   // auto-execute all unblocked workstreams
 }
 
 // Result of the execute command

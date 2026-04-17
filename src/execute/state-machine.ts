@@ -42,6 +42,11 @@ export function createExecuteState(
       workstreamId: sw.id,
       title: sw.title,
       state: "queued",
+      aiModelUsed: undefined,
+      aiPromptHash: undefined,
+      aiChangesCount: undefined,
+      aiLinesAdded: undefined,
+      aiLinesRemoved: undefined,
     };
     state.workstreams.set(sw.id, ws);
     reqMap.set(sw.id, [...sw.mergeOrderRequirements]);

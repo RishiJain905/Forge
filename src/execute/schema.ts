@@ -23,6 +23,11 @@ export const ExecuteWorkstreamSchema = z.object({
   failedAt: z.string().optional(),
   error: z.string().optional(),
   mergeOrderViolations: z.array(z.string()).optional(),
+  aiModelUsed: z.string().optional(),
+  aiPromptHash: z.string().optional(),
+  aiChangesCount: z.number().optional(),
+  aiLinesAdded: z.number().optional(),
+  aiLinesRemoved: z.number().optional(),
 }).strict();
 
 export const MergeOrderGateSchema = z.object({
