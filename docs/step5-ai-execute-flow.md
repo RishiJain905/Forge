@@ -37,7 +37,7 @@ flowchart TB
     subgraph AI_EXEC["3. AI EXECUTION PHASE"]
         direction LR
         C1[/"3a. BUILD PROMPT<br/>workstream desc + file contents<br/>plan context + verify constraints<br/>merge order + carried concerns"/]
-        C2[/"3b. CALL AI MODEL<br/>user-provided cloud model<br/>gpt-4o / claude-4 / gemini-2.5<br/>returns code changes"/]
+        C2[/"3b. CALL AI MODEL<br/>user-provided cloud model<br/>gpt-5.4 / claude-Opus-4.7 / GLM-5.1<br/>returns code changes"/]
         C3[/"3c. APPLY CHANGES<br/>write files to disk<br/>track: path, hash, lines"/]
         C4[/"3d. VERIFY<br/>typecheck / lint<br/>optional per-workstream"/]
         C1 --> C2 --> C3 --> C4
