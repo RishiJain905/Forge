@@ -132,8 +132,8 @@ export interface PromptBuildContext {
   verifyArtifact: VerifyArtifact;
   /** Absolute path to the repository root. */
   repoRoot: string;
-  /** Auto-detected or overridden test framework (e.g. "jest", "pytest"). */
-  testFramework: string;
+  /** Auto-detected or overridden test framework (e.g. "jest", "pytest"). When omitted, the framework is auto-detected from the repository. */
+  testFramework?: string;
 }
 
 // ---------------------------------------------------------------------------

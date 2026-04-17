@@ -7,6 +7,7 @@ import {
   detectTestFramework,
   getChangedFileContents,
   buildIntegrationTestPrompt,
+  deriveFrameworkFromOverride,
 } from "../src/integrate/prompt-builder.js";
 import type { DetectedFramework } from "../src/integrate/prompt-builder.js";
 import type { ExecuteArtifact, ExecuteWorkstream, ChangeMade } from "../src/execute/types.js";
@@ -267,7 +268,6 @@ function makePromptBuildContext(overrides?: Partial<PromptBuildContext>): Prompt
     planArtifact: makePlanArtifact(),
     verifyArtifact: makeVerifyArtifact(),
     repoRoot: "/tmp/test",
-    testFramework: "",
     ...overrides,
   };
 }
@@ -733,7 +733,100 @@ await runScenario("buildIntegrationTestPrompt uses testFramework override when p
 
     assert.equal(result.detectedFramework, "vitest", "should use override framework");
     assert.ok(result.prompt.includes("vitest"), "prompt should mention override framework");
+    // When override is provided, language and testCommand are derived from framework name
+    assert.ok(result.prompt.includes("Language: typescript"), "prompt should have language derived from vitest override");
+    assert.ok(result.prompt.includes("Test command: npx vitest run"), "prompt should have testCommand derived from vitest override");
   });
+});
+
+await runScenario("buildIntegrationTestPrompt with pytest override derives python language and pytest command", async () => {
+  await withTempDir(async (dir) => {
+    await fs.writeFile(
+      path.join(dir, "package.json"),
+      JSON.stringify({ scripts: { test: "jest" } })
+    );
+
+    const ctx = makePromptBuildContext({ repoRoot: dir, testFramework: "pytest" });
+    const result = await buildIntegrationTestPrompt(ctx);
+
+    assert.equal(result.detectedFramework, "pytest", "should use override framework");
+    assert.ok(result.prompt.includes("Language: python"), "prompt should have python language for pytest override");
+    assert.ok(result.prompt.includes("Test command: pytest"), "prompt should have pytest command for pytest override");
+  });
+});
+
+await runScenario("buildIntegrationTestPrompt without testFramework override auto-detects", async () => {
+  await withTempDir(async (dir) => {
+    await fs.writeFile(
+      path.join(dir, "package.json"),
+      JSON.stringify({ scripts: { test: "jest" } })
+    );
+
+    const ctx = makePromptBuildContext({ repoRoot: dir });
+    const result = await buildIntegrationTestPrompt(ctx);
+
+    assert.equal(result.detectedFramework, "jest", "should auto-detect jest from package.json");
+  });
+});
+
+// ===========================================================================
+// deriveFrameworkFromOverride tests
+// ===========================================================================
+
+await runScenario("deriveFrameworkFromOverride returns correct values for pytest", () => {
+  const result = deriveFrameworkFromOverride("pytest");
+  assert.equal(result.name, "pytest");
+  assert.equal(result.language, "python");
+  assert.equal(result.testCommand, "pytest");
+});
+
+await runScenario("deriveFrameworkFromOverride returns correct values for unittest", () => {
+  const result = deriveFrameworkFromOverride("unittest");
+  assert.equal(result.name, "unittest");
+  assert.equal(result.language, "python");
+  assert.equal(result.testCommand, "python -m unittest");
+});
+
+await runScenario("deriveFrameworkFromOverride returns correct values for vitest", () => {
+  const result = deriveFrameworkFromOverride("vitest");
+  assert.equal(result.name, "vitest");
+  assert.equal(result.language, "typescript");
+  assert.equal(result.testCommand, "npx vitest run");
+});
+
+await runScenario("deriveFrameworkFromOverride returns correct values for jest", () => {
+  const result = deriveFrameworkFromOverride("jest");
+  assert.equal(result.name, "jest");
+  assert.equal(result.language, "typescript");
+  assert.equal(result.testCommand, "npx jest");
+});
+
+await runScenario("deriveFrameworkFromOverride returns correct values for mocha", () => {
+  const result = deriveFrameworkFromOverride("mocha");
+  assert.equal(result.name, "mocha");
+  assert.equal(result.language, "javascript");
+  assert.equal(result.testCommand, "npx mocha");
+});
+
+await runScenario("deriveFrameworkFromOverride falls back for unknown framework", () => {
+  const result = deriveFrameworkFromOverride("cypress");
+  assert.equal(result.name, "cypress");
+  assert.equal(result.language, "typescript");
+  assert.equal(result.testCommand, "npm test");
+});
+
+await runScenario("deriveFrameworkFromOverride handles python-like unknown framework", () => {
+  const result = deriveFrameworkFromOverride("pyflakes");
+  assert.equal(result.name, "pyflakes");
+  assert.equal(result.language, "python");
+  assert.equal(result.testCommand, "pytest");
+});
+
+await runScenario("deriveFrameworkFromOverride trims whitespace", () => {
+  const result = deriveFrameworkFromOverride("  jest  ");
+  assert.equal(result.name, "jest");
+  assert.equal(result.language, "typescript");
+  assert.equal(result.testCommand, "npx jest");
 });
 
 await runScenario("buildIntegrationTestPrompt extracts goal from carry_forward.task_spec.goal", async () => {

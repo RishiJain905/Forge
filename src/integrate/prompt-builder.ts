@@ -131,6 +131,48 @@ export async function detectTestFramework(
 }
 
 // ---------------------------------------------------------------------------
+// deriveFrameworkFromOverride
+// ---------------------------------------------------------------------------
+
+/**
+ * Derive a DetectedFramework from a user-provided framework override name.
+ * Maps well-known framework names to appropriate language and testCommand
+ * values. Falls back to "typescript" / "npm test" for unknown frameworks.
+ */
+export function deriveFrameworkFromOverride(
+  override: string
+): DetectedFramework {
+  const name = override.trim();
+
+  // Python frameworks
+  if (name === "pytest") {
+    return { name: "pytest", language: "python", testCommand: "pytest" };
+  }
+  if (name === "unittest") {
+    return { name: "unittest", language: "python", testCommand: "python -m unittest" };
+  }
+
+  // JavaScript/TypeScript frameworks
+  if (name === "vitest") {
+    return { name: "vitest", language: "typescript", testCommand: "npx vitest run" };
+  }
+  if (name === "jest") {
+    return { name: "jest", language: "typescript", testCommand: "npx jest" };
+  }
+  if (name === "mocha") {
+    return { name: "mocha", language: "javascript", testCommand: "npx mocha" };
+  }
+
+  // Catch-all: derive language from name heuristics
+  const language = name.toLowerCase().includes("python") || name.toLowerCase().includes("py")
+    ? "python"
+    : "typescript";
+  const testCommand = language === "python" ? "pytest" : "npm test";
+
+  return { name, language, testCommand };
+}
+
+// ---------------------------------------------------------------------------
 // getChangedFileContents
 // ---------------------------------------------------------------------------
 
@@ -188,16 +230,11 @@ export async function buildIntegrationTestPrompt(
   ctx: PromptBuildContext
 ): Promise<BuiltPrompt> {
   // 1. Detect or use overridden framework
-  const detectedFramework =
-    ctx.testFramework && ctx.testFramework.length > 0
-      ? await detectTestFramework(ctx.repoRoot)
-      : await detectTestFramework(ctx.repoRoot);
+  const hasOverride = ctx.testFramework != null && ctx.testFramework.length > 0;
 
-  // Use the override if provided
-  const framework: DetectedFramework =
-    ctx.testFramework && ctx.testFramework.length > 0
-      ? { name: ctx.testFramework, language: detectedFramework.language, testCommand: detectedFramework.testCommand }
-      : detectedFramework;
+  const framework: DetectedFramework = hasOverride
+    ? deriveFrameworkFromOverride(ctx.testFramework!)
+    : await detectTestFramework(ctx.repoRoot);
 
   // 2. Collect changed file contents
   const changedFiles = await getChangedFileContents(
