@@ -237,7 +237,12 @@ export async function runCli(argv: string[]): Promise<number> {
 
   program
     .command("execute")
-    .description("Run the Step 5 execute stage — track workstream execution interactively.")
+    .description(
+      "Run the Step 5 execute stage — track workstream execution interactively.\n" +
+      "When AI context is available (plan.json, verify.json, and FORGE_MODEL_* env vars),\n" +
+      "`run <id>` triggers the AI pipeline (prompt builder → model → apply → state transition).\n" +
+      "Use --auto or FORGE_EXECUTE_AUTO=1 to auto-execute all unblocked workstreams."
+    )
     .option("--repo <path>", "Target repo root. Defaults to the current directory.")
     .option(
       "--output-dir <path>",
@@ -245,11 +250,13 @@ export async function runCli(argv: string[]): Promise<number> {
     )
     .option("--resume", "Resume from an existing execute.json state.")
     .option("--force", "Force a fresh start even if execute.json exists.")
+    .option("--auto", "Auto-execute all unblocked workstreams in merge order (use FORGE_EXECUTE_AUTO env var to enable by default).")
     .action(async (options: {
       repo?: string;
       outputDir?: string;
       resume?: boolean;
       force?: boolean;
+      auto?: boolean;
     }) => {
       const result = await runExecuteCommand(options);
       const output = formatExecuteCommandOutput(result);
