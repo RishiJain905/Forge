@@ -1,0 +1,41 @@
+{
+  "groupId": "tdd-schema-validation",
+  "milestone": "tdd-tests",
+  "assertions": [],
+  "featureExpectedBehaviors": [
+    {
+      "featureId": "integrate-tdd-tests",
+      "behaviors": [
+        "All schema validation tests pass",
+        "Valid artifacts are accepted by validateIntegrateArtifact",
+        "Invalid artifacts throw ZodError with descriptive messages",
+        "Unknown keys are rejected via .strict() mode"
+      ]
+    }
+  ],
+  "results": [
+    {
+      "behavior": "All schema validation tests pass",
+      "status": "pass",
+      "evidence": "55/55 tests in integrate.types-schema.test.ts passed with exit code 0"
+    },
+    {
+      "behavior": "Valid artifacts are accepted by validateIntegrateArtifact",
+      "status": "pass",
+      "evidence": "validateIntegrateArtifact parses and returns a valid IntegrateArtifact test passed; round-trip JSON serialize then parse yields equal artifact test passed"
+    },
+    {
+      "behavior": "Invalid artifacts throw ZodError with descriptive messages",
+      "status": "pass",
+      "evidence": "Tests for missing required fields, invalid test case status, negative testCount, negative summary total all throw ZodError"
+    },
+    {
+      "behavior": "Unknown keys are rejected via .strict() mode",
+      "status": "pass",
+      "evidence": "Tests for IntegrationTestCaseSchema, IntegrationTestFileSchema, IntegrationSummarySchema, IntegrateArtifactSchema, and validateIntegrateArtifact all reject unknown keys with ZodError"
+    }
+  ],
+  "toolsUsed": ["node", "npm run typecheck", "npm run build", "tsc"],
+  "frictions": [],
+  "blockers": []
+}
