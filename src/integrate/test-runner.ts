@@ -206,7 +206,39 @@ export async function runIntegrationTests(
 
   for (const tf of testFiles) {
     try {
+      // Reject absolute paths before resolving — path traversal guard
+      if (path.isAbsolute(tf.path)) {
+        console.warn(
+          `Warning: skipping test file with absolute path — path traversal detected: ${tf.path}`
+        );
+        writtenFiles.push({
+          path: tf.path,
+          testCount: 0,
+          language: tf.language,
+          framework: tf.framework,
+          content: `/* WARNING: Absolute path rejected — path traversal detected: ${tf.path} */`,
+        });
+        continue;
+      }
+
       const absolutePath = path.resolve(repoRoot, tf.path);
+
+      // Verify resolved path stays within repoRoot — path traversal guard
+      const relativePath = path.relative(repoRoot, absolutePath);
+      if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
+        console.warn(
+          `Warning: skipping test file that resolves outside repo root — path traversal detected: ${tf.path} -> ${absolutePath}`
+        );
+        writtenFiles.push({
+          path: tf.path,
+          testCount: 0,
+          language: tf.language,
+          framework: tf.framework,
+          content: `/* WARNING: Path traversal detected — resolves outside repo root: ${tf.path} */`,
+        });
+        continue;
+      }
+
       const dir = path.dirname(absolutePath);
 
       // Create directories recursively

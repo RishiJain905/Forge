@@ -365,7 +365,6 @@ await runScenario(
   async () => {
     const readme = await readTextFile(join(process.cwd(), "README.md"));
     const progress = await readTextFile(join(process.cwd(), "progress.md"));
-    const doneDoc = await readTextFile(join(process.cwd(), "docs", "S4-B3-Done", "p5-done.md"));
 
     assert.match(readme, /Step 4 Batch 3 Part 5/i);
     assert.match(readme, /Forge Execute Gate/i);
@@ -373,9 +372,7 @@ await runScenario(
     assert.match(progress, /Step 4 Batch 3 Part 5 is complete/i);
     assert.match(progress, /Step 4 is complete for V1 and frozen except for future bug fixes/i);
     assert.match(progress, /Next major target: Step 6 integrate implementation work/i);
-    assert.match(doneDoc, /Step 4 Batch 3 Part 5 Done Summary/i);
-    assert.match(doneDoc, /Step 4 is complete for V1 and frozen except for future bug fixes/i);
-    assert.match(doneDoc, /Step 5 should consume persisted Step 4 split outputs directly/i);
+    // Closeout doc p5-done.md was in docs/S4-B3-Done/ which was removed after Step 4 freeze
   },
 );
 

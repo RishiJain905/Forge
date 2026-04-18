@@ -198,7 +198,29 @@ export async function getChangedFileContents(
       seenPaths.add(change.file);
 
       try {
+        // Reject absolute paths before resolving — path traversal guard
+        if (path.isAbsolute(change.file)) {
+          results.push({
+            path: change.file,
+            content: null,
+            warning: "Absolute path rejected — path traversal detected",
+          });
+          continue;
+        }
+
         const absolutePath = path.resolve(repoRoot, change.file);
+
+        // Verify resolved path stays within repoRoot — path traversal guard
+        const relativeFromRoot = path.relative(repoRoot, absolutePath);
+        if (relativeFromRoot.startsWith("..") || path.isAbsolute(relativeFromRoot)) {
+          results.push({
+            path: change.file,
+            content: null,
+            warning: "Path traversal detected — resolves outside repo root",
+          });
+          continue;
+        }
+
         const content = await fs.readFile(absolutePath, "utf-8");
         results.push({ path: change.file, content, warning: null });
       } catch {
