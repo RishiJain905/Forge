@@ -1,0 +1,51 @@
+{
+  "featureId": "integrate-prompt-builder",
+  "reviewedAt": "2026-04-17T18:45:00.000Z",
+  "commitId": "9fd75c2",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The implementation covers all three required functions (detectTestFramework, getChangedFileContents, buildIntegrationTestPrompt) with 38 comprehensive tests. However, there is a blocking bug in the framework override logic in buildIntegrationTestPrompt where the conditional ternary always calls detectTestFramework regardless of whether an override is provided, and when an override is provided, the detected framework's language and testCommand are used instead of deriving them from the overridden framework name — resulting in a mismatch between the framework name and the test command. There are also minor issues: unused type imports, the PromptBuildContext.testFramework type being required rather than optional, and an overly broad type assertion in extractGoal.",
+    "issues": [
+      {
+        "file": "src/integrate/prompt-builder.ts",
+        "line": 191,
+        "severity": "blocking",
+        "description": "Dead code branch: the ternary expression `ctx.testFramework && ctx.testFramework.length > 0 ? await detectTestFramework(ctx.repoRoot) : await detectTestFramework(ctx.repoRoot)` always calls detectTestFramework regardless of whether a testFramework override is provided. Both branches are identical. The intent was to skip detection when an override is provided, but the code always runs detection. When override IS provided (lines 197-200), it then takes the detected framework's `language` and `testCommand` but replaces `name` with the override. This means if a user provides testFramework='vitest' but the project uses jest, the result would be {name: 'vitest', language: 'typescript', testCommand: 'npx jest'}, which is semantically wrong — the testCommand should match the framework name."
+      },
+      {
+        "file": "src/integrate/prompt-builder.ts",
+        "line": 18,
+        "severity": "non_blocking",
+        "description": "Unused type imports: `ExecuteWorkstream` and `PlanItem` are imported but never referenced in the code. While these are `import type` and won't cause runtime issues, they are dead imports that should be removed for cleanliness."
+      },
+      {
+        "file": "src/integrate/types.ts",
+        "line": 136,
+        "severity": "non_blocking",
+        "description": "PromptBuildContext.testFramework is typed as `string` (required) but the actual usage in prompt-builder.ts treats it as an optional override — checking `ctx.testFramework && ctx.testFramework.length > 0` to mean 'no override'. The type should be `testFramework?: string` (optional) to match the semantics. The IntegrateCommandOptions already correctly uses `testFramework?: string`, but PromptBuildContext should follow the same pattern. Having it as required forces callers to provide an empty string, which is error-prone."
+      },
+      {
+        "file": "src/integrate/prompt-builder.ts",
+        "line": 245,
+        "severity": "non_blocking",
+        "description": "In extractGoal, the carry_forward is cast to `{ task_spec?: { goal?: string } } | undefined`, but carry_forward on PlanArtifact is typed as PlanArtifactCarryForward (never undefined) and task_spec is a required property on it. The type assertion loses type safety — it should use the actual types. Additionally, the function accesses `purpose` via `(planArtifact as { purpose?: string }).purpose`, but `purpose` IS a property on PlanArtifact (typed as `string`), so the type assertion is unnecessary and actually weaker than the real type."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "conventions",
+      "observation": "The AGENTS.md documents using `import type` for cross-module type imports, which the worker followed. However, importing unused types (ExecuteWorkstream, PlanItem) as `import type` is a pattern that slips past linters. The project doesn't appear to have a lint rule to catch unused type imports.",
+      "evidence": "src/integrate/prompt-builder.ts:18-19 imports ExecuteWorkstream and PlanItem which are never referenced in the file"
+    },
+    {
+      "area": "knowledge",
+      "observation": "The PlanArtifact type has `carry_forward: PlanArtifactCarryForward` which is always present and always has `task_spec` with a `goal` field. The prompt-builder's extractGoal function doesn't use this type information and instead does lossy type assertions. This suggests the worker may not have fully explored the type definitions before implementing.",
+      "evidence": "src/integrate/prompt-builder.ts:245-249 — `const cf = planArtifact.carry_forward as { task_spec?: { goal?: string } } | undefined` when PlanArtifactCarryForward is well-typed with required task_spec"
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "The integrate-prompt-builder feature is mostly well-implemented with 38 passing tests and good coverage of detectTestFramework (15 tests), getChangedFileContents (6 tests), and buildIntegrationTestPrompt (17 tests). However, there is a blocking bug in the framework override logic: the ternary operator on line 191 always calls detectTestFramework regardless of whether an override is provided (both branches are identical), and when an override IS provided, it incorrectly uses the detected framework's `language` and `testCommand` instead of deriving appropriate values for the overridden framework name. This means providing testFramework='vitest' on a project that detects jest would produce {name: 'vitest', language: 'typescript', testCommand: 'npx jest'} — a mismatch. The test for this case passes only because it doesn't check testCommand consistency. Minor issues include unused type imports (ExecuteWorkstream, PlanItem), PromptBuildContext.testFramework being required instead of optional, and overly broad type assertions in extractGoal."
+}
