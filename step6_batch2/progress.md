@@ -7,7 +7,7 @@
 - [x] Task 3 (Error Classification + Retry) — **Complete**
 - [x] Task 4 (Missing Artifact Handling) — **Complete**
 - [x] Task 5 (Freeze Criteria) — **Complete**
-- [ ] Task 6 (Partial execute.json) — **Pending**
+- [x] Task 6 (Partial execute.json) — **Complete**
 
 ## Commit History
 
@@ -21,7 +21,7 @@
 | 2025-04-19 | a24f1c7 | feat(step6-batch2): add Zod validation to artifact loaders (task 4 spec compliance) |
 | 2025-04-19 | cc5dd3f | test(step6-batch2): fix test fixtures for Zod validation and improve loader error messages (task 4) |
 | 2025-04-19 | b2746f3 | feat(step6-batch2): implement freeze criteria (task 5) |
-| TBD | TBD | feat(step6-batch2): implement partial execute.json support (task 6) |
+| 2025-04-19 | 6c4ec2c | feat(step6-batch2): implement partial execute.json support (task 6) |
 
 ## Current Branch
 
