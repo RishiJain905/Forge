@@ -33,6 +33,7 @@ import {
 } from "./artifact.js";
 import { createIntegrationReport } from "./report.js";
 import { loadModelConfig, callModel } from "../execute/model-connector.js";
+import { extractJsonFromAIResponse } from "./extract-json.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -309,60 +310,19 @@ function createVerifyStub(): VerifyArtifact {
 
 /**
  * Parse the AI model's raw response to extract a JSON array of test file
- * descriptors. The AI is expected to return a JSON array where each element
- * has { path, content, language, framework, testCount }.
+ * descriptors. Delegates to extractJsonFromAIResponse which tries multiple
+ * extraction strategies (code-block, bare-array, embedded-array, fixed-json).
  *
- * Tries two extraction strategies:
- *   1. Look for a JSON code block (```json ... ```)
- *   2. Fall back to finding a bare JSON array in the text
+ * Returns an empty array if extraction or validation fails.
  */
 export function parseTestFilesFromAIResponse(
   rawResponse: string
 ): IntegrationTestFile[] {
-  // Strategy 1: Extract from a ```json code block
-  const jsonBlockMatch = rawResponse.match(/```json\s*\n([\s\S]*?)\n```/);
-  if (jsonBlockMatch && jsonBlockMatch[1]) {
-    const parsed = tryParseTestFileArray(jsonBlockMatch[1]);
-    if (parsed) return parsed;
-  }
-
-  // Strategy 2: Look for a bare JSON array anywhere in the response
-  const bareArrayMatch = rawResponse.match(/\[[\s\S]*\]/);
-  if (bareArrayMatch) {
-    const parsed = tryParseTestFileArray(bareArrayMatch[0]);
-    if (parsed) return parsed;
-  }
-
-  return [];
-}
-
-/**
- * Try to parse a string as a JSON array of test file descriptors.
- * Returns null if parsing fails or the result is not a valid array.
- */
-function tryParseTestFileArray(jsonStr: string): IntegrationTestFile[] | null {
   try {
-    const parsed = JSON.parse(jsonStr);
-    if (!Array.isArray(parsed)) return null;
-
-    const testFiles: IntegrationTestFile[] = [];
-    for (const item of parsed) {
-      if (typeof item !== "object" || item === null) continue;
-
-      const obj = item as Record<string, unknown>;
-      testFiles.push({
-        path: typeof obj.path === "string" ? obj.path : "unknown.test.ts",
-        testCount: typeof obj.testCount === "number" ? obj.testCount : 0,
-        language:
-          typeof obj.language === "string" ? obj.language : "typescript",
-        framework: typeof obj.framework === "string" ? obj.framework : "jest",
-        content: typeof obj.content === "string" ? obj.content : undefined,
-      });
-    }
-
-    return testFiles;
+    const result = extractJsonFromAIResponse(rawResponse);
+    return result.files;
   } catch {
-    return null;
+    return [];
   }
 }
 
@@ -562,14 +522,19 @@ export async function runIntegrateCommand(
 
   // ---- Step 6: Parse AI response to extract test files ----
 
-  const testFiles = parseTestFilesFromAIResponse(rawResponse);
+  let testFiles: IntegrationTestFile[];
 
-  if (testFiles.length === 0) {
+  try {
+    const extractResult = extractJsonFromAIResponse(rawResponse);
+    testFiles = extractResult.files;
+    console.log(`[AI] Parsed JSON via: ${extractResult.method}`);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     return makeErrorResult(
       repoRoot,
       outputDir,
-      "NO_TEST_FILES_GENERATED",
-      "AI model did not generate any test files. Try adjusting the prompt or providing more context.",
+      "AI_GENERATION_FAILED",
+      `Failed to parse AI response: ${message}`,
       1
     );
   }
