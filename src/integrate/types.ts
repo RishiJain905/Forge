@@ -202,6 +202,8 @@ export interface IntegrateCommandOptions {
   maxRetries?: number;
   /** Override maximum duration in ms before freezing. */
   maxDurationMs?: number;
+  /** Max parallel test operations. */
+  maxConcurrency?: number;
 }
 
 // ---------------------------------------------------------------------------

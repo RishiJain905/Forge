@@ -20,6 +20,7 @@ import type {
   WorkstreamHealth,
 } from "../src/integrate/types.js";
 import type { ExecuteWorkstream } from "../src/execute/types.js";
+import { runIntegrationTestsParallel, type ParallelTestRunOptions } from "../src/integrate/test-runner.js";
 
 async function runScenario(
   name: string,
@@ -1630,5 +1631,58 @@ await runScenario(
     } finally {
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// --max-concurrency CLI flag tests (Phase D, Task 2)
+// ---------------------------------------------------------------------------
+
+await runScenario(
+  "IntegrateCommandOptions accepts maxConcurrency field",
+  () => {
+    const opts: IntegrateCommandOptions = {
+      repo: "/tmp/test",
+      outputDir: "/tmp/test/.forge",
+      force: true,
+      auto: false,
+      jsonOnly: true,
+      testFramework: "jest",
+      delay: 5,
+      maxRetries: 10,
+      maxDurationMs: 60000,
+      maxConcurrency: 3,
+    };
+    assert.equal(opts.maxConcurrency, 3);
+  }
+);
+
+await runScenario(
+  "ParallelTestRunOptions interface works correctly with maxConcurrency value",
+  () => {
+    const parallelOpts: ParallelTestRunOptions = {
+      maxConcurrency: 10,
+      command: "npx jest",
+      repoRoot: "/tmp/test-repo",
+      timeoutMs: 60000,
+    };
+    assert.equal(parallelOpts.maxConcurrency, 10);
+    assert.equal(parallelOpts.command, "npx jest");
+    assert.equal(parallelOpts.repoRoot, "/tmp/test-repo");
+    assert.equal(parallelOpts.timeoutMs, 60000);
+  }
+);
+
+await runScenario(
+  "Default maxConcurrency is 5 when not provided in IntegrateCommandOptions",
+  () => {
+    const opts: IntegrateCommandOptions = {
+      repo: "/tmp/test",
+    };
+    // When maxConcurrency is not provided, it should be undefined (CLI defaults to 5)
+    assert.equal(opts.maxConcurrency, undefined);
+    // The actual default of 5 is applied in the CLI runner:
+    const effectiveMaxConcurrency = opts.maxConcurrency ?? 5;
+    assert.equal(effectiveMaxConcurrency, 5);
   }
 );

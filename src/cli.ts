@@ -308,6 +308,7 @@ export async function runCli(argv: string[]): Promise<number> {
     .option("--delay <seconds>", "Override retry delay in seconds for rate limit backoff", (val) => parseInt(val, 10))
     .option("--max-retries <n>", "Maximum retry attempts before freezing", (val) => parseInt(val, 10))
     .option("--max-duration <ms>", "Maximum duration in ms before freezing", (val) => parseInt(val, 10))
+    .option("--max-concurrency <n>", "Max parallel test operations (default: 5)", (val) => parseInt(val, 10))
     .action(async (options: {
       repo?: string;
       outputDir?: string;
@@ -318,6 +319,7 @@ export async function runCli(argv: string[]): Promise<number> {
       delay?: number;
       maxRetries?: number;
       maxDurationMs?: number;
+      maxConcurrency?: number;
     }) => {
       const result = await runIntegrateCommand(options);
       const output = formatIntegrateCommandOutput(result);

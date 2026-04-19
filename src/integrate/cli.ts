@@ -29,7 +29,7 @@ import type {
 } from "./types.js";
 
 import { buildIntegrationTestPrompt, deriveFrameworkFromOverride } from "./prompt-builder.js";
-import { runIntegrationTests } from "./test-runner.js";
+import { runIntegrationTestsParallel, type ParallelTestRunOptions } from "./test-runner.js";
 import {
   buildIntegrateArtifact,
   writeIntegrateArtifact,
@@ -829,7 +829,13 @@ export async function runIntegrateCommand(
   let testResult: TestRunResult;
 
   try {
-    testResult = await runIntegrationTests(testFiles, repoRoot, testCommand);
+    const parallelOptions: ParallelTestRunOptions = {
+      maxConcurrency: options.maxConcurrency ?? 5,
+      command: testCommand,
+      repoRoot,
+      timeoutMs: 300_000,
+    };
+    testResult = await runIntegrationTestsParallel(testFiles, parallelOptions);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return makeErrorResult(

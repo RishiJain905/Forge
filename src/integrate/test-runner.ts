@@ -319,10 +319,10 @@ async function runIntegrationTestsSequential(
 // ---------------------------------------------------------------------------
 
 /**
- * Write test files to disk and execute the test runner sequentially.
+ * Write test files to disk and execute the test runner.
  *
- * This is the original public API. It delegates to `runIntegrationTestsSequential`
- * for backward compatibility.
+ * This is the original public API. For backward compatibility, it delegates
+ * to `runIntegrationTestsParallel` with default concurrency settings.
  *
  * @param testFiles     Array of test file descriptors (path, content, language, framework).
  * @param repoRoot      Absolute path to the repository root.
@@ -334,7 +334,13 @@ export async function runIntegrationTests(
   repoRoot: string,
   testCommand?: string
 ): Promise<TestRunResult> {
-  return runIntegrationTestsSequential(testFiles, repoRoot, testCommand);
+  const options: ParallelTestRunOptions = {
+    maxConcurrency: 5,
+    command: testCommand ?? "npm test",
+    repoRoot,
+    timeoutMs: 300_000,
+  };
+  return runIntegrationTestsParallel(testFiles, options);
 }
 
 // ---------------------------------------------------------------------------
