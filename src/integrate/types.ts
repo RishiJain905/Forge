@@ -119,6 +119,12 @@ export interface IntegrateArtifact {
   summary: IntegrationSummary;
   /** Actionable recommendations derived from test failures. */
   recommendations: string[];
+  /** Number of AI call attempts made before this artifact was produced. */
+  attemptCount?: number;
+  /** ISO timestamp when the integration was frozen due to unrecoverable conditions. */
+  frozenAt?: string;
+  /** Final error message that caused the integration to freeze. */
+  finalError?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -257,4 +263,36 @@ export interface ErrorClassification {
   message: string;
   /** User-facing actionable suggestion. */
   suggestion: string;
+}
+
+// ---------------------------------------------------------------------------
+// Freeze criteria
+// ---------------------------------------------------------------------------
+
+/** Configuration for freeze criteria — when to stop retrying and produce a frozen artifact. */
+export interface FreezeCriteria {
+  maxRetries: number;
+  maxDurationMs: number;
+  freezeOn: {
+    rateLimitHit: boolean;
+    authFailure: boolean;
+    parseFailure: boolean;
+  };
+}
+
+export const DEFAULT_FREEZE_CRITERIA: FreezeCriteria = {
+  maxRetries: 2,
+  maxDurationMs: 300000, // 5 minutes
+  freezeOn: {
+    rateLimitHit: false,
+    authFailure: true,
+    parseFailure: true,
+  },
+};
+
+/** Mutable state tracking freeze conditions through the retry loop. */
+export interface FreezeState {
+  frozenAt?: string;
+  finalError?: string;
+  attemptCount: number;
 }

@@ -112,6 +112,12 @@ export const IntegrateArtifactSchema = z
     summary: IntegrationSummarySchema,
     /** Actionable recommendations derived from test failures. */
     recommendations: z.array(z.string()),
+    /** Number of AI call attempts made before this artifact was produced. */
+    attemptCount: z.number().int().nonnegative().optional(),
+    /** ISO timestamp when the integration was frozen due to unrecoverable conditions. */
+    frozenAt: z.string().optional(),
+    /** Final error message that caused the integration to freeze. */
+    finalError: z.string().optional(),
   })
   .strict();
 

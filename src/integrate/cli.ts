@@ -32,15 +32,19 @@ import { runIntegrationTests } from "./test-runner.js";
 import {
   buildIntegrateArtifact,
   writeIntegrateArtifact,
+  buildFrozenArtifact,
 } from "./artifact.js";
-import { createIntegrationReport } from "./report.js";
+import { createIntegrationReport, createFrozenReport } from "./report.js";
 import { loadModelConfig, callModel } from "../execute/model-connector.js";
 import { extractJsonFromAIResponse } from "./extract-json.js";
 import { classifyError } from "./errors.js";
 import {
   DEFAULT_RETRY_CONFIG,
+  DEFAULT_FREEZE_CRITERIA,
   type RetryConfig,
   type ErrorClassification,
+  type FreezeCriteria,
+  type FreezeState,
 } from "./types.js";
 
 // ---------------------------------------------------------------------------
@@ -66,6 +70,40 @@ function aiErrorTypeToCode(type: string): string {
   if (type === "parse_error") return "AI_PARSE_FAILURE";
   if (type === "unknown_error") return "AI_UNKNOWN";
   return `AI_${type.toUpperCase()}`;
+}
+
+// ---------------------------------------------------------------------------
+// Freeze criteria check
+// ---------------------------------------------------------------------------
+
+/**
+ * Determine whether the retry loop should freeze (stop and produce a
+ * frozen artifact) instead of retrying or failing immediately.
+ *
+ * Freeze is triggered when:
+ *  - The attempt count exceeds the configured maximum, OR
+ *  - The elapsed time exceeds the configured maximum duration, OR
+ *  - The last error type matches a configured freeze-on flag
+ *    (authFailure, parseFailure, rateLimitHit).
+ *
+ * @param criteria   The freeze criteria configuration.
+ * @param state      The current mutable freeze state.
+ * @param lastError  The last classified error, or null if no error yet.
+ * @param elapsedMs  Elapsed time in milliseconds since the retry loop started.
+ * @returns True if the integration should freeze.
+ */
+export function shouldFreeze(
+  criteria: FreezeCriteria,
+  state: FreezeState,
+  lastError: ErrorClassification | null,
+  elapsedMs: number
+): boolean {
+  if (state.attemptCount > criteria.maxRetries) return true;
+  if (elapsedMs > criteria.maxDurationMs) return true;
+  if (lastError?.type === "auth_failure" && criteria.freezeOn.authFailure) return true;
+  if (lastError?.type === "parse_error" && criteria.freezeOn.parseFailure) return true;
+  if (lastError?.type === "rate_limit" && criteria.freezeOn.rateLimitHit) return true;
+  return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -557,9 +595,13 @@ export async function runIntegrateCommand(
   let modelUsed = "";
   let rawResponse = "";
   const retryConfig: RetryConfig = DEFAULT_RETRY_CONFIG;
+  const freezeCriteria: FreezeCriteria = DEFAULT_FREEZE_CRITERIA;
+  const freezeState: FreezeState = { attemptCount: 0 };
+  const startTime = Date.now();
   let lastClassification: ErrorClassification | null = null;
 
   for (let attempt = 0; attempt <= retryConfig.maxRetries; attempt++) {
+    freezeState.attemptCount = attempt;
     try {
       const config = loadModelConfig();
       rawResponse = await callModel(prompt, config);
@@ -569,14 +611,55 @@ export async function runIntegrateCommand(
     } catch (err) {
       const classified = classifyError(err);
       lastClassification = classified;
-
-      const isRetryableType =
-        retryConfig.retryableErrors.includes(classified.type) && classified.retryable;
+      const elapsed = Date.now() - startTime;
 
       console.error(
         `[AI] Error (attempt ${attempt + 1}/${retryConfig.maxRetries + 1}): ${classified.type}`
       );
       console.error(`[AI] ${classified.suggestion}`);
+
+      // Check if we should freeze instead of retry
+      if (shouldFreeze(freezeCriteria, freezeState, classified, elapsed)) {
+        freezeState.frozenAt = new Date().toISOString();
+        freezeState.finalError = `${classified.type}: ${classified.message}`;
+
+        // Build and write frozen artifact
+        const frozenArtifact = buildFrozenArtifact(
+          executeArtifact,
+          planArtifact,
+          verifyArtifact,
+          freezeState,
+          classified
+        );
+
+        const frozenArtifactPath = path.join(outputDir, "integrate.json");
+        const frozenReportPath = path.join(outputDir, "integration-report.md");
+
+        try {
+          await fs.mkdir(outputDir, { recursive: true });
+          await writeIntegrateArtifact(frozenArtifactPath, frozenArtifact);
+          const frozenReport = createFrozenReport(frozenArtifact, classified);
+          await fs.writeFile(frozenReportPath, frozenReport, "utf-8");
+        } catch {
+          // Best effort — if writing fails, still return the frozen result
+        }
+
+        return {
+          status: "failed",
+          summary: `Integration frozen at ${freezeState.frozenAt}. ${classified.suggestion}`,
+          artifactPath: frozenArtifactPath,
+          reportPath: frozenReportPath,
+          outputRoot: outputDir,
+          exitCode: 1,
+          failure: {
+            code: "INTEGRATION_FROZEN",
+            message: `Integration stopped: ${classified.type}. ${freezeState.finalError}`,
+          },
+        };
+      }
+
+      const isRetryableType =
+        retryConfig.retryableErrors.includes(classified.type) && classified.retryable;
 
       if (!isRetryableType) {
         // Non-retryable — fail immediately with classified error code

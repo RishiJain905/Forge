@@ -7,10 +7,14 @@ import crypto from "node:crypto";
 import {
   runIntegrateCommand,
   parseTestFilesFromAIResponse,
+  shouldFreeze,
 } from "../src/integrate/cli.js";
 import type {
   IntegrateCommandResult,
   IntegrationTestFile,
+  FreezeCriteria,
+  FreezeState,
+  ErrorClassification,
 } from "../src/integrate/types.js";
 
 async function runScenario(
@@ -1044,5 +1048,77 @@ await runScenario(
     } finally {
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Freeze criteria tests (Task 5)
+// ---------------------------------------------------------------------------
+
+await runScenario(
+  "shouldFreeze returns true when attemptCount exceeds maxRetries",
+  () => {
+    const criteria: FreezeCriteria = { maxRetries: 2, maxDurationMs: 300000, freezeOn: { rateLimitHit: false, authFailure: true, parseFailure: true } };
+    const state: FreezeState = { attemptCount: 3 };
+    assert.equal(shouldFreeze(criteria, state, null, 0), true);
+  }
+);
+
+await runScenario(
+  "shouldFreeze returns true for auth_failure when freezeOn.authFailure is true",
+  () => {
+    const criteria: FreezeCriteria = { maxRetries: 2, maxDurationMs: 300000, freezeOn: { rateLimitHit: false, authFailure: true, parseFailure: true } };
+    const state: FreezeState = { attemptCount: 0 };
+    const authError: ErrorClassification = { type: "auth_failure", retryable: false, message: "401 Unauthorized", suggestion: "Check API key." };
+    assert.equal(shouldFreeze(criteria, state, authError, 0), true);
+  }
+);
+
+await runScenario(
+  "shouldFreeze returns false for auth_failure when freezeOn.authFailure is false",
+  () => {
+    const criteria: FreezeCriteria = { maxRetries: 2, maxDurationMs: 300000, freezeOn: { rateLimitHit: false, authFailure: false, parseFailure: true } };
+    const state: FreezeState = { attemptCount: 0 };
+    const authError: ErrorClassification = { type: "auth_failure", retryable: false, message: "401 Unauthorized", suggestion: "Check API key." };
+    assert.equal(shouldFreeze(criteria, state, authError, 0), false);
+  }
+);
+
+await runScenario(
+  "shouldFreeze returns true for parse_error when freezeOn.parseFailure is true",
+  () => {
+    const criteria: FreezeCriteria = { maxRetries: 2, maxDurationMs: 300000, freezeOn: { rateLimitHit: false, authFailure: true, parseFailure: true } };
+    const state: FreezeState = { attemptCount: 0 };
+    const parseError: ErrorClassification = { type: "parse_error", retryable: true, message: "Invalid JSON", suggestion: "Check AI output format." };
+    assert.equal(shouldFreeze(criteria, state, parseError, 0), true);
+  }
+);
+
+await runScenario(
+  "shouldFreeze returns false for rate_limit when freezeOn.rateLimitHit is false",
+  () => {
+    const criteria: FreezeCriteria = { maxRetries: 2, maxDurationMs: 300000, freezeOn: { rateLimitHit: false, authFailure: true, parseFailure: true } };
+    const state: FreezeState = { attemptCount: 0 };
+    const rateLimitError: ErrorClassification = { type: "rate_limit", retryable: true, message: "429 Too Many Requests", suggestion: "Wait and retry." };
+    assert.equal(shouldFreeze(criteria, state, rateLimitError, 0), false);
+  }
+);
+
+await runScenario(
+  "shouldFreeze returns true for rate_limit when freezeOn.rateLimitHit is true",
+  () => {
+    const criteria: FreezeCriteria = { maxRetries: 2, maxDurationMs: 300000, freezeOn: { rateLimitHit: true, authFailure: true, parseFailure: true } };
+    const state: FreezeState = { attemptCount: 0 };
+    const rateLimitError: ErrorClassification = { type: "rate_limit", retryable: true, message: "429 Too Many Requests", suggestion: "Wait and retry." };
+    assert.equal(shouldFreeze(criteria, state, rateLimitError, 0), true);
+  }
+);
+
+await runScenario(
+  "shouldFreeze returns false when criteria not met and no error",
+  () => {
+    const criteria: FreezeCriteria = { maxRetries: 2, maxDurationMs: 300000, freezeOn: { rateLimitHit: false, authFailure: true, parseFailure: true } };
+    const state: FreezeState = { attemptCount: 0 };
+    assert.equal(shouldFreeze(criteria, state, null, 0), false);
   }
 );
