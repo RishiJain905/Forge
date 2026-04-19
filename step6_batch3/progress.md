@@ -3,7 +3,7 @@
 ## Status
 
 - [x] Task 1 (Open Questions: address Batch 2 OQ1-OQ5) — **Complete**
-- [ ] Task 2 (Parallel Test Execution) — **Pending**
+- [x] Task 2 (Parallel Test Execution) — **Complete**
 - [ ] Task 3 (Prompt Builder Polish) — **Pending**
 - [ ] Task 4 (CLI Output Polish) — **Pending**
 - [ ] Task 5 (Freeze + Smoke) — **Pending**
@@ -14,6 +14,7 @@
 |------|--------|-------------|
 | 2025-04-19 | f452c44 | fix: address all PR#64 review comments |
 | 2025-04-19 | TBD | feat(step6-batch3): address all 5 Batch 2 open questions (task 1) |
+| 2025-04-19 | TBD | feat(step6-batch3): add parallel test execution and --max-concurrency flag (task 2) |
 
 ## Current Branch
 
@@ -21,4 +22,4 @@
 
 ## Next Major Target
 
-Task 2 (Parallel Test Execution) → Task 3 (Prompt Builder Polish) → Task 4 (CLI Output Polish) → Task 5 (Freeze + Smoke)
+Task 3 (Prompt Builder Polish) → Task 4 (CLI Output Polish) → Task 5 (Freeze + Smoke)
