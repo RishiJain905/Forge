@@ -484,15 +484,15 @@ await runScenario(
         "utf-8"
       );
 
-      // Without AI env vars, the command should fail with AI_GENERATION_FAILED
+      // Without AI env vars, the command should fail with an AI_* error
       // rather than NO_EXECUTE_ARTIFACT or ALL_WORKSTREAMS_FAILED (which we already tested)
       const result = await runIntegrateCommand({ repo: tmpDir });
       // Should not be NO_EXECUTE_ARTIFACT — that check passed
       assert.notEqual(result.failure?.code, "NO_EXECUTE_ARTIFACT");
       assert.notEqual(result.failure?.code, "NO_WORKSTREAMS");
       assert.notEqual(result.failure?.code, "ALL_WORKSTREAMS_FAILED");
-      // Should be AI_GENERATION_FAILED since no model is configured
-      assert.equal(result.failure?.code, "AI_GENERATION_FAILED");
+      // Should be AI_UNKNOWN since no model is configured (classified by error classifier)
+      assert.equal(result.failure?.code, "AI_UNKNOWN");
     } finally {
       await fs.rm(tmpDir, { recursive: true, force: true });
     }

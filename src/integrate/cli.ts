@@ -34,6 +34,12 @@ import {
 import { createIntegrationReport } from "./report.js";
 import { loadModelConfig, callModel } from "../execute/model-connector.js";
 import { extractJsonFromAIResponse } from "./extract-json.js";
+import { classifyError } from "./errors.js";
+import {
+  DEFAULT_RETRY_CONFIG,
+  type RetryConfig,
+  type ErrorClassification,
+} from "./types.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -41,6 +47,24 @@ import { extractJsonFromAIResponse } from "./extract-json.js";
 
 const SCHEMA_VERSION = "1.0.0";
 const FORGE_VERSION = "0.0.1";
+
+// ---------------------------------------------------------------------------
+// Retry helpers
+// ---------------------------------------------------------------------------
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Convert an AIErrorType to the SPEC's error code format: AI_<UPPER_TYPE>
+ * Special cases: parse_error -> AI_PARSE_FAILURE, unknown_error -> AI_UNKNOWN
+ */
+function aiErrorTypeToCode(type: string): string {
+  if (type === "parse_error") return "AI_PARSE_FAILURE";
+  if (type === "unknown_error") return "AI_UNKNOWN";
+  return `AI_${type.toUpperCase()}`;
+}
 
 // ---------------------------------------------------------------------------
 // Artifact loaders
@@ -500,24 +524,70 @@ export async function runIntegrateCommand(
     );
   }
 
-  // ---- Step 5: Call AI via loadModelConfig + callModel (reused from model-connector) ----
+  // ---- Step 5: Call AI with retry loop (reused model-connector + error classification) ----
 
-  let modelUsed: string;
-  let rawResponse: string;
+  let modelUsed = "";
+  let rawResponse = "";
+  const retryConfig: RetryConfig = DEFAULT_RETRY_CONFIG;
+  let lastClassification: ErrorClassification | null = null;
 
-  try {
-    const config = loadModelConfig();
-    rawResponse = await callModel(prompt, config);
-    modelUsed = `${config.provider}/${config.modelName}`;
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return makeErrorResult(
-      repoRoot,
-      outputDir,
-      "AI_GENERATION_FAILED",
-      `AI model call failed: ${message}`,
-      1
-    );
+  for (let attempt = 0; attempt <= retryConfig.maxRetries; attempt++) {
+    try {
+      const config = loadModelConfig();
+      rawResponse = await callModel(prompt, config);
+      modelUsed = `${config.provider}/${config.modelName}`;
+      // Success — exit retry loop
+      break;
+    } catch (err) {
+      const classified = classifyError(err);
+      lastClassification = classified;
+
+      const isRetryableType =
+        retryConfig.retryableErrors.includes(classified.type) && classified.retryable;
+
+      console.error(
+        `[AI] Error (attempt ${attempt + 1}/${retryConfig.maxRetries + 1}): ${classified.type}`
+      );
+      console.error(`[AI] ${classified.suggestion}`);
+
+      if (!isRetryableType) {
+        // Non-retryable — fail immediately with classified error code
+        return {
+          status: "failed",
+          summary: `AI call failed (${classified.type}): ${classified.message}`,
+          artifactPath: "",
+          outputRoot: outputDir,
+          exitCode: 1,
+          failure: {
+            code: aiErrorTypeToCode(classified.type),
+            message: `${classified.message}\nSuggestion: ${classified.suggestion}`,
+          },
+        };
+      }
+
+      if (attempt < retryConfig.maxRetries) {
+        const delay =
+          classified.retryAfterMs ??
+          retryConfig.initialDelayMs * Math.pow(retryConfig.backoffMultiplier, attempt);
+        console.error(`[AI] Retrying in ${delay}ms...`);
+        await sleep(delay);
+      }
+    }
+  }
+
+  // If we exhausted retries, report the last classified error
+  if (lastClassification && !rawResponse) {
+    return {
+      status: "failed",
+      summary: `AI call failed after ${retryConfig.maxRetries + 1} attempts (${lastClassification.type}): ${lastClassification.message}`,
+      artifactPath: "",
+      outputRoot: outputDir,
+      exitCode: 1,
+      failure: {
+        code: aiErrorTypeToCode(lastClassification.type),
+        message: `${lastClassification.message}\nSuggestion: ${lastClassification.suggestion}`,
+      },
+    };
   }
 
   // ---- Step 6: Parse AI response to extract test files ----
