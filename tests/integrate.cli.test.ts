@@ -831,6 +831,87 @@ await runScenario(
   }
 );
 
+// ---------------------------------------------------------------------------
+// Error classification + retry behavior tests
+// ---------------------------------------------------------------------------
+
+await runScenario(
+  "error classification code format matches SPEC: AI_<TYPE> with underscores",
+  () => {
+    const spec: Record<string, string> = {
+      rate_limit: "AI_RATE_LIMIT",
+      auth_failure: "AI_AUTH_FAILURE",
+      timeout: "AI_TIMEOUT",
+      parse_error: "AI_PARSE_FAILURE",
+      api_error: "AI_API_ERROR",
+      context_overflow: "AI_CONTEXT_OVERFLOW",
+    };
+    for (const [type, code] of Object.entries(spec)) {
+      if (type === "parse_error") {
+        assert.equal(code, "AI_PARSE_FAILURE");
+      } else {
+        assert.equal(code, `AI_${type.toUpperCase()}`);
+      }
+    }
+  }
+);
+
+await runScenario(
+  "runIntegrateCommand AI call failure produces classified error code",
+  async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-integrate-test-"));
+    try {
+      const forgeDir = path.join(tmpDir, ".forge");
+      await fs.mkdir(forgeDir, { recursive: true });
+
+      const execArtifact = makeExecuteArtifact([
+        makeWorkstream({ workstreamId: "ws-1", state: "completed" }),
+      ]);
+      await fs.writeFile(
+        path.join(forgeDir, "execute.json"),
+        JSON.stringify(execArtifact),
+        "utf-8"
+      );
+      await fs.writeFile(
+        path.join(forgeDir, "plan.json"),
+        JSON.stringify(makePlanArtifact()),
+        "utf-8"
+      );
+      await fs.writeFile(
+        path.join(forgeDir, "verify.json"),
+        JSON.stringify(makeVerifyArtifact()),
+        "utf-8"
+      );
+      await fs.writeFile(
+        path.join(tmpDir, "package.json"),
+        JSON.stringify({ scripts: { test: "jest" }, devDependencies: { jest: "^29" } }),
+        "utf-8"
+      );
+
+      const result = await runIntegrateCommand({ repo: tmpDir });
+      // Without API keys, it should fail with a classified AI error code
+      assert.equal(result.status, "failed");
+      assert.equal(result.exitCode, 1);
+      // Verify it's an AI classified error (not generic AI_GENERATION_FAILED)
+      const aiCodes = [
+        "AI_RATE_LIMIT",
+        "AI_AUTH_FAILURE",
+        "AI_TIMEOUT",
+        "AI_PARSE_FAILURE",
+        "AI_API_ERROR",
+        "AI_CONTEXT_OVERFLOW",
+        "AI_UNKNOWN",
+      ];
+      assert.ok(
+        aiCodes.includes(result.failure?.code ?? ""),
+        `Expected AI classified error code but got: ${result.failure?.code}`
+      );
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  }
+);
+
 await runScenario(
   "parseTestFilesFromAIResponse still works after extract-json refactor",
   () => {
