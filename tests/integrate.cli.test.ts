@@ -925,3 +925,124 @@ await runScenario(
     assert.equal(result[0].framework, "jest");
   }
 );
+
+// ---------------------------------------------------------------------------
+// Missing artifact handling tests (Task 4)
+// ---------------------------------------------------------------------------
+
+await runScenario(
+  "missing plan.json without --auto creates stub with execute-derived goal and proceeds",
+  async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-integrate-test-"));
+    try {
+      const forgeDir = path.join(tmpDir, ".forge");
+      await fs.mkdir(forgeDir, { recursive: true });
+
+      // Write execute.json with a workstream that has a title
+      const execArtifact = makeExecuteArtifact([
+        makeWorkstream({ workstreamId: "ws-1", state: "completed", title: "Build the feature" }),
+      ]);
+      await fs.writeFile(
+        path.join(forgeDir, "execute.json"),
+        JSON.stringify(execArtifact),
+        "utf-8"
+      );
+
+      // Write verify.json (present) but deliberately NOT plan.json
+      await fs.writeFile(
+        path.join(forgeDir, "verify.json"),
+        JSON.stringify(makeVerifyArtifact()),
+        "utf-8"
+      );
+
+      // Write package.json for framework detection
+      await fs.writeFile(
+        path.join(tmpDir, "package.json"),
+        JSON.stringify({ scripts: { test: "jest" }, devDependencies: { jest: "^29" } }),
+        "utf-8"
+      );
+
+      const result = await runIntegrateCommand({ repo: tmpDir });
+      // Should NOT fail with PLAN_REQUIRED (that's --auto only)
+      assert.notEqual(result.failure?.code, "PLAN_REQUIRED");
+      // Should NOT fail with NO_EXECUTE_ARTIFACT
+      assert.notEqual(result.failure?.code, "NO_EXECUTE_ARTIFACT");
+      // Should NOT fail with NO_WORKSTREAMS
+      assert.notEqual(result.failure?.code, "NO_WORKSTREAMS");
+      // Should proceed past artifact loading (will fail at AI call since no model configured)
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  }
+);
+
+await runScenario(
+  "both plan.json and verify.json missing without --auto creates both stubs and proceeds",
+  async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-integrate-test-"));
+    try {
+      const forgeDir = path.join(tmpDir, ".forge");
+      await fs.mkdir(forgeDir, { recursive: true });
+
+      // Write only execute.json — no plan.json, no verify.json
+      const execArtifact = makeExecuteArtifact([
+        makeWorkstream({ workstreamId: "ws-1", state: "completed" }),
+      ]);
+      await fs.writeFile(
+        path.join(forgeDir, "execute.json"),
+        JSON.stringify(execArtifact),
+        "utf-8"
+      );
+
+      // Deliberately NOT writing plan.json or verify.json
+
+      // Write package.json for framework detection
+      await fs.writeFile(
+        path.join(tmpDir, "package.json"),
+        JSON.stringify({ scripts: { test: "jest" }, devDependencies: { jest: "^29" } }),
+        "utf-8"
+      );
+
+      const result = await runIntegrateCommand({ repo: tmpDir });
+      // Should NOT fail with PLAN_REQUIRED or VERIFY_REQUIRED (those are --auto only)
+      assert.notEqual(result.failure?.code, "PLAN_REQUIRED");
+      assert.notEqual(result.failure?.code, "VERIFY_REQUIRED");
+      // Should NOT fail with NO_EXECUTE_ARTIFACT
+      assert.notEqual(result.failure?.code, "NO_EXECUTE_ARTIFACT");
+      // Should proceed past artifact loading
+      assert.notEqual(result.failure?.code, "NO_WORKSTREAMS");
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  }
+);
+
+await runScenario(
+  "both missing with --auto fails on first missing (plan) with PLAN_REQUIRED",
+  async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-integrate-test-"));
+    try {
+      const forgeDir = path.join(tmpDir, ".forge");
+      await fs.mkdir(forgeDir, { recursive: true });
+
+      // Write only execute.json — no plan.json, no verify.json
+      const execArtifact = makeExecuteArtifact([
+        makeWorkstream({ workstreamId: "ws-1", state: "completed" }),
+      ]);
+      await fs.writeFile(
+        path.join(forgeDir, "execute.json"),
+        JSON.stringify(execArtifact),
+        "utf-8"
+      );
+
+      // Deliberately NOT writing plan.json or verify.json
+
+      const result = await runIntegrateCommand({ repo: tmpDir, auto: true });
+      assert.equal(result.status, "failed");
+      assert.equal(result.failure?.code, "PLAN_REQUIRED");
+      assert.equal(result.exitCode, 1);
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  }
+);

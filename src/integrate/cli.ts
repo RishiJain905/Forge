@@ -139,8 +139,11 @@ async function loadVerifyArtifact(
  * Create a minimal PlanArtifact stub when plan.json is missing.
  * Populates the field actually accessed by the prompt builder and artifact
  * builder: carry_forward, summary, plan_items.
+ * Derives the goal from the execute artifact's workstreams when available.
  */
-function createPlanStub(): PlanArtifact {
+function createPlanStub(executeArtifact: ExecuteArtifact): PlanArtifact {
+  const derivedGoal =
+    executeArtifact.workstreams[0]?.title ?? "Unknown task";
   return {
     schemaVersion: "1.0.0",
     command: "plan",
@@ -161,7 +164,7 @@ function createPlanStub(): PlanArtifact {
     files: { artifactPath: null, reportPath: null },
     startedAt: new Date().toISOString(),
     finishedAt: new Date().toISOString(),
-    summary: "Plan context unavailable — integration proceeding without plan",
+    summary: "Plan stub derived from execute artifact — plan.json was missing",
     boundaryNotes: [],
     source_intake: {
       artifactPath: "",
@@ -177,7 +180,7 @@ function createPlanStub(): PlanArtifact {
     test_obligations: [],
     parallelization_signals: [],
     carry_forward: {
-      task_spec: { goal: "" },
+      task_spec: { goal: derivedGoal },
     } as unknown as PlanArtifact["carry_forward"],
     planning_diagnostics: {
       usability_status: "non_actionable",
@@ -459,10 +462,13 @@ export async function runIntegrateCommand(
 
   // ---- Step 3: Load plan.json and verify.json ----
 
+  // Load each artifact only once — used by both --auto guard and stub fallback
+  let planArtifact: PlanArtifact | null = await loadPlanArtifact(repoRoot);
+  let verifyArtifact: VerifyArtifact | null = await loadVerifyArtifact(repoRoot);
+
   // In --auto mode, both plan.json and verify.json are required
   if (options.auto) {
-    const planLoaded = await loadPlanArtifact(repoRoot);
-    if (!planLoaded) {
+    if (!planArtifact) {
       return {
         status: "failed",
         summary: "plan.json not found. --auto mode requires plan.json.",
@@ -475,8 +481,7 @@ export async function runIntegrateCommand(
         },
       };
     }
-    const verifyLoaded = await loadVerifyArtifact(repoRoot);
-    if (!verifyLoaded) {
+    if (!verifyArtifact) {
       return {
         status: "failed",
         summary: "verify.json not found. --auto mode requires verify.json.",
@@ -492,10 +497,15 @@ export async function runIntegrateCommand(
     process.env.FORGE_NO_COLOR = "true";
   }
 
-  const planArtifact =
-    (await loadPlanArtifact(repoRoot)) ?? createPlanStub();
-  const verifyArtifact =
-    (await loadVerifyArtifact(repoRoot)) ?? createVerifyStub();
+  if (!planArtifact) {
+    planArtifact = createPlanStub(executeArtifact);
+    console.warn("Warning: plan.json not found. Using stub derived from execute artifact.");
+  }
+
+  if (!verifyArtifact) {
+    verifyArtifact = createVerifyStub();
+    console.warn("Warning: verify.json not found. Proceeding without verification context.");
+  }
 
   // ---- Step 4: Build integration test prompt ----
 
