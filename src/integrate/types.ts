@@ -180,6 +180,8 @@ export interface IntegrateCommandOptions {
   outputDir?: string;
   /** Force re-running integration even if an integrate.json already exists. */
   force?: boolean;
+  /** Non-interactive mode for CI/CD: fail on any warning or error. */
+  auto?: boolean;
   /** Override the auto-detected test framework. */
   testFramework?: string;
 }

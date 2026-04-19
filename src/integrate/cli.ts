@@ -412,7 +412,30 @@ export async function runIntegrateCommand(
   const repoRoot = options.repo ?? process.cwd();
   const outputDir = options.outputDir ?? path.join(repoRoot, ".forge");
 
-  // ---- Step 1: Load execute.json (required) ----
+  // ---- Step 1.5: --force guard — check if integrate.json already exists ----
+
+  const integrateJsonPath = path.join(outputDir, "integrate.json");
+  try {
+    await fs.access(integrateJsonPath);
+    // File exists — if --force is not set, fail early
+    if (!options.force) {
+      return {
+        status: "failed",
+        summary: `integrate.json already exists at ${integrateJsonPath}. Use --force to re-run.`,
+        artifactPath: integrateJsonPath,
+        outputRoot: outputDir,
+        exitCode: 1,
+        failure: {
+          code: "INTEGRATE_ALREADY_EXISTS",
+          message: "integrate.json already exists. Run with --force to re-run integration.",
+        },
+      };
+    }
+  } catch {
+    // File does not exist — proceed normally
+  }
+
+  // ---- Step 2: Load execute.json (required) ----
 
   const executeArtifact = await loadExecuteArtifact(repoRoot);
   if (!executeArtifact) {
@@ -450,7 +473,40 @@ export async function runIntegrateCommand(
     );
   }
 
-  // ---- Step 3: Load plan.json and verify.json (optional) ----
+  // ---- Step 3: Load plan.json and verify.json ----
+
+  // In --auto mode, both plan.json and verify.json are required
+  if (options.auto) {
+    const planLoaded = await loadPlanArtifact(repoRoot);
+    if (!planLoaded) {
+      return {
+        status: "failed",
+        summary: "plan.json not found. --auto mode requires plan.json.",
+        artifactPath: "",
+        outputRoot: repoRoot,
+        exitCode: 1,
+        failure: {
+          code: "PLAN_REQUIRED",
+          message: "plan.json required for --auto mode",
+        },
+      };
+    }
+    const verifyLoaded = await loadVerifyArtifact(repoRoot);
+    if (!verifyLoaded) {
+      return {
+        status: "failed",
+        summary: "verify.json not found. --auto mode requires verify.json.",
+        artifactPath: "",
+        outputRoot: repoRoot,
+        exitCode: 1,
+        failure: {
+          code: "VERIFY_REQUIRED",
+          message: "verify.json required for --auto mode",
+        },
+      };
+    }
+    process.env.FORGE_NO_COLOR = "true";
+  }
 
   const planArtifact =
     (await loadPlanArtifact(repoRoot)) ?? createPlanStub();
