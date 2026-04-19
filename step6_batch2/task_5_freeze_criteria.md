@@ -6,7 +6,7 @@ MiniMax
 
 ## Status
 
-**Pending**
+**Complete**
 
 ## Context
 

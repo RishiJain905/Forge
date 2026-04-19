@@ -211,13 +211,13 @@ function tryFixedJson(response: string): { raw: string; items: unknown[] } | nul
   // Now try embedded array on the fixed text
   const result = tryEmbeddedArray(text);
   if (result !== null) {
-    return { raw: text, items: result.items };
+    return { raw: result.raw, items: result.items };
   }
 
   // Also try bare array on the fixed text
   const bareResult = tryBareArray(text);
   if (bareResult !== null) {
-    return { raw: text, items: bareResult.items };
+    return { raw: bareResult.raw, items: bareResult.items };
   }
 
   return null;

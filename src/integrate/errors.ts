@@ -71,7 +71,7 @@ export function classifyError(err: unknown): ErrorClassification {
   }
 
   // Parse error
-  if (message.includes("unexpected token") || message.includes("JSON.parse") || message.includes("Unexpected end")) {
+  if (message.toLowerCase().includes("unexpected token") || message.includes("JSON.parse") || message.includes("Unexpected end")) {
     return {
       type: "parse_error",
       retryable: false,

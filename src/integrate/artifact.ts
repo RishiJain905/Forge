@@ -123,9 +123,9 @@ export function buildIntegrateArtifact(
 /**
  * Build a frozen IntegrateArtifact when the retry loop stops due to freeze criteria.
  *
- * Unlike `buildIntegrateArtifact`, this does NOT call `validateIntegrateArtifact`
- * because the frozen artifact has empty tests/testFiles and zero summary counts
- * which would fail strict validation. The object is cast directly.
+ * The frozen artifact has empty tests/testFiles and zero summary counts, but these
+ * are valid per the Zod schema (empty arrays and nonnegative counts are allowed).
+ * Validates the artifact before returning.
  *
  * @param executeArtifact  The execute artifact from Step 5.
  * @param planArtifact     The plan artifact (or null if unavailable).
@@ -149,8 +149,7 @@ export function buildFrozenArtifact(
   const workstreamsSummary = buildWorkstreamsSummary(executeArtifact);
 
   // 3. Construct the frozen artifact — empty tests, zero counts.
-  //    Cast directly since it won't pass strict validation.
-  return {
+  const artifact = {
     schemaVersion: SCHEMA_VERSION,
     forgeVersion: FORGE_VERSION,
     createdAt: new Date().toISOString(),
@@ -176,7 +175,9 @@ export function buildFrozenArtifact(
     attemptCount: freezeState.attemptCount,
     frozenAt: freezeState.frozenAt,
     finalError: freezeState.finalError,
-  } as IntegrateArtifact;
+  };
+
+  return validateIntegrateArtifact(artifact);
 }
 
 

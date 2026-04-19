@@ -599,7 +599,13 @@ export async function runIntegrateCommand(
   if (health.failed.length > 0 && health.completed.length > 0) {
     const msg = `Warning: ${health.failed.length}/${workstreams.length} workstreams failed. Integration will verify what was completed.`;
     if (options.auto) {
-      console.warn(`[Auto] ${msg}`);
+      return makeErrorResult(
+        repoRoot,
+        outputDir,
+        "SOME_WORKSTREAMS_FAILED",
+        `${msg} In --auto mode, any workstream failure is treated as fatal.`,
+        1
+      );
     } else {
       console.warn(msg);
     }
@@ -692,7 +698,7 @@ export async function runIntegrateCommand(
   let lastClassification: ErrorClassification | null = null;
 
   for (let attempt = 0; attempt <= retryConfig.maxRetries; attempt++) {
-    freezeState.attemptCount = attempt;
+    freezeState.attemptCount = attempt + 1;
     try {
       const config = loadModelConfig();
       rawResponse = await callModel(prompt, config);
