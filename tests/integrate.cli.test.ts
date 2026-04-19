@@ -830,3 +830,17 @@ await runScenario(
     }
   }
 );
+
+await runScenario(
+  "parseTestFilesFromAIResponse still works after extract-json refactor",
+  () => {
+    const raw =
+      'Here are the test files:\n```json\n[\n  {\n    "path": "tests/integration.test.ts",\n    "content": "test(\\"it works\\", () => { expect(true).toBe(true); });",\n    "language": "typescript",\n    "framework": "jest",\n    "testCount": 1\n  }\n]\n```\nDone!';
+    const result = parseTestFilesFromAIResponse(raw);
+    assert.equal(result.length, 1);
+    assert.equal(result[0].path, "tests/integration.test.ts");
+    assert.equal(result[0].testCount, 1);
+    assert.equal(result[0].language, "typescript");
+    assert.equal(result[0].framework, "jest");
+  }
+);
