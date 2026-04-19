@@ -1,0 +1,84 @@
+{
+  "milestone": "cli-wiring",
+  "groupId": "cli-errors",
+  "testedAt": "2026-04-17T19:35:00Z",
+  "isolation": {
+    "repoRoot": "F:/Personal/ForgeCLI/Forge",
+    "operations": "read-only codebase inspection + unit test execution"
+  },
+  "toolsUsed": ["node", "cli-test-execution", "source-code-inspection"],
+  "assertions": [
+    {
+      "id": "VAL-CLI-001",
+      "title": "forge integrate without execute.json fails with NO_EXECUTE_ARTIFACT",
+      "status": "pass",
+      "steps": [
+        { "action": "Run node dist-tests/tests/integrate.cli.test.js", "expected": "Test 'runIntegrateCommand fails with NO_EXECUTE_ARTIFACT when execute.json is missing' passes", "observed": "PASS — test confirms result.status === 'failed', result.failure.code === 'NO_EXECUTE_ARTIFACT', result.exitCode === 1" },
+        { "action": "Inspect source code cli.ts", "expected": "makeErrorResult called with code 'NO_EXECUTE_ARTIFACT' and exitCode 1 when executeArtifact is null", "observed": "Source at cli.ts line ~147 confirms: if (!executeArtifact) return makeErrorResult(... 'NO_EXECUTE_ARTIFACT' ... exitCode 1)" }
+      ],
+      "evidence": {
+        "testOutput": "cli-wiring/cli-errors/test-output.txt — line: PASS runIntegrateCommand fails with NO_EXECUTE_ARTIFACT when execute.json is missing",
+        "sourceCode": "cli.ts lines 144-150: early return with NO_EXECUTE_ARTIFACT error code and exitCode=1"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-CLI-002",
+      "title": "forge integrate with empty workstreams fails with NO_WORKSTREAMS",
+      "status": "pass",
+      "steps": [
+        { "action": "Run node dist-tests/tests/integrate.cli.test.js", "expected": "Test 'runIntegrateCommand fails with NO_WORKSTREAMS when execute.json has empty workstreams' passes", "observed": "PASS — test confirms result.status === 'failed', result.failure.code === 'NO_WORKSTREAMS', result.exitCode === 1" },
+        { "action": "Inspect source code cli.ts", "expected": "makeErrorResult called with code 'NO_WORKSTREAMS' when workstreams.length === 0", "observed": "Source at cli.ts line ~157 confirms: if (workstreams.length === 0) return makeErrorResult(... 'NO_WORKSTREAMS' ... exitCode 1)" }
+      ],
+      "evidence": {
+        "testOutput": "cli-wiring/cli-errors/test-output.txt — line: PASS runIntegrateCommand fails with NO_WORKSTREAMS when execute.json has empty workstreams",
+        "sourceCode": "cli.ts lines 155-162: early return with NO_WORKSTREAMS error code and exitCode=1 when workstreams array is empty"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-CLI-003",
+      "title": "forge integrate with all failed workstreams fails with ALL_WORKSTREAMS_FAILED",
+      "status": "pass",
+      "steps": [
+        { "action": "Run node dist-tests/tests/integrate.cli.test.js", "expected": "Test 'runIntegrateCommand fails with ALL_WORKSTREAMS_FAILED when all workstreams failed' passes", "observed": "PASS — test confirms result.status === 'failed', result.failure.code === 'ALL_WORKSTREAMS_FAILED', result.exitCode === 1" },
+        { "action": "Inspect source code cli.ts", "expected": "makeErrorResult called with code 'ALL_WORKSTREAMS_FAILED' when every workstream state is 'failed'", "observed": "Source at cli.ts line ~164-165 confirms: const allFailed = workstreams.every(ws => ws.state === 'failed'); if (allFailed) return makeErrorResult(... 'ALL_WORKSTREAMS_FAILED' ... exitCode 1)" }
+      ],
+      "evidence": {
+        "testOutput": "cli-wiring/cli-errors/test-output.txt — line: PASS runIntegrateCommand fails with ALL_WORKSTREAMS_FAILED when all workstreams failed",
+        "sourceCode": "cli.ts lines 164-171: early return with ALL_WORKSTREAMS_FAILED error code and exitCode=1 when all workstreams have state 'failed'"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-CLI-005",
+      "title": "Exit code is 0 when summary.failed === 0, 1 when summary.failed > 0",
+      "status": "pass",
+      "steps": [
+        { "action": "Run CLI test for exit code verification", "expected": "Test 'runIntegrateCommand exit code is 0 when summary.failed === 0, 1 when summary.failed > 0' passes", "observed": "PASS — test confirms exitCode === 1 for NO_EXECUTE_ARTIFACT case (error path)" },
+        { "action": "Inspect source code cli.ts for exit code logic", "expected": "Code sets exitCode = 0 on success, exitCode = 1 on failure", "observed": "Source at cli.ts line 257: const hasFailures = artifact.summary.failed > 0; const exitCode = hasFailures ? 1 : 0; const status = hasFailures ? 'failed' : 'ready'; — confirms exitCode=0 when no failures, exitCode=1 when failures exist" }
+      ],
+      "evidence": {
+        "testOutput": "cli-wiring/cli-errors/test-output.txt — line: PASS runIntegrateCommand exit code is 0 when summary.failed === 0, 1 when summary.failed > 0",
+        "sourceCode": "cli.ts line 257-258: 'const hasFailures = artifact.summary.failed > 0; const exitCode = hasFailures ? 1 : 0;' — happy path exitCode=0 is confirmed by source code; error paths all set exitCode=1 (confirmed by VAL-CLI-001/002/003 tests)"
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [
+    {
+      "description": "Node test runner exits with code 1 even when all tests pass, because process.exitCode is set to 1 in the catch block and PowerShell treats stderr output as error. All 14 tests showed PASS status.",
+      "resolved": true,
+      "resolution": "Examined test output lines individually — all show PASS, exit code 1 is a test runner artifact from stderr warnings (plan.json/verify.json not found in intentional test scenarios)",
+      "affectedAssertions": ["VAL-CLI-001", "VAL-CLI-002", "VAL-CLI-003", "VAL-CLI-005"]
+    },
+    {
+      "description": "VAL-CLI-005 happy path (exitCode=0) cannot be tested without a real AI endpoint; the test only verifies exitCode=1 for error cases. Source code inspection confirms the exitCode=0 logic.",
+      "resolved": true,
+      "resolution": "Traced source code at cli.ts line 257-258: 'const exitCode = hasFailures ? 1 : 0' — this is the definitive logic for the happy path",
+      "affectedAssertions": ["VAL-CLI-005"]
+    }
+  ],
+  "blockers": [],
+  "summary": "Tested 4 assertions: 4 passed. All CLI error cases (NO_EXECUTE_ARTIFACT, NO_WORKSTREAMS, ALL_WORKSTREAMS_FAILED) confirmed working via unit test execution. Exit code logic (0=success, 1=failure) confirmed via both test execution (error paths) and source code inspection (happy path at cli.ts line 257)."
+}

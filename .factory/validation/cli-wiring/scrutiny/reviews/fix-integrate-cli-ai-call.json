@@ -1,0 +1,50 @@
+{
+  "featureId": "fix-integrate-cli-ai-call",
+  "reviewedAt": "2026-04-18T00:00:00.000Z",
+  "commitId": "a3fe574",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The fix correctly replaces executeWorkstream() with loadModelConfig() + callModel() in src/integrate/cli.ts, resolving all three original blocking issues. (1) parseModelResponse (which expects ## CHANGES format) is no longer called; the raw AI response goes directly to parseTestFilesFromAIResponse which correctly handles plain JSON arrays of test files. (2) applyChanges (which writes files to disk with the wrong format) is no longer called since executeWorkstream is not invoked; runIntegrationTests handles file writing exclusively. (3) The format mismatch is resolved because parseTestFilesFromAIResponse expects {path, content, language, framework, testCount} objects matching the integration prompt, no longer going through {file, action, content} format. The diff is minimal and surgical: only the import line, the Step 5 code block, and the corresponding test assertion comments were changed. All verification commands pass (typecheck, build, 14 CLI tests, CLI --help, NO_EXECUTE_ARTIFACT error).",
+    "issues": [
+      {
+        "file": "tests/integrate.cli.test.ts",
+        "line": 599,
+        "severity": "non_blocking",
+        "description": "The structural assertion test 'runIntegrateCommand reuses loadModelConfig and callModel from model-connector' only checks that runIntegrateCommand and parseTestFilesFromAIResponse are functions — it does not verify that loadModelConfig or callModel are actually imported or reachable from the cli module. The comment claims 'the typechecker confirms loadModelConfig and callModel come from the model-connector module,' which is true (import errors would fail typecheck), but runtime reflection could verify this more robustly (e.g., checking that the module re-exports loadModelConfig). This is a pre-existing weakness from the original test, not a regression."
+      },
+      {
+        "file": "src/integrate/cli.ts",
+        "line": 155,
+        "severity": "non_blocking",
+        "description": "Pre-existing: The --force CLI option is accepted but never checked or implemented in runIntegrateCommand. It is a no-op flag. Not introduced by this fix."
+      },
+      {
+        "file": "tests/integrate.cli.test.ts",
+        "line": 388,
+        "severity": "non_blocking",
+        "description": "Pre-existing: Missing tests for NO_TEST_FILES_GENERATED, TEST_RUN_FAILED, and IO_ERROR error codes. The success path (exitCode=0) is also untested. Not introduced by this fix."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "conventions",
+      "observation": "AGENTS.md in the mission dir still says 'Reuse executeWorkstream from src/execute/model-connector.ts — this is non-negotiable' under the 'AI Integration' section. This is now incorrect — the fix replaced executeWorkstream with loadModelConfig + callModel. Future workers reading AGENTS.md may be misled into reintroducing the executeWorkstream bug.",
+      "evidence": "Mission AGENTS.md: 'AI Integration > Reuse executeWorkstream from src/execute/model-connector.ts — this is non-negotiable' vs actual implementation: import { loadModelConfig, callModel } from '../execute/model-connector.js' in cli.ts:35"
+    },
+    {
+      "area": "skills",
+      "observation": "The backend-worker skill (SKILL.md) still contains theconstraint: 'DO NOT create a new AI model connector — reuse executeWorkstream from src/execute/model-connector.ts'. After this fix, the correct guidance should be: 'For the execute step, reuse executeWorkstream; for the integrate step, use loadModelConfig + callModel directly (not executeWorkstream, which parses ## CHANGES format and applies file changes).'",
+      "evidence": ".factory/skills/backend-worker/SKILL.md: 'Important Constraints > DO NOT create a new AI model connector — reuse executeWorkstream from src/execute/model-connector.ts'"
+    },
+    {
+      "area": "knowledge",
+      "observation": "The worker correctly documented the decision in .factory/library/integrate-ai-call.md, which explains why executeWorkstream is wrong for the integrate step and shows the correct loadModelConfig + callModel + parseTestFilesFromAIResponse pattern. This is a good addition that should prevent future confusion.",
+      "evidence": ".factory/library/integrate-ai-call.md — created by the fix worker, documents the architectural decision"
+    }
+  ],
+  "addressesFailureFrom": ".factory/validation/cli-wiring/scrutiny/reviews/integrate-cli.json",
+  "summary": "PASS — The fix adequately addresses all three original blocking issues. (1) executeWorkstream replaced with loadModelConfig + callModel → parseModelResponse (expecting ## CHANGES) is no longer called. (2) applyChanges (file-writing side effect) no longer runs; runIntegrationTests handles file writing exclusively. (3) parseTestFilesFromAIResponse now receives the raw AI response and correctly parses {path, content, language, framework, testCount} objects. The diff is minimal and correct: only the import line, Step 5 AI call code, and test assertion comments were changed. All verification passes (typecheck, build, 14 tests, CLI help, error handling). Non-blocking issues are pre-existing (--force no-op, incomplete test coverage). Two shared state gaps noted: AGENTS.md and the skill file still reference executeWorkstream as required for the integrate step, which contradicts the fix."
+}

@@ -1,0 +1,35 @@
+{
+  "milestone": "cli-wiring",
+  "round": 1,
+  "status": "pass",
+  "assertionsSummary": {
+    "total": 12,
+    "passed": 12,
+    "failed": 0,
+    "blocked": 0
+  },
+  "passedAssertions": [
+    "VAL-ARTIFACT-001",
+    "VAL-ARTIFACT-002",
+    "VAL-REPORT-001",
+    "VAL-REPORT-002",
+    "VAL-CLI-001",
+    "VAL-CLI-002",
+    "VAL-CLI-003",
+    "VAL-CLI-004",
+    "VAL-CLI-005",
+    "VAL-CROSS-001",
+    "VAL-CROSS-002",
+    "VAL-CROSS-003"
+  ],
+  "failedAssertions": [],
+  "blockedAssertions": [],
+  "appliedUpdates": [
+    {
+      "target": "user-testing.md",
+      "description": "Added 'Flow Validator Guidance: cli-wiring' section documenting the cli-wiring validation surface, isolation rules, constraints, commands, and all 12 assertions to validate.",
+      "source": "setup"
+    }
+  ],
+  "previousRound": null
+}

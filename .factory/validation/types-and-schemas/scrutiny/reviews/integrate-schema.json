@@ -1,0 +1,26 @@
+{
+  "featureId": "integrate-schema",
+  "reviewedAt": "2026-04-17T18:15:00.000Z",
+  "commitId": "f4c65f1",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The implemention fully covers the feature requirements. All 6 required exports are present: IntegrationTestStateSchema, IntegrationTestCaseSchema, IntegrationTestFileSchema, IntegrationSummarySchema, IntegrateArtifactSchema, and validateIntegrateArtifact(). All Zod object schemas correctly use .strict() to reject unknown keys. All numeric fields use .int().nonnegative() constraints. The validateIntegrateArtifact function accepts unknown input and returns IntegrateArtifact, throwing ZodError on validation failure — matching the execute/schema.ts pattern. Schemas precisely mirror the TypeScript types in types.ts. Tests are thorough with 52+ cases covering valid inputs, missing required fields, invalid enum values, negative/float numeric values, unknown key rejection (.strict()), nested validation propagation, and edge cases (empty arrays, zero counts, all valid states).",
+    "issues": []
+  },
+  "sharedStateObservations": [
+    {
+      "area": "conventions",
+      "observation": "The integrate schemas apply .int().nonnegative() to ALL numeric fields, which is more consistent than execute/schema.ts where ExecuteArtifactSummarySchema uses plain z.number() for total/queued/running/completed/failed/blocked, and ExecuteWorkstreamSchema uses plain z.number() for aiExecutionDurationMs, aiChangesCount, aiLinesAdded, aiLinesRemoved. AGENTS.md states 'All schemas use .strict() to reject unknown keys' but doesn't mention .int().nonnegative() as a numeric field convention. Future workers implementing schemas should know to use .int().nonnegative() for count/duration fields.",
+      "evidence": "src/integrate/schema.ts uses z.number().int().nonnegative() consistently. src/execute/schema.ts has ExecuteArtifactSummarySchema with total: z.number() (no .int().nonnegative()). Also, ExecuteArtifactSummarySchema and StateTransitionSchema lack .strict() unlike other schemas in the same file."
+    },
+    {
+      "area": "conventions",
+      "observation": "In execute/schema.ts, ExecuteArtifactSummarySchema and StateTransitionSchema do NOT use .strict() while all other object schemas in that file do. AGENTS.md says 'All schemas use .strict()' which is aspirational but not yet true for all existing schemas.",
+      "evidence": "src/execute/schema.ts lines with ExecuteArtifactSummarySchema and StateTransitionSchema are z.object({...}) without .strict(). ChangeMadeSchema, AIModelInfoSchema, ExecuteWorkstreamSchema, MergeOrderGateSchema, ExecuteArtifactSchema all end with .strict()."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "PASS — The integrate-schema feature is complete and correct. All 6 required exports are present, all object schemas use .strict(), all numeric fields use .int().nonnegative(), and validateIntegrateArtifact() correctly delegates to IntegrateArtifactSchema.parse(). The 52+ TDD tests comprehensively cover valid inputs, rejection of invalid inputs, strict key rejection, nested schema validation, and edge cases. Schemas precisely mirror the types in types.ts. No blocking or non-blocking issues found. Two convention observations noted: (1) the new integrate schemas are stricter with .int().nonnegative() on numeric fields than the older execute schemas, setting a better pattern; (2) two schemas in execute/schema.ts are missing .strict() contrary to AGENTS.md guidance."
+}

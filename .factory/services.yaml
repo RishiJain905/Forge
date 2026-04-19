@@ -1,0 +1,8 @@
+commands:
+  install: npm install
+  typecheck: npm run typecheck
+  build: npm run build
+  test: npm run test
+  smoke: npm run smoke
+
+services: {}

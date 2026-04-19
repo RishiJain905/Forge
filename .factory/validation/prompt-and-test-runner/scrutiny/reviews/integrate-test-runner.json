@@ -1,0 +1,55 @@
+{
+  "featureId": "integrate-test-runner",
+  "reviewedAt": "2026-04-17T19:15:00.000Z",
+  "commitId": "08878f2",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The integrate-test-runner feature is well-implemented with thorough test coverage (34 test cases) and clean code structure. The implementation correctly covers all behaviors specified in the feature description: writing test files to disk with recursive directory creation, parsing test output for jest/vitest/pytest/generic formats, estimating test counts from framework-specific patterns, and returning a properly typed TestRunResult. The code follows existing Forge patterns (matching prompt-builder.ts style), uses proper TypeScript types from types.ts, and handles error cases (empty testFiles, file write errors, command execution failures). One minor bug was found in parseTestOutput's generic fallback regex group reference (genericFailed[2] where only group 1 exists), but it is non-blocking because the nullish coalescing fallback produces the correct result. The implementation has a minor security consideration around path traversal in test file writing, consistent with the existing pattern in prompt-builder.ts.",
+    "issues": [
+      {
+        "file": "src/integrate/test-runner.ts",
+        "line": 150,
+        "severity": "non_blocking",
+        "description": "Bug in genericFailed regex group reference: `genericFailed[2] ?? genericFailed[1]` references capture group 2 from `/((\\d+)\\s+failed/`, but this regex only has one capturing group (index 1). `genericFailed[2]` will always be undefined, so the nullish coalescing always falls through to `genericFailed[1]`. This produces the correct result, but the code is misleading — it appears the developer intended a different regex with two groups. Should be simplified to just `parseInt(genericFailed[1], 10)`."
+      },
+      {
+        "file": "src/integrate/test-runner.ts",
+        "line": 209,
+        "severity": "non_blocking",
+        "description": "Path traversal concern: `path.resolve(repoRoot, tf.path)` does not validate that the resolved path stays within repoRoot. A malicious tf.path like '../../etc/passwd' would write outside the repo. This is consistent with prompt-builder.ts (line 159) which has the same pattern without validation. Since tf.path comes from AI-generated test files (not direct user input), the risk is low. However, for defense in depth, a check like `absolutePath.startsWith(repoRoot)` would be prudent, especially since the CLI will execute these files."
+      },
+      {
+        "file": "src/integrate/test-runner.ts",
+        "line": 245,
+        "severity": "non_blocking",
+        "description": "The `success` field logic (`runError === undefined && failed === 0 && total > 0`) means that if the test command produces completely unparseable output (total=0, failed=0), success will be false even if the command ran without error. This is a reasonable design choice since unparseable output shouldn't be a 'success', but it's worth documenting. If a future use case needs a 'ran but no results parsed' state, this logic could be refined."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "conventions",
+      "observation": "The test-runner follows the same code organization patterns as prompt-builder.ts: module header comments, section separators, JSDoc on exported functions, named constants for magic values. Both use `import type` for cross-module imports and `promises as fs` for async file operations. This is consistent and well-maintained convention.",
+      "evidence": "src/integrate/test-runner.ts lines 1-17 match src/integrate/prompt-builder.ts lines 1-20 in structure"
+    },
+    {
+      "area": "knowledge",
+      "observation": "The worker created `.factory/library/test-runner.md` documenting the module's exported functions. This is useful for future workers who need to understand the test runner API without reading the full source.",
+      "evidence": ".factory/library/test-runner.md exists with documentation of estimateTestCount, parseTestOutput, and runIntegrationTests"
+    },
+    {
+      "area": "skills",
+      "observation": "The backend-worker skill was followed correctly (skillFeedback.followedProcedure: true). The worker followed the implementation order and verification steps as specified. One deviation during development was fixing 3 test issues (estimateTestCount pattern matching, testCount fallback logic, and Windows path error handling) — the worker iterated and resolved all 3 correctly.",
+      "evidence": "Transcript shows worker: (1) implemented feature, (2) ran tests, (3) identified 3 failures, (4) fixed each issue, (5) verified all 34 tests pass, (6) ran full test suite to check for regressions"
+    },
+    {
+      "area": "knowledge",
+      "observation": "The worker discovered that on Windows, invalid paths like '/dev/null/impossible/path/test.ts' and 'CON\\test.ts' behave differently than on Unix. The worker adapted by using a file-as-directory blocker pattern (creating a file where a directory should be) which works cross-platform. This is environment-specific knowledge worth noting.",
+      "evidence": "Transcript shows multiple iterations of the file write error test, ultimately using `path.join(dir, 'blocked')` as a file, then trying to create `blocked/sub/test.ts` inside it"
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "PASS — The integrate-test-runner feature is well-implemented with 34 comprehensive test cases covering all specified behaviors. The code follows existing Forge patterns, uses proper types, handles edge cases (empty testFiles, file write errors, command failures), and correctly implements test count estimation and output parsing. One minor bug exists in parseTestOutput's generic regex group reference (genericFailed[2] where only group 1 exists), but it's non-blocking because the nullish coalescing fallback produces the correct result. A path traversal concern exists in file writing (consistent with prompt-builder.ts) but is low-risk since paths come from AI-generated content. The worker followed procedures correctly, iterated to fix test issues, and documented the module in the shared library."
+}

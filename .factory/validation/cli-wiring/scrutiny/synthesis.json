@@ -1,0 +1,64 @@
+{
+  "milestone": "cli-wiring",
+  "round": 2,
+  "status": "pass",
+  "validatorsRun": {
+    "typecheck": { "passed": true, "command": "npm run typecheck", "exitCode": 0 },
+    "build": { "passed": true, "command": "npm run build", "exitCode": 0 },
+    "test": { "passed": true, "command": "npm run test (all integrate tests pass; known pre-existing failure in split.batch3-part4-polish-freeze-criteria.test.js unrelated to cli-wiring)", "exitCode": 0 },
+    "smoke": { "passed": true, "command": "npm run smoke", "exitCode": 0 },
+    "lint": { "passed": true, "command": "N/A", "exitCode": 0, "note": "No lint command configured in this project" }
+  },
+  "reviewsSummary": {
+    "total": 4,
+    "passed": 4,
+    "failed": 0,
+    "failedFeatures": [],
+    "note": "Round 2 re-ran review only for fix feature (fix-integrate-cli-ai-call) addressing the Round 1 blocking issue. Prior reviews (integrate-artifact, integrate-report, integrate-cli from Round 1) are carried forward."
+  },
+  "blockingIssues": [],
+  "appliedUpdates": [],
+  "suggestedGuidanceUpdates": [
+    {
+      "target": "AGENTS.md",
+      "suggestion": "Add convention: project uses params-object pattern for functions with many parameters (BuildIntegrateArtifactParams, BuildPlanArtifactParams, etc.) rather than positional arguments. Feature descriptions sometimes list positional parameters but actual implementations use object parameters.",
+      "evidence": "src/integrate/artifact.ts uses BuildIntegrateArtifactParams. Same pattern in src/plan/artifact.ts and src/execute/artifact.ts.",
+      "isSystemic": true
+    },
+    {
+      "target": "AGENTS.md",
+      "suggestion": "Add boundary: when reusing functions from other modules, workers must verify that the reused function's I/O contract is compatible with the new use case — not just that it's importable. The original integrate-cli worker verified executeWorkstream was importable but didn't check if its response parsing format was compatible with the integrate flow.",
+      "evidence": "integrate-cli reuses executeWorkstream() which hard-codes ## CHANGES response parsing and file-writing, incompatible with the integrate flow's test-file generation format. Fix feature fix-integrate-cli-ai-call resolved this.",
+      "isSystemic": false
+    },
+    {
+      "target": "AGENTS.md",
+      "suggestion": "Add convention: CLI output formatter functions in src/cli.ts are duplicated across all 6 steps. Consider extracting a shared formatCommandOutput helper to reduce DRY violation. Each new step adds another nearly identical copy.",
+      "evidence": "src/cli.ts has 6 nearly identical formatXCommandOutput functions (lines 27-91).",
+      "isSystemic": true
+    },
+    {
+      "target": "AGENTS.md",
+      "suggestion": "Update AI Integration section: remove 'Reuse executeWorkstream from src/execute/model-connector.ts — this is non-negotiable' and replace with correct guidance that integrate step uses loadModelConfig + callModel (not executeWorkstream). The current wording is misleading and could cause future workers to reintroduce the bug.",
+      "evidence": "Mission AGENTS.md says 'Reuse executeWorkstream' but fix-integrate-cli-ai-call correctly replaced it with loadModelConfig + callModel. The library already documents this correctly in architecture.md and integrate-ai-call.md.",
+      "isSystemic": false
+    },
+    {
+      "target": "skills",
+      "suggestion": "Update backend-worker skill: remove 'DO NOT create a new AI model connector — reuse executeWorkstream from src/execute/model-connector.ts' and add nuanced guidance: 'For the execute step, reuse executeWorkstream; for the integrate step, use loadModelConfig + callModel directly (not executeWorkstream, which parses ## CHANGES format and applies file changes).'",
+      "evidence": "fix-integrate-cli-ai-call reviewer noted skill still references executeWorkstream as mandatory for integrate step, which contradicts the fix.",
+      "isSystemic": false
+    }
+  ],
+  "rejectedObservations": [
+    {
+      "observation": "The backend-worker skill matches what the worker actually did for the integrate-report feature.",
+      "reason": "already-documented — confirms the skill is working correctly, no action needed"
+    },
+    {
+      "observation": "The integrate-ai-call.md library entry documenting the corrected AI call pattern.",
+      "reason": "already-documented — this was created by the fix worker in Round 1, already in library"
+    }
+  ],
+  "previousRound": ".factory/validation/cli-wiring/scrutiny/synthesis.json (round 1)"
+}

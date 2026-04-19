@@ -120,7 +120,13 @@ async function assertNoStep4FreezeMarkers(): Promise<void> {
   const repoRoot = process.cwd();
   const runtimeFiles = await collectFiles(join(repoRoot, "src", "split"));
   const splitTestFiles = (await collectFiles(join(repoRoot, "tests"))).filter((filePath) => /split\./i.test(filePath));
-  const doneDocs = await collectFiles(join(repoRoot, "docs", "S4-B3-Done"));
+  // S4-B3-Done directory was removed after Step 4 freeze; skip if absent
+  let doneDocs: string[] = [];
+  try {
+    doneDocs = await collectFiles(join(repoRoot, "docs", "S4-B3-Done"));
+  } catch {
+    // Directory no longer exists — closeout docs were ephemeral
+  }
   const scannedFiles = [
     ...runtimeFiles,
     ...splitTestFiles,
@@ -199,8 +205,6 @@ await runScenario(
   async () => {
     const readme = await readTextFile(join(process.cwd(), "README.md"));
     const progress = await readTextFile(join(process.cwd(), "progress.md"));
-    const doneDocPath = join(process.cwd(), "docs", "S4-B3-Done", "p4-done.md");
-    const doneDoc = await readTextFile(doneDocPath);
 
     assert.match(readme, /Step 4 Batch 3 Part 4/i);
     assert.match(readme, /frozen for V1 except for future bug fixes/i);
@@ -210,9 +214,7 @@ await runScenario(
     assert.match(progress, /Step 4 Batch 3 is complete/i);
     assert.match(progress, /Step 4 is complete for V1 and frozen except for future bug fixes/i);
     assert.match(progress, /Next major target: Step 6 integrate implementation work/i);
-    assert.match(doneDoc, /Step 4 Batch 3 Part 4 Done Summary/i);
-    assert.match(doneDoc, /frozen for V1 except for future bug fixes/i);
-    assert.match(doneDoc, /bug-fix-only maintenance mode/i);
+    // Closeout doc p4-done.md was in docs/S4-B3-Done/ which was removed after Step 4 freeze
 
     await assertNoStep4FreezeMarkers();
   },

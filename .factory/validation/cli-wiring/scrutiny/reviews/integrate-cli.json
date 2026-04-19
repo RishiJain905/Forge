@@ -1,0 +1,79 @@
+{
+  "featureId": "integrate-cli",
+  "reviewedAt": "2026-04-17T23:30:00.000Z",
+  "commitId": "c623a38",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The integrate-cli feature implements the full runIntegrateCommand flow with proper error handling and CLI registration. However, there is a critical blocking bug: the command reuses executeWorkstream() from model-connector.ts, which internally calls parseModelResponse() expecting '## CHANGES' format and then applyChanges(). The integration prompt asks the AI to return a plain JSON array of test file objects ({path, content, language, framework, testCount}), but parseModelResponse() will throw PARSE_ERROR because it cannot find the '## CHANGES' markdown header. Even if the AI returned the expected ## CHANGES format, applyChanges() would write the test files to disk (using action: create|modify|delete format) creating a redundant/conflicting write with runIntegrationTests(). This means the happy path can never succeed — any real invocation of forge integrate with a configured AI model will fail with AI_GENERATION_FAILED at the parseModelResponse step. Tests don't catch this because all test scenarios short-circuit before the AI call, or fail at loadModelConfig (no env vars), so parseModelResponse is never exercised.",
+    "issues": [
+      {
+        "file": "src/integrate/cli.ts",
+        "line": 35,
+        "severity": "blocking",
+        "description": "executeWorkstream from model-connector.ts calls parseModelResponse() which expects AI response in '## CHANGES\\n```json [{file, action, content}]```' format, but the integration test prompt (built by buildIntegrationTestPrompt) asks the AI to return a plain JSON array of test files [{path, content, language, framework, testCount}]. These formats are incompatible, so executeWorkstream will always fail with PARSE_ERROR when the AI responds to the integration prompt. This breaks the entire happy path since parseModelResponse throws before cli.ts can access rawResponse."
+      },
+      {
+        "file": "src/integrate/cli.ts",
+        "line": 490,
+        "severity": "blocking",
+        "description": "Even if parseModelResponse somehow succeeded, executeWorkstream calls applyChanges() which writes files to disk using the {file, action, content} format. But runIntegrationTests (step 7) also writes test files. This creates a double-write conflict: applyChanges writes files first (with wrong format assumptions), then runIntegrationTests overwrites them. The intended flow is that the AI generates test files → parseTestFilesFromAIResponse extracts them → runIntegrationTests writes and runs them. executeWorkstream's applyChanges step hijacks the file-writing responsibility."
+      },
+      {
+        "file": "src/integrate/cli.ts",
+        "line": 490,
+        "severity": "blocking",
+        "description": "The integration test prompt (prompt-builder.ts assemblePrompt) asks the AI to return objects with keys {path, content, language, framework, testCount} but parseModelResponse requires {file, action, content} objects where action must be 'create', 'modify', or 'delete'. Even if the AI wrapped its response in '## CHANGES' format, the individual objects would fail action validation in parseModelResponse."
+      },
+      {
+        "file": "src/integrate/cli.ts",
+        "line": 495,
+        "severity": "non_blocking",
+        "description": "parseTestFilesFromAIResponse is called on rawResponse from executeWorkstream, but rawResponse is the raw AI model output — not what executeWorkstream parsed. Since executeWorkstream already attempted to parse this response as ## CHANGES (and would have thrown), this line is dead code in the current flow. If the architecture is fixed to use a lighter AI call (callModel + loadModelConfig directly), this line would become reachable."
+      },
+      {
+        "file": "src/integrate/cli.ts",
+        "line": 155,
+        "severity": "non_blocking",
+        "description": "The --force option is accepted as CLI flag and included in IntegrateCommandOptions, but runIntegrateCommand never checks for an existing integrate.json or implements force-overwrite logic. The flag is a no-op."
+      },
+      {
+        "file": "tests/integrate.cli.test.ts",
+        "line": 388,
+        "severity": "non_blocking",
+        "description": "The exit code test only verifies exitCode=1 for the failure case (NO_EXECUTE_ARTIFACT). The success path (exitCode=0 when all tests pass) is not tested. The test comment acknowledges this but it means core exit-code logic is unverified."
+      },
+      {
+        "file": "tests/integrate.cli.test.ts",
+        "line": 1,
+        "severity": "non_blocking",
+        "description": "Missing tests for NO_TEST_FILES_GENERATED, TEST_RUN_FAILED, and IO_ERROR error codes. These are defined in the implementation but not directly exercised by test scenarios."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "conventions",
+      "observation": "executeWorkstream() from src/execute/model-connector.ts is NOT suitable as a general-purpose AI call for the integrate step. It hard-codes response parsing to ## CHANGES format and applies file changes to disk. The integrate step needs a lighter AI interaction: send a prompt, get raw response, parse the response as test file descriptors (not code changes). architecture.md documents that Step 6 'reuses executeWorkstream from model-connector.ts' but this is architecturally incorrect — callModel() and loadModelConfig() should be used directly instead.",
+      "evidence": "src/execute/model-connector.ts:570-588 — executeWorkstream calls parseModelResponse (expects ## CHANGES) then applyChanges. src/integrate/cli.ts:490 — calls executeWorkstream(prompt, repoRoot) where prompt asks for [{path, content, language, framework, testCount}] format. These are incompatible."
+    },
+    {
+      "area": "skills",
+      "observation": "The backend-worker skill should guide workers to verify that reused functions are actually compatible with the new use case, not just structurally importable. The worker verified executeWorkstream was importable but didn't check if its response parsing was compatible with the integrate flow.",
+      "evidence": "Test 'runIntegrateCommand reuses executeWorkstream from model-connector' only checks typeof runIntegrateCommand === 'function' — doesn't verify the AI response round-trip is compatible."
+    },
+    {
+      "area": "knowledge",
+      "observation": "The parseModelResponse function in model-connector.ts expects a very specific AI response format (## CHANGES markdown header + JSON code block with {file, action, content} objects). Any step that wants to use the AI model for a different purpose (like generating test files) cannot reuse executeWorkstream — it must call callModel and loadModelConfig directly. This constraint should be documented since future steps may also want to interact with the AI model for non-code-change purposes.",
+      "evidence": "src/execute/model-connector.ts:380-415 — parseModelResponse strictly requires ## CHANGES format. src/integrate/cli.ts:35 — imports executeWorkstream for AI call. The prompt format from prompt-builder.ts is incompatible."
+    },
+    {
+      "area": "conventions",
+      "observation": "The formatIntegrateCommandOutput function in src/cli.ts is an exact copy of the other 5 formatXCommandOutput functions (formatIntakeCommandOutput, formatPlanCommandOutput, etc.). This is a DRY violation across the entire codebase, not specific to this feature, but each new step adds another identical copy.",
+      "evidence": "src/cli.ts:27-36, 38-47, 49-58, 60-69, 71-80 — five nearly identical format functions before formatIntegrateCommandOutput at line 82-91"
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "BLOCKING: The forge integrate CLI cannot work end-to-end because it reuses executeWorkstream() which parses AI responses as ## CHANGES code-change format and applies file changes to disk. But the integration test prompt asks the AI to return a plain JSON array of test files — a completely different format. This means any real invocation with a configured AI model will always fail with AI_GENERATION_FAILED (PARSE_ERROR from parseModelResponse). The fix requires either: (a) replacing executeWorkstream with direct calls to callModel + loadModelConfig from model-connector.ts and parsing responses with parseTestFilesFromAIResponse, or (b) changing the prompt format to use ## CHANGES with action:'create' items (which would still conflict with runIntegrationTests' file writing). Option (a) is the correct fix. Non-blocking issues include: --force flag not implemented, missing test coverage for some error codes, and DRY violations in CLI output formatters."
+}

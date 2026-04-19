@@ -1,0 +1,45 @@
+{
+  "featureId": "fix-prompt-builder-framework-override",
+  "reviewedAt": "2026-04-17T19:30:00.000Z",
+  "commitId": "9451cf6",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The fix successfully addresses all three aspects of the original blocking bug: (1) the dead-code ternary with identical branches has been replaced with a clean hasOverride conditional that either uses deriveFrameworkFromOverride or falls back to detectTestFramework; (2) when an override is provided, language and testCommand are now correctly derived from the override name via deriveFrameworkFromOverride rather than taken from the auto-detected framework; (3) PromptBuildContext.testFramework is now optional (testFramework?: string) in types.ts. The new deriveFrameworkFromOverride function maps 5 well-known frameworks (pytest, unittest, vitest, jest, mocha) with sensible defaults, and includes heuristic fallback for unknown names and whitespace trimming. 10 new tests comprehensively cover the fix. The remaining non-blocking issues from the prior review (unused imports, extractGoal type assertions) were not addressed by this fix feature, which is appropriate since they were not part of the fix scope.",
+    "issues": [
+      {
+        "file": "src/integrate/prompt-builder.ts",
+        "line": 18,
+        "severity": "non_blocking",
+        "description": "Pre-existing: unused type imports ExecuteWorkstream and PlanItem remain. These were flagged in the prior review as non-blocking and are not part of this fix's scope, but should be cleaned up eventually."
+      },
+      {
+        "file": "src/integrate/prompt-builder.ts",
+        "line": 245,
+        "severity": "non_blocking",
+        "description": "Pre-existing: extractGoal uses overly broad type assertions (carry_forward cast and purpose cast). These were flagged in the prior review as non-blocking and are not part of this fix's scope."
+      },
+      {
+        "file": "src/integrate/prompt-builder.ts",
+        "line": 152,
+        "severity": "non_blocking",
+        "description": "deriveFrameworkFromOverride heuristic for detecting 'python-like' frameworks via name.includes('py') could produce false positives for frameworks like 'pylint' or 'pyroscope' that aren't test frameworks. However, this is a minor concern since the function is only called when the user explicitly provides a testFramework override — if they provide 'pylint', they are already providing a non-test-framework name. The catch-all fallback is reasonable for this use case."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "conventions",
+      "observation": "The deriveFrameworkFromOverride function uses a simple if-else chain for framework mapping rather than a lookup Map/object. Both patterns exist in the codebase (detectTestFramework uses if-else, detectTestFramework in execute may use maps). There's no documented convention for when to use which pattern.",
+      "evidence": "src/integrate/prompt-builder.ts:152-182 — deriveFrameworkFromOverride uses if-else chain; detectTestFramework above it (lines ~58-120) also uses if-else chain, so the worker followed the local convention."
+    },
+    {
+      "area": "skills",
+      "observation": "The worker followed the backend-worker skill procedure correctly: read relevant files, implemented the fix, wrote tests, ran all verification commands. The skillFeedback.followedProcedure is true. No deviations or skill gaps identified.",
+      "evidence": "Handoff shows all verification commands ran (typecheck, build, test compilation, unit tests) and skillFeedback.followedProcedure = true with no deviations."
+    }
+  ],
+  "addressesFailureFrom": "F:\\Personal\\ForgeCLI\\Forge\\.factory\\validation\\prompt-and-test-runner\\scrutiny\\reviews\\integrate-prompt-builder.json",
+  "summary": "The fix adequately addresses ALL aspects of the original blocking failure. The three original problems were: (1) Dead code branch — both ternary branches called detectTestFramework. FIXED: Now uses `hasOverride ? deriveFrameworkFromOverride(...) : detectTestFramework(...)` with distinct branches. (2) Override used detected framework's language/testCommand — if user provided 'vitest' on a jest project, they'd get {name:'vitest', language:'typescript', testCommand:'npx jest'} which is wrong. FIXED: deriveFrameworkFromOverride correctly maps framework names to their own language/testCommand (e.g., vitest→typescript/npx vitest run, pytest→python/pytest). (3) PromptBuildContext.testFramework was required instead of optional. FIXED: Changed to `testFramework?: string` in types.ts. 10 new tests cover deriveFrameworkFromOverride (8 tests) and buildIntegrationTestPrompt override behavior (2 tests), plus the existing override test was enhanced to verify derived language and testCommand. All 43 prompt-builder tests pass. The pre-existing non-blocking issues (unused imports, extractGoal type assertions) remain but are appropriately out of scope for this fix."
+}

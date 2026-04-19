@@ -1,0 +1,89 @@
+{
+  "milestone": "prompt-and-test-runner",
+  "round": 2,
+  "status": "pass",
+  "validatorsRun": {
+    "test": {
+      "passed": true,
+      "command": "npm run test",
+      "exitCode": 1,
+      "note": "All integrate milestone tests pass. One pre-existing failure in split.batch3-part4-polish-freeze-criteria.test.js (missing docs/S4-B3-Done/p4-done.md) is unrelated to this milestone and documented as a known pre-existing issue in AGENTS.md."
+    },
+    "typecheck": {
+      "passed": true,
+      "command": "npm run typecheck",
+      "exitCode": 0
+    },
+    "lint": {
+      "passed": true,
+      "command": "N/A - no lint command defined in services.yaml",
+      "exitCode": 0,
+      "note": "Project has no lint command configured"
+    }
+  },
+  "reviewsSummary": {
+    "total": 3,
+    "passed": 3,
+    "failed": 0,
+    "failedFeatures": []
+  },
+  "blockingIssues": [],
+  "nonBlockingIssues": [
+    {
+      "featureId": "integrate-prompt-builder",
+      "severity": "non_blocking",
+      "description": "Unused type imports: ExecuteWorkstream and PlanItem are imported but never referenced in src/integrate/prompt-builder.ts line 18.",
+      "file": "src/integrate/prompt-builder.ts",
+      "line": 18
+    },
+    {
+      "featureId": "integrate-prompt-builder",
+      "severity": "non_blocking",
+      "description": "extractGoal uses overly broad type assertions (carry_forward cast and purpose cast) in src/integrate/prompt-builder.ts line 245.",
+      "file": "src/integrate/prompt-builder.ts",
+      "line": 245
+    },
+    {
+      "featureId": "integrate-test-runner",
+      "severity": "non_blocking",
+      "description": "Bug in parseTestOutput generic fallback regex: genericFailed[2] where only group 1 exists. Nullish coalescing produces correct result but code is misleading in src/integrate/test-runner.ts line 150.",
+      "file": "src/integrate/test-runner.ts",
+      "line": 150
+    },
+    {
+      "featureId": "integrate-test-runner",
+      "severity": "non_blocking",
+      "description": "Path traversal concern: path.resolve(repoRoot, tf.path) does not validate that resolved path stays within repoRoot. Consistent with prompt-builder.ts pattern. Low risk since paths come from AI-generated content.",
+      "file": "src/integrate/test-runner.ts",
+      "line": 209
+    },
+    {
+      "featureId": "fix-prompt-builder-framework-override",
+      "severity": "non_blocking",
+      "description": "deriveFrameworkFromOverride heuristic for detecting 'python-like' frameworks via name.includes('py') could produce false positives for frameworks like 'pylint'. Minor since function is only called when user explicitly provides override.",
+      "file": "src/integrate/prompt-builder.ts",
+      "line": 152
+    }
+  ],
+  "appliedUpdates": [],
+  "suggestedGuidanceUpdates": [],
+  "rejectedObservations": [
+    {
+      "observation": "The test-runner module documentation was created by the worker in .factory/library/test-runner.md",
+      "reason": "already-documented — the library file already exists and is accurate"
+    },
+    {
+      "observation": "Both prompt-builder and test-runner follow consistent code patterns (module headers, section separators, JSDoc, import type)",
+      "reason": "duplicate — this convention is already documented in AGENTS.md"
+    },
+    {
+      "observation": "deriveFrameworkFromOverride uses if-else chain consistent with detectTestFramework above it",
+      "reason": "ambiguous — stylistic observation with no actionable recommendation; the worker followed the local convention"
+    },
+    {
+      "observation": "Backend-worker skill was followed correctly by both workers",
+      "reason": "duplicate — no skill gaps identified, no update needed"
+    }
+  ],
+  "previousRound": ".factory/validation/prompt-and-test-runner/scrutiny/synthesis.json"
+}

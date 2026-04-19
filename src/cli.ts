@@ -10,6 +10,8 @@ import { runVerifyCommand } from "./verify/runner.js";
 import type { VerifyCommandResult } from "./verify/types.js";
 import { runExecuteCommand } from "./execute/cli.js";
 import type { ExecuteCommandResult } from "./execute/types.js";
+import { runIntegrateCommand } from "./integrate/cli.js";
+import type { IntegrateCommandResult } from "./integrate/types.js";
 
 function hasFlag(argv: string[], flag: string): boolean {
   return argv.includes(flag);
@@ -68,6 +70,19 @@ export function formatSplitCommandOutput(result: SplitCommandResult): string {
 }
 
 export function formatExecuteCommandOutput(result: ExecuteCommandResult): string {
+  const lines = [
+    `Status: ${result.status}`,
+    `Summary: ${result.summary}`,
+    result.outputRoot ? `Output root: ${result.outputRoot}` : null,
+    result.artifactPath ? `Artifact: ${result.artifactPath}` : null,
+    result.reportPath ? `Report: ${result.reportPath}` : null,
+    result.failure ? `Failure: [${result.failure.code}] ${result.failure.message}` : null,
+  ].filter((line): line is string => Boolean(line));
+
+  return `${lines.join("\n")}\n`;
+}
+
+export function formatIntegrateCommandOutput(result: IntegrateCommandResult): string {
   const lines = [
     `Status: ${result.status}`,
     `Summary: ${result.summary}`,
@@ -264,6 +279,42 @@ export async function runCli(argv: string[]): Promise<number> {
       if (result.status !== "ready") {
         process.stderr.write(output);
         exitCode = 1;
+        return;
+      }
+
+      if (result.exitCode !== undefined && result.exitCode !== 0) {
+        exitCode = result.exitCode;
+      }
+
+      process.stdout.write(output);
+    });
+
+  program
+    .command("integrate")
+    .description(
+      "Run the Step 6 integration stage — verify the whole system works together.\n" +
+      "Generates integration tests via AI, runs them, and produces integrate.json\n" +
+      "and integration-report.md. Requires execute.json from Step 5."
+    )
+    .option("--repo <path>", "Target repo root. Defaults to the current directory.")
+    .option(
+      "--output-dir <path>",
+      "Custom repo-internal output directory. Defaults to .forge.",
+    )
+    .option("--force", "Force re-running integration even if integrate.json already exists.")
+    .option("--test-framework <name>", "Override the auto-detected test framework (e.g. jest, vitest, pytest).")
+    .action(async (options: {
+      repo?: string;
+      outputDir?: string;
+      force?: boolean;
+      testFramework?: string;
+    }) => {
+      const result = await runIntegrateCommand(options);
+      const output = formatIntegrateCommandOutput(result);
+
+      if (result.status !== "ready") {
+        process.stderr.write(output);
+        exitCode = result.exitCode ?? 1;
         return;
       }
 
