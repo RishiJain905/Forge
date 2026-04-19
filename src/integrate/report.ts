@@ -88,6 +88,7 @@ function renderOverview(artifact: IntegrateArtifact): string {
     `- **Date**: ${artifact.createdAt}`,
     `- **Goal**: ${artifact.goal}`,
     `- **AI Model**: ${artifact.summary.aiModelUsed}`,
+    `- **Attempts**: ${artifact.attemptCount ?? 1}`,
     `- **Schema Version**: \`${artifact.schemaVersion}\``,
     `- **Forge Version**: \`${artifact.forgeVersion}\``,
   ];

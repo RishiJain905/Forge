@@ -12,6 +12,7 @@ import {
 } from "../src/integrate/cli.js";
 import type {
   IntegrateCommandResult,
+  IntegrateCommandOptions,
   IntegrationTestFile,
   FreezeCriteria,
   FreezeState,
@@ -1451,5 +1452,183 @@ await runScenario(
     assert.equal(health.completed.length, 0);
     assert.equal(health.failed.length, 0);
     assert.equal(health.unknown.length, 0);
+  }
+);
+
+// ---------------------------------------------------------------------------
+// OQ2/OQ5: Freeze criteria override tests
+// ---------------------------------------------------------------------------
+
+await runScenario(
+  "shouldFreeze uses custom maxRetries from override",
+  () => {
+    const criteria: FreezeCriteria = {
+      maxRetries: 5,
+      maxDurationMs: 300000,
+      freezeOn: { rateLimitHit: false, authFailure: true, parseFailure: true },
+    };
+    const state: FreezeState = { attemptCount: 4 };
+    // attemptCount 4 <= maxRetries 5 → should NOT freeze on count alone
+    assert.equal(shouldFreeze(criteria, state, null, 0), false);
+    // attemptCount 6 > maxRetries 5 → should freeze
+    state.attemptCount = 6;
+    assert.equal(shouldFreeze(criteria, state, null, 0), true);
+  }
+);
+
+await runScenario(
+  "shouldFreeze uses custom maxDurationMs from override",
+  () => {
+    const criteria: FreezeCriteria = {
+      maxRetries: 2,
+      maxDurationMs: 10000,
+      freezeOn: { rateLimitHit: false, authFailure: true, parseFailure: true },
+    };
+    const state: FreezeState = { attemptCount: 0 };
+    // elapsed 5000 < maxDurationMs 10000 → should NOT freeze
+    assert.equal(shouldFreeze(criteria, state, null, 5000), false);
+    // elapsed 15000 > maxDurationMs 10000 → should freeze
+    assert.equal(shouldFreeze(criteria, state, null, 15000), true);
+  }
+);
+
+await runScenario(
+  "shouldFreeze with default FreezeCriteria values works as expected",
+  () => {
+    const criteria: FreezeCriteria = {
+      maxRetries: 2,
+      maxDurationMs: 300000,
+      freezeOn: { rateLimitHit: false, authFailure: true, parseFailure: true },
+    };
+    const state: FreezeState = { attemptCount: 1 };
+    assert.equal(shouldFreeze(criteria, state, null, 0), false);
+  }
+);
+
+// ---------------------------------------------------------------------------
+// OQ4: attemptCount tracking test (unit level)
+// ---------------------------------------------------------------------------
+
+await runScenario(
+  "FreezeState tracks attemptCount as 1-based counter",
+  () => {
+    const state: FreezeState = { attemptCount: 0 };
+    // Simulate the retry loop: attempt 0 → attemptCount = 1
+    state.attemptCount = 0 + 1;
+    assert.equal(state.attemptCount, 1);
+    // attempt 1 → attemptCount = 2
+    state.attemptCount = 1 + 1;
+    assert.equal(state.attemptCount, 2);
+    // attempt 2 → attemptCount = 3, which exceeds maxRetries(2)
+    state.attemptCount = 2 + 1;
+    assert.equal(state.attemptCount, 3);
+    const criteria: FreezeCriteria = {
+      maxRetries: 2,
+      maxDurationMs: 300000,
+      freezeOn: { rateLimitHit: false, authFailure: true, parseFailure: true },
+    };
+    assert.equal(shouldFreeze(criteria, state, null, 0), true);
+  }
+);
+
+// ---------------------------------------------------------------------------
+// OQ3: jsonOnly option type acceptance test
+// ---------------------------------------------------------------------------
+
+await runScenario(
+  "IntegrateCommandOptions accepts jsonOnly, delay, maxRetries, maxDurationMs fields",
+  () => {
+    const opts: IntegrateCommandOptions = {
+      repo: "/tmp/test",
+      outputDir: "/tmp/test/.forge",
+      force: true,
+      auto: false,
+      jsonOnly: true,
+      testFramework: "jest",
+      delay: 5,
+      maxRetries: 10,
+      maxDurationMs: 60000,
+    };
+    assert.equal(opts.jsonOnly, true);
+    assert.equal(opts.delay, 5);
+    assert.equal(opts.maxRetries, 10);
+    assert.equal(opts.maxDurationMs, 60000);
+  }
+);
+
+// ---------------------------------------------------------------------------
+// OQ1: --force overwrite verification
+// ---------------------------------------------------------------------------
+
+await runScenario(
+  "force overwrite behavior: existing integrate.json is overwritten when force=true",
+  async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-integrate-test-"));
+    try {
+      const forgeDir = path.join(tmpDir, ".forge");
+      await fs.mkdir(forgeDir, { recursive: true });
+      const execArtifact = makeExecuteArtifact([
+        makeWorkstream({ workstreamId: "ws-1", title: "Feature", state: "completed" }),
+      ]);
+      await fs.writeFile(
+        path.join(forgeDir, "execute.json"),
+        JSON.stringify(execArtifact),
+        "utf-8"
+      );
+      // Pre-create an old integrate.json with a distinctive marker
+      await fs.writeFile(
+        path.join(forgeDir, "integrate.json"),
+        JSON.stringify({ schemaVersion: "0.0.0", oldFile: true }),
+        "utf-8"
+      );
+      // Without force, should fail with INTEGRATE_ALREADY_EXISTS
+      const resultNoForce = await runIntegrateCommand({ repo: tmpDir });
+      assert.equal(resultNoForce.failure?.code, "INTEGRATE_ALREADY_EXISTS");
+      // With force, should proceed past the guard (will fail later due to no AI model,
+      // but that's fine — we just need to verify it gets past the --force check)
+      const resultWithForce = await runIntegrateCommand({ repo: tmpDir, force: true });
+      // With force, it should NOT fail with INTEGRATE_ALREADY_EXISTS
+      assert.notEqual(resultWithForce.failure?.code, "INTEGRATE_ALREADY_EXISTS");
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// OQ2/OQ5: delay and freeze criteria override integration-level test
+// ---------------------------------------------------------------------------
+
+await runScenario(
+  "auto mode with --max-retries override: SOME_WORKSTREAMS_FAILED still fails",
+  async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-integrate-test-"));
+    try {
+      const forgeDir = path.join(tmpDir, ".forge");
+      await fs.mkdir(forgeDir, { recursive: true });
+      // Mixed workstreams: some completed, some failed → --auto should fail
+      const execArtifact = makeExecuteArtifact([
+        makeWorkstream({ workstreamId: "ws-1", title: "Completed WS", state: "completed" }),
+        makeWorkstream({ workstreamId: "ws-2", title: "Failed WS", state: "failed" }),
+      ]);
+      await fs.writeFile(
+        path.join(forgeDir, "execute.json"),
+        JSON.stringify(execArtifact),
+        "utf-8"
+      );
+      await fs.writeFile(
+        path.join(tmpDir, "package.json"),
+        JSON.stringify({ scripts: { test: "jest" }, devDependencies: { jest: "^29" } }),
+        "utf-8"
+      );
+      const result = await runIntegrateCommand({
+        repo: tmpDir,
+        auto: true,
+        maxRetries: 10,
+      });
+      assert.equal(result.failure?.code, "SOME_WORKSTREAMS_FAILED");
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
   }
 );

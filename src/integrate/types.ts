@@ -192,8 +192,16 @@ export interface IntegrateCommandOptions {
   force?: boolean;
   /** Non-interactive mode for CI/CD: fail on any warning or error. */
   auto?: boolean;
+  /** Only write integrate.json, skip integration-report.md. */
+  jsonOnly?: boolean;
   /** Override the auto-detected test framework. */
   testFramework?: string;
+  /** Override retry delay in seconds (replaces exponential backoff). */
+  delay?: number;
+  /** Override maximum retry attempts before freezing. */
+  maxRetries?: number;
+  /** Override maximum duration in ms before freezing. */
+  maxDurationMs?: number;
 }
 
 // ---------------------------------------------------------------------------

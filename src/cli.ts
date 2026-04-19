@@ -304,12 +304,20 @@ export async function runCli(argv: string[]): Promise<number> {
     .option("--force", "Force re-running integration even if integrate.json already exists.")
     .option("--auto", "Non-interactive mode: fail on any warning or error.")
     .option("--test-framework <name>", "Override the auto-detected test framework (e.g. jest, vitest, pytest).")
+    .option("--json-only", "Only write integrate.json, skip integration-report.md")
+    .option("--delay <seconds>", "Override retry delay in seconds for rate limit backoff", (val) => parseInt(val, 10))
+    .option("--max-retries <n>", "Maximum retry attempts before freezing", (val) => parseInt(val, 10))
+    .option("--max-duration <ms>", "Maximum duration in ms before freezing", (val) => parseInt(val, 10))
     .action(async (options: {
       repo?: string;
       outputDir?: string;
       force?: boolean;
       auto?: boolean;
+      jsonOnly?: boolean;
       testFramework?: string;
+      delay?: number;
+      maxRetries?: number;
+      maxDurationMs?: number;
     }) => {
       const result = await runIntegrateCommand(options);
       const output = formatIntegrateCommandOutput(result);

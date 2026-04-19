@@ -692,7 +692,11 @@ export async function runIntegrateCommand(
   let modelUsed = "";
   let rawResponse = "";
   const retryConfig: RetryConfig = DEFAULT_RETRY_CONFIG;
-  const freezeCriteria: FreezeCriteria = DEFAULT_FREEZE_CRITERIA;
+  const effectiveFreezeCriteria: FreezeCriteria = {
+    maxRetries: options.maxRetries ?? DEFAULT_FREEZE_CRITERIA.maxRetries,
+    maxDurationMs: options.maxDurationMs ?? DEFAULT_FREEZE_CRITERIA.maxDurationMs,
+    freezeOn: DEFAULT_FREEZE_CRITERIA.freezeOn,
+  };
   const freezeState: FreezeState = { attemptCount: 0 };
   const startTime = Date.now();
   let lastClassification: ErrorClassification | null = null;
@@ -716,7 +720,7 @@ export async function runIntegrateCommand(
       console.error(`[AI] ${classified.suggestion}`);
 
       // Check if we should freeze instead of retry
-      if (shouldFreeze(freezeCriteria, freezeState, classified, elapsed)) {
+      if (shouldFreeze(effectiveFreezeCriteria, freezeState, classified, elapsed)) {
         freezeState.frozenAt = new Date().toISOString();
         freezeState.finalError = `${classified.type}: ${classified.message}`;
 
@@ -735,8 +739,10 @@ export async function runIntegrateCommand(
         try {
           await fs.mkdir(outputDir, { recursive: true });
           await writeIntegrateArtifact(frozenArtifactPath, frozenArtifact);
-          const frozenReport = createFrozenReport(frozenArtifact, classified);
-          await fs.writeFile(frozenReportPath, frozenReport, "utf-8");
+          if (!options.jsonOnly) {
+            const frozenReport = createFrozenReport(frozenArtifact, classified);
+            await fs.writeFile(frozenReportPath, frozenReport, "utf-8");
+          }
         } catch {
           // Best effort — if writing fails, still return the frozen result
         }
@@ -774,11 +780,12 @@ export async function runIntegrateCommand(
       }
 
       if (attempt < retryConfig.maxRetries) {
-        const delay =
-          classified.retryAfterMs ??
-          retryConfig.initialDelayMs * Math.pow(retryConfig.backoffMultiplier, attempt);
-        console.error(`[AI] Retrying in ${delay}ms...`);
-        await sleep(delay);
+        const delayMs = options.delay !== undefined
+          ? options.delay * 1000
+          : (classified.retryAfterMs ??
+             retryConfig.initialDelayMs * Math.pow(retryConfig.backoffMultiplier, attempt));
+        console.error(`[AI] Retrying in ${delayMs}ms...`);
+        await sleep(delayMs);
       }
     }
   }
@@ -844,6 +851,7 @@ export async function runIntegrateCommand(
     aiModelUsed: modelUsed,
     schemaVersion: SCHEMA_VERSION,
     forgeVersion: FORGE_VERSION,
+    attemptCount: freezeState.attemptCount || 1,
   });
 
   // ---- Step 9: Write integrate.json and integration-report.md ----
@@ -855,8 +863,10 @@ export async function runIntegrateCommand(
     await fs.mkdir(outputDir, { recursive: true });
     await writeIntegrateArtifact(artifactPath, artifact);
 
-    const report = createIntegrationReport(artifact);
-    await fs.writeFile(reportPath, report, "utf-8");
+    if (!options.jsonOnly) {
+      const report = createIntegrationReport(artifact);
+      await fs.writeFile(reportPath, report, "utf-8");
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return makeErrorResult(
@@ -882,7 +892,7 @@ export async function runIntegrateCommand(
     status,
     summary: resultSummary,
     artifactPath,
-    reportPath,
+    reportPath: options.jsonOnly ? undefined : reportPath,
     outputRoot: outputDir,
     exitCode,
   };
