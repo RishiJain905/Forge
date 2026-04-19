@@ -98,7 +98,15 @@ async function loadPlanArtifact(
   const filePath = path.join(repoRoot, ".forge", "plan.json");
   try {
     const content = await fs.readFile(filePath, "utf-8");
-    return validatePlanArtifact(JSON.parse(content));
+    try {
+      return validatePlanArtifact(JSON.parse(content));
+    } catch (validationError) {
+      const message = validationError instanceof Error ? validationError.message : String(validationError);
+      console.warn(
+        `Warning: plan.json at ${filePath} is invalid (${message}). Proceeding without plan context.`
+      );
+      return null;
+    }
   } catch {
     console.warn(
       `Warning: plan.json not found at ${filePath} — proceeding without plan context.`
@@ -117,7 +125,15 @@ async function loadVerifyArtifact(
   const filePath = path.join(repoRoot, ".forge", "verify.json");
   try {
     const content = await fs.readFile(filePath, "utf-8");
-    return validateVerifyArtifact(JSON.parse(content));
+    try {
+      return validateVerifyArtifact(JSON.parse(content));
+    } catch (validationError) {
+      const message = validationError instanceof Error ? validationError.message : String(validationError);
+      console.warn(
+        `Warning: verify.json at ${filePath} is invalid (${message}). Proceeding without verification context.`
+      );
+      return null;
+    }
   } catch {
     console.warn(
       `Warning: verify.json not found at ${filePath} — proceeding without verification constraints.`
