@@ -18,6 +18,8 @@ import path from "node:path";
 import type { ExecuteArtifact } from "../execute/types.js";
 import type { PlanArtifact } from "../plan/types.js";
 import type { VerifyArtifact } from "../verify/types.js";
+import { validatePlanArtifact } from "../plan/schema.js";
+import { validateVerifyArtifact } from "../verify/schema.js";
 import type {
   IntegrateCommandOptions,
   IntegrateCommandResult,
@@ -96,7 +98,7 @@ async function loadPlanArtifact(
   const filePath = path.join(repoRoot, ".forge", "plan.json");
   try {
     const content = await fs.readFile(filePath, "utf-8");
-    return JSON.parse(content) as PlanArtifact;
+    return validatePlanArtifact(JSON.parse(content));
   } catch {
     console.warn(
       `Warning: plan.json not found at ${filePath} — proceeding without plan context.`
@@ -115,7 +117,7 @@ async function loadVerifyArtifact(
   const filePath = path.join(repoRoot, ".forge", "verify.json");
   try {
     const content = await fs.readFile(filePath, "utf-8");
-    return JSON.parse(content) as VerifyArtifact;
+    return validateVerifyArtifact(JSON.parse(content));
   } catch {
     console.warn(
       `Warning: verify.json not found at ${filePath} — proceeding without verification constraints.`
