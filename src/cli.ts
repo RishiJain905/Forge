@@ -302,11 +302,13 @@ export async function runCli(argv: string[]): Promise<number> {
       "Custom repo-internal output directory. Defaults to .forge.",
     )
     .option("--force", "Force re-running integration even if integrate.json already exists.")
+    .option("--auto", "Non-interactive mode: fail on any warning or error.")
     .option("--test-framework <name>", "Override the auto-detected test framework (e.g. jest, vitest, pytest).")
     .action(async (options: {
       repo?: string;
       outputDir?: string;
       force?: boolean;
+      auto?: boolean;
       testFramework?: string;
     }) => {
       const result = await runIntegrateCommand(options);

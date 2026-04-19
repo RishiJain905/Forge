@@ -22,8 +22,17 @@ import type {
   IntegrationSummary,
   IntegrateArtifact,
   TestRunResult,
+  FreezeState,
 } from "./types.js";
+import type { ErrorClassification } from "./types.js";
 import { validateIntegrateArtifact } from "./schema.js";
+
+// ---------------------------------------------------------------------------
+// Version constants
+// ---------------------------------------------------------------------------
+
+const SCHEMA_VERSION = "1.0.0";
+const FORGE_VERSION = "0.0.1";
 
 // ---------------------------------------------------------------------------
 // buildIntegrateArtifact
@@ -108,6 +117,71 @@ export function buildIntegrateArtifact(
 }
 
 // ---------------------------------------------------------------------------
+// buildFrozenArtifact
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a frozen IntegrateArtifact when the retry loop stops due to freeze criteria.
+ *
+ * The frozen artifact has empty tests/testFiles and zero summary counts, but these
+ * are valid per the Zod schema (empty arrays and nonnegative counts are allowed).
+ * Validates the artifact before returning.
+ *
+ * @param executeArtifact  The execute artifact from Step 5.
+ * @param planArtifact     The plan artifact (or null if unavailable).
+ * @param verifyArtifact   The verify artifact (or null if unavailable).
+ * @param freezeState      The current freeze state tracking attempt count and frozen-at time.
+ * @param lastError        The classified error that triggered the freeze.
+ */
+export function buildFrozenArtifact(
+  executeArtifact: ExecuteArtifact,
+  planArtifact: PlanArtifact | null,
+  verifyArtifact: VerifyArtifact | null,
+  freezeState: FreezeState,
+  lastError: ErrorClassification
+): IntegrateArtifact {
+  // 1. Derive the goal (with "? Unknown" fallback if no plan)
+  const goal = planArtifact
+    ? extractGoal(planArtifact, "? Unknown")
+    : "? Unknown";
+
+  // 2. Build workstreams summary
+  const workstreamsSummary = buildWorkstreamsSummary(executeArtifact);
+
+  // 3. Construct the frozen artifact — empty tests, zero counts.
+  const artifact = {
+    schemaVersion: SCHEMA_VERSION,
+    forgeVersion: FORGE_VERSION,
+    createdAt: new Date().toISOString(),
+    executeSource: ".forge/execute.json",
+    planSource: planArtifact ? ".forge/plan.json" : "",
+    verifySource: verifyArtifact ? ".forge/verify.json" : "",
+    goal,
+    workstreamsSummary,
+    tests: [],
+    testFiles: [],
+    summary: {
+      total: 0,
+      passed: 0,
+      failed: 0,
+      skipped: 0,
+      durationMs: 0,
+      testFilesGenerated: 0,
+      aiModelUsed: "unknown",
+    },
+    recommendations: [
+      `Frozen due to: ${lastError.type}. ${lastError.suggestion}`,
+    ],
+    attemptCount: freezeState.attemptCount,
+    frozenAt: freezeState.frozenAt,
+    finalError: freezeState.finalError,
+  };
+
+  return validateIntegrateArtifact(artifact);
+}
+
+
+// ---------------------------------------------------------------------------
 // writeIntegrateArtifact
 // ---------------------------------------------------------------------------
 
@@ -140,7 +214,7 @@ export async function writeIntegrateArtifact(
  * Tries carry_forward.task_spec.goal, then purpose, then summary,
  * then falls back to "Unknown goal".
  */
-function extractGoal(planArtifact: PlanArtifact): string {
+function extractGoal(planArtifact: PlanArtifact, fallback: string = "Unknown goal"): string {
   const cf = planArtifact.carry_forward as
     | { task_spec?: { goal?: string } }
     | undefined;
@@ -157,7 +231,7 @@ function extractGoal(planArtifact: PlanArtifact): string {
     return planArtifact.summary;
   }
 
-  return "Unknown goal";
+  return fallback;
 }
 
 /**

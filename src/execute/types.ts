@@ -1,5 +1,5 @@
 // Workstream execution states
-export type ExecuteWorkstreamState = "queued" | "running" | "completed" | "failed" | "blocked";
+export type ExecuteWorkstreamState = "queued" | "running" | "completed" | "failed" | "blocked" | "partial";
 
 // A single change made by the AI
 export interface ChangeMade {
@@ -65,6 +65,7 @@ export interface ExecuteArtifactSummary {
   completed: number;
   failed: number;
   blocked: number;
+  partial?: number;             // How many workstreams are in partial state
   aiExecutedCount?: number;      // How many workstreams were AI-executed
   totalChangesMade?: number;     // Total file changes across all workstreams
 }

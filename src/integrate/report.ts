@@ -10,6 +10,7 @@
 // ---------------------------------------------------------------------------
 
 import type { IntegrateArtifact, IntegrationTestCase } from "./types.js";
+import type { ErrorClassification } from "./types.js";
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -300,4 +301,80 @@ export function createIntegrationReport(artifact: IntegrateArtifact): string {
   ];
 
   return ["# Forge Integration Report", "", sections.join("\n\n"), ""].join("\n");
+}
+
+// ---------------------------------------------------------------------------
+// createFrozenReport
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a human-readable Markdown report for a frozen integration.
+ *
+ * A frozen integration occurs when freeze criteria (e.g. max retries exceeded,
+ * auth failure, parse failure) stop the retry loop before a successful AI
+ * response is obtained. The report clearly marks the integration as frozen
+ * and explains why, along with next-step guidance.
+ *
+ * @param artifact   The frozen IntegrateArtifact.
+ * @param lastError  The ErrorClassification that triggered the freeze.
+ * @returns A Markdown string representing the frozen report.
+ */
+export function createFrozenReport(
+  artifact: IntegrateArtifact,
+  lastError: ErrorClassification
+): string {
+  const parsed = parseWorkstreamsSummary(artifact.workstreamsSummary);
+
+  // Build the workstreams table rows
+  let workstreamsSection: string;
+  if (parsed) {
+    const header =
+      "| Metric | Count |\n|--------|-------|";
+    const rows = [
+      `| Total | ${parsed.total} |`,
+      `| Completed | ${parsed.completed} |`,
+      `| Failed | ${parsed.failed} |`,
+    ].join("\n");
+    workstreamsSection = renderSection("Workstreams Summary", [header, rows]);
+  } else {
+    workstreamsSection = renderSection("Workstreams Summary", [
+      artifact.workstreamsSummary,
+    ]);
+  }
+
+  // Build the next steps section
+  const nextStepsLines: string[] = [
+    "The integration was frozen before tests could be generated. To resolve:",
+    "",
+    "- Address the issue described above and re-run `forge integrate`",
+    "- Use `--force` to overwrite the frozen artifact",
+  ];
+  if (lastError.type === "rate_limit") {
+    nextStepsLines.push("- Wait a few minutes for the rate limit to reset and try again");
+  }
+
+  const sections = [
+    `**Date**: ${artifact.createdAt}`,
+    `**Status**: ❌ INTEGRATION FROZEN`,
+    `**Frozen At**: ${artifact.frozenAt ?? "unknown"}`,
+    `**Attempts**: ${artifact.attemptCount ?? 0}`,
+    "",
+    renderSection("Reason for Freeze", [
+      "```",
+      artifact.finalError ?? "unknown error",
+      "```",
+    ]),
+    "",
+    renderSection("Suggestion", [
+      lastError.suggestion,
+    ]),
+    "",
+    workstreamsSection,
+    "",
+    renderSection("Next Steps", nextStepsLines),
+    "",
+    "*This integration was frozen and may be incomplete.*",
+  ];
+
+  return ["# Forge Integration Report — [FROZEN]", "", sections.join("\n\n"), ""].join("\n");
 }

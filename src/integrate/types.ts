@@ -6,7 +6,7 @@
 // from their respective modules for convenient cross-step consumption.
 // ---------------------------------------------------------------------------
 
-import type { ExecuteArtifact, AIModelInfo } from "../execute/types.js";
+import type { ExecuteArtifact, ExecuteWorkstream, AIModelInfo } from "../execute/types.js";
 import type { PlanArtifact } from "../plan/types.js";
 import type { VerifyArtifact } from "../verify/types.js";
 
@@ -14,7 +14,7 @@ import type { VerifyArtifact } from "../verify/types.js";
 // Re-exports from other steps
 // ---------------------------------------------------------------------------
 
-export type { ExecuteArtifact, AIModelInfo } from "../execute/types.js";
+export type { ExecuteArtifact, ExecuteWorkstream, AIModelInfo } from "../execute/types.js";
 export type { PlanArtifact } from "../plan/types.js";
 export type { VerifyArtifact } from "../verify/types.js";
 
@@ -119,6 +119,12 @@ export interface IntegrateArtifact {
   summary: IntegrationSummary;
   /** Actionable recommendations derived from test failures. */
   recommendations: string[];
+  /** Number of AI call attempts made before this artifact was produced. */
+  attemptCount?: number;
+  /** ISO timestamp when the integration was frozen due to unrecoverable conditions. */
+  frozenAt?: string;
+  /** Final error message that caused the integration to freeze. */
+  finalError?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -134,6 +140,10 @@ export interface PromptBuildContext {
   repoRoot: string;
   /** Auto-detected or overridden test framework (e.g. "jest", "pytest"). When omitted, the framework is auto-detected from the repository. */
   testFramework?: string;
+  /** Health classification of workstreams by state. */
+  workstreamHealth?: WorkstreamHealth;
+  /** Pre-formatted health context string to include in the prompt. */
+  workstreamHealthContext?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -180,6 +190,8 @@ export interface IntegrateCommandOptions {
   outputDir?: string;
   /** Force re-running integration even if an integrate.json already exists. */
   force?: boolean;
+  /** Non-interactive mode for CI/CD: fail on any warning or error. */
+  auto?: boolean;
   /** Override the auto-detected test framework. */
   testFramework?: string;
 }
@@ -207,4 +219,96 @@ export interface IntegrateCommandResult {
     code: string;
     message: string;
   };
+}
+
+// ---------------------------------------------------------------------------
+// AI error classification
+// ---------------------------------------------------------------------------
+
+/** Classified AI error types for the integrate step. */
+export type AIErrorType =
+  | "rate_limit"        // 429 — too many requests, back off and retry
+  | "auth_failure"       // 401/403 — bad API key or insufficient permissions
+  | "timeout"           // Request timed out
+  | "parse_error"       // AI returned non-JSON or malformed response
+  | "api_error"         // 500/502/503 from the API provider
+  | "context_overflow"  // Prompt exceeds context window
+  | "unknown_error";    // Something else
+
+/** Configuration for retry behavior when AI calls fail. */
+export interface RetryConfig {
+  /** Maximum number of retries after the initial attempt. Default: 2. */
+  maxRetries: number;
+  /** Initial delay in milliseconds before first retry. Default: 1000. */
+  initialDelayMs: number;
+  /** Multiplier for exponential backoff. Default: 2. */
+  backoffMultiplier: number;
+  /** Error types that are worth retrying. */
+  retryableErrors: AIErrorType[];
+}
+
+/** Default retry configuration. */
+export const DEFAULT_RETRY_CONFIG: RetryConfig = {
+  maxRetries: 2,
+  initialDelayMs: 1000,
+  backoffMultiplier: 2,
+  retryableErrors: ["rate_limit", "timeout", "api_error"],
+};
+
+/** Result of classifying an AI error. */
+export interface ErrorClassification {
+  /** The classified error type. */
+  type: AIErrorType;
+  /** Whether this error type is retryable. */
+  retryable: boolean;
+  /** Suggested delay before retrying (in ms). For rate_limit — parsed from Retry-After. */
+  retryAfterMs?: number;
+  /** The original error message. */
+  message: string;
+  /** User-facing actionable suggestion. */
+  suggestion: string;
+}
+
+// ---------------------------------------------------------------------------
+// Freeze criteria
+// ---------------------------------------------------------------------------
+
+/** Configuration for freeze criteria — when to stop retrying and produce a frozen artifact. */
+export interface FreezeCriteria {
+  maxRetries: number;
+  maxDurationMs: number;
+  freezeOn: {
+    rateLimitHit: boolean;
+    authFailure: boolean;
+    parseFailure: boolean;
+  };
+}
+
+export const DEFAULT_FREEZE_CRITERIA: FreezeCriteria = {
+  maxRetries: 2,
+  maxDurationMs: 300000, // 5 minutes
+  freezeOn: {
+    rateLimitHit: false,
+    authFailure: true,
+    parseFailure: true,
+  },
+};
+
+/** Mutable state tracking freeze conditions through the retry loop. */
+export interface FreezeState {
+  frozenAt?: string;
+  finalError?: string;
+  attemptCount: number;
+}
+
+// ---------------------------------------------------------------------------
+// Workstream health classification
+// ---------------------------------------------------------------------------
+
+/** Health classification of workstreams by state. */
+export interface WorkstreamHealth {
+  completed: ExecuteWorkstream[];
+  failed: ExecuteWorkstream[];
+  partial: ExecuteWorkstream[];
+  unknown: ExecuteWorkstream[];
 }

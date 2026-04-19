@@ -7,11 +7,18 @@ import crypto from "node:crypto";
 import {
   runIntegrateCommand,
   parseTestFilesFromAIResponse,
+  shouldFreeze,
+  classifyWorkstreamHealth,
 } from "../src/integrate/cli.js";
 import type {
   IntegrateCommandResult,
   IntegrationTestFile,
+  FreezeCriteria,
+  FreezeState,
+  ErrorClassification,
+  WorkstreamHealth,
 } from "../src/integrate/types.js";
+import type { ExecuteWorkstream } from "../src/execute/types.js";
 
 async function runScenario(
   name: string,
@@ -84,9 +91,9 @@ function makeWorkstream(
 
 function makePlanArtifact(): object {
   return {
-    schemaVersion: "1.0.0",
-    command: "plan",
-    stage: "plan",
+    schemaVersion: "2.0.0",
+    command: "forge plan",
+    stage: "step2",
     status: "ready",
     purpose: "Plan feature",
     repoRoot: "/tmp/test",
@@ -96,30 +103,30 @@ function makePlanArtifact(): object {
       mode: "output-root-only",
       repoReadOnlyOutsideOutputRoot: true,
       allowedRoot: "/tmp/test",
-      allowedSideEffects: [],
-      deferredCapabilities: [],
-      disallowedCapabilities: [],
+      allowedSideEffects: ["read the Step 1 intake artifact"],
+      deferredCapabilities: ["forge verify"],
+      disallowedCapabilities: ["verify correctness directly"],
     },
-    files: { artifactPath: null, reportPath: null },
+    files: { artifactPath: "/tmp/test/.forge/plan.json", reportPath: "/tmp/test/.forge/plan-report.md" },
     startedAt: "2025-01-01T00:00:00.000Z",
     finishedAt: "2025-01-01T00:00:00.000Z",
     summary: "Plan for feature",
-    boundaryNotes: [],
+    boundaryNotes: ["Plan consumes the persisted Step 1 intake artifact."],
     source_intake: {
-      artifactPath: "",
-      command: "intake",
+      artifactPath: ".forge/intake.json",
+      command: "forge intake",
       status: "success",
-      summary: "",
+      summary: "Intake completed successfully",
       readyForPlanning: true,
     },
     plan_item_contract: {
-      requiredFields: ["id", "title"],
+      requiredFields: ["id", "title", "description", "category", "sourceRequirements", "likelyAffectedPaths", "dependencies", "riskLevel", "testObligations", "verificationRelevance", "parallelization"],
       categories: ["implementation"],
       dependencyTypes: ["hard"],
       riskLevels: ["low"],
       testObligationCategories: ["unit"],
-      verificationCategories: ["functional"],
-      parallelizationSignals: ["independent"],
+      verificationCategories: ["code_surface"],
+      parallelizationSignals: ["serial_only"],
     },
     plan_items: [
       {
@@ -132,14 +139,14 @@ function makePlanArtifact(): object {
         dependencies: [],
         riskLevel: "low",
         testObligations: [{ category: "unit", reason: "Must test" }],
-        verificationRelevance: { relevant: true, categories: ["functional"], notes: [] },
-        parallelization: { signal: "independent", reason: "No deps" },
+        verificationRelevance: { relevant: true, categories: ["code_surface"], notes: ["Verify feature"] },
+        parallelization: { signal: "serial_only", reason: "No deps" },
       },
     ],
     dependency_graph: [],
     conflict_zones: [],
-    test_obligations: [],
-    parallelization_signals: [],
+    test_obligations: [{ planItemId: "pi-1", category: "unit", reason: "Must test" }],
+    parallelization_signals: [{ planItemId: "pi-1", signal: "serial_only", reason: "No deps" }],
     carry_forward: {
       task_spec: {
         title: "Feature",
@@ -170,15 +177,15 @@ function makePlanArtifact(): object {
         test_framework_hints: [],
         test_command_hints: [],
         ci_hints: [],
-        layout_summary: "",
-        git_context: { status: "unavailable", branch: null, commitHash: null, isDirty: false },
+        layout_summary: "Minimal project",
+        git_context: { status: "unavailable", branch: null, commitHash: null, isDirty: false, repo_root: null, recent_files: [] },
       },
       candidate_targets: [],
       risk_analysis: { initial_risk_zones: [], derived_risk_zones: [], supporting_analysis: { ambiguity_items: [], warning_items: [] } },
       initial_verification_targets: [],
       ambiguities: [],
       warnings: [],
-      confidence: { level: "low", signals: { task_parsing: "weak", repo_inspection: "weak", targeting: "weak" }, reasons: [] },
+      confidence: { level: "high", signals: { task_parsing: "strong", repo_inspection: "strong", targeting: "strong" }, reasons: [] },
       next_step_readiness: { ready: true, blocking_issues: [], recommended_user_actions: [] },
       concerns: [],
     },
@@ -192,7 +199,7 @@ function makePlanArtifact(): object {
     planning_readiness: {
       ready: true,
       status: "ready",
-      summary: "",
+      summary: "Ready for planning",
       warning_items: [],
       blocking_issues: [],
       partial_output: null,
@@ -205,9 +212,9 @@ function makePlanArtifact(): object {
 
 function makeVerifyArtifact(): object {
   return {
-    schemaVersion: "1.0.0",
-    command: "verify",
-    stage: "verify",
+    schemaVersion: "2.0.0",
+    command: "forge verify",
+    stage: "step3",
     status: "ready",
     purpose: "Verify feature",
     repoRoot: "/tmp/test",
@@ -217,31 +224,31 @@ function makeVerifyArtifact(): object {
       mode: "output-root-only",
       repoReadOnlyOutsideOutputRoot: true,
       allowedRoot: "/tmp/test",
-      allowedSideEffects: [],
-      deferredCapabilities: [],
-      disallowedCapabilities: [],
+      allowedSideEffects: ["read the Step 2 plan artifact"],
+      deferredCapabilities: ["forge split"],
+      disallowedCapabilities: ["re-plan the task from prose"],
     },
     files: {
-      artifactPath: null,
-      reportPath: null,
-      debugArtifactPath: "",
-      debugVerificationCasesPath: "",
-      debugStructuralFindingsPath: "",
-      debugVerificationReadinessPath: "",
-      debugStateModelsPath: "",
-      debugTlaSpecsPath: "",
-      debugTlcResultsPath: "",
+      artifactPath: "/tmp/test/.forge/verify.json",
+      reportPath: "/tmp/test/.forge/verify-report.md",
+      debugArtifactPath: "/tmp/test/.forge/verify-debug.json",
+      debugVerificationCasesPath: "/tmp/test/.forge/verification-cases.json",
+      debugStructuralFindingsPath: "/tmp/test/.forge/structural-findings.json",
+      debugVerificationReadinessPath: "/tmp/test/.forge/verification-readiness.json",
+      debugStateModelsPath: "/tmp/test/.forge/state-models.json",
+      debugTlaSpecsPath: "/tmp/test/.forge/tla-specs.json",
+      debugTlcResultsPath: "/tmp/test/.forge/tlc-results.json",
     },
     startedAt: "2025-01-01T00:00:00.000Z",
     finishedAt: "2025-01-01T00:00:00.000Z",
     summary: "Verification complete",
-    boundaryNotes: [],
+    boundaryNotes: ["Verify consumes the persisted Step 2 plan artifact."],
     source_plan: {
-      artifactPath: "",
-      command: "plan",
-      repoRoot: "/tmp",
+      artifactPath: "/tmp/test/.forge/plan.json",
+      command: "forge plan",
+      repoRoot: "/tmp/test",
       status: "ready",
-      summary: "",
+      summary: "Plan completed successfully",
       readyForVerification: true,
       planningReadinessStatus: "ready",
       planning_diagnostics: {
@@ -254,7 +261,7 @@ function makeVerifyArtifact(): object {
       planning_readiness: {
         ready: true,
         status: "ready",
-        summary: "",
+        summary: "Ready for planning",
         warning_items: [],
         blocking_issues: [],
         partial_output: null,
@@ -265,38 +272,38 @@ function makeVerifyArtifact(): object {
     },
     verification_target_contract: {
       requiredFields: ["id"],
-      riskSources: ["dependency"],
-      structuralFocusAreas: ["error_handling"],
+      riskSources: ["plan_item_verification_relevance"],
+      structuralFocusAreas: ["dependency_contradiction"],
       formalFocusAreas: ["retry_logic"],
       supportedLanes: ["structural"],
     },
     formal_lane_contract: {
-      tooling: ["tlc"],
-      scenarioKinds: ["safety"],
-      entryCriteria: ["state_model_complete"],
+      tooling: ["TLC"],
+      scenarioKinds: ["ordering_serialization"],
+      entryCriteria: ["state_machine_like"],
       stateModelRequiredFields: ["states"],
       tlcStatuses: ["passed"],
     },
     verification_targets: [],
     verification_cases: [],
-    structural_verification: { status: "passed", summary: "", findings: [], constraints: [] },
-    formal_verification: { status: "not_run", summary: "", caution_notes: [], state_models: [], tla_specs: [], tlc_results: [], findings: [], constraints: [] },
+    structural_verification: { status: "not_run", summary: "No structural verification performed", findings: [], constraints: [] },
+    formal_verification: { status: "not_run", summary: "No formal verification performed", caution_notes: [], state_models: [], tla_specs: [], tlc_results: [], findings: [], constraints: [] },
     findings: [],
     constraints: [],
     carry_forward: {
       task_spec: { title: "Feature", summary: "Feature", goal: "Add feature", scope: [], acceptance_criteria: [], has_acceptance_criteria: false, explicit_requirements: [], implementation_necessities: [], constraints: [], mentioned_paths: [], mentioned_tests: [], mentioned_modules: [], risky_phrases: [], open_questions: [] },
-      repo_context: { grounded: false, source_files: [], test_files: [], manifest_files: [], languages: [], framework_hints: [], package_manager: null, key_directories: [], entry_points: [], test_framework_hints: [], test_command_hints: [], ci_hints: [], layout_summary: "", git_context: { status: "unavailable", branch: null, commitHash: null, isDirty: false } },
+      repo_context: { grounded: false, source_files: [], test_files: [], manifest_files: [], languages: [], framework_hints: [], package_manager: null, key_directories: [], entry_points: [], test_framework_hints: [], test_command_hints: [], ci_hints: [], layout_summary: "Minimal project", git_context: { status: "unavailable", branch: null, commitHash: null, isDirty: false, repo_root: null, recent_files: [] } },
       candidate_targets: [],
       risk_analysis: { initial_risk_zones: [], derived_risk_zones: [], supporting_analysis: { ambiguity_items: [], warning_items: [] } },
       initial_verification_targets: [],
       ambiguities: [],
       warnings: [],
-      confidence: { level: "low", signals: { task_parsing: "weak", repo_inspection: "weak", targeting: "weak" }, reasons: [] },
+      confidence: { level: "high", signals: { task_parsing: "strong", repo_inspection: "strong", targeting: "strong" }, reasons: [] },
       next_step_readiness: { ready: true, blocking_issues: [], recommended_user_actions: [] },
       concerns: [],
     },
     verification_diagnostics: { usability_status: "actionable", warning_items: [], blocking_items: [], partial_output: null },
-    verification_readiness: { ready: true, status: "ready", summary: "", warning_items: [], blocking_issues: [], partial_output: null, constraining_concern_ids: [], recommended_user_actions: [] },
+    verification_readiness: { ready: true, status: "ready", summary: "Ready for verification", warning_items: [], blocking_issues: [], partial_output: null, constraining_concern_ids: [], recommended_user_actions: [] },
     failure: null,
   };
 }
@@ -484,15 +491,15 @@ await runScenario(
         "utf-8"
       );
 
-      // Without AI env vars, the command should fail with AI_GENERATION_FAILED
+      // Without AI env vars, the command should fail with an AI_* error
       // rather than NO_EXECUTE_ARTIFACT or ALL_WORKSTREAMS_FAILED (which we already tested)
       const result = await runIntegrateCommand({ repo: tmpDir });
       // Should not be NO_EXECUTE_ARTIFACT — that check passed
       assert.notEqual(result.failure?.code, "NO_EXECUTE_ARTIFACT");
       assert.notEqual(result.failure?.code, "NO_WORKSTREAMS");
       assert.notEqual(result.failure?.code, "ALL_WORKSTREAMS_FAILED");
-      // Should be AI_GENERATION_FAILED since no model is configured
-      assert.equal(result.failure?.code, "AI_GENERATION_FAILED");
+      // Should be AI_UNKNOWN since no model is configured (classified by error classifier)
+      assert.equal(result.failure?.code, "AI_UNKNOWN");
     } finally {
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
@@ -610,5 +617,839 @@ await runScenario(
     // The function exists and can be called — the import path is verified
     // by the typechecker which confirms loadModelConfig and callModel come from
     // the model-connector module.
+  }
+);
+
+// ---------------------------------------------------------------------------
+// --force guard and --auto mode tests
+// ---------------------------------------------------------------------------
+
+await runScenario(
+  "runIntegrateCommand fails with INTEGRATE_ALREADY_EXISTS when integrate.json exists and --force is not set",
+  async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-integrate-test-"));
+    try {
+      const forgeDir = path.join(tmpDir, ".forge");
+      await fs.mkdir(forgeDir, { recursive: true });
+
+      // Write valid execute.json with a completed workstream
+      const execArtifact = makeExecuteArtifact([
+        makeWorkstream({ workstreamId: "ws-1", state: "completed" }),
+      ]);
+      await fs.writeFile(
+        path.join(forgeDir, "execute.json"),
+        JSON.stringify(execArtifact),
+        "utf-8"
+      );
+
+      // Write integrate.json to trigger the guard
+      await fs.writeFile(
+        path.join(forgeDir, "integrate.json"),
+        JSON.stringify({}),
+        "utf-8"
+      );
+
+      // Write package.json for framework detection
+      await fs.writeFile(
+        path.join(tmpDir, "package.json"),
+        JSON.stringify({ scripts: { test: "jest" }, devDependencies: { jest: "^29" } }),
+        "utf-8"
+      );
+
+      const result = await runIntegrateCommand({ repo: tmpDir });
+      assert.equal(result.status, "failed");
+      assert.equal(result.failure?.code, "INTEGRATE_ALREADY_EXISTS");
+      assert.equal(result.exitCode, 1);
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  }
+);
+
+await runScenario(
+  "runIntegrateCommand --force proceeds when integrate.json already exists",
+  async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-integrate-test-"));
+    try {
+      const forgeDir = path.join(tmpDir, ".forge");
+      await fs.mkdir(forgeDir, { recursive: true });
+
+      // Write valid execute.json with a completed workstream
+      const execArtifact = makeExecuteArtifact([
+        makeWorkstream({ workstreamId: "ws-1", state: "completed" }),
+      ]);
+      await fs.writeFile(
+        path.join(forgeDir, "execute.json"),
+        JSON.stringify(execArtifact),
+        "utf-8"
+      );
+
+      // Write integrate.json to test that --force bypasses the guard
+      await fs.writeFile(
+        path.join(forgeDir, "integrate.json"),
+        JSON.stringify({}),
+        "utf-8"
+      );
+
+      // Write package.json for framework detection
+      await fs.writeFile(
+        path.join(tmpDir, "package.json"),
+        JSON.stringify({ scripts: { test: "jest" }, devDependencies: { jest: "^29" } }),
+        "utf-8"
+      );
+
+      const result = await runIntegrateCommand({ repo: tmpDir, force: true });
+      // Should NOT be INTEGRATE_ALREADY_EXISTS — it should proceed past the guard
+      assert.notEqual(result.failure?.code, "INTEGRATE_ALREADY_EXISTS");
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  }
+);
+
+await runScenario(
+  "runIntegrateCommand --auto fails with PLAN_REQUIRED when plan.json is missing",
+  async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-integrate-test-"));
+    try {
+      const forgeDir = path.join(tmpDir, ".forge");
+      await fs.mkdir(forgeDir, { recursive: true });
+
+      // Write valid execute.json with a completed workstream
+      const execArtifact = makeExecuteArtifact([
+        makeWorkstream({ workstreamId: "ws-1", state: "completed" }),
+      ]);
+      await fs.writeFile(
+        path.join(forgeDir, "execute.json"),
+        JSON.stringify(execArtifact),
+        "utf-8"
+      );
+
+      // Write verify.json (present) but deliberately NOT plan.json
+      await fs.writeFile(
+        path.join(forgeDir, "verify.json"),
+        JSON.stringify(makeVerifyArtifact()),
+        "utf-8"
+      );
+
+      // Write package.json for framework detection
+      await fs.writeFile(
+        path.join(tmpDir, "package.json"),
+        JSON.stringify({ scripts: { test: "jest" }, devDependencies: { jest: "^29" } }),
+        "utf-8"
+      );
+
+      const result = await runIntegrateCommand({ repo: tmpDir, auto: true });
+      assert.equal(result.status, "failed");
+      assert.equal(result.failure?.code, "PLAN_REQUIRED");
+      assert.equal(result.exitCode, 1);
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  }
+);
+
+await runScenario(
+  "runIntegrateCommand --auto fails with VERIFY_REQUIRED when verify.json is missing",
+  async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-integrate-test-"));
+    try {
+      const forgeDir = path.join(tmpDir, ".forge");
+      await fs.mkdir(forgeDir, { recursive: true });
+
+      // Write valid execute.json with a completed workstream
+      const execArtifact = makeExecuteArtifact([
+        makeWorkstream({ workstreamId: "ws-1", state: "completed" }),
+      ]);
+      await fs.writeFile(
+        path.join(forgeDir, "execute.json"),
+        JSON.stringify(execArtifact),
+        "utf-8"
+      );
+
+      // Write plan.json (present) but deliberately NOT verify.json
+      await fs.writeFile(
+        path.join(forgeDir, "plan.json"),
+        JSON.stringify(makePlanArtifact()),
+        "utf-8"
+      );
+
+      // Write package.json for framework detection
+      await fs.writeFile(
+        path.join(tmpDir, "package.json"),
+        JSON.stringify({ scripts: { test: "jest" }, devDependencies: { jest: "^29" } }),
+        "utf-8"
+      );
+
+      const result = await runIntegrateCommand({ repo: tmpDir, auto: true });
+      assert.equal(result.status, "failed");
+      assert.equal(result.failure?.code, "VERIFY_REQUIRED");
+      assert.equal(result.exitCode, 1);
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  }
+);
+
+await runScenario(
+  "runIntegrateCommand --auto proceeds past auto checks when all artifacts are present",
+  async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-integrate-test-"));
+    try {
+      const forgeDir = path.join(tmpDir, ".forge");
+      await fs.mkdir(forgeDir, { recursive: true });
+
+      // Write valid execute.json with a completed workstream
+      const execArtifact = makeExecuteArtifact([
+        makeWorkstream({ workstreamId: "ws-1", state: "completed" }),
+      ]);
+      await fs.writeFile(
+        path.join(forgeDir, "execute.json"),
+        JSON.stringify(execArtifact),
+        "utf-8"
+      );
+
+      // Write plan.json and verify.json (both present)
+      await fs.writeFile(
+        path.join(forgeDir, "plan.json"),
+        JSON.stringify(makePlanArtifact()),
+        "utf-8"
+      );
+      await fs.writeFile(
+        path.join(forgeDir, "verify.json"),
+        JSON.stringify(makeVerifyArtifact()),
+        "utf-8"
+      );
+
+      // Write package.json for framework detection
+      await fs.writeFile(
+        path.join(tmpDir, "package.json"),
+        JSON.stringify({ scripts: { test: "jest" }, devDependencies: { jest: "^29" } }),
+        "utf-8"
+      );
+
+      const result = await runIntegrateCommand({ repo: tmpDir, auto: true });
+      // Should proceed past auto checks — not fail with PLAN_REQUIRED or VERIFY_REQUIRED
+      assert.notEqual(result.failure?.code, "PLAN_REQUIRED");
+      assert.notEqual(result.failure?.code, "VERIFY_REQUIRED");
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Error classification + retry behavior tests
+// ---------------------------------------------------------------------------
+
+await runScenario(
+  "error classification code format matches SPEC: AI_<TYPE> with underscores",
+  () => {
+    const spec: Record<string, string> = {
+      rate_limit: "AI_RATE_LIMIT",
+      auth_failure: "AI_AUTH_FAILURE",
+      timeout: "AI_TIMEOUT",
+      parse_error: "AI_PARSE_FAILURE",
+      api_error: "AI_API_ERROR",
+      context_overflow: "AI_CONTEXT_OVERFLOW",
+    };
+    for (const [type, code] of Object.entries(spec)) {
+      if (type === "parse_error") {
+        assert.equal(code, "AI_PARSE_FAILURE");
+      } else {
+        assert.equal(code, `AI_${type.toUpperCase()}`);
+      }
+    }
+  }
+);
+
+await runScenario(
+  "runIntegrateCommand AI call failure produces classified error code",
+  async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-integrate-test-"));
+    try {
+      const forgeDir = path.join(tmpDir, ".forge");
+      await fs.mkdir(forgeDir, { recursive: true });
+
+      const execArtifact = makeExecuteArtifact([
+        makeWorkstream({ workstreamId: "ws-1", state: "completed" }),
+      ]);
+      await fs.writeFile(
+        path.join(forgeDir, "execute.json"),
+        JSON.stringify(execArtifact),
+        "utf-8"
+      );
+      await fs.writeFile(
+        path.join(forgeDir, "plan.json"),
+        JSON.stringify(makePlanArtifact()),
+        "utf-8"
+      );
+      await fs.writeFile(
+        path.join(forgeDir, "verify.json"),
+        JSON.stringify(makeVerifyArtifact()),
+        "utf-8"
+      );
+      await fs.writeFile(
+        path.join(tmpDir, "package.json"),
+        JSON.stringify({ scripts: { test: "jest" }, devDependencies: { jest: "^29" } }),
+        "utf-8"
+      );
+
+      const result = await runIntegrateCommand({ repo: tmpDir });
+      // Without API keys, it should fail with a classified AI error code
+      assert.equal(result.status, "failed");
+      assert.equal(result.exitCode, 1);
+      // Verify it's an AI classified error (not generic AI_GENERATION_FAILED)
+      const aiCodes = [
+        "AI_RATE_LIMIT",
+        "AI_AUTH_FAILURE",
+        "AI_TIMEOUT",
+        "AI_PARSE_FAILURE",
+        "AI_API_ERROR",
+        "AI_CONTEXT_OVERFLOW",
+        "AI_UNKNOWN",
+      ];
+      assert.ok(
+        aiCodes.includes(result.failure?.code ?? ""),
+        `Expected AI classified error code but got: ${result.failure?.code}`
+      );
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  }
+);
+
+await runScenario(
+  "parseTestFilesFromAIResponse still works after extract-json refactor",
+  () => {
+    const raw =
+      'Here are the test files:\n```json\n[\n  {\n    "path": "tests/integration.test.ts",\n    "content": "test(\\"it works\\", () => { expect(true).toBe(true); });",\n    "language": "typescript",\n    "framework": "jest",\n    "testCount": 1\n  }\n]\n```\nDone!';
+    const result = parseTestFilesFromAIResponse(raw);
+    assert.equal(result.length, 1);
+    assert.equal(result[0].path, "tests/integration.test.ts");
+    assert.equal(result[0].testCount, 1);
+    assert.equal(result[0].language, "typescript");
+    assert.equal(result[0].framework, "jest");
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Missing artifact handling tests (Task 4)
+// ---------------------------------------------------------------------------
+
+await runScenario(
+  "missing plan.json without --auto creates stub with execute-derived goal and proceeds",
+  async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-integrate-test-"));
+    try {
+      const forgeDir = path.join(tmpDir, ".forge");
+      await fs.mkdir(forgeDir, { recursive: true });
+
+      // Write execute.json with a workstream that has a title
+      const execArtifact = makeExecuteArtifact([
+        makeWorkstream({ workstreamId: "ws-1", state: "completed", title: "Build the feature" }),
+      ]);
+      await fs.writeFile(
+        path.join(forgeDir, "execute.json"),
+        JSON.stringify(execArtifact),
+        "utf-8"
+      );
+
+      // Write verify.json (present) but deliberately NOT plan.json
+      await fs.writeFile(
+        path.join(forgeDir, "verify.json"),
+        JSON.stringify(makeVerifyArtifact()),
+        "utf-8"
+      );
+
+      // Write package.json for framework detection
+      await fs.writeFile(
+        path.join(tmpDir, "package.json"),
+        JSON.stringify({ scripts: { test: "jest" }, devDependencies: { jest: "^29" } }),
+        "utf-8"
+      );
+
+      const result = await runIntegrateCommand({ repo: tmpDir });
+      // Should NOT fail with PLAN_REQUIRED (that's --auto only)
+      assert.notEqual(result.failure?.code, "PLAN_REQUIRED");
+      // Should NOT fail with NO_EXECUTE_ARTIFACT
+      assert.notEqual(result.failure?.code, "NO_EXECUTE_ARTIFACT");
+      // Should NOT fail with NO_WORKSTREAMS
+      assert.notEqual(result.failure?.code, "NO_WORKSTREAMS");
+      // Should proceed past artifact loading (will fail at AI call since no model configured)
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  }
+);
+
+await runScenario(
+  "both plan.json and verify.json missing without --auto creates both stubs and proceeds",
+  async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-integrate-test-"));
+    try {
+      const forgeDir = path.join(tmpDir, ".forge");
+      await fs.mkdir(forgeDir, { recursive: true });
+
+      // Write only execute.json — no plan.json, no verify.json
+      const execArtifact = makeExecuteArtifact([
+        makeWorkstream({ workstreamId: "ws-1", state: "completed" }),
+      ]);
+      await fs.writeFile(
+        path.join(forgeDir, "execute.json"),
+        JSON.stringify(execArtifact),
+        "utf-8"
+      );
+
+      // Deliberately NOT writing plan.json or verify.json
+
+      // Write package.json for framework detection
+      await fs.writeFile(
+        path.join(tmpDir, "package.json"),
+        JSON.stringify({ scripts: { test: "jest" }, devDependencies: { jest: "^29" } }),
+        "utf-8"
+      );
+
+      const result = await runIntegrateCommand({ repo: tmpDir });
+      // Should NOT fail with PLAN_REQUIRED or VERIFY_REQUIRED (those are --auto only)
+      assert.notEqual(result.failure?.code, "PLAN_REQUIRED");
+      assert.notEqual(result.failure?.code, "VERIFY_REQUIRED");
+      // Should NOT fail with NO_EXECUTE_ARTIFACT
+      assert.notEqual(result.failure?.code, "NO_EXECUTE_ARTIFACT");
+      // Should proceed past artifact loading
+      assert.notEqual(result.failure?.code, "NO_WORKSTREAMS");
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  }
+);
+
+await runScenario(
+  "both missing with --auto fails on first missing (plan) with PLAN_REQUIRED",
+  async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-integrate-test-"));
+    try {
+      const forgeDir = path.join(tmpDir, ".forge");
+      await fs.mkdir(forgeDir, { recursive: true });
+
+      // Write only execute.json — no plan.json, no verify.json
+      const execArtifact = makeExecuteArtifact([
+        makeWorkstream({ workstreamId: "ws-1", state: "completed" }),
+      ]);
+      await fs.writeFile(
+        path.join(forgeDir, "execute.json"),
+        JSON.stringify(execArtifact),
+        "utf-8"
+      );
+
+      // Deliberately NOT writing plan.json or verify.json
+
+      const result = await runIntegrateCommand({ repo: tmpDir, auto: true });
+      assert.equal(result.status, "failed");
+      assert.equal(result.failure?.code, "PLAN_REQUIRED");
+      assert.equal(result.exitCode, 1);
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Freeze criteria tests (Task 5)
+// ---------------------------------------------------------------------------
+
+await runScenario(
+  "shouldFreeze returns true when attemptCount exceeds maxRetries",
+  () => {
+    const criteria: FreezeCriteria = { maxRetries: 2, maxDurationMs: 300000, freezeOn: { rateLimitHit: false, authFailure: true, parseFailure: true } };
+    const state: FreezeState = { attemptCount: 3 };
+    assert.equal(shouldFreeze(criteria, state, null, 0), true);
+  }
+);
+
+await runScenario(
+  "shouldFreeze returns true for auth_failure when freezeOn.authFailure is true",
+  () => {
+    const criteria: FreezeCriteria = { maxRetries: 2, maxDurationMs: 300000, freezeOn: { rateLimitHit: false, authFailure: true, parseFailure: true } };
+    const state: FreezeState = { attemptCount: 0 };
+    const authError: ErrorClassification = { type: "auth_failure", retryable: false, message: "401 Unauthorized", suggestion: "Check API key." };
+    assert.equal(shouldFreeze(criteria, state, authError, 0), true);
+  }
+);
+
+await runScenario(
+  "shouldFreeze returns false for auth_failure when freezeOn.authFailure is false",
+  () => {
+    const criteria: FreezeCriteria = { maxRetries: 2, maxDurationMs: 300000, freezeOn: { rateLimitHit: false, authFailure: false, parseFailure: true } };
+    const state: FreezeState = { attemptCount: 0 };
+    const authError: ErrorClassification = { type: "auth_failure", retryable: false, message: "401 Unauthorized", suggestion: "Check API key." };
+    assert.equal(shouldFreeze(criteria, state, authError, 0), false);
+  }
+);
+
+await runScenario(
+  "shouldFreeze returns true for parse_error when freezeOn.parseFailure is true",
+  () => {
+    const criteria: FreezeCriteria = { maxRetries: 2, maxDurationMs: 300000, freezeOn: { rateLimitHit: false, authFailure: true, parseFailure: true } };
+    const state: FreezeState = { attemptCount: 0 };
+    const parseError: ErrorClassification = { type: "parse_error", retryable: true, message: "Invalid JSON", suggestion: "Check AI output format." };
+    assert.equal(shouldFreeze(criteria, state, parseError, 0), true);
+  }
+);
+
+await runScenario(
+  "shouldFreeze returns false for rate_limit when freezeOn.rateLimitHit is false",
+  () => {
+    const criteria: FreezeCriteria = { maxRetries: 2, maxDurationMs: 300000, freezeOn: { rateLimitHit: false, authFailure: true, parseFailure: true } };
+    const state: FreezeState = { attemptCount: 0 };
+    const rateLimitError: ErrorClassification = { type: "rate_limit", retryable: true, message: "429 Too Many Requests", suggestion: "Wait and retry." };
+    assert.equal(shouldFreeze(criteria, state, rateLimitError, 0), false);
+  }
+);
+
+await runScenario(
+  "shouldFreeze returns true for rate_limit when freezeOn.rateLimitHit is true",
+  () => {
+    const criteria: FreezeCriteria = { maxRetries: 2, maxDurationMs: 300000, freezeOn: { rateLimitHit: true, authFailure: true, parseFailure: true } };
+    const state: FreezeState = { attemptCount: 0 };
+    const rateLimitError: ErrorClassification = { type: "rate_limit", retryable: true, message: "429 Too Many Requests", suggestion: "Wait and retry." };
+    assert.equal(shouldFreeze(criteria, state, rateLimitError, 0), true);
+  }
+);
+
+await runScenario(
+  "shouldFreeze returns false when criteria not met and no error",
+  () => {
+    const criteria: FreezeCriteria = { maxRetries: 2, maxDurationMs: 300000, freezeOn: { rateLimitHit: false, authFailure: true, parseFailure: true } };
+    const state: FreezeState = { attemptCount: 0 };
+    assert.equal(shouldFreeze(criteria, state, null, 0), false);
+  }
+);
+
+// ---------------------------------------------------------------------------
+// classifyWorkstreamHealth tests (Task 6)
+// ---------------------------------------------------------------------------
+
+await runScenario(
+  "classifyWorkstreamHealth classifies completed workstreams",
+  () => {
+    const workstreams: ExecuteWorkstream[] = [
+      { workstreamId: "ws-1", title: "Feature A", state: "completed" },
+      { workstreamId: "ws-2", title: "Feature B", state: "completed" },
+    ];
+    const health = classifyWorkstreamHealth(workstreams);
+    assert.equal(health.completed.length, 2);
+    assert.equal(health.failed.length, 0);
+    assert.equal(health.partial.length, 0);
+    assert.equal(health.unknown.length, 0);
+  }
+);
+
+await runScenario(
+  "classifyWorkstreamHealth classifies failed workstreams",
+  () => {
+    const workstreams: ExecuteWorkstream[] = [
+      { workstreamId: "ws-1", title: "Feature A", state: "failed", error: "timeout" },
+      { workstreamId: "ws-2", title: "Feature B", state: "failed", error: "crash" },
+    ];
+    const health = classifyWorkstreamHealth(workstreams);
+    assert.equal(health.completed.length, 0);
+    assert.equal(health.failed.length, 2);
+    assert.equal(health.partial.length, 0);
+    assert.equal(health.unknown.length, 0);
+  }
+);
+
+await runScenario(
+  "classifyWorkstreamHealth classifies partial workstreams",
+  () => {
+    const workstreams: ExecuteWorkstream[] = [
+      { workstreamId: "ws-1", title: "Feature A", state: "partial" },
+    ];
+    const health = classifyWorkstreamHealth(workstreams);
+    assert.equal(health.completed.length, 0);
+    assert.equal(health.failed.length, 0);
+    assert.equal(health.partial.length, 1);
+    assert.equal(health.unknown.length, 0);
+    assert.equal(health.partial[0].workstreamId, "ws-1");
+  }
+);
+
+await runScenario(
+  "classifyWorkstreamHealth classifies unknown states (queued, running, blocked)",
+  () => {
+    const workstreams: ExecuteWorkstream[] = [
+      { workstreamId: "ws-1", title: "Queued", state: "queued" },
+      { workstreamId: "ws-2", title: "Running", state: "running" },
+      { workstreamId: "ws-3", title: "Blocked", state: "blocked" },
+    ];
+    const health = classifyWorkstreamHealth(workstreams);
+    assert.equal(health.completed.length, 0);
+    assert.equal(health.failed.length, 0);
+    assert.equal(health.partial.length, 0);
+    assert.equal(health.unknown.length, 3);
+  }
+);
+
+await runScenario(
+  "classifyWorkstreamHealth classifies mixed workstream states",
+  () => {
+    const workstreams: ExecuteWorkstream[] = [
+      { workstreamId: "ws-1", title: "Done", state: "completed" },
+      { workstreamId: "ws-2", title: "Oops", state: "failed", error: "err" },
+      { workstreamId: "ws-3", title: "Partial", state: "partial" },
+      { workstreamId: "ws-4", title: "Pending", state: "queued" },
+    ];
+    const health = classifyWorkstreamHealth(workstreams);
+    assert.equal(health.completed.length, 1);
+    assert.equal(health.failed.length, 1);
+    assert.equal(health.partial.length, 1);
+    assert.equal(health.unknown.length, 1);
+  }
+);
+
+await runScenario(
+  "classifyWorkstreamHealth handles empty array",
+  () => {
+    const health = classifyWorkstreamHealth([]);
+    assert.equal(health.completed.length, 0);
+    assert.equal(health.failed.length, 0);
+    assert.equal(health.partial.length, 0);
+    assert.equal(health.unknown.length, 0);
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Partial execute.json CLI scenarios (Task 6)
+// ---------------------------------------------------------------------------
+
+await runScenario(
+  "all workstreams completed proceeds normally",
+  async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-integrate-test-"));
+    try {
+      const forgeDir = path.join(tmpDir, ".forge");
+      await fs.mkdir(forgeDir, { recursive: true });
+      const execArtifact = makeExecuteArtifact([
+        makeWorkstream({ workstreamId: "ws-1", state: "completed", title: "Feature A" }),
+        makeWorkstream({ workstreamId: "ws-2", state: "completed", title: "Feature B" }),
+      ]);
+      await fs.writeFile(
+        path.join(forgeDir, "execute.json"),
+        JSON.stringify(execArtifact),
+        "utf-8"
+      );
+      await fs.writeFile(
+        path.join(forgeDir, "plan.json"),
+        JSON.stringify(makePlanArtifact()),
+        "utf-8"
+      );
+      await fs.writeFile(
+        path.join(forgeDir, "verify.json"),
+        JSON.stringify(makeVerifyArtifact()),
+        "utf-8"
+      );
+      await fs.writeFile(
+        path.join(tmpDir, "package.json"),
+        JSON.stringify({ scripts: { test: "jest" }, devDependencies: { jest: "^29" } }),
+        "utf-8"
+      );
+
+      const result = await runIntegrateCommand({ repo: tmpDir });
+      // Should NOT fail with ALL_WORKSTREAMS_FAILED or NO_WORKSTREAMS
+      assert.notEqual(result.failure?.code, "ALL_WORKSTREAMS_FAILED");
+      assert.notEqual(result.failure?.code, "NO_WORKSTREAMS");
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  }
+);
+
+await runScenario(
+  "all workstreams failed → fails with ALL_WORKSTREAMS_FAILED",
+  async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-integrate-test-"));
+    try {
+      const forgeDir = path.join(tmpDir, ".forge");
+      await fs.mkdir(forgeDir, { recursive: true });
+      const execArtifact = makeExecuteArtifact([
+        makeWorkstream({ workstreamId: "ws-1", state: "failed", error: "timeout" }),
+        makeWorkstream({ workstreamId: "ws-2", state: "failed", error: "crash" }),
+      ]);
+      await fs.writeFile(
+        path.join(forgeDir, "execute.json"),
+        JSON.stringify(execArtifact),
+        "utf-8"
+      );
+      const result = await runIntegrateCommand({ repo: tmpDir });
+      assert.equal(result.failure?.code, "ALL_WORKSTREAMS_FAILED");
+      assert.equal(result.exitCode, 1);
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  }
+);
+
+await runScenario(
+  "mixed completed and failed workstreams → proceeds with warning",
+  async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-integrate-test-"));
+    try {
+      const forgeDir = path.join(tmpDir, ".forge");
+      await fs.mkdir(forgeDir, { recursive: true });
+      const execArtifact = makeExecuteArtifact([
+        makeWorkstream({ workstreamId: "ws-1", state: "completed", title: "Feature A" }),
+        makeWorkstream({ workstreamId: "ws-2", state: "failed", error: "timeout" }),
+      ]);
+      await fs.writeFile(
+        path.join(forgeDir, "execute.json"),
+        JSON.stringify(execArtifact),
+        "utf-8"
+      );
+      await fs.writeFile(
+        path.join(forgeDir, "plan.json"),
+        JSON.stringify(makePlanArtifact()),
+        "utf-8"
+      );
+      await fs.writeFile(
+        path.join(forgeDir, "verify.json"),
+        JSON.stringify(makeVerifyArtifact()),
+        "utf-8"
+      );
+      await fs.writeFile(
+        path.join(tmpDir, "package.json"),
+        JSON.stringify({ scripts: { test: "jest" }, devDependencies: { jest: "^29" } }),
+        "utf-8"
+      );
+
+      const result = await runIntegrateCommand({ repo: tmpDir });
+      // Should NOT fail with ALL_WORKSTREAMS_FAILED
+      assert.notEqual(result.failure?.code, "ALL_WORKSTREAMS_FAILED");
+      assert.notEqual(result.failure?.code, "NO_WORKSTREAMS");
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  }
+);
+
+await runScenario(
+  "mixed in --auto mode → warning in output, still proceeds",
+  async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-integrate-test-"));
+    try {
+      const forgeDir = path.join(tmpDir, ".forge");
+      await fs.mkdir(forgeDir, { recursive: true });
+      const execArtifact = makeExecuteArtifact([
+        makeWorkstream({ workstreamId: "ws-1", state: "completed", title: "Feature A" }),
+        makeWorkstream({ workstreamId: "ws-2", state: "failed", error: "timeout" }),
+      ]);
+      await fs.writeFile(
+        path.join(forgeDir, "execute.json"),
+        JSON.stringify(execArtifact),
+        "utf-8"
+      );
+      await fs.writeFile(
+        path.join(forgeDir, "plan.json"),
+        JSON.stringify(makePlanArtifact()),
+        "utf-8"
+      );
+      await fs.writeFile(
+        path.join(forgeDir, "verify.json"),
+        JSON.stringify(makeVerifyArtifact()),
+        "utf-8"
+      );
+      await fs.writeFile(
+        path.join(tmpDir, "package.json"),
+        JSON.stringify({ scripts: { test: "jest" }, devDependencies: { jest: "^29" } }),
+        "utf-8"
+      );
+
+      const result = await runIntegrateCommand({ repo: tmpDir, auto: true });
+      // Should NOT fail with ALL_WORKSTREAMS_FAILED
+      assert.notEqual(result.failure?.code, "ALL_WORKSTREAMS_FAILED");
+      assert.notEqual(result.failure?.code, "NO_WORKSTREAMS");
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  }
+);
+
+await runScenario(
+  "no workstreams → fails with NO_WORKSTREAMS",
+  async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-integrate-test-"));
+    try {
+      const forgeDir = path.join(tmpDir, ".forge");
+      await fs.mkdir(forgeDir, { recursive: true });
+      const execArtifact = makeExecuteArtifact([]);
+      await fs.writeFile(
+        path.join(forgeDir, "execute.json"),
+        JSON.stringify(execArtifact),
+        "utf-8"
+      );
+      const result = await runIntegrateCommand({ repo: tmpDir });
+      assert.equal(result.failure?.code, "NO_WORKSTREAMS");
+      assert.equal(result.exitCode, 1);
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  }
+);
+
+await runScenario(
+  "all unknown state workstreams → fails with NO_WORKSTREAMS (no valid workstreams)",
+  async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-integrate-test-"));
+    try {
+      const forgeDir = path.join(tmpDir, ".forge");
+      await fs.mkdir(forgeDir, { recursive: true });
+      const execArtifact = makeExecuteArtifact([
+        makeWorkstream({ workstreamId: "ws-1", state: "queued" }),
+        makeWorkstream({ workstreamId: "ws-2", state: "running" }),
+      ]);
+      await fs.writeFile(
+        path.join(forgeDir, "execute.json"),
+        JSON.stringify(execArtifact),
+        "utf-8"
+      );
+      const result = await runIntegrateCommand({ repo: tmpDir });
+      assert.equal(result.failure?.code, "NO_WORKSTREAMS");
+      assert.equal(result.exitCode, 1);
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  }
+);
+
+await runScenario(
+  "partial workstreams classified correctly by classifyWorkstreamHealth",
+  () => {
+    const workstreams: ExecuteWorkstream[] = [
+      { workstreamId: "ws-1", title: "Partial Feature", state: "partial" },
+      { workstreamId: "ws-2", title: "Completed Feature", state: "completed" },
+    ];
+    const health = classifyWorkstreamHealth(workstreams);
+    assert.equal(health.partial.length, 1);
+    assert.equal(health.partial[0].workstreamId, "ws-1");
+    assert.equal(health.completed.length, 1);
+    assert.equal(health.completed[0].workstreamId, "ws-2");
+  }
+);
+
+await runScenario(
+  "all-partial workstreams proceeds to integration (not blocked)",
+  () => {
+    const workstreams: ExecuteWorkstream[] = [
+      { workstreamId: "ws-1", title: "Partial Feature A", state: "partial" },
+      { workstreamId: "ws-2", title: "Partial Feature B", state: "partial" },
+    ];
+    const health = classifyWorkstreamHealth(workstreams);
+    // All partial: no completed, no failed — should not be treated as
+    // ALL_WORKSTREAMS_FAILED (those require completed===0 && all are failed)
+    // nor NO_WORKSTREAMS (empty array). Proceeds to AI integration.
+    assert.equal(health.partial.length, 2);
+    assert.equal(health.completed.length, 0);
+    assert.equal(health.failed.length, 0);
+    assert.equal(health.unknown.length, 0);
   }
 );

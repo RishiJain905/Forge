@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 
-import { createIntegrationReport } from "../src/integrate/report.js";
+import { createIntegrationReport, createFrozenReport } from "../src/integrate/report.js";
 import type {
   IntegrationTestCase,
   IntegrationTestFile,
   IntegrationSummary,
   IntegrateArtifact,
+  ErrorClassification,
 } from "../src/integrate/types.js";
 
 async function runScenario(
@@ -521,6 +522,82 @@ await runScenario("Full artifact produces report with all required sections", ()
 
   // Check recommendation
   assert.ok(report.includes("Check the update handler for null user ID"), "Recommendation content");
+});
+
+// ===========================================================================
+// createFrozenReport tests (Task 5)
+// ===========================================================================
+
+await runScenario("createFrozenReport contains [FROZEN] badge in title", () => {
+  const authError: ErrorClassification = { type: "auth_failure", retryable: false, message: "401 Unauthorized", suggestion: "Check your API key" };
+  const frozenArtifact: IntegrateArtifact = {
+    schemaVersion: "2.0.0",
+    forgeVersion: "0.1.0",
+    createdAt: "2025-01-01T00:00:00.000Z",
+    executeSource: ".forge/execute.json",
+    planSource: ".forge/plan.json",
+    verifySource: ".forge/verify.json",
+    goal: "Add user authentication to the application",
+    workstreamsSummary: "Total: 3, Completed: 1, Failed: 1, Changes: 5",
+    tests: [],
+    testFiles: [],
+    summary: { total: 0, passed: 0, failed: 0, skipped: 0, durationMs: 0, testFilesGenerated: 0, aiModelUsed: "auth_failure" },
+    recommendations: ["Frozen due to: auth_failure. Check your API key"],
+    attemptCount: 2,
+    frozenAt: "2025-01-01T00:00:00.000Z",
+    finalError: "auth_failure: 401",
+  };
+  const report = createFrozenReport(frozenArtifact, authError);
+  assert.ok(report.includes("[FROZEN]"), "Report title must contain [FROZEN] badge");
+});
+
+await runScenario("createFrozenReport includes error type and suggestion", () => {
+  const authError: ErrorClassification = { type: "auth_failure", retryable: false, message: "401 Unauthorized", suggestion: "Check your API key" };
+  const frozenArtifact: IntegrateArtifact = {
+    schemaVersion: "2.0.0",
+    forgeVersion: "0.1.0",
+    createdAt: "2025-01-01T00:00:00.000Z",
+    executeSource: ".forge/execute.json",
+    planSource: ".forge/plan.json",
+    verifySource: ".forge/verify.json",
+    goal: "Add user authentication to the application",
+    workstreamsSummary: "Total: 3, Completed: 1, Failed: 1, Changes: 5",
+    tests: [],
+    testFiles: [],
+    summary: { total: 0, passed: 0, failed: 0, skipped: 0, durationMs: 0, testFilesGenerated: 0, aiModelUsed: "auth_failure" },
+    recommendations: ["Frozen due to: auth_failure. Check your API key"],
+    attemptCount: 2,
+    frozenAt: "2025-01-01T00:00:00.000Z",
+    finalError: "auth_failure: 401",
+  };
+  const report = createFrozenReport(frozenArtifact, authError);
+  assert.ok(report.includes("auth_failure"), "Report must include error type");
+  assert.ok(report.includes("Check your API key"), "Report must include suggestion");
+});
+
+await runScenario("createFrozenReport includes workstreams table", () => {
+  const authError: ErrorClassification = { type: "auth_failure", retryable: false, message: "401 Unauthorized", suggestion: "Check your API key" };
+  const frozenArtifact: IntegrateArtifact = {
+    schemaVersion: "2.0.0",
+    forgeVersion: "0.1.0",
+    createdAt: "2025-01-01T00:00:00.000Z",
+    executeSource: ".forge/execute.json",
+    planSource: ".forge/plan.json",
+    verifySource: ".forge/verify.json",
+    goal: "Add user authentication to the application",
+    workstreamsSummary: "Total: 3, Completed: 1, Failed: 1, Changes: 5",
+    tests: [],
+    testFiles: [],
+    summary: { total: 0, passed: 0, failed: 0, skipped: 0, durationMs: 0, testFilesGenerated: 0, aiModelUsed: "auth_failure" },
+    recommendations: ["Frozen due to: auth_failure. Check your API key"],
+    attemptCount: 2,
+    frozenAt: "2025-01-01T00:00:00.000Z",
+    finalError: "auth_failure: 401",
+  };
+  const report = createFrozenReport(frozenArtifact, authError);
+  assert.ok(report.includes("Total"), "Report must include Total in workstreams table");
+  assert.ok(report.includes("Completed"), "Report must include Completed in workstreams table");
+  assert.ok(report.includes("Failed"), "Report must include Failed in workstreams table");
 });
 
 console.log("All integrate report tests completed.");

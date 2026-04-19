@@ -7,6 +7,7 @@ import crypto from "node:crypto";
 import {
   buildIntegrateArtifact,
   writeIntegrateArtifact,
+  buildFrozenArtifact,
 } from "../src/integrate/artifact.js";
 import type { BuildIntegrateArtifactParams } from "../src/integrate/artifact.js";
 import { validateIntegrateArtifact } from "../src/integrate/schema.js";
@@ -30,6 +31,8 @@ import type {
   IntegrationSummary,
   IntegrateArtifact,
   TestRunResult,
+  FreezeState,
+  ErrorClassification,
 } from "../src/integrate/types.js";
 
 async function runScenario(name: string, fn: () => void | Promise<void>): Promise<void> {
@@ -661,6 +664,49 @@ await runScenario("writeIntegrateArtifact overwrites existing file", async () =>
     const parsed = JSON.parse(content);
     assert.equal(parsed.schemaVersion, "2.1.0");
   });
+});
+
+// ===========================================================================
+// buildFrozenArtifact tests (Task 5)
+// ===========================================================================
+
+await runScenario("buildFrozenArtifact creates artifact with frozenAt, finalError, and attemptCount set", () => {
+  const executeArtifact = makeExecuteArtifact([makeWorkstream({ workstreamId: "ws-1", state: "completed" })]);
+  const planArtifact = makePlanArtifact();
+  const verifyArtifact = makeVerifyArtifact();
+  const freezeState: FreezeState = { frozenAt: "2025-01-01T00:00:00.000Z", finalError: "auth_failure: 401", attemptCount: 2 };
+  const authError: ErrorClassification = { type: "auth_failure", retryable: false, message: "401 Unauthorized", suggestion: "Check your API key" };
+
+  const result = buildFrozenArtifact(executeArtifact, planArtifact, verifyArtifact, freezeState, authError);
+
+  assert.equal(result.frozenAt, "2025-01-01T00:00:00.000Z");
+  assert.equal(result.finalError, "auth_failure: 401");
+  assert.equal(result.attemptCount, 2);
+  assert.equal(result.tests.length, 0);
+  assert.equal(result.testFiles.length, 0);
+});
+
+await runScenario("buildFrozenArtifact derives goal from plan artifact when provided", () => {
+  const executeArtifact = makeExecuteArtifact([makeWorkstream({ workstreamId: "ws-1", state: "completed" })]);
+  const planArtifact = makePlanArtifact();
+  const verifyArtifact = makeVerifyArtifact();
+  const freezeState: FreezeState = { frozenAt: "2025-01-01T00:00:00.000Z", finalError: "auth_failure: 401", attemptCount: 1 };
+  const authError: ErrorClassification = { type: "auth_failure", retryable: false, message: "401 Unauthorized", suggestion: "Check your API key" };
+
+  const result = buildFrozenArtifact(executeArtifact, planArtifact, verifyArtifact, freezeState, authError);
+
+  // makePlanArtifact sets carry_forward.task_spec.goal = "Add user authentication to the application"
+  assert.equal(result.goal, "Add user authentication to the application");
+});
+
+await runScenario("buildFrozenArtifact uses '? Unknown' goal when planArtifact is null", () => {
+  const executeArtifact = makeExecuteArtifact([makeWorkstream({ workstreamId: "ws-1", state: "completed" })]);
+  const freezeState: FreezeState = { frozenAt: "2025-01-01T00:00:00.000Z", finalError: "rate_limit: 429", attemptCount: 3 };
+  const rateLimitError: ErrorClassification = { type: "rate_limit", retryable: true, message: "429 Too Many Requests", suggestion: "Wait and retry." };
+
+  const result = buildFrozenArtifact(executeArtifact, null, null, freezeState, rateLimitError);
+
+  assert.equal(result.goal, "? Unknown");
 });
 
 console.log("All integrate artifact tests completed.");

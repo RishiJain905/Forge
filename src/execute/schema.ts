@@ -15,6 +15,7 @@ export const ExecuteWorkstreamStateSchema = z.enum([
   "completed",
   "failed",
   "blocked",
+  "partial",
 ]);
 
 export const ChangeMadeSchema = z.object({
@@ -74,6 +75,7 @@ export const ExecuteArtifactSummarySchema = z.object({
   completed: z.number(),
   failed: z.number(),
   blocked: z.number(),
+  partial: z.number().int().nonnegative().optional(),
   aiExecutedCount: z.number().int().nonnegative().optional(),
   totalChangesMade: z.number().int().nonnegative().optional(),
 });

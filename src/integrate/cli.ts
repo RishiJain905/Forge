@@ -15,14 +15,17 @@
 import { promises as fs } from "fs";
 import path from "node:path";
 
-import type { ExecuteArtifact } from "../execute/types.js";
+import type { ExecuteArtifact, ExecuteWorkstream } from "../execute/types.js";
 import type { PlanArtifact } from "../plan/types.js";
 import type { VerifyArtifact } from "../verify/types.js";
+import { validatePlanArtifact } from "../plan/schema.js";
+import { validateVerifyArtifact } from "../verify/schema.js";
 import type {
   IntegrateCommandOptions,
   IntegrateCommandResult,
   IntegrationTestFile,
   TestRunResult,
+  WorkstreamHealth,
 } from "./types.js";
 
 import { buildIntegrationTestPrompt, deriveFrameworkFromOverride } from "./prompt-builder.js";
@@ -30,9 +33,20 @@ import { runIntegrationTests } from "./test-runner.js";
 import {
   buildIntegrateArtifact,
   writeIntegrateArtifact,
+  buildFrozenArtifact,
 } from "./artifact.js";
-import { createIntegrationReport } from "./report.js";
+import { createIntegrationReport, createFrozenReport } from "./report.js";
 import { loadModelConfig, callModel } from "../execute/model-connector.js";
+import { extractJsonFromAIResponse } from "./extract-json.js";
+import { classifyError } from "./errors.js";
+import {
+  DEFAULT_RETRY_CONFIG,
+  DEFAULT_FREEZE_CRITERIA,
+  type RetryConfig,
+  type ErrorClassification,
+  type FreezeCriteria,
+  type FreezeState,
+} from "./types.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -40,6 +54,119 @@ import { loadModelConfig, callModel } from "../execute/model-connector.js";
 
 const SCHEMA_VERSION = "1.0.0";
 const FORGE_VERSION = "0.0.1";
+
+// ---------------------------------------------------------------------------
+// Retry helpers
+// ---------------------------------------------------------------------------
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Convert an AIErrorType to the SPEC's error code format: AI_<UPPER_TYPE>
+ * Special cases: parse_error -> AI_PARSE_FAILURE, unknown_error -> AI_UNKNOWN
+ */
+function aiErrorTypeToCode(type: string): string {
+  if (type === "parse_error") return "AI_PARSE_FAILURE";
+  if (type === "unknown_error") return "AI_UNKNOWN";
+  return `AI_${type.toUpperCase()}`;
+}
+
+// ---------------------------------------------------------------------------
+// Workstream health classification
+// ---------------------------------------------------------------------------
+
+/**
+ * Classify workstreams by their execution state into health categories.
+ * Workstreams in "completed", "failed", or "partial" states are categorized
+ * into their respective buckets. All other states (queued, running, blocked,
+ * or missing) go into the "unknown" bucket.
+ */
+export function classifyWorkstreamHealth(
+  workstreams: ExecuteWorkstream[]
+): WorkstreamHealth {
+  return {
+    completed: workstreams.filter((ws) => ws.state === "completed"),
+    failed: workstreams.filter((ws) => ws.state === "failed"),
+    partial: workstreams.filter((ws) => ws.state === "partial"),
+    unknown: workstreams.filter(
+      (ws) => !ws.state || !["completed", "failed", "partial"].includes(ws.state)
+    ),
+  };
+}
+
+/**
+ * Build a human-readable health summary section for the AI prompt.
+ */
+function buildWorkstreamHealthContext(health: WorkstreamHealth): string {
+  const lines: string[] = [
+    "# Workstream Health Summary",
+    "",
+    `Completed: ${health.completed.length} | Failed: ${health.failed.length} | Partial: ${health.partial.length}`,
+    "",
+  ];
+
+  if (health.completed.length > 0) {
+    lines.push("## Completed Workstreams (focus integration tests here)");
+    for (const ws of health.completed) {
+      lines.push(`- ${ws.workstreamId}: ${ws.title}`);
+    }
+    lines.push("");
+  }
+
+  if (health.failed.length > 0) {
+    lines.push("## Failed Workstreams (tests may need to work around these)");
+    for (const ws of health.failed) {
+      lines.push(`- ${ws.workstreamId}: ${ws.title} — ${ws.error ?? "unknown error"}`);
+    }
+    lines.push("");
+  }
+
+  if (health.partial.length > 0) {
+    lines.push("## Partial Workstreams");
+    for (const ws of health.partial) {
+      lines.push(`- ${ws.workstreamId}: ${ws.title}`);
+    }
+    lines.push("");
+  }
+
+  return lines.join("\n");
+}
+
+// ---------------------------------------------------------------------------
+// Freeze criteria check
+// ---------------------------------------------------------------------------
+
+/**
+ * Determine whether the retry loop should freeze (stop and produce a
+ * frozen artifact) instead of retrying or failing immediately.
+ *
+ * Freeze is triggered when:
+ *  - The attempt count exceeds the configured maximum, OR
+ *  - The elapsed time exceeds the configured maximum duration, OR
+ *  - The last error type matches a configured freeze-on flag
+ *    (authFailure, parseFailure, rateLimitHit).
+ *
+ * @param criteria   The freeze criteria configuration.
+ * @param state      The current mutable freeze state.
+ * @param lastError  The last classified error, or null if no error yet.
+ * @param elapsedMs  Elapsed time in milliseconds since the retry loop started.
+ * @returns True if the integration should freeze.
+ */
+export function shouldFreeze(
+  criteria: FreezeCriteria,
+  state: FreezeState,
+  lastError: ErrorClassification | null,
+  elapsedMs: number
+): boolean {
+  if (state.attemptCount > criteria.maxRetries) return true;
+  if (elapsedMs > criteria.maxDurationMs) return true;
+  if (lastError?.type === "auth_failure" && criteria.freezeOn.authFailure) return true;
+  if (lastError?.type === "parse_error" && criteria.freezeOn.parseFailure) return true;
+  if (lastError?.type === "rate_limit" && criteria.freezeOn.rateLimitHit) return true;
+  return false;
+}
 
 // ---------------------------------------------------------------------------
 // Artifact loaders
@@ -71,7 +198,15 @@ async function loadPlanArtifact(
   const filePath = path.join(repoRoot, ".forge", "plan.json");
   try {
     const content = await fs.readFile(filePath, "utf-8");
-    return JSON.parse(content) as PlanArtifact;
+    try {
+      return validatePlanArtifact(JSON.parse(content));
+    } catch (validationError) {
+      const message = validationError instanceof Error ? validationError.message : String(validationError);
+      console.warn(
+        `Warning: plan.json at ${filePath} is invalid (${message}). Proceeding without plan context.`
+      );
+      return null;
+    }
   } catch {
     console.warn(
       `Warning: plan.json not found at ${filePath} — proceeding without plan context.`
@@ -90,7 +225,15 @@ async function loadVerifyArtifact(
   const filePath = path.join(repoRoot, ".forge", "verify.json");
   try {
     const content = await fs.readFile(filePath, "utf-8");
-    return JSON.parse(content) as VerifyArtifact;
+    try {
+      return validateVerifyArtifact(JSON.parse(content));
+    } catch (validationError) {
+      const message = validationError instanceof Error ? validationError.message : String(validationError);
+      console.warn(
+        `Warning: verify.json at ${filePath} is invalid (${message}). Proceeding without verification context.`
+      );
+      return null;
+    }
   } catch {
     console.warn(
       `Warning: verify.json not found at ${filePath} — proceeding without verification constraints.`
@@ -114,8 +257,11 @@ async function loadVerifyArtifact(
  * Create a minimal PlanArtifact stub when plan.json is missing.
  * Populates the field actually accessed by the prompt builder and artifact
  * builder: carry_forward, summary, plan_items.
+ * Derives the goal from the execute artifact's workstreams when available.
  */
-function createPlanStub(): PlanArtifact {
+function createPlanStub(executeArtifact: ExecuteArtifact): PlanArtifact {
+  const derivedGoal =
+    executeArtifact.workstreams[0]?.title ?? "Unknown task";
   return {
     schemaVersion: "1.0.0",
     command: "plan",
@@ -136,7 +282,7 @@ function createPlanStub(): PlanArtifact {
     files: { artifactPath: null, reportPath: null },
     startedAt: new Date().toISOString(),
     finishedAt: new Date().toISOString(),
-    summary: "Plan context unavailable — integration proceeding without plan",
+    summary: "Plan stub derived from execute artifact — plan.json was missing",
     boundaryNotes: [],
     source_intake: {
       artifactPath: "",
@@ -152,7 +298,7 @@ function createPlanStub(): PlanArtifact {
     test_obligations: [],
     parallelization_signals: [],
     carry_forward: {
-      task_spec: { goal: "" },
+      task_spec: { goal: derivedGoal },
     } as unknown as PlanArtifact["carry_forward"],
     planning_diagnostics: {
       usability_status: "non_actionable",
@@ -309,60 +455,19 @@ function createVerifyStub(): VerifyArtifact {
 
 /**
  * Parse the AI model's raw response to extract a JSON array of test file
- * descriptors. The AI is expected to return a JSON array where each element
- * has { path, content, language, framework, testCount }.
+ * descriptors. Delegates to extractJsonFromAIResponse which tries multiple
+ * extraction strategies (code-block, bare-array, embedded-array, fixed-json).
  *
- * Tries two extraction strategies:
- *   1. Look for a JSON code block (```json ... ```)
- *   2. Fall back to finding a bare JSON array in the text
+ * Returns an empty array if extraction or validation fails.
  */
 export function parseTestFilesFromAIResponse(
   rawResponse: string
 ): IntegrationTestFile[] {
-  // Strategy 1: Extract from a ```json code block
-  const jsonBlockMatch = rawResponse.match(/```json\s*\n([\s\S]*?)\n```/);
-  if (jsonBlockMatch && jsonBlockMatch[1]) {
-    const parsed = tryParseTestFileArray(jsonBlockMatch[1]);
-    if (parsed) return parsed;
-  }
-
-  // Strategy 2: Look for a bare JSON array anywhere in the response
-  const bareArrayMatch = rawResponse.match(/\[[\s\S]*\]/);
-  if (bareArrayMatch) {
-    const parsed = tryParseTestFileArray(bareArrayMatch[0]);
-    if (parsed) return parsed;
-  }
-
-  return [];
-}
-
-/**
- * Try to parse a string as a JSON array of test file descriptors.
- * Returns null if parsing fails or the result is not a valid array.
- */
-function tryParseTestFileArray(jsonStr: string): IntegrationTestFile[] | null {
   try {
-    const parsed = JSON.parse(jsonStr);
-    if (!Array.isArray(parsed)) return null;
-
-    const testFiles: IntegrationTestFile[] = [];
-    for (const item of parsed) {
-      if (typeof item !== "object" || item === null) continue;
-
-      const obj = item as Record<string, unknown>;
-      testFiles.push({
-        path: typeof obj.path === "string" ? obj.path : "unknown.test.ts",
-        testCount: typeof obj.testCount === "number" ? obj.testCount : 0,
-        language:
-          typeof obj.language === "string" ? obj.language : "typescript",
-        framework: typeof obj.framework === "string" ? obj.framework : "jest",
-        content: typeof obj.content === "string" ? obj.content : undefined,
-      });
-    }
-
-    return testFiles;
+    const result = extractJsonFromAIResponse(rawResponse);
+    return result.files;
   } catch {
-    return null;
+    return [];
   }
 }
 
@@ -412,7 +517,30 @@ export async function runIntegrateCommand(
   const repoRoot = options.repo ?? process.cwd();
   const outputDir = options.outputDir ?? path.join(repoRoot, ".forge");
 
-  // ---- Step 1: Load execute.json (required) ----
+  // ---- Step 1.5: --force guard — check if integrate.json already exists ----
+
+  const integrateJsonPath = path.join(outputDir, "integrate.json");
+  try {
+    await fs.access(integrateJsonPath);
+    // File exists — if --force is not set, fail early
+    if (!options.force) {
+      return {
+        status: "failed",
+        summary: `integrate.json already exists at ${integrateJsonPath}. Use --force to re-run.`,
+        artifactPath: integrateJsonPath,
+        outputRoot: outputDir,
+        exitCode: 1,
+        failure: {
+          code: "INTEGRATE_ALREADY_EXISTS",
+          message: "integrate.json already exists. Run with --force to re-run integration.",
+        },
+      };
+    }
+  } catch {
+    // File does not exist — proceed normally
+  }
+
+  // ---- Step 2: Load execute.json (required) ----
 
   const executeArtifact = await loadExecuteArtifact(repoRoot);
   if (!executeArtifact) {
@@ -428,6 +556,7 @@ export async function runIntegrateCommand(
   // ---- Step 2: Check workstreams ----
 
   const workstreams = executeArtifact.workstreams ?? [];
+  const health = classifyWorkstreamHealth(workstreams);
 
   if (workstreams.length === 0) {
     return makeErrorResult(
@@ -439,8 +568,11 @@ export async function runIntegrateCommand(
     );
   }
 
-  const allFailed = workstreams.every((ws) => ws.state === "failed");
-  if (allFailed) {
+  // If ALL workstreams failed, integration is meaningless
+  if (
+    health.completed.length === 0 &&
+    health.failed.length === workstreams.length
+  ) {
     return makeErrorResult(
       repoRoot,
       outputDir,
@@ -450,12 +582,81 @@ export async function runIntegrateCommand(
     );
   }
 
-  // ---- Step 3: Load plan.json and verify.json (optional) ----
+  // If ALL workstreams are unknown state, treat as no workstreams
+  if (
+    health.unknown.length === workstreams.length
+  ) {
+    return makeErrorResult(
+      repoRoot,
+      outputDir,
+      "NO_WORKSTREAMS",
+      "No valid workstreams found in execute.json.",
+      1
+    );
+  }
 
-  const planArtifact =
-    (await loadPlanArtifact(repoRoot)) ?? createPlanStub();
-  const verifyArtifact =
-    (await loadVerifyArtifact(repoRoot)) ?? createVerifyStub();
+  // Warn if some workstreams failed (but others completed)
+  if (health.failed.length > 0 && health.completed.length > 0) {
+    const msg = `Warning: ${health.failed.length}/${workstreams.length} workstreams failed. Integration will verify what was completed.`;
+    if (options.auto) {
+      return makeErrorResult(
+        repoRoot,
+        outputDir,
+        "SOME_WORKSTREAMS_FAILED",
+        `${msg} In --auto mode, any workstream failure is treated as fatal.`,
+        1
+      );
+    } else {
+      console.warn(msg);
+    }
+  }
+
+  // ---- Step 3: Load plan.json and verify.json ----
+
+  // Load each artifact only once — used by both --auto guard and stub fallback
+  let planArtifact: PlanArtifact | null = await loadPlanArtifact(repoRoot);
+  let verifyArtifact: VerifyArtifact | null = await loadVerifyArtifact(repoRoot);
+
+  // In --auto mode, both plan.json and verify.json are required
+  if (options.auto) {
+    if (!planArtifact) {
+      return {
+        status: "failed",
+        summary: "plan.json not found. --auto mode requires plan.json.",
+        artifactPath: "",
+        outputRoot: repoRoot,
+        exitCode: 1,
+        failure: {
+          code: "PLAN_REQUIRED",
+          message: "plan.json required for --auto mode",
+        },
+      };
+    }
+    if (!verifyArtifact) {
+      return {
+        status: "failed",
+        summary: "verify.json not found. --auto mode requires verify.json.",
+        artifactPath: "",
+        outputRoot: repoRoot,
+        exitCode: 1,
+        failure: {
+          code: "VERIFY_REQUIRED",
+          message: "verify.json required for --auto mode",
+        },
+      };
+    }
+    process.env.FORGE_NO_COLOR = "true";
+  }
+
+  if (!planArtifact) {
+    planArtifact = createPlanStub(executeArtifact);
+    console.warn("Warning: plan.json not found. Using stub derived from execute artifact.");
+  }
+
+  if (!verifyArtifact) {
+    verifyArtifact = createVerifyStub();
+    console.warn("Warning: verify.json not found. Proceeding without verification context.");
+  }
 
   // ---- Step 4: Build integration test prompt ----
 
@@ -469,6 +670,8 @@ export async function runIntegrateCommand(
       verifyArtifact,
       repoRoot,
       testFramework: options.testFramework,
+      workstreamHealth: health,
+      workstreamHealthContext: buildWorkstreamHealthContext(health),
     });
     prompt = builtPrompt.prompt;
     // Derive the framework-specific test command from detected framework name
@@ -484,36 +687,132 @@ export async function runIntegrateCommand(
     );
   }
 
-  // ---- Step 5: Call AI via loadModelConfig + callModel (reused from model-connector) ----
+  // ---- Step 5: Call AI with retry loop (reused model-connector + error classification) ----
 
-  let modelUsed: string;
-  let rawResponse: string;
+  let modelUsed = "";
+  let rawResponse = "";
+  const retryConfig: RetryConfig = DEFAULT_RETRY_CONFIG;
+  const freezeCriteria: FreezeCriteria = DEFAULT_FREEZE_CRITERIA;
+  const freezeState: FreezeState = { attemptCount: 0 };
+  const startTime = Date.now();
+  let lastClassification: ErrorClassification | null = null;
+
+  for (let attempt = 0; attempt <= retryConfig.maxRetries; attempt++) {
+    freezeState.attemptCount = attempt + 1;
+    try {
+      const config = loadModelConfig();
+      rawResponse = await callModel(prompt, config);
+      modelUsed = `${config.provider}/${config.modelName}`;
+      // Success — exit retry loop
+      break;
+    } catch (err) {
+      const classified = classifyError(err);
+      lastClassification = classified;
+      const elapsed = Date.now() - startTime;
+
+      console.error(
+        `[AI] Error (attempt ${attempt + 1}/${retryConfig.maxRetries + 1}): ${classified.type}`
+      );
+      console.error(`[AI] ${classified.suggestion}`);
+
+      // Check if we should freeze instead of retry
+      if (shouldFreeze(freezeCriteria, freezeState, classified, elapsed)) {
+        freezeState.frozenAt = new Date().toISOString();
+        freezeState.finalError = `${classified.type}: ${classified.message}`;
+
+        // Build and write frozen artifact
+        const frozenArtifact = buildFrozenArtifact(
+          executeArtifact,
+          planArtifact,
+          verifyArtifact,
+          freezeState,
+          classified
+        );
+
+        const frozenArtifactPath = path.join(outputDir, "integrate.json");
+        const frozenReportPath = path.join(outputDir, "integration-report.md");
+
+        try {
+          await fs.mkdir(outputDir, { recursive: true });
+          await writeIntegrateArtifact(frozenArtifactPath, frozenArtifact);
+          const frozenReport = createFrozenReport(frozenArtifact, classified);
+          await fs.writeFile(frozenReportPath, frozenReport, "utf-8");
+        } catch {
+          // Best effort — if writing fails, still return the frozen result
+        }
+
+        return {
+          status: "failed",
+          summary: `Integration frozen at ${freezeState.frozenAt}. ${classified.suggestion}`,
+          artifactPath: frozenArtifactPath,
+          reportPath: frozenReportPath,
+          outputRoot: outputDir,
+          exitCode: 1,
+          failure: {
+            code: "INTEGRATION_FROZEN",
+            message: `Integration stopped: ${classified.type}. ${freezeState.finalError}`,
+          },
+        };
+      }
+
+      const isRetryableType =
+        retryConfig.retryableErrors.includes(classified.type) && classified.retryable;
+
+      if (!isRetryableType) {
+        // Non-retryable — fail immediately with classified error code
+        return {
+          status: "failed",
+          summary: `AI call failed (${classified.type}): ${classified.message}`,
+          artifactPath: "",
+          outputRoot: outputDir,
+          exitCode: 1,
+          failure: {
+            code: aiErrorTypeToCode(classified.type),
+            message: `${classified.message}\nSuggestion: ${classified.suggestion}`,
+          },
+        };
+      }
+
+      if (attempt < retryConfig.maxRetries) {
+        const delay =
+          classified.retryAfterMs ??
+          retryConfig.initialDelayMs * Math.pow(retryConfig.backoffMultiplier, attempt);
+        console.error(`[AI] Retrying in ${delay}ms...`);
+        await sleep(delay);
+      }
+    }
+  }
+
+  // If we exhausted retries, report the last classified error
+  if (lastClassification && !rawResponse) {
+    return {
+      status: "failed",
+      summary: `AI call failed after ${retryConfig.maxRetries + 1} attempts (${lastClassification.type}): ${lastClassification.message}`,
+      artifactPath: "",
+      outputRoot: outputDir,
+      exitCode: 1,
+      failure: {
+        code: aiErrorTypeToCode(lastClassification.type),
+        message: `${lastClassification.message}\nSuggestion: ${lastClassification.suggestion}`,
+      },
+    };
+  }
+
+  // ---- Step 6: Parse AI response to extract test files ----
+
+  let testFiles: IntegrationTestFile[];
 
   try {
-    const config = loadModelConfig();
-    rawResponse = await callModel(prompt, config);
-    modelUsed = `${config.provider}/${config.modelName}`;
+    const extractResult = extractJsonFromAIResponse(rawResponse);
+    testFiles = extractResult.files;
+    console.log(`[AI] Parsed JSON via: ${extractResult.method}`);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return makeErrorResult(
       repoRoot,
       outputDir,
       "AI_GENERATION_FAILED",
-      `AI model call failed: ${message}`,
-      1
-    );
-  }
-
-  // ---- Step 6: Parse AI response to extract test files ----
-
-  const testFiles = parseTestFilesFromAIResponse(rawResponse);
-
-  if (testFiles.length === 0) {
-    return makeErrorResult(
-      repoRoot,
-      outputDir,
-      "NO_TEST_FILES_GENERATED",
-      "AI model did not generate any test files. Try adjusting the prompt or providing more context.",
+      `Failed to parse AI response: ${message}`,
       1
     );
   }
