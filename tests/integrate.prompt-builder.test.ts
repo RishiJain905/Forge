@@ -1016,6 +1016,123 @@ await runScenario("buildIntegrationTestPrompt SHA-256 hash is different for diff
 });
 
 // ---------------------------------------------------------------------------
+// Workstream health context in prompt (Task 6)
+// ---------------------------------------------------------------------------
+
+await runScenario("Prompt includes workstream health context when health is passed", async () => {
+  await withTempDir(async (dir) => {
+    await fs.writeFile(
+      path.join(dir, "package.json"),
+      JSON.stringify({ scripts: { test: "jest" } })
+    );
+
+    const execArtifact = makeExecuteArtifact([
+      makeWorkstream({ workstreamId: "ws-1", title: "Feature A", state: "completed" }),
+      makeWorkstream({ workstreamId: "ws-2", title: "Feature B", state: "failed", error: "timeout" }),
+    ]);
+
+    const health: import("../src/integrate/types.js").WorkstreamHealth = {
+      completed: [execArtifact.workstreams[0]],
+      failed: [execArtifact.workstreams[1]],
+      partial: [],
+      unknown: [],
+    };
+
+    const healthContext = "# Workstream Health Summary\n\nCompleted: 1 | Failed: 1 | Partial: 0";
+
+    const ctx = makePromptBuildContext({
+      repoRoot: dir,
+      executeArtifact: execArtifact,
+      workstreamHealth: health,
+      workstreamHealthContext: healthContext,
+    });
+
+    const result = await buildIntegrationTestPrompt(ctx);
+
+    assert.ok(
+      result.prompt.includes("Workstream Health Summary"),
+      "prompt should contain health summary heading"
+    );
+    assert.ok(
+      result.prompt.includes("Completed: 1 | Failed: 1 | Partial: 0"),
+      "prompt should contain health summary counts"
+    );
+  });
+});
+
+await runScenario("Prompt health section lists completed, failed, and partial workstreams separately", async () => {
+  await withTempDir(async (dir) => {
+    await fs.writeFile(
+      path.join(dir, "package.json"),
+      JSON.stringify({ scripts: { test: "jest" } })
+    );
+
+    const execArtifact = makeExecuteArtifact([
+      makeWorkstream({ workstreamId: "ws-1", title: "Auth feature", state: "completed" }),
+      makeWorkstream({ workstreamId: "ws-2", title: "DB migration", state: "failed", error: "connection refused" }),
+      makeWorkstream({ workstreamId: "ws-3", title: "Cache layer", state: "partial" }),
+    ]);
+
+    const health: import("../src/integrate/types.js").WorkstreamHealth = {
+      completed: [execArtifact.workstreams[0]],
+      failed: [execArtifact.workstreams[1]],
+      partial: [execArtifact.workstreams[2]],
+      unknown: [],
+    };
+
+    const healthContext = [
+      "# Workstream Health Summary",
+      "",
+      "Completed: 1 | Failed: 1 | Partial: 1",
+      "",
+      "## Completed Workstreams (focus integration tests here)",
+      "- ws-1: Auth feature",
+      "",
+      "## Failed Workstreams (tests may need to work around these)",
+      "- ws-2: DB migration — connection refused",
+      "",
+      "## Partial Workstreams",
+      "- ws-3: Cache layer",
+      "",
+    ].join("\n");
+
+    const ctx = makePromptBuildContext({
+      repoRoot: dir,
+      executeArtifact: execArtifact,
+      workstreamHealth: health,
+      workstreamHealthContext: healthContext,
+    });
+
+    const result = await buildIntegrationTestPrompt(ctx);
+
+    assert.ok(
+      result.prompt.includes("ws-1"),
+      "prompt should contain completed workstream ID"
+    );
+    assert.ok(
+      result.prompt.includes("ws-2"),
+      "prompt should contain failed workstream ID"
+    );
+    assert.ok(
+      result.prompt.includes("ws-3"),
+      "prompt should contain partial workstream ID"
+    );
+    assert.ok(
+      result.prompt.includes("Completed Workstreams"),
+      "prompt should contain Completed Workstreams heading"
+    );
+    assert.ok(
+      result.prompt.includes("Failed Workstreams"),
+      "prompt should contain Failed Workstreams heading"
+    );
+    assert.ok(
+      result.prompt.includes("Partial Workstreams"),
+      "prompt should contain Partial Workstreams heading"
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Summary
 // ---------------------------------------------------------------------------
 

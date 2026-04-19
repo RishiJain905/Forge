@@ -272,6 +272,9 @@ export async function buildIntegrationTestPrompt(
   const planSection = buildPlanSection(ctx.planArtifact);
   const constraintSection = buildConstraintSection(ctx.verifyArtifact);
   const fileSection = buildFileSection(changedFiles);
+  const healthSection = ctx.workstreamHealthContext
+    ? `\n${ctx.workstreamHealthContext}\n`
+    : "";
 
   // 5. Assemble the final prompt
   const prompt = assemblePrompt(
@@ -280,7 +283,8 @@ export async function buildIntegrationTestPrompt(
     planSection,
     constraintSection,
     fileSection,
-    framework
+    framework,
+    healthSection
   );
 
   // 6. Compute deterministic hash
@@ -436,7 +440,8 @@ function assemblePrompt(
   planSection: string,
   constraintSection: string,
   fileSection: string,
-  framework: DetectedFramework
+  framework: DetectedFramework,
+  healthSection: string = ""
 ): string {
   return `# System Role
 You are a skilled software engineer writing integration tests for a codebase.
@@ -446,7 +451,7 @@ ${goal}
 
 # Workstream Execution Results
 ${workstreamSection}
-
+${healthSection}
 # Plan Items
 ${planSection}
 

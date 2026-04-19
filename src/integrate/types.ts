@@ -6,7 +6,7 @@
 // from their respective modules for convenient cross-step consumption.
 // ---------------------------------------------------------------------------
 
-import type { ExecuteArtifact, AIModelInfo } from "../execute/types.js";
+import type { ExecuteArtifact, ExecuteWorkstream, AIModelInfo } from "../execute/types.js";
 import type { PlanArtifact } from "../plan/types.js";
 import type { VerifyArtifact } from "../verify/types.js";
 
@@ -14,7 +14,7 @@ import type { VerifyArtifact } from "../verify/types.js";
 // Re-exports from other steps
 // ---------------------------------------------------------------------------
 
-export type { ExecuteArtifact, AIModelInfo } from "../execute/types.js";
+export type { ExecuteArtifact, ExecuteWorkstream, AIModelInfo } from "../execute/types.js";
 export type { PlanArtifact } from "../plan/types.js";
 export type { VerifyArtifact } from "../verify/types.js";
 
@@ -140,6 +140,10 @@ export interface PromptBuildContext {
   repoRoot: string;
   /** Auto-detected or overridden test framework (e.g. "jest", "pytest"). When omitted, the framework is auto-detected from the repository. */
   testFramework?: string;
+  /** Health classification of workstreams by state. */
+  workstreamHealth?: WorkstreamHealth;
+  /** Pre-formatted health context string to include in the prompt. */
+  workstreamHealthContext?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -295,4 +299,16 @@ export interface FreezeState {
   frozenAt?: string;
   finalError?: string;
   attemptCount: number;
+}
+
+// ---------------------------------------------------------------------------
+// Workstream health classification
+// ---------------------------------------------------------------------------
+
+/** Health classification of workstreams by state. */
+export interface WorkstreamHealth {
+  completed: ExecuteWorkstream[];
+  failed: ExecuteWorkstream[];
+  partial: ExecuteWorkstream[];
+  unknown: ExecuteWorkstream[];
 }

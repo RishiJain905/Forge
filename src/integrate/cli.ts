@@ -15,7 +15,7 @@
 import { promises as fs } from "fs";
 import path from "node:path";
 
-import type { ExecuteArtifact } from "../execute/types.js";
+import type { ExecuteArtifact, ExecuteWorkstream } from "../execute/types.js";
 import type { PlanArtifact } from "../plan/types.js";
 import type { VerifyArtifact } from "../verify/types.js";
 import { validatePlanArtifact } from "../plan/schema.js";
@@ -25,6 +25,7 @@ import type {
   IntegrateCommandResult,
   IntegrationTestFile,
   TestRunResult,
+  WorkstreamHealth,
 } from "./types.js";
 
 import { buildIntegrationTestPrompt, deriveFrameworkFromOverride } from "./prompt-builder.js";
@@ -70,6 +71,67 @@ function aiErrorTypeToCode(type: string): string {
   if (type === "parse_error") return "AI_PARSE_FAILURE";
   if (type === "unknown_error") return "AI_UNKNOWN";
   return `AI_${type.toUpperCase()}`;
+}
+
+// ---------------------------------------------------------------------------
+// Workstream health classification
+// ---------------------------------------------------------------------------
+
+/**
+ * Classify workstreams by their execution state into health categories.
+ * Workstreams in "completed", "failed", or "partial" states are categorized
+ * into their respective buckets. All other states (queued, running, blocked,
+ * or missing) go into the "unknown" bucket.
+ */
+export function classifyWorkstreamHealth(
+  workstreams: ExecuteWorkstream[]
+): WorkstreamHealth {
+  return {
+    completed: workstreams.filter((ws) => ws.state === "completed"),
+    failed: workstreams.filter((ws) => ws.state === "failed"),
+    partial: workstreams.filter((ws) => ws.state === "partial"),
+    unknown: workstreams.filter(
+      (ws) => !ws.state || !["completed", "failed", "partial"].includes(ws.state)
+    ),
+  };
+}
+
+/**
+ * Build a human-readable health summary section for the AI prompt.
+ */
+function buildWorkstreamHealthContext(health: WorkstreamHealth): string {
+  const lines: string[] = [
+    "# Workstream Health Summary",
+    "",
+    `Completed: ${health.completed.length} | Failed: ${health.failed.length} | Partial: ${health.partial.length}`,
+    "",
+  ];
+
+  if (health.completed.length > 0) {
+    lines.push("## Completed Workstreams (focus integration tests here)");
+    for (const ws of health.completed) {
+      lines.push(`- ${ws.workstreamId}: ${ws.title}`);
+    }
+    lines.push("");
+  }
+
+  if (health.failed.length > 0) {
+    lines.push("## Failed Workstreams (tests may need to work around these)");
+    for (const ws of health.failed) {
+      lines.push(`- ${ws.workstreamId}: ${ws.title} — ${ws.error ?? "unknown error"}`);
+    }
+    lines.push("");
+  }
+
+  if (health.partial.length > 0) {
+    lines.push("## Partial Workstreams");
+    for (const ws of health.partial) {
+      lines.push(`- ${ws.workstreamId}: ${ws.title}`);
+    }
+    lines.push("");
+  }
+
+  return lines.join("\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -494,6 +556,7 @@ export async function runIntegrateCommand(
   // ---- Step 2: Check workstreams ----
 
   const workstreams = executeArtifact.workstreams ?? [];
+  const health = classifyWorkstreamHealth(workstreams);
 
   if (workstreams.length === 0) {
     return makeErrorResult(
@@ -505,8 +568,11 @@ export async function runIntegrateCommand(
     );
   }
 
-  const allFailed = workstreams.every((ws) => ws.state === "failed");
-  if (allFailed) {
+  // If ALL workstreams failed, integration is meaningless
+  if (
+    health.completed.length === 0 &&
+    health.failed.length === workstreams.length
+  ) {
     return makeErrorResult(
       repoRoot,
       outputDir,
@@ -514,6 +580,29 @@ export async function runIntegrateCommand(
       "All workstreams in execute.json failed. Cannot run integration tests.",
       1
     );
+  }
+
+  // If ALL workstreams are unknown state, treat as no workstreams
+  if (
+    health.unknown.length === workstreams.length
+  ) {
+    return makeErrorResult(
+      repoRoot,
+      outputDir,
+      "NO_WORKSTREAMS",
+      "No valid workstreams found in execute.json.",
+      1
+    );
+  }
+
+  // Warn if some workstreams failed (but others completed)
+  if (health.failed.length > 0 && health.completed.length > 0) {
+    const msg = `Warning: ${health.failed.length}/${workstreams.length} workstreams failed. Integration will verify what was completed.`;
+    if (options.auto) {
+      console.warn(`[Auto] ${msg}`);
+    } else {
+      console.warn(msg);
+    }
   }
 
   // ---- Step 3: Load plan.json and verify.json ----
@@ -575,6 +664,8 @@ export async function runIntegrateCommand(
       verifyArtifact,
       repoRoot,
       testFramework: options.testFramework,
+      workstreamHealth: health,
+      workstreamHealthContext: buildWorkstreamHealthContext(health),
     });
     prompt = builtPrompt.prompt;
     // Derive the framework-specific test command from detected framework name

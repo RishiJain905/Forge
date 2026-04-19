@@ -8,6 +8,7 @@ import {
   runIntegrateCommand,
   parseTestFilesFromAIResponse,
   shouldFreeze,
+  classifyWorkstreamHealth,
 } from "../src/integrate/cli.js";
 import type {
   IntegrateCommandResult,
@@ -15,7 +16,9 @@ import type {
   FreezeCriteria,
   FreezeState,
   ErrorClassification,
+  WorkstreamHealth,
 } from "../src/integrate/types.js";
+import type { ExecuteWorkstream } from "../src/execute/types.js";
 
 async function runScenario(
   name: string,
@@ -1120,5 +1123,333 @@ await runScenario(
     const criteria: FreezeCriteria = { maxRetries: 2, maxDurationMs: 300000, freezeOn: { rateLimitHit: false, authFailure: true, parseFailure: true } };
     const state: FreezeState = { attemptCount: 0 };
     assert.equal(shouldFreeze(criteria, state, null, 0), false);
+  }
+);
+
+// ---------------------------------------------------------------------------
+// classifyWorkstreamHealth tests (Task 6)
+// ---------------------------------------------------------------------------
+
+await runScenario(
+  "classifyWorkstreamHealth classifies completed workstreams",
+  () => {
+    const workstreams: ExecuteWorkstream[] = [
+      { workstreamId: "ws-1", title: "Feature A", state: "completed" },
+      { workstreamId: "ws-2", title: "Feature B", state: "completed" },
+    ];
+    const health = classifyWorkstreamHealth(workstreams);
+    assert.equal(health.completed.length, 2);
+    assert.equal(health.failed.length, 0);
+    assert.equal(health.partial.length, 0);
+    assert.equal(health.unknown.length, 0);
+  }
+);
+
+await runScenario(
+  "classifyWorkstreamHealth classifies failed workstreams",
+  () => {
+    const workstreams: ExecuteWorkstream[] = [
+      { workstreamId: "ws-1", title: "Feature A", state: "failed", error: "timeout" },
+      { workstreamId: "ws-2", title: "Feature B", state: "failed", error: "crash" },
+    ];
+    const health = classifyWorkstreamHealth(workstreams);
+    assert.equal(health.completed.length, 0);
+    assert.equal(health.failed.length, 2);
+    assert.equal(health.partial.length, 0);
+    assert.equal(health.unknown.length, 0);
+  }
+);
+
+await runScenario(
+  "classifyWorkstreamHealth classifies partial workstreams",
+  () => {
+    const workstreams: ExecuteWorkstream[] = [
+      { workstreamId: "ws-1", title: "Feature A", state: "partial" },
+    ];
+    const health = classifyWorkstreamHealth(workstreams);
+    assert.equal(health.completed.length, 0);
+    assert.equal(health.failed.length, 0);
+    assert.equal(health.partial.length, 1);
+    assert.equal(health.unknown.length, 0);
+    assert.equal(health.partial[0].workstreamId, "ws-1");
+  }
+);
+
+await runScenario(
+  "classifyWorkstreamHealth classifies unknown states (queued, running, blocked)",
+  () => {
+    const workstreams: ExecuteWorkstream[] = [
+      { workstreamId: "ws-1", title: "Queued", state: "queued" },
+      { workstreamId: "ws-2", title: "Running", state: "running" },
+      { workstreamId: "ws-3", title: "Blocked", state: "blocked" },
+    ];
+    const health = classifyWorkstreamHealth(workstreams);
+    assert.equal(health.completed.length, 0);
+    assert.equal(health.failed.length, 0);
+    assert.equal(health.partial.length, 0);
+    assert.equal(health.unknown.length, 3);
+  }
+);
+
+await runScenario(
+  "classifyWorkstreamHealth classifies mixed workstream states",
+  () => {
+    const workstreams: ExecuteWorkstream[] = [
+      { workstreamId: "ws-1", title: "Done", state: "completed" },
+      { workstreamId: "ws-2", title: "Oops", state: "failed", error: "err" },
+      { workstreamId: "ws-3", title: "Partial", state: "partial" },
+      { workstreamId: "ws-4", title: "Pending", state: "queued" },
+    ];
+    const health = classifyWorkstreamHealth(workstreams);
+    assert.equal(health.completed.length, 1);
+    assert.equal(health.failed.length, 1);
+    assert.equal(health.partial.length, 1);
+    assert.equal(health.unknown.length, 1);
+  }
+);
+
+await runScenario(
+  "classifyWorkstreamHealth handles empty array",
+  () => {
+    const health = classifyWorkstreamHealth([]);
+    assert.equal(health.completed.length, 0);
+    assert.equal(health.failed.length, 0);
+    assert.equal(health.partial.length, 0);
+    assert.equal(health.unknown.length, 0);
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Partial execute.json CLI scenarios (Task 6)
+// ---------------------------------------------------------------------------
+
+await runScenario(
+  "all workstreams completed proceeds normally",
+  async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-integrate-test-"));
+    try {
+      const forgeDir = path.join(tmpDir, ".forge");
+      await fs.mkdir(forgeDir, { recursive: true });
+      const execArtifact = makeExecuteArtifact([
+        makeWorkstream({ workstreamId: "ws-1", state: "completed", title: "Feature A" }),
+        makeWorkstream({ workstreamId: "ws-2", state: "completed", title: "Feature B" }),
+      ]);
+      await fs.writeFile(
+        path.join(forgeDir, "execute.json"),
+        JSON.stringify(execArtifact),
+        "utf-8"
+      );
+      await fs.writeFile(
+        path.join(forgeDir, "plan.json"),
+        JSON.stringify(makePlanArtifact()),
+        "utf-8"
+      );
+      await fs.writeFile(
+        path.join(forgeDir, "verify.json"),
+        JSON.stringify(makeVerifyArtifact()),
+        "utf-8"
+      );
+      await fs.writeFile(
+        path.join(tmpDir, "package.json"),
+        JSON.stringify({ scripts: { test: "jest" }, devDependencies: { jest: "^29" } }),
+        "utf-8"
+      );
+
+      const result = await runIntegrateCommand({ repo: tmpDir });
+      // Should NOT fail with ALL_WORKSTREAMS_FAILED or NO_WORKSTREAMS
+      assert.notEqual(result.failure?.code, "ALL_WORKSTREAMS_FAILED");
+      assert.notEqual(result.failure?.code, "NO_WORKSTREAMS");
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  }
+);
+
+await runScenario(
+  "all workstreams failed → fails with ALL_WORKSTREAMS_FAILED",
+  async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-integrate-test-"));
+    try {
+      const forgeDir = path.join(tmpDir, ".forge");
+      await fs.mkdir(forgeDir, { recursive: true });
+      const execArtifact = makeExecuteArtifact([
+        makeWorkstream({ workstreamId: "ws-1", state: "failed", error: "timeout" }),
+        makeWorkstream({ workstreamId: "ws-2", state: "failed", error: "crash" }),
+      ]);
+      await fs.writeFile(
+        path.join(forgeDir, "execute.json"),
+        JSON.stringify(execArtifact),
+        "utf-8"
+      );
+      const result = await runIntegrateCommand({ repo: tmpDir });
+      assert.equal(result.failure?.code, "ALL_WORKSTREAMS_FAILED");
+      assert.equal(result.exitCode, 1);
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  }
+);
+
+await runScenario(
+  "mixed completed and failed workstreams → proceeds with warning",
+  async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-integrate-test-"));
+    try {
+      const forgeDir = path.join(tmpDir, ".forge");
+      await fs.mkdir(forgeDir, { recursive: true });
+      const execArtifact = makeExecuteArtifact([
+        makeWorkstream({ workstreamId: "ws-1", state: "completed", title: "Feature A" }),
+        makeWorkstream({ workstreamId: "ws-2", state: "failed", error: "timeout" }),
+      ]);
+      await fs.writeFile(
+        path.join(forgeDir, "execute.json"),
+        JSON.stringify(execArtifact),
+        "utf-8"
+      );
+      await fs.writeFile(
+        path.join(forgeDir, "plan.json"),
+        JSON.stringify(makePlanArtifact()),
+        "utf-8"
+      );
+      await fs.writeFile(
+        path.join(forgeDir, "verify.json"),
+        JSON.stringify(makeVerifyArtifact()),
+        "utf-8"
+      );
+      await fs.writeFile(
+        path.join(tmpDir, "package.json"),
+        JSON.stringify({ scripts: { test: "jest" }, devDependencies: { jest: "^29" } }),
+        "utf-8"
+      );
+
+      const result = await runIntegrateCommand({ repo: tmpDir });
+      // Should NOT fail with ALL_WORKSTREAMS_FAILED
+      assert.notEqual(result.failure?.code, "ALL_WORKSTREAMS_FAILED");
+      assert.notEqual(result.failure?.code, "NO_WORKSTREAMS");
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  }
+);
+
+await runScenario(
+  "mixed in --auto mode → warning in output, still proceeds",
+  async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-integrate-test-"));
+    try {
+      const forgeDir = path.join(tmpDir, ".forge");
+      await fs.mkdir(forgeDir, { recursive: true });
+      const execArtifact = makeExecuteArtifact([
+        makeWorkstream({ workstreamId: "ws-1", state: "completed", title: "Feature A" }),
+        makeWorkstream({ workstreamId: "ws-2", state: "failed", error: "timeout" }),
+      ]);
+      await fs.writeFile(
+        path.join(forgeDir, "execute.json"),
+        JSON.stringify(execArtifact),
+        "utf-8"
+      );
+      await fs.writeFile(
+        path.join(forgeDir, "plan.json"),
+        JSON.stringify(makePlanArtifact()),
+        "utf-8"
+      );
+      await fs.writeFile(
+        path.join(forgeDir, "verify.json"),
+        JSON.stringify(makeVerifyArtifact()),
+        "utf-8"
+      );
+      await fs.writeFile(
+        path.join(tmpDir, "package.json"),
+        JSON.stringify({ scripts: { test: "jest" }, devDependencies: { jest: "^29" } }),
+        "utf-8"
+      );
+
+      const result = await runIntegrateCommand({ repo: tmpDir, auto: true });
+      // Should NOT fail with ALL_WORKSTREAMS_FAILED
+      assert.notEqual(result.failure?.code, "ALL_WORKSTREAMS_FAILED");
+      assert.notEqual(result.failure?.code, "NO_WORKSTREAMS");
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  }
+);
+
+await runScenario(
+  "no workstreams → fails with NO_WORKSTREAMS",
+  async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-integrate-test-"));
+    try {
+      const forgeDir = path.join(tmpDir, ".forge");
+      await fs.mkdir(forgeDir, { recursive: true });
+      const execArtifact = makeExecuteArtifact([]);
+      await fs.writeFile(
+        path.join(forgeDir, "execute.json"),
+        JSON.stringify(execArtifact),
+        "utf-8"
+      );
+      const result = await runIntegrateCommand({ repo: tmpDir });
+      assert.equal(result.failure?.code, "NO_WORKSTREAMS");
+      assert.equal(result.exitCode, 1);
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  }
+);
+
+await runScenario(
+  "all unknown state workstreams → fails with NO_WORKSTREAMS (no valid workstreams)",
+  async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-integrate-test-"));
+    try {
+      const forgeDir = path.join(tmpDir, ".forge");
+      await fs.mkdir(forgeDir, { recursive: true });
+      const execArtifact = makeExecuteArtifact([
+        makeWorkstream({ workstreamId: "ws-1", state: "queued" }),
+        makeWorkstream({ workstreamId: "ws-2", state: "running" }),
+      ]);
+      await fs.writeFile(
+        path.join(forgeDir, "execute.json"),
+        JSON.stringify(execArtifact),
+        "utf-8"
+      );
+      const result = await runIntegrateCommand({ repo: tmpDir });
+      assert.equal(result.failure?.code, "NO_WORKSTREAMS");
+      assert.equal(result.exitCode, 1);
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  }
+);
+
+await runScenario(
+  "partial workstreams classified correctly by classifyWorkstreamHealth",
+  () => {
+    const workstreams: ExecuteWorkstream[] = [
+      { workstreamId: "ws-1", title: "Partial Feature", state: "partial" },
+      { workstreamId: "ws-2", title: "Completed Feature", state: "completed" },
+    ];
+    const health = classifyWorkstreamHealth(workstreams);
+    assert.equal(health.partial.length, 1);
+    assert.equal(health.partial[0].workstreamId, "ws-1");
+    assert.equal(health.completed.length, 1);
+    assert.equal(health.completed[0].workstreamId, "ws-2");
+  }
+);
+
+await runScenario(
+  "all-partial workstreams proceeds to integration (not blocked)",
+  () => {
+    const workstreams: ExecuteWorkstream[] = [
+      { workstreamId: "ws-1", title: "Partial Feature A", state: "partial" },
+      { workstreamId: "ws-2", title: "Partial Feature B", state: "partial" },
+    ];
+    const health = classifyWorkstreamHealth(workstreams);
+    // All partial: no completed, no failed — should not be treated as
+    // ALL_WORKSTREAMS_FAILED (those require completed===0 && all are failed)
+    // nor NO_WORKSTREAMS (empty array). Proceeds to AI integration.
+    assert.equal(health.partial.length, 2);
+    assert.equal(health.completed.length, 0);
+    assert.equal(health.failed.length, 0);
+    assert.equal(health.unknown.length, 0);
   }
 );
