@@ -5,9 +5,12 @@
 // repository, runs the test command, parses pass/fail results, and returns
 // a structured TestRunResult.
 //
-// Two exported functions:
+// Exported functions:
 //   estimateTestCount(content, framework) — estimate test count from content
-//   runIntegrationTests(testFiles, repoRoot, testCommand?) — full runner
+//   parseTestOutput(output) — parse pass/fail from test runner output
+//   runIntegrationTests(testFiles, repoRoot, testCommand?) — sequential runner
+//   writeTestFilesParallel(testFiles, repoRoot) — parallel file writer
+//   runIntegrationTestsParallel(testFiles, options) — parallel test runner
 // ---------------------------------------------------------------------------
 
 import { promises as fs } from "fs";
@@ -161,29 +164,14 @@ export function parseTestOutput(output: string): {
 }
 
 // ---------------------------------------------------------------------------
-// runIntegrationTests
+// runIntegrationTestsSequential (internal)
 // ---------------------------------------------------------------------------
 
 /**
- * Write test files to disk and execute the test runner.
- *
- * For each file in `testFiles`:
- *   1. Resolve the file path relative to `repoRoot`
- *   2. Create parent directories (recursive)
- *   3. Write `content` to the file
- *   4. Estimate the test count from `content` using `estimateTestCount`
- *
- * After writing all files, runs `testCommand` (defaults to "npm test") and
- * parses the output for pass/fail counts.
- *
- * If `testFiles` is empty, returns `{ success: false, error: "No test files provided..." }`.
- *
- * @param testFiles     Array of test file descriptors (path, content, language, framework).
- * @param repoRoot      Absolute path to the repository root.
- * @param testCommand   Optional override for the test command (defaults to "npm test").
- * @returns A TestRunResult indicating success/failure, test cases, durations, etc.
+ * Sequential implementation: write test files to disk and run a single test command.
+ * Extracted from runIntegrationTests for reuse by the parallel runner for small suites.
  */
-export async function runIntegrationTests(
+async function runIntegrationTestsSequential(
   testFiles: IntegrationTestFile[],
   repoRoot: string,
   testCommand?: string
@@ -324,6 +312,291 @@ export async function runIntegrationTests(
     durationMs: elapsed,
     ...(runError ? { error: runError } : {}),
   };
+}
+
+// ---------------------------------------------------------------------------
+// runIntegrationTests (public wrapper — backward-compatible)
+// ---------------------------------------------------------------------------
+
+/**
+ * Write test files to disk and execute the test runner sequentially.
+ *
+ * This is the original public API. It delegates to `runIntegrationTestsSequential`
+ * for backward compatibility.
+ *
+ * @param testFiles     Array of test file descriptors (path, content, language, framework).
+ * @param repoRoot      Absolute path to the repository root.
+ * @param testCommand   Optional override for the test command (defaults to "npm test").
+ * @returns A TestRunResult indicating success/failure, test cases, durations, etc.
+ */
+export async function runIntegrationTests(
+  testFiles: IntegrationTestFile[],
+  repoRoot: string,
+  testCommand?: string
+): Promise<TestRunResult> {
+  return runIntegrationTestsSequential(testFiles, repoRoot, testCommand);
+}
+
+// ---------------------------------------------------------------------------
+// writeTestFilesParallel
+// ---------------------------------------------------------------------------
+
+/**
+ * Write multiple test files to disk in parallel using Promise.all.
+ *
+ * For each file:
+ *   1. Resolve the path relative to `repoRoot`
+ *   2. Apply path traversal guards (reject absolute paths, reject paths outside repoRoot)
+ *   3. Create parent directories (recursive)
+ *   4. Write content to the file
+ *   5. Estimate test count from content using `estimateTestCount`
+ *
+ * Files that fail path traversal guards are skipped with a warning and
+ * recorded as placeholder entries with testCount = 0.
+ *
+ * @param testFiles  Array of test file descriptors to write.
+ * @param repoRoot   Absolute path to the repository root.
+ * @returns Array of written file descriptors with resolved paths and effective test counts.
+ */
+export async function writeTestFilesParallel(
+  testFiles: IntegrationTestFile[],
+  repoRoot: string
+): Promise<IntegrationTestFile[]> {
+  const writePromises = testFiles.map(async (tf) => {
+    // Reject absolute paths — path traversal guard
+    if (path.isAbsolute(tf.path)) {
+      console.warn(
+        `Warning: skipping test file with absolute path — path traversal detected: ${tf.path}`
+      );
+      return {
+        path: tf.path,
+        testCount: 0,
+        language: tf.language,
+        framework: tf.framework,
+        content: `/* WARNING: Absolute path rejected — path traversal detected: ${tf.path} */`,
+      } as IntegrationTestFile;
+    }
+
+    const absolutePath = path.resolve(repoRoot, tf.path);
+
+    // Verify resolved path stays within repoRoot — path traversal guard
+    const relativePath = path.relative(repoRoot, absolutePath);
+    if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
+      console.warn(
+        `Warning: skipping test file that resolves outside repo root — path traversal detected: ${tf.path} -> ${absolutePath}`
+      );
+      return {
+        path: tf.path,
+        testCount: 0,
+        language: tf.language,
+        framework: tf.framework,
+        content: `/* WARNING: Path traversal detected — resolves outside repo root: ${tf.path} */`,
+      } as IntegrationTestFile;
+    }
+
+    const dir = path.dirname(absolutePath);
+
+    // Create directories recursively
+    await fs.mkdir(dir, { recursive: true });
+
+    // Write file content
+    await fs.writeFile(absolutePath, tf.content ?? "", "utf-8");
+
+    // Estimate test count
+    const estimatedCount = estimateTestCount(tf.content ?? "", tf.framework);
+    const effectiveTestCount = tf.testCount > 0 ? tf.testCount : estimatedCount;
+
+    return {
+      path: tf.path,
+      testCount: effectiveTestCount,
+      language: tf.language,
+      framework: tf.framework,
+      content: tf.content,
+    } as IntegrationTestFile;
+  });
+
+  return Promise.all(writePromises);
+}
+
+// ---------------------------------------------------------------------------
+// ParallelTestRunOptions
+// ---------------------------------------------------------------------------
+
+/** Options for parallel test execution. */
+export interface ParallelTestRunOptions {
+  /** Maximum number of test commands to run in parallel per batch. */
+  maxConcurrency: number;
+  /** Base test command to execute (e.g. "npm test" or "npx jest"). */
+  command: string;
+  /** Absolute path to the repository root. */
+  repoRoot: string;
+  /** Timeout in milliseconds for each individual test command. */
+  timeoutMs: number;
+}
+
+// ---------------------------------------------------------------------------
+// runIntegrationTestsParallel
+// ---------------------------------------------------------------------------
+
+/**
+ * Run integration tests in parallel batches.
+ *
+ * - If testFiles is empty, returns an error result.
+ * - If testFiles < 5, delegates to `runIntegrationTestsSequential` (single batch).
+ * - If testFiles >= 5, splits into batches of `maxConcurrency` and runs
+ *   each batch in parallel via `Promise.all`.
+ *
+ * @param testFiles  Array of test file descriptors.
+ * @param options    Parallel execution options.
+ * @returns A TestRunResult with aggregated pass/fail counts.
+ */
+export async function runIntegrationTestsParallel(
+  testFiles: IntegrationTestFile[],
+  options: ParallelTestRunOptions
+): Promise<TestRunResult> {
+  const startTime = Date.now();
+
+  // --- Guard: empty test files ---
+  if (!testFiles || testFiles.length === 0) {
+    return {
+      success: false,
+      tests: [],
+      testFiles: [],
+      durationMs: 0,
+      error: EMPTY_TEST_FILES_ERROR,
+    };
+  }
+
+  // Delegate to sequential for small suites (< 5 files)
+  if (testFiles.length < 5) {
+    return runIntegrationTestsSequential(
+      testFiles,
+      options.repoRoot,
+      options.command
+    );
+  }
+
+  // --- Parallel execution for 5+ files ---
+  // First, write all test files in parallel
+  const writtenFiles = await writeTestFilesParallel(testFiles, options.repoRoot);
+
+  // Batch test files by maxConcurrency
+  const batches = chunkArray(testFiles, options.maxConcurrency ?? 5);
+  const allResults: TestRunResult[] = [];
+
+  for (const batch of batches) {
+    const batchResults = await Promise.all(
+      batch.map((tf) => runSingleTestFile(tf, options))
+    );
+    allResults.push(...batchResults);
+  }
+
+  // Aggregate results
+  let totalPassed = 0;
+  let totalFailed = 0;
+  const allTests: IntegrationTestCase[] = [];
+  let hasErrors = false;
+
+  for (const result of allResults) {
+    allTests.push(...result.tests);
+    if (result.error) {
+      hasErrors = true;
+    }
+    // Count passed and failed from the result
+    totalPassed += result.tests.filter((t) => t.status === "passed").length;
+    totalFailed += result.tests.filter((t) => t.status === "failed").length;
+  }
+
+  const elapsed = Date.now() - startTime;
+
+  return {
+    success: !hasErrors && totalFailed === 0 && totalPassed > 0,
+    tests: allTests,
+    testFiles: writtenFiles,
+    durationMs: elapsed,
+    ...(hasErrors ? { error: allResults.find((r) => r.error)?.error } : {}),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// runSingleTestFile (internal helper)
+// ---------------------------------------------------------------------------
+
+/**
+ * Run a single test file's test command and return a TestRunResult.
+ *
+ * Executes `${options.command} ${tf.path}` in the repo root directory,
+ * parses the output for pass/fail counts, and returns a result.
+ *
+ * @param tf       The test file to run.
+ * @param options  Parallel execution options.
+ * @returns A TestRunResult for the single test file.
+ */
+async function runSingleTestFile(
+  tf: IntegrationTestFile,
+  options: ParallelTestRunOptions
+): Promise<TestRunResult> {
+  const startTime = Date.now();
+  const command = `${options.command} ${tf.path}`;
+
+  let stdout = "";
+  let stderr = "";
+  let runError: string | undefined;
+
+  try {
+    const result = await execAsync(command, {
+      cwd: options.repoRoot,
+      timeout: options.timeoutMs,
+      maxBuffer: 10 * 1024 * 1024,
+    });
+    stdout = result.stdout ?? "";
+    stderr = result.stderr ?? "";
+  } catch (err: unknown) {
+    // Many test runners exit with non-zero when tests fail — that's expected.
+    if (err && typeof err === "object" && "stdout" in err && "stderr" in err) {
+      const execErr = err as { stdout?: string; stderr?: string; message?: string };
+      stdout = execErr.stdout ?? "";
+      stderr = execErr.stderr ?? "";
+    } else {
+      runError = err instanceof Error ? err.message : String(err);
+    }
+  }
+
+  const combinedOutput = `${stdout}\n${stderr}`;
+  const elapsed = Date.now() - startTime;
+
+  // Parse the test output
+  const { passed, failed, total } = parseTestOutput(combinedOutput);
+
+  // Build test case results for this file
+  const tests: IntegrationTestCase[] = buildTestCaseResults(passed, failed, [tf]);
+
+  return {
+    success: runError === undefined && failed === 0 && total > 0,
+    tests,
+    testFiles: [tf],
+    durationMs: elapsed,
+    ...(runError ? { error: runError } : {}),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// chunkArray (utility)
+// ---------------------------------------------------------------------------
+
+/**
+ * Split an array into chunks of the given size.
+ *
+ * @param arr   The array to split.
+ * @param size  The maximum chunk size.
+ * @returns An array of arrays, each of length `size` (except possibly the last).
+ */
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  const result: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) {
+    result.push(arr.slice(i, i + size));
+  }
+  return result;
 }
 
 // ---------------------------------------------------------------------------
