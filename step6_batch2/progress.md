@@ -14,7 +14,7 @@
 | Date | Commit | Description |
 |------|--------|-------------|
 | TBD | TBD | feat(step6-batch2): add Step 6 Batch 2 spec |
-| 2025-04-19 | TBD | feat(step6-batch2): implement --force and --auto flags (task 1) |
+| 2025-04-19 | f366815 | feat(step6-batch2): implement --force and --auto flags (task 1) |
 | TBD | TBD | feat(step6-batch2): implement robust JSON extraction (task 2) |
 | TBD | TBD | feat(step6-batch2): implement error classification + retry (task 3) |
 | TBD | TBD | feat(step6-batch2): implement missing artifact handling (task 4) |
