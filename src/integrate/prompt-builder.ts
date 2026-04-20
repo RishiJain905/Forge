@@ -11,7 +11,7 @@
 //   buildIntegrationTestPrompt(ctx)     — assemble the full AI prompt
 // ---------------------------------------------------------------------------
 
-import { promises as fs } from "fs";
+import { promises as fs, Dirent } from "fs";
 import path from "node:path";
 import crypto from "node:crypto";
 
@@ -181,14 +181,17 @@ export function deriveFrameworkFromOverride(
  * all workstreams in the execute artifact. Deduplicates by path so that files
  * changed by multiple workstreams are read only once.
  *
+ * Files are read in parallel using Promise.all for performance.
  * Missing files produce a warning rather than crashing.
  */
 export async function getChangedFileContents(
   executeArtifact: ExecuteArtifact,
   repoRoot: string
-): Promise<ChangedFileContent[]> {
-  const results: ChangedFileContent[] = [];
+): Promise<{ files: ChangedFileContent[]; totalChangedCount: number }> {
+  // Phase A: Collect file entries first (deduplication + path traversal guards)
   const seenPaths = new Set<string>();
+  const entriesToRead: { filePath: string; absolutePath: string }[] = [];
+  const pathTraversalResults: ChangedFileContent[] = [];
 
   for (const workstream of executeArtifact.workstreams) {
     if (!workstream.changesMade) continue;
@@ -197,44 +200,127 @@ export async function getChangedFileContents(
       if (seenPaths.has(change.file)) continue;
       seenPaths.add(change.file);
 
-      try {
-        // Reject absolute paths before resolving — path traversal guard
-        if (path.isAbsolute(change.file)) {
-          results.push({
-            path: change.file,
-            content: null,
-            warning: "Absolute path rejected — path traversal detected",
-          });
-          continue;
-        }
-
-        const absolutePath = path.resolve(repoRoot, change.file);
-
-        // Verify resolved path stays within repoRoot — path traversal guard
-        const relativeFromRoot = path.relative(repoRoot, absolutePath);
-        if (relativeFromRoot.startsWith("..") || path.isAbsolute(relativeFromRoot)) {
-          results.push({
-            path: change.file,
-            content: null,
-            warning: "Path traversal detected — resolves outside repo root",
-          });
-          continue;
-        }
-
-        const content = await fs.readFile(absolutePath, "utf-8");
-        results.push({ path: change.file, content, warning: null });
-      } catch {
-        results.push({
+      // Reject absolute paths before resolving — path traversal guard
+      if (path.isAbsolute(change.file)) {
+        pathTraversalResults.push({
           path: change.file,
           content: null,
-          warning: `Could not read file ${change.file} — file may not exist`,
+          warning: "Absolute path rejected — path traversal detected",
         });
+        continue;
+      }
+
+      const absolutePath = path.resolve(repoRoot, change.file);
+
+      // Verify resolved path stays within repoRoot — path traversal guard
+      const relativeFromRoot = path.relative(repoRoot, absolutePath);
+      if (relativeFromRoot.startsWith("..") || path.isAbsolute(relativeFromRoot)) {
+        pathTraversalResults.push({
+          path: change.file,
+          content: null,
+          warning: "Path traversal detected — resolves outside repo root",
+        });
+        continue;
+      }
+
+      entriesToRead.push({ filePath: change.file, absolutePath });
+    }
+  }
+
+  // Cap the read set to avoid unnecessary IO on large diffs
+  const MAX_CHANGED_FILES_READ = 20;
+  const filesToRead = entriesToRead.length > MAX_CHANGED_FILES_READ
+    ? entriesToRead.slice(0, MAX_CHANGED_FILES_READ)
+    : entriesToRead;
+
+  // Phase B: Read all files in parallel using Promise.all
+  const readResults = await Promise.all(
+    filesToRead.map(async ({ filePath, absolutePath }) => {
+      try {
+        const content = await fs.readFile(absolutePath, "utf-8");
+        return { path: filePath, content, warning: null } as ChangedFileContent;
+      } catch {
+        return {
+          path: filePath,
+          content: null,
+          warning: `Could not read file ${filePath} — file may not exist`,
+        } as ChangedFileContent;
+      }
+    })
+  );
+
+  const totalChangedCount = pathTraversalResults.length + entriesToRead.length;
+  return { files: [...pathTraversalResults, ...readResults], totalChangedCount };
+}
+
+// ---------------------------------------------------------------------------
+// discoverExistingTests
+// ---------------------------------------------------------------------------
+
+/** Test file patterns to match. */
+const TEST_FILE_PATTERNS = [
+  /\.test\.ts$/,
+  /\.spec\.ts$/,
+  /\.test\.js$/,
+  /\.spec\.js$/,
+  /_test\.py$/,
+  /_spec\.rb$/,
+];
+
+/** Directories to exclude when walking the test tree. */
+const EXCLUDED_DIRS = new Set(["node_modules", "dist"]);
+
+/**
+ * Discover existing test files under the `tests/` directory of the repo.
+ * Returns a deduplicated list of repo-relative paths (relative to repoRoot).
+ * If no `tests/` directory exists, returns an empty array.
+ */
+export async function discoverExistingTests(repoRoot: string): Promise<string[]> {
+  const testsDir = path.join(repoRoot, "tests");
+
+  try {
+    await fs.access(testsDir);
+  } catch {
+    return [];
+  }
+
+  const results: string[] = [];
+
+  async function walkDir(dir: string): Promise<void> {
+    let entries: Dirent[];
+    try {
+      entries = await fs.readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        if (EXCLUDED_DIRS.has(entry.name)) {
+          continue;
+        }
+        await walkDir(path.join(dir, entry.name));
+      } else if (entry.isFile()) {
+        const relativePath = path.relative(repoRoot, path.join(dir, entry.name));
+        if (TEST_FILE_PATTERNS.some((pattern) => pattern.test(entry.name))) {
+          results.push(relativePath);
+        }
       }
     }
   }
 
-  return results;
+  await walkDir(testsDir);
+
+  // Deduplicate
+  return [...new Set(results)];
 }
+
+// ---------------------------------------------------------------------------
+// Context warning threshold
+// ---------------------------------------------------------------------------
+
+/** Estimated-token threshold above which a context warning is appended. */
+export const CONTEXT_WARNING_THRESHOLD = 100_000;
 
 // ---------------------------------------------------------------------------
 // buildIntegrationTestPrompt
@@ -259,39 +345,54 @@ export async function buildIntegrationTestPrompt(
     : await detectTestFramework(ctx.repoRoot);
 
   // 2. Collect changed file contents
-  const changedFiles = await getChangedFileContents(
+  const { files: changedFiles, totalChangedCount } = await getChangedFileContents(
     ctx.executeArtifact,
     ctx.repoRoot
   );
 
-  // 3. Derive the goal
+  // 3. Discover existing tests (Phase B)
+  const existingTests = await discoverExistingTests(ctx.repoRoot);
+
+  // 4. Derive the goal
   const goal = extractGoal(ctx.planArtifact);
 
-  // 4. Build each section
+  // 5. Build each section
   const workstreamSection = buildWorkstreamSection(ctx.executeArtifact);
   const planSection = buildPlanSection(ctx.planArtifact);
   const constraintSection = buildConstraintSection(ctx.verifyArtifact);
-  const fileSection = buildFileSection(changedFiles);
+  const fileSection = buildFileSection(changedFiles, totalChangedCount);
+  const existingTestsSection = buildExistingTestsSection(existingTests);
   const healthSection = ctx.workstreamHealthContext
     ? `\n${ctx.workstreamHealthContext}\n`
     : "";
 
-  // 5. Assemble the final prompt
+  // 6. Assemble the final prompt
   const prompt = assemblePrompt(
     goal,
     workstreamSection,
     planSection,
     constraintSection,
     fileSection,
+    existingTestsSection,
     framework,
-    healthSection
+    healthSection,
+    totalChangedCount
   );
 
-  // 6. Compute deterministic hash
-  const promptHash = crypto.createHash("sha256").update(prompt).digest("hex");
+  // Phase C: Context size warning
+  const estimatedTokens = Math.ceil(prompt.length / 4);
+  let contextWarning = "";
+  if (estimatedTokens > CONTEXT_WARNING_THRESHOLD) {
+    contextWarning = `\n\n⚠️ WARNING: Prompt is estimated at ~${estimatedTokens.toLocaleString()} tokens, which may approach context limits. Consider using --focus to narrow scope.`;
+  }
+
+  const finalPrompt = prompt + contextWarning;
+
+  // 7. Compute deterministic hash (must hash finalPrompt, not prompt, so hashes are deterministic)
+  const promptHash = crypto.createHash("sha256").update(finalPrompt).digest("hex");
 
   return {
-    prompt,
+    prompt: finalPrompt,
     promptHash,
     detectedFramework: framework.name,
   };
@@ -415,13 +516,19 @@ function buildConstraintSection(verifyArtifact: VerifyArtifact): string {
 
 /**
  * Build a section showing the current content of changed files.
+ * Phase D: Caps output at 20 files with overflow note when there are more.
  */
-function buildFileSection(files: ChangedFileContent[]): string {
+function buildFileSection(files: ChangedFileContent[], totalChangedCount?: number): string {
   if (files.length === 0) {
     return "No changed files to include.";
   }
 
-  return files
+  const FILE_CAP = 20;
+  const capped = files.length > FILE_CAP ? files.slice(0, FILE_CAP) : files;
+  const effectiveTotal = totalChangedCount ?? files.length;
+  const overflow = effectiveTotal - FILE_CAP;
+
+  const contentParts = capped
     .map((fc) => {
       if (fc.content !== null) {
         return `FILE: ${fc.path}\n---\n${fc.content}\n---`;
@@ -429,6 +536,22 @@ function buildFileSection(files: ChangedFileContent[]): string {
       return `FILE: ${fc.path}\n---\n[FILE NOT FOUND — may need to be created]\n---`;
     })
     .join("\n\n");
+
+  if (overflow > 0) {
+    return `${contentParts}\n\n... and ${overflow} more file${overflow === 1 ? "" : "s"}`;
+  }
+
+  return contentParts;
+}
+
+/**
+ * Build a section listing existing test files (Phase B).
+ */
+function buildExistingTestsSection(existingTests: string[]): string {
+  if (existingTests.length === 0) {
+    return "(no existing tests found)";
+  }
+  return existingTests.map((p) => `- ${p}`).join("\n");
 }
 
 /**
@@ -440,9 +563,16 @@ function assemblePrompt(
   planSection: string,
   constraintSection: string,
   fileSection: string,
+  existingTestsSection: string,
   framework: DetectedFramework,
-  healthSection: string = ""
+  healthSection: string = "",
+  changedFileCount: number = 0
 ): string {
+  // Phase D: Dynamic header for changed files section
+  const fileHeader = changedFileCount > 20
+    ? `# CHANGED FILES (${changedFileCount} files — showing first 20)`
+    : `# Changed Files`;
+
   return `# System Role
 You are a skilled software engineer writing integration tests for a codebase.
 
@@ -451,17 +581,19 @@ ${goal}
 
 # Workstream Execution Results
 ${workstreamSection}
-${healthSection}
-# Plan Items
+${healthSection}# Plan Items
 ${planSection}
 
 # Verification Constraints
 ${constraintSection}
 
-# Changed Files
+${fileHeader}
 Below are the current contents of files that were changed by the AI execution:
 
 ${fileSection}
+
+# Existing Tests
+${existingTestsSection}
 
 # Test Framework
 Detected framework: ${framework.name}

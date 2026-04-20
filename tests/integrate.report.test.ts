@@ -600,4 +600,123 @@ await runScenario("createFrozenReport includes workstreams table", () => {
   assert.ok(report.includes("Failed"), "Report must include Failed in workstreams table");
 });
 
+// ===========================================================================
+// Phase D: Report polish tests — How to Reproduce & Troubleshooting
+// ===========================================================================
+
+await runScenario("Report includes How to Reproduce section", () => {
+  const artifact = makeArtifact();
+  const report = createIntegrationReport(artifact);
+  assert.ok(report.includes("## How to Reproduce"), "Report must have How to Reproduce section");
+  assert.ok(report.includes("forge integrate --repo ."), "How to Reproduce must include the command");
+});
+
+await runScenario("Report includes Troubleshooting section when tests fail", () => {
+  const artifact = makeArtifact({
+    summary: makeSummary({ passed: 2, failed: 1, total: 3 }),
+    tests: [
+      makeTestCase({ id: "tc-1", name: "Passed", status: "passed" }),
+      makeTestCase({ id: "tc-2", name: "Failed", status: "failed", error: "broken" }),
+    ],
+  });
+  const report = createIntegrationReport(artifact);
+  assert.ok(report.includes("## Troubleshooting"), "Report must have Troubleshooting section");
+  assert.ok(report.includes("test(s) failed"), "Troubleshooting must mention failed tests");
+  assert.ok(report.includes("--force"), "Troubleshooting must mention --force flag");
+});
+
+await runScenario("Report Troubleshooting shows all tests passed when no failures", () => {
+  const artifact = makeArtifact({
+    summary: makeSummary({ passed: 3, failed: 0, total: 3 }),
+    tests: [
+      makeTestCase({ id: "tc-1", name: "Passed", status: "passed" }),
+      makeTestCase({ id: "tc-2", name: "Also passed", status: "passed" }),
+    ],
+  });
+  const report = createIntegrationReport(artifact);
+  assert.ok(report.includes("## Troubleshooting"), "Report must have Troubleshooting section");
+  assert.ok(report.includes("All tests passed"), "Troubleshooting must say all tests passed");
+});
+
+await runScenario("Report includes attemptCount in Overview", () => {
+  const artifact = makeArtifact({ attemptCount: 3 });
+  const report = createIntegrationReport(artifact);
+  assert.ok(report.includes("Attempts"), "Report must include Attempts in Overview");
+  assert.ok(report.includes("3"), "Report must show attemptCount value");
+});
+
+// ===========================================================================
+// Phase E: Frozen report polish tests
+// ===========================================================================
+
+await runScenario("createFrozenReport includes frozen warning", () => {
+  const authError: ErrorClassification = { type: "auth_failure", retryable: false, message: "401 Unauthorized", suggestion: "Check your API key" };
+  const frozenArtifact: IntegrateArtifact = {
+    schemaVersion: "2.0.0",
+    forgeVersion: "0.1.0",
+    createdAt: "2025-01-01T00:00:00.000Z",
+    executeSource: ".forge/execute.json",
+    planSource: ".forge/plan.json",
+    verifySource: ".forge/verify.json",
+    goal: "Add user authentication",
+    workstreamsSummary: "Total: 3, Completed: 1, Failed: 1, Changes: 5",
+    tests: [],
+    testFiles: [],
+    summary: { total: 0, passed: 0, failed: 0, skipped: 0, durationMs: 0, testFilesGenerated: 0, aiModelUsed: "none" },
+    recommendations: [],
+    attemptCount: 2,
+    frozenAt: "2025-01-01T00:00:00.000Z",
+    finalError: "auth_failure: 401",
+  };
+  const report = createFrozenReport(frozenArtifact, authError);
+  assert.ok(report.includes("Integration was frozen"), "Frozen report must include frozen warning");
+});
+
+await runScenario("createFrozenReport includes final error", () => {
+  const authError: ErrorClassification = { type: "auth_failure", retryable: false, message: "401 Unauthorized", suggestion: "Check your API key" };
+  const frozenArtifact: IntegrateArtifact = {
+    schemaVersion: "2.0.0",
+    forgeVersion: "0.1.0",
+    createdAt: "2025-01-01T00:00:00.000Z",
+    executeSource: ".forge/execute.json",
+    planSource: ".forge/plan.json",
+    verifySource: ".forge/verify.json",
+    goal: "Add user auth",
+    workstreamsSummary: "Total: 3, Completed: 1, Failed: 1, Changes: 5",
+    tests: [],
+    testFiles: [],
+    summary: { total: 0, passed: 0, failed: 0, skipped: 0, durationMs: 0, testFilesGenerated: 0, aiModelUsed: "none" },
+    recommendations: [],
+    attemptCount: 2,
+    frozenAt: "2025-01-01T00:00:00.000Z",
+    finalError: "auth_failure: 401 Unauthorized",
+  };
+  const report = createFrozenReport(frozenArtifact, authError);
+  assert.ok(report.includes("**Final Error:**"), "Frozen report must include Final Error line");
+  assert.ok(report.includes("auth_failure: 401 Unauthorized"), "Frozen report must include the actual error text");
+});
+
+await runScenario("createFrozenReport includes goal", () => {
+  const authError: ErrorClassification = { type: "auth_failure", retryable: false, message: "401 Unauthorized", suggestion: "Check your API key" };
+  const frozenArtifact: IntegrateArtifact = {
+    schemaVersion: "2.0.0",
+    forgeVersion: "0.1.0",
+    createdAt: "2025-01-01T00:00:00.000Z",
+    executeSource: ".forge/execute.json",
+    planSource: ".forge/plan.json",
+    verifySource: ".forge/verify.json",
+    goal: "Build the REST API",
+    workstreamsSummary: "Total: 3, Completed: 1, Failed: 1, Changes: 5",
+    tests: [],
+    testFiles: [],
+    summary: { total: 0, passed: 0, failed: 0, skipped: 0, durationMs: 0, testFilesGenerated: 0, aiModelUsed: "none" },
+    recommendations: [],
+    attemptCount: 2,
+    frozenAt: "2025-01-01T00:00:00.000Z",
+    finalError: "auth_failure",
+  };
+  const report = createFrozenReport(frozenArtifact, authError);
+  assert.ok(report.includes("Build the REST API"), "Frozen report must include the goal");
+});
+
 console.log("All integrate report tests completed.");

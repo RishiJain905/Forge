@@ -56,6 +56,8 @@ export interface BuildIntegrateArtifactParams {
   schemaVersion: string;
   /** Forge CLI version that produced this artifact. */
   forgeVersion: string;
+  /** Number of AI call attempts made. */
+  attemptCount?: number;
 }
 
 /**
@@ -82,6 +84,7 @@ export function buildIntegrateArtifact(
     aiModelUsed,
     schemaVersion,
     forgeVersion,
+    attemptCount,
   } = params;
 
   // 1. Derive the goal
@@ -110,6 +113,7 @@ export function buildIntegrateArtifact(
     testFiles: testResult.testFiles,
     summary,
     recommendations,
+    attemptCount,
   };
 
   // 6. Validate and return

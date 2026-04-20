@@ -8,6 +8,8 @@ import {
   getChangedFileContents,
   buildIntegrationTestPrompt,
   deriveFrameworkFromOverride,
+  discoverExistingTests,
+  CONTEXT_WARNING_THRESHOLD,
 } from "../src/integrate/prompt-builder.js";
 import type { DetectedFramework } from "../src/integrate/prompt-builder.js";
 import type { ExecuteArtifact, ExecuteWorkstream, ChangeMade } from "../src/execute/types.js";
@@ -479,7 +481,7 @@ await runScenario("getChangedFileContents reads files from execute artifact work
       }),
     ]);
 
-    const result = await getChangedFileContents(execArtifact, dir);
+    const { files: result } = await getChangedFileContents(execArtifact, dir);
     assert.equal(result.length, 1);
     assert.equal(result[0].path, "src/auth.ts");
     assert.equal(result[0].content, "export function login() { return true; }");
@@ -497,7 +499,7 @@ await runScenario("getChangedFileContents handles missing files with warning", a
       }),
     ]);
 
-    const result = await getChangedFileContents(execArtifact, dir);
+    const { files: result } = await getChangedFileContents(execArtifact, dir);
     assert.equal(result.length, 1);
     assert.equal(result[0].path, "src/nonexistent.ts");
     assert.equal(result[0].content, null);
@@ -521,7 +523,7 @@ await runScenario("getChangedFileContents deduplicates files across workstreams"
       }),
     ]);
 
-    const result = await getChangedFileContents(execArtifact, dir);
+    const { files: result } = await getChangedFileContents(execArtifact, dir);
     assert.equal(result.length, 1); // deduplicated
     assert.equal(result[0].path, "src/shared.ts");
   });
@@ -542,7 +544,7 @@ await runScenario("getChangedFileContents skips deleted files", async () => {
     await fs.mkdir(path.join(dir, "src"), { recursive: true });
     await fs.writeFile(path.join(dir, "src", "new.ts"), "export const y = 2;");
 
-    const result = await getChangedFileContents(execArtifact, dir);
+    const { files: result } = await getChangedFileContents(execArtifact, dir);
     // Deleted file should be skipped
     const paths = result.map((r) => r.path);
     assert.ok(!paths.includes("src/old.ts"), "deleted file should be skipped");
@@ -556,14 +558,14 @@ await runScenario("getChangedFileContents returns empty array when no changesMad
       makeWorkstream({ changesMade: undefined }),
     ]);
 
-    const result = await getChangedFileContents(execArtifact, dir);
+    const { files: result } = await getChangedFileContents(execArtifact, dir);
     assert.equal(result.length, 0);
   });
 });
 
 await runScenario("getChangedFileContents returns empty array for empty workstreams", async () => {
   const execArtifact = makeExecuteArtifact([]);
-  const result = await getChangedFileContents(execArtifact, "/tmp/nonexistent");
+  const { files: result } = await getChangedFileContents(execArtifact, "/tmp/nonexistent");
   assert.equal(result.length, 0);
 });
 
@@ -931,6 +933,7 @@ await runScenario("buildIntegrationTestPrompt prompt contains correct section he
     assert.ok(result.prompt.includes("# Plan Items"), "prompt should have Plan Items section");
     assert.ok(result.prompt.includes("# Verification Constraints"), "prompt should have Constraints section");
     assert.ok(result.prompt.includes("# Changed Files"), "prompt should have Changed Files section");
+    assert.ok(result.prompt.includes("# Existing Tests"), "prompt should have Existing Tests section");
     assert.ok(result.prompt.includes("# Test Framework"), "prompt should have Test Framework section");
     assert.ok(result.prompt.includes("# Your Task"), "prompt should have Your Task section");
   });
@@ -1129,6 +1132,234 @@ await runScenario("Prompt health section lists completed, failed, and partial wo
       result.prompt.includes("Partial Workstreams"),
       "prompt should contain Partial Workstreams heading"
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase A: Parallel file reads — getChangedFileContents tests
+// ---------------------------------------------------------------------------
+
+await runScenario("getChangedFileContents reads multiple files in parallel", async () => {
+  await withTempDir(async (dir) => {
+    // Create 5 temp files
+    await fs.mkdir(path.join(dir, "src"), { recursive: true });
+    const files = ["a.ts", "b.ts", "c.ts", "d.ts", "e.ts"];
+    for (const f of files) {
+      await fs.writeFile(path.join(dir, "src", f), `// content of ${f}`);
+    }
+
+    const execArtifact = makeExecuteArtifact([
+      makeWorkstream({
+        workstreamId: "ws-1",
+        changesMade: files.map((f, i) => makeChangeMade({ file: `src/${f}`, action: "modify" })),
+      }),
+    ]);
+
+    const { files: result } = await getChangedFileContents(execArtifact, dir);
+    assert.equal(result.length, 5);
+    for (const entry of result) {
+      assert.ok(entry.content !== null, `file ${entry.path} should have content`);
+      assert.ok(entry.content!.includes("// content of"), `file ${entry.path} should have correct content`);
+      assert.equal(entry.warning, null);
+    }
+  });
+});
+
+await runScenario("getChangedFileContents handles all missing files gracefully in parallel", async () => {
+  await withTempDir(async (dir) => {
+    const files = ["missing1.ts", "missing2.ts", "missing3.ts"];
+    const execArtifact = makeExecuteArtifact([
+      makeWorkstream({
+        workstreamId: "ws-1",
+        changesMade: files.map((f) => makeChangeMade({ file: `src/${f}`, action: "create" })),
+      }),
+    ]);
+
+    const { files: result } = await getChangedFileContents(execArtifact, dir);
+    assert.equal(result.length, 3);
+    for (const entry of result) {
+      assert.equal(entry.content, null, `file ${entry.path} should have null content`);
+      assert.ok(entry.warning !== null, `file ${entry.path} should have a warning`);
+      assert.ok(entry.warning!.includes("Could not read file"), `warning should mention read failure`);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase B: discoverExistingTests tests
+// ---------------------------------------------------------------------------
+
+await runScenario("discoverExistingTests finds test files in tests directory", async () => {
+  await withTempDir(async (dir) => {
+    await fs.mkdir(path.join(dir, "tests"), { recursive: true });
+    await fs.writeFile(path.join(dir, "tests", "foo.test.ts"), "// test");
+    await fs.writeFile(path.join(dir, "tests", "bar.spec.ts"), "// spec");
+    await fs.writeFile(path.join(dir, "tests", "baz.test.js"), "// test js");
+    await fs.writeFile(path.join(dir, "tests", "qux.spec.js"), "// spec js");
+    await fs.writeFile(path.join(dir, "tests", "helper.ts"), "// not a test");
+    await fs.writeFile(path.join(dir, "tests", "main.py"), "// not a test");
+
+    const result = await discoverExistingTests(dir);
+    assert.ok(result.includes("tests/foo.test.ts"), "should find .test.ts");
+    assert.ok(result.includes("tests/bar.spec.ts"), "should find .spec.ts");
+    assert.ok(result.includes("tests/baz.test.js"), "should find .test.js");
+    assert.ok(result.includes("tests/qux.spec.js"), "should find .spec.js");
+    assert.ok(!result.includes("tests/helper.ts"), "should not find non-test .ts");
+    assert.ok(!result.includes("tests/main.py"), "should not find .py without _test");
+  });
+});
+
+await runScenario("discoverExistingTests returns empty array when no tests directory", async () => {
+  await withTempDir(async (dir) => {
+    // No tests/ directory created
+    const result = await discoverExistingTests(dir);
+    assert.ok(Array.isArray(result), "should return an array");
+    assert.equal(result.length, 0, "should be empty");
+  });
+});
+
+await runScenario("discoverExistingTests ignores node_modules and dist directories", async () => {
+  await withTempDir(async (dir) => {
+    await fs.mkdir(path.join(dir, "tests", "node_modules", "pkg"), { recursive: true });
+    await fs.mkdir(path.join(dir, "tests", "dist"), { recursive: true });
+    await fs.mkdir(path.join(dir, "tests"), { recursive: true });
+
+    // These should be excluded
+    await fs.writeFile(path.join(dir, "tests", "node_modules", "pkg", "index.test.ts"), "// should be excluded");
+    await fs.writeFile(path.join(dir, "tests", "dist", "bundle.test.js"), "// should be excluded");
+
+    // This should be included
+    await fs.writeFile(path.join(dir, "tests", "real.test.ts"), "// real test");
+
+    const result = await discoverExistingTests(dir);
+    assert.ok(result.includes("tests/real.test.ts"), "should find real test file");
+    assert.ok(!result.some((p: string) => p.includes("node_modules")), "should exclude node_modules");
+    assert.ok(!result.some((p: string) => p.includes("dist")), "should exclude dist");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase C: Context size warning tests
+// ---------------------------------------------------------------------------
+
+await runScenario("buildIntegrationTestPrompt includes context warning for large prompts", async () => {
+  await withTempDir(async (dir) => {
+    await fs.writeFile(
+      path.join(dir, "package.json"),
+      JSON.stringify({ scripts: { test: "jest" } })
+    );
+    await fs.mkdir(path.join(dir, "src"), { recursive: true });
+
+    // Create changes that produce a very large prompt (>400k chars => ~100k tokens)
+    const changes: ChangeMade[] = [];
+    // Create multiple large files
+    for (let i = 0; i < 25; i++) {
+      const bigContent = "x".repeat(20_000); // 20k chars each
+      await fs.writeFile(path.join(dir, "src", `big${i}.ts`), bigContent);
+      changes.push(makeChangeMade({ file: `src/big${i}.ts`, action: "modify" }));
+    }
+
+    const execArtifact = makeExecuteArtifact([
+      makeWorkstream({ workstreamId: "ws-1", changesMade: changes }),
+    ]);
+    const ctx = makePromptBuildContext({ repoRoot: dir, executeArtifact: execArtifact });
+    const result = await buildIntegrationTestPrompt(ctx);
+
+    assert.ok(result.prompt.includes("WARNING"), "large prompt should contain WARNING");
+    assert.ok(result.prompt.includes("context limits"), "large prompt should mention context limits");
+  });
+});
+
+await runScenario("buildIntegrationTestPrompt has no context warning for normal prompts", async () => {
+  await withTempDir(async (dir) => {
+    await fs.writeFile(
+      path.join(dir, "package.json"),
+      JSON.stringify({ scripts: { test: "jest" } })
+    );
+
+    const ctx = makePromptBuildContext({ repoRoot: dir });
+    const result = await buildIntegrationTestPrompt(ctx);
+
+    assert.ok(!result.prompt.includes("WARNING"), "normal prompt should not contain WARNING");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase D: File cap at 20 tests
+// ---------------------------------------------------------------------------
+
+await runScenario("buildFileSection caps output at 20 files with overflow note", async () => {
+  await withTempDir(async (dir) => {
+    await fs.writeFile(
+      path.join(dir, "package.json"),
+      JSON.stringify({ scripts: { test: "jest" } })
+    );
+    await fs.mkdir(path.join(dir, "src"), { recursive: true });
+
+    // Create 25 changed files
+    const changes: ChangeMade[] = [];
+    for (let i = 0; i < 25; i++) {
+      await fs.writeFile(path.join(dir, "src", `file${i}.ts`), `// file ${i}`);
+      changes.push(makeChangeMade({ file: `src/file${i}.ts`, action: "modify" }));
+    }
+
+    const execArtifact = makeExecuteArtifact([
+      makeWorkstream({ workstreamId: "ws-1", changesMade: changes }),
+    ]);
+    const ctx = makePromptBuildContext({ repoRoot: dir, executeArtifact: execArtifact });
+    const result = await buildIntegrationTestPrompt(ctx);
+
+    // Should show header with "(25 files — showing first 20)"
+    assert.ok(
+      result.prompt.includes("showing first 20"),
+      "prompt should indicate showing first 20 files"
+    );
+    // Should show overflow note
+    assert.ok(
+      result.prompt.includes("5 more files"),
+      "prompt should indicate 5 more files"
+    );
+  });
+});
+
+await runScenario("buildFileSection shows all files when count is 20 or less", async () => {
+  await withTempDir(async (dir) => {
+    await fs.writeFile(
+      path.join(dir, "package.json"),
+      JSON.stringify({ scripts: { test: "jest" } })
+    );
+    await fs.mkdir(path.join(dir, "src"), { recursive: true });
+
+    // Create 15 changed files
+    const changes: ChangeMade[] = [];
+    for (let i = 0; i < 15; i++) {
+      await fs.writeFile(path.join(dir, "src", `small${i}.ts`), `// small file ${i}`);
+      changes.push(makeChangeMade({ file: `src/small${i}.ts`, action: "modify" }));
+    }
+
+    const execArtifact = makeExecuteArtifact([
+      makeWorkstream({ workstreamId: "ws-1", changesMade: changes }),
+    ]);
+    const ctx = makePromptBuildContext({ repoRoot: dir, executeArtifact: execArtifact });
+    const result = await buildIntegrationTestPrompt(ctx);
+
+    // Should NOT show "(...files — showing first 20)"
+    assert.ok(
+      !result.prompt.includes("showing first 20"),
+      "prompt should not mention file cap for <= 20 files"
+    );
+    // Should NOT show "more files" overflow note
+    assert.ok(
+      !result.prompt.includes("more files"),
+      "prompt should not mention overflow for <= 20 files"
+    );
+    // All files should be present
+    for (let i = 0; i < 15; i++) {
+      assert.ok(
+        result.prompt.includes(`src/small${i}.ts`),
+        `prompt should include file small${i}.ts`
+      );
+    }
   });
 });
 

@@ -304,14 +304,52 @@ export async function runCli(argv: string[]): Promise<number> {
     .option("--force", "Force re-running integration even if integrate.json already exists.")
     .option("--auto", "Non-interactive mode: fail on any warning or error.")
     .option("--test-framework <name>", "Override the auto-detected test framework (e.g. jest, vitest, pytest).")
+    .option("--json-only", "Only write integrate.json, skip integration-report.md")
+    .option("--delay <seconds>", "Override retry delay in seconds for rate limit backoff", (val) => parseInt(val, 10))
+    .option("--max-retries <n>", "Maximum retry attempts before freezing", (val) => parseInt(val, 10))
+    .option("--max-duration <ms>", "Maximum duration in ms before freezing", (val) => parseInt(val, 10))
+    .option("--max-concurrency <n>", "Max parallel test operations (default: 5)", (val) => parseInt(val, 10))
+    .option("--no-color", "Disable color output")
     .action(async (options: {
       repo?: string;
       outputDir?: string;
       force?: boolean;
       auto?: boolean;
+      jsonOnly?: boolean;
       testFramework?: string;
+      delay?: number;
+      maxRetries?: number;
+      maxDuration?: number;
+      maxConcurrency?: number;
+      noColor?: boolean;
     }) => {
-      const result = await runIntegrateCommand(options);
+      // Validate numeric CLI options
+      if (options.delay !== undefined && (!Number.isFinite(options.delay) || options.delay < 0)) {
+        process.stderr.write("Error: --delay must be a non-negative number.\n");
+        exitCode = 1;
+        return;
+      }
+      if (options.maxRetries !== undefined && (!Number.isFinite(options.maxRetries) || options.maxRetries < 1)) {
+        process.stderr.write("Error: --max-retries must be a positive number.\n");
+        exitCode = 1;
+        return;
+      }
+      if (options.maxDuration !== undefined && (!Number.isFinite(options.maxDuration) || options.maxDuration < 1)) {
+        process.stderr.write("Error: --max-duration must be a positive number.\n");
+        exitCode = 1;
+        return;
+      }
+      if (options.maxConcurrency !== undefined && (!Number.isFinite(options.maxConcurrency) || options.maxConcurrency < 1)) {
+        process.stderr.write("Error: --max-concurrency must be a positive number.\n");
+        exitCode = 1;
+        return;
+      }
+
+      const result = await runIntegrateCommand({
+        ...options,
+        maxDurationMs: options.maxDuration,
+        noColor: options.noColor,
+      });
       const output = formatIntegrateCommandOutput(result);
 
       if (result.status !== "ready") {
