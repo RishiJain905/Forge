@@ -560,8 +560,16 @@
 - Step 6 Batch 3 Part 3, including context size warnings for large prompts, file cap at 20 changed files with overflow note, staged progress output [1/5] through [5/5], color output control, enhanced error suggestions, and stronger output polish coverage while keeping the public integrate surface stable.
 - Step 6 Batch 3 Part 4, including the explicit freeze boundary documentation, full V1 freeze sign-off, updated progress.md, and confirmation that Step 6 integrate is frozen for V1 except future bug fixes.
 - Step 6 Batch 3 is complete and Step 6 integrate is frozen for V1.
+- Step 7 Batch 1 Task 1 (npm Packaging):
+  - Renamed package to @forge-cli/forge, bumped to 1.0.0
+  - Added bin, exports, engines, os, keywords, repository, license, publishConfig
+  - Added scripts/fix-shebang.js build safety net
+  - Added tests/npm-packaging.test.ts (15 tests) wired into default test gate
+  - Kept engines.node >=20 (stricter than spec's >=18)
+  - npm publish --dry-run passes with valid package structure
 
 ## Next
 
 - Step 6 Batch 3 is complete and frozen for V1.
-- Next major target: Step 7 deploy.
+- Step 7 Batch 1 Task 1 (npm Packaging) is complete.
+- Next major target: Step 7 Batch 1 Task 2 (forge init).
