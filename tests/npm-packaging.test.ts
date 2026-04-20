@@ -84,6 +84,11 @@ describe("npm packaging contract", () => {
   it("has prepublishOnly script", () => {
     assert.ok(packageJson.scripts.prepublishOnly);
   });
+
+  it("has postinstall script for forge init", () => {
+    assert.ok(packageJson.scripts.postinstall);
+    assert.match(packageJson.scripts.postinstall, /forge.*--init/);
+  });
 });
 
 describe("shebang preservation", () => {

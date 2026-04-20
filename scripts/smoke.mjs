@@ -8,6 +8,16 @@ import { fileURLToPath } from "node:url";
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(currentDirectory, "..");
 const entryPointPath = resolve(repoRoot, "dist", "src", "index.js");
+
+// Verify forge --version works
+const versionResult = spawnSync(process.execPath, [entryPointPath, "--version"], {
+  encoding: "utf8",
+});
+if (versionResult.error) throw versionResult.error;
+assert.equal(versionResult.status, 0);
+assert.ok(versionResult.stdout.trim().length > 0, "expected version output from forge --version");
+console.log("PASS: forge --version");
+
 const VERIFY_REPORT_HEADINGS = [
   "# Forge Verify Report",
   "## Overview",
