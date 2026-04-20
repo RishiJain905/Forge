@@ -38,6 +38,50 @@ function assertNoVerifyReportHeadings(output) {
   }
 }
 
+async function smokeIntegrate() {
+  const executeJsonPath = join(repoRoot, ".forge", "execute.json");
+  try {
+    await access(executeJsonPath);
+  } catch {
+    console.log("SKIP: execute.json not found (run forge execute first)");
+    return;
+  }
+
+  const integrateResult = spawnSync(process.execPath, [
+    entryPointPath,
+    "integrate",
+    "--repo",
+    ".",
+    "--force",
+  ], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+    },
+  });
+
+  if (integrateResult.error) {
+    throw integrateResult.error;
+  }
+
+  assert.equal(integrateResult.status, 0);
+
+  const integrateJsonPath = join(repoRoot, ".forge", "integrate.json");
+  const integrationReportPath = join(repoRoot, ".forge", "integration-report.md");
+
+  await access(integrateJsonPath);
+  await access(integrationReportPath);
+
+  const integrateArtifact = JSON.parse(await readFile(integrateJsonPath, "utf8"));
+  assert.ok(
+    typeof integrateArtifact.attemptCount === "number" && integrateArtifact.attemptCount >= 1,
+    `expected attemptCount >= 1, got ${integrateArtifact.attemptCount}`,
+  );
+
+  console.log("PASS: forge integrate smoke");
+}
+
 async function main() {
   const tempRepo = await mkdtemp(join(tmpdir(), "forge-smoke-"));
 
@@ -691,3 +735,4 @@ async function main() {
 }
 
 await main();
+await smokeIntegrate();
