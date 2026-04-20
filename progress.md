@@ -567,9 +567,18 @@
   - Added tests/npm-packaging.test.ts (15 tests) wired into default test gate
   - Kept engines.node >=20 (stricter than spec's >=18)
   - npm publish --dry-run passes with valid package structure
+- Step 7 Batch 1 Task 2 (forge init):
+  - Added src/init.ts with initForge function (creates .forge/ directory structure)
+  - Added forge init CLI command with --dir, --yes, --force options via Commander
+  - Added forge --version flag via .version(packageJson.version) (deferred from Task 1)
+  - Added postinstall script "forge --init 2>/dev/null || true" (deferred from Task 1)
+  - Added tests/init.test.ts (13 tests: 8 unit + 4 CLI + 1 version) wired into default test gate
+  - Added postinstall assertion to tests/npm-packaging.test.ts (now 16 tests)
+  - Added forge --version smoke test assertion
 
 ## Next
 
 - Step 6 Batch 3 is complete and frozen for V1.
 - Step 7 Batch 1 Task 1 (npm Packaging) is complete.
-- Next major target: Step 7 Batch 1 Task 2 (forge init).
+- Step 7 Batch 1 Task 2 (forge init) is complete.
+- Next major target: Step 7 Batch 1 Task 3 (forge doctor).
