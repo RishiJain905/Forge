@@ -12,7 +12,7 @@
 
 | Date | Commit | Description |
 |------|--------|-------------|
-| 2026-04-20 | TBD | feat(step7-b1): npm packaging — package.json, bin entry, engines, exports, shebang CLI |
+| 2026-04-20 | 1d40677 | feat(step7-b1): npm packaging — package.json, bin entry, engines, exports, shebang CLI |
 | TBD | TBD | feat(step7-b1): forge init — .forge/ directory, config.yaml, .forgeignore |
 | TBD | TBD | feat(step7-b1): forge doctor — pre-flight checks (node, git, npm, network, config, permissions) |
 | TBD | TBD | feat(step7-b2): forge update — self-update via npm view |
