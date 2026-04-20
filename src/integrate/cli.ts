@@ -102,14 +102,14 @@ export function classifyWorkstreamHealth(
 
 /**
  * Determine if color output should be used based on CLI options and environment.
- * --auto mode disables color. FORGE_NO_COLOR and NO_COLOR env vars disable color.
- * --no-color CLI flag disables color.
+ * --auto mode disables color. FORGE_NO_COLOR and NO_COLOR env vars disable color
+ * when they are present with a non-empty value. --no-color CLI flag disables color.
  */
 export function shouldUseColor(options: IntegrateCommandOptions): boolean {
   if (options.auto) return false;
-  if (process.env.FORGE_NO_COLOR === "true") return false;
-  if (process.env.NO_COLOR === "true") return false;
-  if (process.argv.includes("--no-color")) return false;
+  if (options.noColor) return false;
+  if (typeof process.env.FORGE_NO_COLOR === "string" && process.env.FORGE_NO_COLOR.length > 0) return false;
+  if (typeof process.env.NO_COLOR === "string" && process.env.NO_COLOR.length > 0) return false;
   return true;
 }
 
@@ -797,7 +797,7 @@ export async function runIntegrateCommand(
           status: "failed",
           summary: `Integration frozen at ${freezeState.frozenAt}. ${classified.suggestion}`,
           artifactPath: frozenArtifactPath,
-          reportPath: frozenReportPath,
+          reportPath: options.jsonOnly ? undefined : frozenReportPath,
           outputRoot: outputDir,
           exitCode: 1,
           failure: {
@@ -826,6 +826,12 @@ export async function runIntegrateCommand(
       }
 
       if (attempt < retryConfig.maxRetries) {
+        // Validate delay before use
+        if (options.delay !== undefined) {
+          if (!Number.isFinite(options.delay) || options.delay < 0) {
+            return makeErrorResult(repoRoot, outputDir, "AI_GENERATION_FAILED", "Invalid --delay value: must be a non-negative number.", 1);
+          }
+        }
         const delayMs = options.delay !== undefined
           ? options.delay * 1000
           : (classified.retryAfterMs ??

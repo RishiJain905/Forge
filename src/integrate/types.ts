@@ -204,6 +204,8 @@ export interface IntegrateCommandOptions {
   maxDurationMs?: number;
   /** Max parallel test operations. */
   maxConcurrency?: number;
+  /** Disable color output. */
+  noColor?: boolean;
 }
 
 // ---------------------------------------------------------------------------

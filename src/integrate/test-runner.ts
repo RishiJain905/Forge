@@ -15,12 +15,13 @@
 
 import { promises as fs } from "fs";
 import path from "node:path";
-import { exec } from "node:child_process";
+import { exec, execFile } from "node:child_process";
 import { promisify } from "node:util";
 
 import type { IntegrationTestFile, IntegrationTestCase, TestRunResult } from "./types.js";
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -486,8 +487,10 @@ export async function runIntegrationTestsParallel(
   // First, write all test files in parallel
   const writtenFiles = await writeTestFilesParallel(testFiles, options.repoRoot);
 
-  // Batch test files by maxConcurrency
-  const batches = chunkArray(testFiles, options.maxConcurrency ?? 5);
+  // Batch test files by maxConcurrency (use sanitized writtenFiles, not original testFiles)
+  const safeFiles = writtenFiles.filter(tf => tf.testCount > 0);
+  const concurrency = Math.max(1, Number.isFinite(options.maxConcurrency) ? options.maxConcurrency : 5);
+  const batches = chunkArray(safeFiles, concurrency);
   const allResults: TestRunResult[] = [];
 
   for (const batch of batches) {
@@ -543,14 +546,18 @@ async function runSingleTestFile(
   options: ParallelTestRunOptions
 ): Promise<TestRunResult> {
   const startTime = Date.now();
-  const command = `${options.command} ${tf.path}`;
-
   let stdout = "";
   let stderr = "";
   let runError: string | undefined;
 
+  // Special case: npm test doesn't support per-file args, run the whole suite
+  const isNpmTest = options.command.trim() === "npm test";
+  const commandParts = isNpmTest
+    ? ["npm", "test"]
+    : [...options.command.split(/\s+/), tf.path];
+
   try {
-    const result = await execAsync(command, {
+    const result = await execFileAsync(commandParts[0], commandParts.slice(1), {
       cwd: options.repoRoot,
       timeout: options.timeoutMs,
       maxBuffer: 10 * 1024 * 1024,
@@ -559,10 +566,13 @@ async function runSingleTestFile(
     stderr = result.stderr ?? "";
   } catch (err: unknown) {
     // Many test runners exit with non-zero when tests fail — that's expected.
+    // We still capture output for parsing.
     if (err && typeof err === "object" && "stdout" in err && "stderr" in err) {
       const execErr = err as { stdout?: string; stderr?: string; message?: string };
       stdout = execErr.stdout ?? "";
       stderr = execErr.stderr ?? "";
+      // Only set a real error flag if the process couldn't run at all
+      // (e.g., command not found). Test failures are handled via parsing.
     } else {
       runError = err instanceof Error ? err.message : String(err);
     }
@@ -598,6 +608,9 @@ async function runSingleTestFile(
  * @returns An array of arrays, each of length `size` (except possibly the last).
  */
 function chunkArray<T>(arr: T[], size: number): T[][] {
+  if (!Number.isFinite(size) || size < 1) {
+    return [arr]; // Fallback: treat as single batch
+  }
   const result: T[][] = [];
   for (let i = 0; i < arr.length; i += size) {
     result.push(arr.slice(i, i + size));

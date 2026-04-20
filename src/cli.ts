@@ -309,6 +309,7 @@ export async function runCli(argv: string[]): Promise<number> {
     .option("--max-retries <n>", "Maximum retry attempts before freezing", (val) => parseInt(val, 10))
     .option("--max-duration <ms>", "Maximum duration in ms before freezing", (val) => parseInt(val, 10))
     .option("--max-concurrency <n>", "Max parallel test operations (default: 5)", (val) => parseInt(val, 10))
+    .option("--no-color", "Disable color output")
     .action(async (options: {
       repo?: string;
       outputDir?: string;
@@ -318,10 +319,37 @@ export async function runCli(argv: string[]): Promise<number> {
       testFramework?: string;
       delay?: number;
       maxRetries?: number;
-      maxDurationMs?: number;
+      maxDuration?: number;
       maxConcurrency?: number;
+      noColor?: boolean;
     }) => {
-      const result = await runIntegrateCommand(options);
+      // Validate numeric CLI options
+      if (options.delay !== undefined && (!Number.isFinite(options.delay) || options.delay < 0)) {
+        process.stderr.write("Error: --delay must be a non-negative number.\n");
+        exitCode = 1;
+        return;
+      }
+      if (options.maxRetries !== undefined && (!Number.isFinite(options.maxRetries) || options.maxRetries < 1)) {
+        process.stderr.write("Error: --max-retries must be a positive number.\n");
+        exitCode = 1;
+        return;
+      }
+      if (options.maxDuration !== undefined && (!Number.isFinite(options.maxDuration) || options.maxDuration < 1)) {
+        process.stderr.write("Error: --max-duration must be a positive number.\n");
+        exitCode = 1;
+        return;
+      }
+      if (options.maxConcurrency !== undefined && (!Number.isFinite(options.maxConcurrency) || options.maxConcurrency < 1)) {
+        process.stderr.write("Error: --max-concurrency must be a positive number.\n");
+        exitCode = 1;
+        return;
+      }
+
+      const result = await runIntegrateCommand({
+        ...options,
+        maxDurationMs: options.maxDuration,
+        noColor: options.noColor,
+      });
       const output = formatIntegrateCommandOutput(result);
 
       if (result.status !== "ready") {

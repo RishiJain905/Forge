@@ -187,7 +187,7 @@ export function deriveFrameworkFromOverride(
 export async function getChangedFileContents(
   executeArtifact: ExecuteArtifact,
   repoRoot: string
-): Promise<ChangedFileContent[]> {
+): Promise<{ files: ChangedFileContent[]; totalChangedCount: number }> {
   // Phase A: Collect file entries first (deduplication + path traversal guards)
   const seenPaths = new Set<string>();
   const entriesToRead: { filePath: string; absolutePath: string }[] = [];
@@ -227,9 +227,15 @@ export async function getChangedFileContents(
     }
   }
 
-  // Phase A: Read all files in parallel using Promise.all
+  // Cap the read set to avoid unnecessary IO on large diffs
+  const MAX_CHANGED_FILES_READ = 20;
+  const filesToRead = entriesToRead.length > MAX_CHANGED_FILES_READ
+    ? entriesToRead.slice(0, MAX_CHANGED_FILES_READ)
+    : entriesToRead;
+
+  // Phase B: Read all files in parallel using Promise.all
   const readResults = await Promise.all(
-    entriesToRead.map(async ({ filePath, absolutePath }) => {
+    filesToRead.map(async ({ filePath, absolutePath }) => {
       try {
         const content = await fs.readFile(absolutePath, "utf-8");
         return { path: filePath, content, warning: null } as ChangedFileContent;
@@ -243,7 +249,8 @@ export async function getChangedFileContents(
     })
   );
 
-  return [...pathTraversalResults, ...readResults];
+  const totalChangedCount = pathTraversalResults.length + entriesToRead.length;
+  return { files: [...pathTraversalResults, ...readResults], totalChangedCount };
 }
 
 // ---------------------------------------------------------------------------
@@ -338,7 +345,7 @@ export async function buildIntegrationTestPrompt(
     : await detectTestFramework(ctx.repoRoot);
 
   // 2. Collect changed file contents
-  const changedFiles = await getChangedFileContents(
+  const { files: changedFiles, totalChangedCount } = await getChangedFileContents(
     ctx.executeArtifact,
     ctx.repoRoot
   );
@@ -353,7 +360,7 @@ export async function buildIntegrationTestPrompt(
   const workstreamSection = buildWorkstreamSection(ctx.executeArtifact);
   const planSection = buildPlanSection(ctx.planArtifact);
   const constraintSection = buildConstraintSection(ctx.verifyArtifact);
-  const fileSection = buildFileSection(changedFiles);
+  const fileSection = buildFileSection(changedFiles, totalChangedCount);
   const existingTestsSection = buildExistingTestsSection(existingTests);
   const healthSection = ctx.workstreamHealthContext
     ? `\n${ctx.workstreamHealthContext}\n`
@@ -369,7 +376,7 @@ export async function buildIntegrationTestPrompt(
     existingTestsSection,
     framework,
     healthSection,
-    changedFiles.length
+    totalChangedCount
   );
 
   // Phase C: Context size warning
@@ -511,14 +518,15 @@ function buildConstraintSection(verifyArtifact: VerifyArtifact): string {
  * Build a section showing the current content of changed files.
  * Phase D: Caps output at 20 files with overflow note when there are more.
  */
-function buildFileSection(files: ChangedFileContent[]): string {
+function buildFileSection(files: ChangedFileContent[], totalChangedCount?: number): string {
   if (files.length === 0) {
     return "No changed files to include.";
   }
 
   const FILE_CAP = 20;
   const capped = files.length > FILE_CAP ? files.slice(0, FILE_CAP) : files;
-  const overflow = files.length - FILE_CAP;
+  const effectiveTotal = totalChangedCount ?? files.length;
+  const overflow = effectiveTotal - FILE_CAP;
 
   const contentParts = capped
     .map((fc) => {

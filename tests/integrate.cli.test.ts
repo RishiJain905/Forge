@@ -1697,11 +1697,11 @@ await runScenario(
 await runScenario("shouldUseColor returns true by default", () => {
   const origForgeNoColor = process.env.FORGE_NO_COLOR;
   const origNoColor = process.env.NO_COLOR;
-  process.env.FORGE_NO_COLOR = undefined;
-  process.env.NO_COLOR = undefined;
+  delete process.env.FORGE_NO_COLOR;
+  delete process.env.NO_COLOR;
   const result = shouldUseColor({});
-  process.env.FORGE_NO_COLOR = origForgeNoColor;
-  process.env.NO_COLOR = origNoColor;
+  if (origForgeNoColor !== undefined) process.env.FORGE_NO_COLOR = origForgeNoColor;
+  if (origNoColor !== undefined) process.env.NO_COLOR = origNoColor;
   assert.strictEqual(result, true, "shouldUseColor should return true by default");
 });
 
@@ -1710,20 +1710,27 @@ await runScenario("shouldUseColor returns false when auto is true", () => {
   assert.strictEqual(result, false, "shouldUseColor should return false with auto=true");
 });
 
-await runScenario("shouldUseColor returns false when FORGE_NO_COLOR is true", () => {
+await runScenario("shouldUseColor returns false when FORGE_NO_COLOR is set", () => {
   const original = process.env.FORGE_NO_COLOR;
-  process.env.FORGE_NO_COLOR = "true";
+  process.env.FORGE_NO_COLOR = "1";
   const result = shouldUseColor({});
-  process.env.FORGE_NO_COLOR = original;
-  assert.strictEqual(result, false, "shouldUseColor should return false with FORGE_NO_COLOR=true");
+  delete process.env.FORGE_NO_COLOR;
+  if (original !== undefined) process.env.FORGE_NO_COLOR = original;
+  assert.strictEqual(result, false, "shouldUseColor should return false with FORGE_NO_COLOR set");
 });
 
-await runScenario("shouldUseColor returns false when NO_COLOR is true", () => {
+await runScenario("shouldUseColor returns false when NO_COLOR is set", () => {
   const original = process.env.NO_COLOR;
-  process.env.NO_COLOR = "true";
+  process.env.NO_COLOR = "1";
   const result = shouldUseColor({});
-  process.env.NO_COLOR = original;
-  assert.strictEqual(result, false, "shouldUseColor should return false with NO_COLOR=true");
+  delete process.env.NO_COLOR;
+  if (original !== undefined) process.env.NO_COLOR = original;
+  assert.strictEqual(result, false, "shouldUseColor should return false with NO_COLOR set");
+});
+
+await runScenario("shouldUseColor returns false when noColor is true", () => {
+  const result = shouldUseColor({ noColor: true });
+  assert.strictEqual(result, false, "shouldUseColor should return false with noColor=true");
 });
 
 await runScenario("formatStatusIcon returns green ✓ with color when no failures", () => {

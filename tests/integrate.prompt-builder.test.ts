@@ -481,7 +481,7 @@ await runScenario("getChangedFileContents reads files from execute artifact work
       }),
     ]);
 
-    const result = await getChangedFileContents(execArtifact, dir);
+    const { files: result } = await getChangedFileContents(execArtifact, dir);
     assert.equal(result.length, 1);
     assert.equal(result[0].path, "src/auth.ts");
     assert.equal(result[0].content, "export function login() { return true; }");
@@ -499,7 +499,7 @@ await runScenario("getChangedFileContents handles missing files with warning", a
       }),
     ]);
 
-    const result = await getChangedFileContents(execArtifact, dir);
+    const { files: result } = await getChangedFileContents(execArtifact, dir);
     assert.equal(result.length, 1);
     assert.equal(result[0].path, "src/nonexistent.ts");
     assert.equal(result[0].content, null);
@@ -523,7 +523,7 @@ await runScenario("getChangedFileContents deduplicates files across workstreams"
       }),
     ]);
 
-    const result = await getChangedFileContents(execArtifact, dir);
+    const { files: result } = await getChangedFileContents(execArtifact, dir);
     assert.equal(result.length, 1); // deduplicated
     assert.equal(result[0].path, "src/shared.ts");
   });
@@ -544,7 +544,7 @@ await runScenario("getChangedFileContents skips deleted files", async () => {
     await fs.mkdir(path.join(dir, "src"), { recursive: true });
     await fs.writeFile(path.join(dir, "src", "new.ts"), "export const y = 2;");
 
-    const result = await getChangedFileContents(execArtifact, dir);
+    const { files: result } = await getChangedFileContents(execArtifact, dir);
     // Deleted file should be skipped
     const paths = result.map((r) => r.path);
     assert.ok(!paths.includes("src/old.ts"), "deleted file should be skipped");
@@ -558,14 +558,14 @@ await runScenario("getChangedFileContents returns empty array when no changesMad
       makeWorkstream({ changesMade: undefined }),
     ]);
 
-    const result = await getChangedFileContents(execArtifact, dir);
+    const { files: result } = await getChangedFileContents(execArtifact, dir);
     assert.equal(result.length, 0);
   });
 });
 
 await runScenario("getChangedFileContents returns empty array for empty workstreams", async () => {
   const execArtifact = makeExecuteArtifact([]);
-  const result = await getChangedFileContents(execArtifact, "/tmp/nonexistent");
+  const { files: result } = await getChangedFileContents(execArtifact, "/tmp/nonexistent");
   assert.equal(result.length, 0);
 });
 
@@ -1155,7 +1155,7 @@ await runScenario("getChangedFileContents reads multiple files in parallel", asy
       }),
     ]);
 
-    const result = await getChangedFileContents(execArtifact, dir);
+    const { files: result } = await getChangedFileContents(execArtifact, dir);
     assert.equal(result.length, 5);
     for (const entry of result) {
       assert.ok(entry.content !== null, `file ${entry.path} should have content`);
@@ -1175,7 +1175,7 @@ await runScenario("getChangedFileContents handles all missing files gracefully i
       }),
     ]);
 
-    const result = await getChangedFileContents(execArtifact, dir);
+    const { files: result } = await getChangedFileContents(execArtifact, dir);
     assert.equal(result.length, 3);
     for (const entry of result) {
       assert.equal(entry.content, null, `file ${entry.path} should have null content`);

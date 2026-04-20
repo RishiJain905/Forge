@@ -22,7 +22,7 @@
 
 ## Current Branch
 
-`dev` — `github.com:RishiJain905/Forge`
+`dev` — `github.com/RishiJain905/Forge`
 
 ## Next Major Target
 
