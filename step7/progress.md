@@ -4,7 +4,7 @@
 
 - [x] Batch 1 Task 1 (npm Packaging) ✅
 - [x] Batch 1 Task 2 (forge init) ✅
-- [ ] Batch 1 Task 3 (forge doctor)
+- [x] Batch 1 Task 3 (forge doctor) ✅
 - [ ] Batch 2 (forge update, forge config, env variables)
 - [ ] Batch 3 (GitHub Action, Docker, release process)
 
@@ -14,7 +14,7 @@
 |------|--------|-------------|
 | 2026-04-20 | 1d40677 | feat(step7-b1): npm packaging — package.json, bin entry, engines, exports, shebang CLI |
 | 2026-04-20 | 3158415 | feat(step7-b1): forge init command, --version flag, postinstall script, init tests |
-| TBD | TBD | feat(step7-b1): forge doctor — pre-flight checks (node, git, npm, network, config, permissions) |
+| 2026-04-20 | 30cf8bf | feat(step7-b1): forge doctor — pre-flight checks (node, git, npm, network, config, permissions) |
 | TBD | TBD | feat(step7-b2): forge update — self-update via npm view |
 | TBD | TBD | feat(step7-b2): forge config — list/get/set/unset/edit with precedence |
 | TBD | TBD | feat(step7-b2): environment variable support — FORGE_* env vars |
@@ -28,4 +28,4 @@
 
 ## Next Major Target
 
-Batch 1 Task 3 — forge doctor
+Batch 2 Task 1 — forge update

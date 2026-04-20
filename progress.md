@@ -581,4 +581,13 @@
 - Step 6 Batch 3 is complete and frozen for V1.
 - Step 7 Batch 1 Task 1 (npm Packaging) is complete.
 - Step 7 Batch 1 Task 2 (forge init) is complete.
-- Next major target: Step 7 Batch 1 Task 3 (forge doctor).
+- Step 7 Batch 1 Task 3 (forge doctor):
+  - Added src/doctor/ directory with 8 modules: index.ts (runner, interfaces, printDoctorResults), node.ts, git.ts, npm.ts, network.ts, config.ts, permissions.ts, gitClean.ts
+  - Added forge doctor CLI command with --fix and --checks options via Commander
+  - Uses exitCode = 1 pattern on check failures (matching existing CLI convention)
+  - Node version threshold >=20 (matching repo engines.node convention)
+  - Uses js-yaml for config validation (yaml package not installed in repo)
+  - Added js-yaml dependency and @types/js-yaml devDependency
+  - Added tests/doctor.test.ts (12 tests: 3 runDoctor unit + 5 individual checks + 1 printDoctorResults + 3 CLI integration)
+  - Wired doctor.test.js into default npm test script chain
+- Next major target: Step 7 Batch 2 Task 1 (forge update).

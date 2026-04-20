@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { Command } from "commander";
 
 import { initForge } from "./init.js";
+import { runDoctor, printDoctorResults } from "./doctor/index.js";
 import { runIntakeCommand } from "./intake/runner.js";
 import type { IntakeCommandResult } from "./intake/types.js";
 import { runPlanCommand } from "./plan/runner.js";
@@ -387,6 +388,28 @@ export async function runCli(argv: string[]): Promise<number> {
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
         process.stderr.write(`Error: ${message}\n`);
+        exitCode = 1;
+      }
+    });
+
+  program
+    .command("doctor")
+    .description("Run pre-flight environment checks")
+    .option("--fix", "Auto-fix what can be fixed")
+    .option("--checks <list>", "Comma-separated list of checks to run (e.g., node,git,npm)")
+    .action(async (options: { fix?: boolean; checks?: string }) => {
+      const checkNames = options.checks
+        ? options.checks.split(",").map((s: string) => s.trim())
+        : undefined;
+
+      const results = await runDoctor({
+        fix: options.fix,
+        checks: checkNames,
+      });
+
+      printDoctorResults(results);
+
+      if (results.some((r) => r.status === "fail")) {
         exitCode = 1;
       }
     });
