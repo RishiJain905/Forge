@@ -96,6 +96,41 @@ export function classifyWorkstreamHealth(
   };
 }
 
+// ---------------------------------------------------------------------------
+// Color control utilities
+// ---------------------------------------------------------------------------
+
+/**
+ * Determine if color output should be used based on CLI options and environment.
+ * --auto mode disables color. FORGE_NO_COLOR and NO_COLOR env vars disable color.
+ * --no-color CLI flag disables color.
+ */
+export function shouldUseColor(options: IntegrateCommandOptions): boolean {
+  if (options.auto) return false;
+  if (process.env.FORGE_NO_COLOR === "true") return false;
+  if (process.env.NO_COLOR === "true") return false;
+  if (process.argv.includes("--no-color")) return false;
+  return true;
+}
+
+/**
+ * Format a status icon (checkmark or cross) with optional ANSI color.
+ */
+export function formatStatusIcon(failed: number, useColor: boolean): string {
+  if (failed > 0) {
+    return useColor ? "\x1b[31m✗\x1b[0m" : "✗";
+  }
+  return useColor ? "\x1b[32m✓\x1b[0m" : "✓";
+}
+
+/**
+ * Format text with dim/bright styling. When useColor is true, wraps the
+ * text in ANSI dim escape codes. When false, returns the text unchanged.
+ */
+export function formatDim(text: string, useColor: boolean): string {
+  return useColor ? `\x1b[2m${text}\x1b[0m` : text;
+}
+
 /**
  * Build a human-readable health summary section for the AI prompt.
  */
@@ -517,6 +552,11 @@ export async function runIntegrateCommand(
   const repoRoot = options.repo ?? process.cwd();
   const outputDir = options.outputDir ?? path.join(repoRoot, ".forge");
 
+  const useColor = shouldUseColor(options);
+  const dim = (text: string) => formatDim(text, useColor);
+
+  console.log("Welcome to Forge Integrate (V1)\n");
+
   // ---- Step 1.5: --force guard — check if integrate.json already exists ----
 
   const integrateJsonPath = path.join(outputDir, "integrate.json");
@@ -539,6 +579,8 @@ export async function runIntegrateCommand(
   } catch {
     // File does not exist — proceed normally
   }
+
+  console.log(dim("[1/5] Loading artifacts..."));
 
   // ---- Step 2: Load execute.json (required) ----
 
@@ -660,6 +702,8 @@ export async function runIntegrateCommand(
 
   // ---- Step 4: Build integration test prompt ----
 
+  console.log(dim("[2/5] Building integration prompt..."));
+
   let prompt: string;
   let testCommand: string;
 
@@ -688,6 +732,8 @@ export async function runIntegrateCommand(
   }
 
   // ---- Step 5: Call AI with retry loop (reused model-connector + error classification) ----
+
+  console.log(dim("[3/5] Calling AI model..."));
 
   let modelUsed = "";
   let rawResponse = "";
@@ -807,6 +853,8 @@ export async function runIntegrateCommand(
 
   // ---- Step 6: Parse AI response to extract test files ----
 
+  console.log(dim("[4/5] Generating test files..."));
+
   let testFiles: IntegrationTestFile[];
 
   try {
@@ -825,6 +873,8 @@ export async function runIntegrateCommand(
   }
 
   // ---- Step 7: Run the generated tests ----
+
+  console.log(dim("[5/5] Running integration tests..."));
 
   let testResult: TestRunResult;
 
@@ -893,6 +943,16 @@ export async function runIntegrateCommand(
   const resultSummary = hasFailures
     ? `Integration complete with ${artifact.summary.failed} failure(s) out of ${artifact.summary.total} test(s)`
     : `All ${artifact.summary.total} integration tests passed`;
+
+  // Final status summary
+  const icon = formatStatusIcon(artifact.summary.failed, useColor);
+  const summaryLine = `  Tests: ${artifact.summary.passed} passed, ${artifact.summary.failed} failed, ${artifact.summary.skipped} skipped`;
+  console.log(`\n${icon} Integration complete.`);
+  if (useColor) {
+    console.log(`\x1b[2m${summaryLine}\x1b[0m`);
+  } else {
+    console.log(summaryLine);
+  }
 
   return {
     status,

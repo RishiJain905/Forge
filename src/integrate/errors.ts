@@ -45,7 +45,7 @@ export function classifyError(err: unknown): ErrorClassification {
       retryable: true,
       retryAfterMs: extractRetryAfter(message),
       message,
-      suggestion: "Rate limit hit. Will retry automatically. Consider using a slower model or adding delay.",
+      suggestion: "Rate limit hit. Will retry automatically. Consider using --delay to increase wait time, or switch to a faster/less congested model.",
     };
   }
 
@@ -55,7 +55,7 @@ export function classifyError(err: unknown): ErrorClassification {
       type: "auth_failure",
       retryable: false,
       message,
-      suggestion: "Authentication failed. Check your API key in FORGE_API_KEY or .env file.",
+      suggestion: "Authentication failed. Check your FORGE_API_KEY environment variable or .env file. Ensure the key has not expired.",
     };
   }
 
@@ -66,7 +66,7 @@ export function classifyError(err: unknown): ErrorClassification {
       retryable: true,
       retryAfterMs: 5000,
       message,
-      suggestion: "Request timed out. Will retry automatically. Consider using a faster model.",
+      suggestion: "Request timed out. Will retry automatically. Consider using --max-duration to limit total time spent.",
     };
   }
 
@@ -76,7 +76,7 @@ export function classifyError(err: unknown): ErrorClassification {
       type: "parse_error",
       retryable: false,
       message,
-      suggestion: "AI returned malformed response. The model may need temperature adjustment or prompt simplification.",
+      suggestion: "AI returned malformed JSON. Try adjusting the model temperature, or use --force to retry with a fresh prompt.",
     };
   }
 
@@ -87,7 +87,7 @@ export function classifyError(err: unknown): ErrorClassification {
       retryable: true,
       retryAfterMs: 10000,
       message,
-      suggestion: "API server error. Will retry automatically. This is likely a temporary outage.",
+      suggestion: "API server error (5xx). Will retry automatically. If this persists, check your API provider status page.",
     };
   }
 
@@ -97,7 +97,7 @@ export function classifyError(err: unknown): ErrorClassification {
       type: "context_overflow",
       retryable: false,
       message,
-      suggestion: "Prompt exceeds model context window. Consider reducing workstream scope or using a model with larger context.",
+      suggestion: "Prompt exceeds model context window. Use --focus to narrow the workstream scope, or use a model with larger context.",
     };
   }
 
@@ -106,6 +106,6 @@ export function classifyError(err: unknown): ErrorClassification {
     type: "unknown_error",
     retryable: false,
     message,
-    suggestion: "An unexpected error occurred. Check Forge logs for details.",
+    suggestion: "An unexpected error occurred. Check Forge logs at ~/.forge/logs/ for details. Use --force to retry.",
   };
 }

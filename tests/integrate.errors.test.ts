@@ -65,14 +65,14 @@ await runScenario(
 // 4. classifyError classifies 401 as auth_failure
 // ---------------------------------------------------------------------------
 await runScenario(
-  "classifyError classifies 401 as auth_failure (retryable=false, suggestion includes API key)",
+  "classifyError classifies 401 as auth_failure (retryable=false, suggestion includes FORGE_API_KEY)",
   () => {
     const result = classifyError(new Error("HTTP 401 Unauthorized"));
     assert.equal(result.type, "auth_failure");
     assert.equal(result.retryable, false);
     assert.ok(
-      result.suggestion.includes("API key"),
-      `suggestion should include "API key", got: ${result.suggestion}`
+      result.suggestion.includes("FORGE_API_KEY"),
+      `suggestion should include "FORGE_API_KEY", got: ${result.suggestion}`
     );
   }
 );

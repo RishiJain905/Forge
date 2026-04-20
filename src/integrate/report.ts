@@ -95,6 +95,30 @@ function renderOverview(artifact: IntegrateArtifact): string {
   return renderSection("Overview", lines);
 }
 
+/** Render the How to Reproduce section. */
+function renderHowToReproduce(): string {
+  return renderSection("How to Reproduce", [
+    "```bash",
+    "forge integrate --repo .",
+    "```",
+  ]);
+}
+
+/** Render the Troubleshooting section. */
+function renderTroubleshooting(artifact: IntegrateArtifact): string {
+  const lines: string[] = [];
+  if (artifact.summary.failed > 0) {
+    lines.push(`- **${artifact.summary.failed} test(s) failed** — review individual test errors above`);
+    lines.push("- Check that all workstream changes were applied correctly");
+    lines.push("- Verify the test framework is correctly detected");
+    lines.push("- Try `forge integrate --force` to re-run from scratch");
+    lines.push("- Check `forge integrate --help` for available flags");
+  } else {
+    lines.push("- All tests passed — no troubleshooting needed");
+  }
+  return renderSection("Troubleshooting", lines);
+}
+
 /** Render the workstreams summary as a table. */
 function renderWorkstreamsSummary(artifact: IntegrateArtifact): string {
   const parsed = parseWorkstreamsSummary(artifact.workstreamsSummary);
@@ -271,13 +295,15 @@ function renderNextSteps(artifact: IntegrateArtifact): string {
  * Sections:
  *   1. Title — "Forge Integration Report"
  *   2. Overview — date, goal, AI model, schema/forge version
- *   3. Workstreams Summary — table with total/completed/failed/changes
- *   4. Test Results — table with passed/failed/skipped/duration
- *   5. Test Files — list with paths, test counts, language, framework
- *   6. Individual Test Results — table with status icons (✅/❌/⏭️)
- *   7. Failed Test Errors — errors in code blocks
- *   8. AI Recommendations — from failed tests
- *   9. Next Steps — guidance based on pass/fail status
+ *   3. How to Reproduce — command to reproduce the integration
+ *   4. Workstreams Summary — table with total/completed/failed/changes
+ *   5. Test Results — table with passed/failed/skipped/duration
+ *   6. Test Files — list with paths, test counts, language, framework
+ *   7. Individual Test Results — table with status icons (✅/❌/⏭️)
+ *   8. Failed Test Errors — errors in code blocks
+ *   9. AI Recommendations — from failed tests
+ *  10. Troubleshooting — guidance based on pass/fail status
+ *  11. Next Steps — guidance based on pass/fail status
  *
  * @param artifact  The validated IntegrateArtifact.
  * @returns A Markdown string representing the full report.
@@ -285,6 +311,8 @@ function renderNextSteps(artifact: IntegrateArtifact): string {
 export function createIntegrationReport(artifact: IntegrateArtifact): string {
   const sections = [
     renderOverview(artifact),
+    "",
+    renderHowToReproduce(),
     "",
     renderWorkstreamsSummary(artifact),
     "",
@@ -297,6 +325,8 @@ export function createIntegrationReport(artifact: IntegrateArtifact): string {
     renderFailedTestErrors(artifact),
     "",
     renderAIRecommendations(artifact),
+    "",
+    renderTroubleshooting(artifact),
     "",
     renderNextSteps(artifact),
   ];
@@ -356,9 +386,13 @@ export function createFrozenReport(
 
   const sections = [
     `**Date**: ${artifact.createdAt}`,
+    `**Goal**: ${artifact.goal}`,
     `**Status**: ❌ INTEGRATION FROZEN`,
     `**Frozen At**: ${artifact.frozenAt ?? "unknown"}`,
     `**Attempts**: ${artifact.attemptCount ?? 0}`,
+    "",
+    `⚠️ **Integration was frozen** — not all tests could be verified.`,
+    `**Final Error:** ${artifact.finalError ?? "Unknown"}`,
     "",
     renderSection("Reason for Freeze", [
       "```",
