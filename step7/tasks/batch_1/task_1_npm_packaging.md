@@ -100,18 +100,56 @@ if (!content.startsWith("#!")) {
 - Run `npm publish --dry-run` and verify no errors
 - After publish (not yet), `forge --version` should work globally
 
+## Deferred Items (completed post-initial-implementation)
+
+### `postinstall` script
+
+The spec lists `"postinstall": "forge --init 2>/dev/null || true"` in package.json scripts.
+This was deferred from the initial Task 1 implementation because `forge init` did not exist yet.
+**Action:** Add `"postinstall": "forge --init 2>/dev/null || true"` to `package.json` scripts when Task 2 (`forge init`) is implemented and tested.
+
+### `--version` flag
+
+The design reference (`future_idea_implementation/step7-deploy.md` line 78) shows `.version(packageJson.version)` on the Commander program, and the verification checklist includes `forge --version` printing the correct version.
+**Action:** Add `program.version(...)` to `src/cli.ts` with the version read from `package.json`.
+This is a one-line addition in `src/cli.ts`:
+
+```typescript
+// src/cli.ts — near the top, after importing Commander
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const packageJson = JSON.parse(
+  readFileSync(join(__dirname, "..", "package.json"), "utf8")
+);
+
+// Then in runCli():
+program
+  .name("forge")
+  .description("Reliability-first CLI for agentic software development.")
+  .version(packageJson.version)
+  .showHelpAfterError();
+```
+
+Add `forge --version` to the smoke test assertions in `scripts/smoke.mjs`.
+
 ## Verification
 
 - `npm run build` produces clean `dist/` with no TypeScript errors
-- `dist/cli.js` starts with `#!/usr/bin/env node`
+- `dist/src/index.js` starts with `#!/usr/bin/env node`
 - `npm publish --dry-run` passes without errors
-- `forge --version` prints the correct version
+- `forge --version` prints the correct version (`1.0.0`)
 - Package has correct `bin`, `exports`, `engines`, `os` fields
+- `postinstall` script is present in package.json (after Task 2 is complete)
 
 ## Files Modified
 
 - `package.json` — Updated with new name, bin, exports, engines, scripts
 - `scripts/fix-shebang.js` — NEW — Preserves shebang after build
+- `src/cli.ts` — MODIFY — Add `.version(packageJson.version)` with package.json import
+- `scripts/smoke.mjs` — MODIFY — Add `forge --version` assertion
 
 ## Non-Goals
 

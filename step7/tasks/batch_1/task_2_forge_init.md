@@ -223,6 +223,32 @@ describe("forge init", () => {
 
 Update `scripts/smoke.mjs` to include `forge init` in the smoke path if needed.
 
+## Deferred Items from Task 1
+
+### `postinstall` script in package.json
+
+Task 1 (npm Packaging) deferred the `postinstall` script because `forge init` did not exist yet.
+Now that Task 2 implements `forge init`, add the postinstall script to `package.json`:
+
+```json
+"postinstall": "forge --init 2>/dev/null || true"
+```
+
+This script runs automatically after `npm install -g @forge-cli/forge`, creating `.forge/` in the user's project directory with default config. The `2>/dev/null || true` ensures it fails silently if the user is installing globally or in a non-project directory.
+
+Add a test in `tests/npm-packaging.test.ts` to verify the `postinstall` script is present:
+
+```typescript
+it("has postinstall script for forge init", () => {
+  assert.ok(packageJson.scripts.postinstall);
+  assert.match(packageJson.scripts.postinstall, /forge.*--init/);
+});
+```
+
+### `forge --version` flag
+
+Task 1 will add `.version(packageJson.version)` to the Commander program in `src/cli.ts`. Task 2 should verify that `forge --version` works after `forge init` is implemented, and that the smoke test covers it.
+
 ## Verification
 
 - `forge init` creates valid `.forge/config.yaml`
