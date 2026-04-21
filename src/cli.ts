@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { Command } from "commander";
 
 import { initForge } from "./init.js";
@@ -25,6 +25,7 @@ import {
   unsetConfigValue,
   openInEditor,
 } from "./config.js";
+import { loadRepoDotenv } from "./repo-dotenv.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const packageJson = JSON.parse(
@@ -114,6 +115,8 @@ export function formatIntegrateCommandOutput(result: IntegrateCommandResult): st
 }
 
 export async function runCli(argv: string[]): Promise<number> {
+  loadRepoDotenv(resolve(process.cwd()));
+
   const program = new Command();
   const intakeFlagPresence = {
     jsonOnly: hasFlag(argv, "--json-only"),
@@ -273,8 +276,8 @@ export async function runCli(argv: string[]): Promise<number> {
     .command("execute")
     .description(
       "Run the Step 5 execute stage — track workstream execution interactively.\n" +
-      "When AI context is available (plan.json, verify.json, and FORGE_MODEL_* env vars),\n" +
-      "`run <id>` triggers the AI pipeline (prompt builder → model → apply → state transition).\n" +
+      "Loads repo-root `.env` when present. When a model is configured (env + `.forge/config.yaml`),\n" +
+      "`run <id>` runs the AI pipeline (prompt → model → apply → completed). Otherwise workstreams stay in manual mode.\n" +
       "Use --auto or FORGE_EXECUTE_AUTO=1 to auto-execute all unblocked workstreams."
     )
     .option("--repo <path>", "Target repo root. Defaults to the current directory.")

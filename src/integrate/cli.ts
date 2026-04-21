@@ -37,6 +37,7 @@ import {
 } from "./artifact.js";
 import { createIntegrationReport, createFrozenReport } from "./report.js";
 import { loadModelConfig, callModel } from "../execute/model-connector.js";
+import { loadRepoDotenv } from "../repo-dotenv.js";
 import { extractJsonFromAIResponse } from "./extract-json.js";
 import { classifyError } from "./errors.js";
 import {
@@ -549,7 +550,8 @@ function makeErrorResult(
 export async function runIntegrateCommand(
   options: IntegrateCommandOptions = {}
 ): Promise<IntegrateCommandResult> {
-  const repoRoot = options.repo ?? process.cwd();
+  const repoRoot = path.resolve(options.repo ?? process.cwd());
+  loadRepoDotenv(repoRoot);
   const outputDir = options.outputDir ?? path.join(repoRoot, ".forge");
 
   const useColor = shouldUseColor(options);

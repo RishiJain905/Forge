@@ -23,7 +23,12 @@ import { writeExecuteArtifact } from "./artifact.js";
 import { createExecuteReport } from "./report.js";
 import type { SplitArtifact } from "../split/types.js";
 import { buildWorkstreamPrompt } from "./prompt-builder.js";
-import { executeWorkstream, isModelConfigured } from "./model-connector.js";
+import {
+  executeWorkstream,
+  getModelConfigError,
+  isModelConfigured,
+} from "./model-connector.js";
+import { loadRepoDotenv } from "../repo-dotenv.js";
 
 const SCHEMA_VERSION = "1.0.0";
 const FORGE_VERSION = "0.0.1";
@@ -207,7 +212,9 @@ async function executeWorkstreamWithAI(
 export async function runExecuteCommand(
   options: ExecuteCommandOptions = {}
 ): Promise<ExecuteCommandResult> {
-  const repoRoot = options.repo ?? process.cwd();
+  const repoRoot = path.resolve(options.repo ?? process.cwd());
+  loadRepoDotenv(repoRoot);
+
   const splitJsonPath = path.join(repoRoot, ".forge", "split.json");
 
   console.log("Welcome to Forge Execute (V1)\n");
@@ -369,10 +376,18 @@ export async function runExecuteCommand(
   console.log("  fail <id> [reason]: Mark workstream as failed");
   console.log("  status:            Show dashboard");
   console.log("  exit:              Exit REPL");
-  console.log(
-    "\nAI execution needs a model: set FORGE_MODEL_PROVIDER + FORGE_MODEL_NAME, or configure execute.default_model / forge.default_model in .forge/config.yaml (or FORGE_MODEL=provider/model)."
-  );
-  console.log("Optional: FORGE_MODEL_API_KEY, FORGE_MODEL_BASE_URL, FORGE_EXECUTE_AUTO");
+  const modelConfigErr = getModelConfigError(repoRoot);
+  if (modelConfigErr) {
+    console.log(`\nAI is off: ${modelConfigErr}`);
+    console.log(
+      "Fix: repo-root .env (e.g. FORGE_MODEL_API_KEY, FORGE_MODEL=openai/your-model) and/or .forge/config.yaml `execute.default_model`, then restart this command."
+    );
+  } else {
+    console.log(
+      "\nAI execution: model resolved from env / .forge/config.yaml (repo .env is loaded when present)."
+    );
+    console.log("Optional: FORGE_MODEL_BASE_URL, FORGE_EXECUTE_AUTO");
+  }
 
   const rl = readline.createInterface({
     input: process.stdin,

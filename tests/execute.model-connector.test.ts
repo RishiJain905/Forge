@@ -718,6 +718,46 @@ await runScenario("loadModelConfig reads execute.default_model from .forge/confi
   }
 });
 
+await runScenario("loadModelConfig treats bare model id in yaml as openai/<id>", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-model-yaml-bare-"));
+  try {
+    await fs.mkdir(path.join(dir, ".forge"), { recursive: true });
+    await fs.writeFile(
+      path.join(dir, ".forge", "config.yaml"),
+      "execute:\n  default_model: kimi-k2.6:cloud\n",
+      "utf8",
+    );
+    await withEnv(modelEnv({}), async () => {
+      const config = loadModelConfig(dir);
+      assert.equal(config.provider, "openai");
+      assert.equal(config.modelName, "kimi-k2.6:cloud");
+    });
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+await runScenario("loadModelConfig rejects provider-only model id from yaml", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-model-yaml-provider-only-"));
+  try {
+    await fs.mkdir(path.join(dir, ".forge"), { recursive: true });
+    await fs.writeFile(
+      path.join(dir, ".forge", "config.yaml"),
+      "execute:\n  default_model: openai\n",
+      "utf8",
+    );
+    await withEnv(modelEnv({}), async () => {
+      assert.throws(
+        () => loadModelConfig(dir),
+        (err: unknown): err is AIModelError =>
+          err instanceof AIModelError && err.code === "MISSING_MODEL_CONFIG",
+      );
+    });
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
 await runScenario("loadModelConfig prefers FORGE_MODEL over config file when env model pair unset", async () => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-model-env-pref-"));
   try {

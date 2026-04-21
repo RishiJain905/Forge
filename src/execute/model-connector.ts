@@ -109,15 +109,29 @@ export function hashContent(content: string): string {
 
 function parseProviderModelId(raw: string): { provider: ModelProvider; modelName: string } {
   const trimmed = raw.trim();
-  const slash = trimmed.indexOf("/");
-  if (slash <= 0 || slash >= trimmed.length - 1) {
+  /** OpenAI-compatible hosts often configure only the model path segment. */
+  const normalized = trimmed.includes("/")
+    ? trimmed
+    : VALID_PROVIDERS.has(trimmed)
+      ? null
+      : `openai/${trimmed}`;
+
+  if (normalized === null) {
+    throw new AIModelError(
+      AI_ERROR_CODES.MISSING_MODEL_CONFIG,
+      `Invalid model id "${raw}". Use provider/model (e.g. openai/gpt-4o), not a provider name alone.`
+    );
+  }
+
+  const slash = normalized.indexOf("/");
+  if (slash <= 0 || slash >= normalized.length - 1) {
     throw new AIModelError(
       AI_ERROR_CODES.MISSING_MODEL_CONFIG,
       `Invalid model id "${raw}". Expected provider/model (e.g. openai/gpt-4o).`
     );
   }
-  const provider = trimmed.slice(0, slash);
-  const modelName = trimmed.slice(slash + 1);
+  const provider = normalized.slice(0, slash);
+  const modelName = normalized.slice(slash + 1);
   if (!VALID_PROVIDERS.has(provider)) {
     throw new AIModelError(
       AI_ERROR_CODES.MISSING_MODEL_CONFIG,
@@ -183,14 +197,19 @@ export function loadModelConfig(cwd: string = process.cwd()): ModelConfig {
   };
 }
 
-/** True when {@link loadModelConfig} would succeed for the given repo root. */
-export function isModelConfigured(cwd: string = process.cwd()): boolean {
+/** Non-null message when {@link loadModelConfig} would throw for this repo root. */
+export function getModelConfigError(cwd: string = process.cwd()): string | null {
   try {
     loadModelConfig(cwd);
-    return true;
-  } catch {
-    return false;
+    return null;
+  } catch (e) {
+    return e instanceof Error ? e.message : String(e);
   }
+}
+
+/** True when {@link loadModelConfig} would succeed for the given repo root. */
+export function isModelConfigured(cwd: string = process.cwd()): boolean {
+  return getModelConfigError(cwd) === null;
 }
 
 // ---------------------------------------------------------------------------
