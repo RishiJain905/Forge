@@ -18,6 +18,13 @@ import type { ExecuteCommandResult } from "./execute/types.js";
 import { runIntegrateCommand } from "./integrate/cli.js";
 import type { IntegrateCommandResult } from "./integrate/types.js";
 import { checkForUpdate, selfUpdate } from "./update.js";
+import {
+  resolveConfig,
+  getConfigValue,
+  setConfigValue,
+  unsetConfigValue,
+  openInEditor,
+} from "./config.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const packageJson = JSON.parse(
@@ -411,6 +418,93 @@ export async function runCli(argv: string[]): Promise<number> {
       printDoctorResults(results);
 
       if (results.some((r) => r.status === "fail")) {
+        exitCode = 1;
+      }
+    });
+
+  program
+    .command("config")
+    .description("View and edit Forge configuration.")
+    .option("--list", "List all configuration values")
+    .option("--get <key>", "Get a specific config value by dot key")
+    .option("--set <pair>", "Set a config value (key=value)")
+    .option("--unset <key>", "Remove a config value")
+    .option("--edit", "Open the config in $EDITOR")
+    .action(async (options: {
+      list?: boolean;
+      get?: string;
+      set?: string;
+      unset?: string;
+      edit?: boolean;
+    }) => {
+      try {
+        const hasAction = options.get || options.set || options.unset || options.edit;
+        if (!hasAction || options.list) {
+          const { sources, values } = resolveConfig();
+          const lines: string[] = [];
+          const stack: Array<{ obj: unknown; prefix: string }> = [{ obj: values, prefix: "" }];
+          while (stack.length > 0) {
+            const { obj, prefix } = stack.pop()!;
+            if (typeof obj !== "object" || obj === null) {
+              const source = sources[prefix] ?? "unknown";
+              lines.push(`${prefix}=${JSON.stringify(obj)} (${source})`);
+              continue;
+            }
+            const keys = Object.keys(obj as Record<string, unknown>);
+            for (let i = keys.length - 1; i >= 0; i--) {
+              const k = keys[i];
+              const path = prefix ? `${prefix}.${k}` : k;
+              stack.push({ obj: (obj as Record<string, unknown>)[k], prefix: path });
+            }
+          }
+          process.stdout.write(lines.join("\n") + "\n");
+          return;
+        }
+
+        if (options.get) {
+          const value = getConfigValue(options.get);
+          if (value === undefined) {
+            process.stderr.write(`Error: Key '${options.get}' not found.\n`);
+            exitCode = 1;
+            return;
+          }
+          process.stdout.write(`${JSON.stringify(value)}\n`);
+          return;
+        }
+
+        if (options.set) {
+          const idx = options.set.indexOf("=");
+          if (idx === -1) {
+            process.stderr.write("Error: --set must be in key=value format.\n");
+            exitCode = 1;
+            return;
+          }
+          const key = options.set.slice(0, idx);
+          const raw = options.set.slice(idx + 1);
+          let value: unknown = raw;
+          try {
+            value = JSON.parse(raw);
+          } catch {
+            // use raw string
+          }
+          setConfigValue(key, value);
+          process.stdout.write(`Set ${key}=${JSON.stringify(value)}\n`);
+          return;
+        }
+
+        if (options.unset) {
+          unsetConfigValue(options.unset);
+          process.stdout.write(`Unset ${options.unset}\n`);
+          return;
+        }
+
+        if (options.edit) {
+          openInEditor();
+          return;
+        }
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        process.stderr.write(`Error: ${message}\n`);
         exitCode = 1;
       }
     });
