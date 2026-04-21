@@ -1,625 +1,440 @@
-# Forge
+# Forge CLI
 
-**Forge** is a reliability-first CLI for agentic software development.
+> A reliability-first CLI for agentic software development.
 
-It is designed to improve the quality, structure, and safety of AI-assisted coding by wrapping coding agents in a disciplined engineering workflow instead of relying on raw prompt-to-code generation.
+**Version: 1.0.0 (V1 Frozen)**  
+**Package:** `@forge-cli/forge`  
+**License:** MIT
 
-Forge does **not** try to replace coding agents like Codex.  
-It exists to make them **more effective, more predictable, and more engineering-aware**.
+Forge wraps AI coding agents in a disciplined engineering workflow — converting messy tasks into structured implementation work, preserving clean context handoffs, and enforcing validation before merge.
 
----
+## Example Forge spec
 
-# Core Mission
+Use a spec like this when you want the smoothest possible Step 1 intake. It is specific, includes acceptance criteria, and avoids vague goals that usually trigger warnings.
 
-Modern AI coding is powerful, but it has a recurring weakness:
+```md
+# Improve `forge doctor` readiness summary
 
-- people increasingly trust code they did not deeply review
-- planning is often shallow or skipped
-- context windows bloat over time
-- parallel work overlaps and creates integration pain
-- risky coordination logic is rarely checked early
-- testing is too often treated as an afterthought
+## Goal
+Make `forge doctor` print a short, easy-to-scan readiness summary for local setup checks.
 
-Forge exists to address that.
+## Summary
+Keep the command fast and deterministic while making pass/fail results clearer.
 
-Its mission is to provide a **structured development harness** around AI coding agents so that software work moves through a defined, high-signal process:
+## Scope
+- Update `forge doctor` output formatting
+- Keep the existing checks and exit behavior
+- Add or update tests for the CLI output
 
-1. understand the task properly  
-2. ground it in the real repo  
-3. normalize and refine the work  
-4. identify risky logic early  
-5. split work safely  
-6. execute with bounded context  
-7. validate and integrate with engineering discipline  
+## Acceptance Criteria
+- `forge doctor --help` remains available and unchanged in purpose
+- `forge doctor` prints a concise readiness summary
+- Passing checks are reported as clearly as failing checks
+- Tests cover the main success and failure paths
 
-Forge is built for developers who want better outcomes from AI coding without overengineering the workflow or pretending that agents are magically correct.
-
----
-
-# Vision
-
-Forge aims to become a **thin but powerful engineering layer** on top of coding agents.
-
-The long-term vision is an end-to-end open-source CLI that helps developers and teams:
-
-- turn messy tasks or spec files into structured implementation work
-- preserve clean context handoffs between phases and agents
-- reduce wasted context and token usage
-- add reliability checks before coding begins
-- make multi-agent or multi-stream development safer
-- enforce stronger validation and testing at the end of execution
-
-Forge should feel like a practical developer tool, not an academic experiment and not an overbuilt autonomous platform.
-
-The guiding vision is:
-
-> **better engineering process for AI coding, not more hype around AI coding**
-
----
-
-# Product Philosophy
-
-Forge is built around a few core beliefs.
-
-## 1. Better process beats bigger prompting
-
-The goal is not to “out-prompt” the model.
-
-The goal is to improve outcomes through:
-- better intake
-- better planning
-- better context handoff
-- better verification
-- better execution boundaries
-- better integration and testing
-
-## 2. Fresh context is better than bloated context
-
-Long-running agent sessions degrade over time.
-
-Forge prefers:
-- phase-based execution
-- structured artifacts
-- summarized handoffs
-- fresh sessions per major step
-
-This is inspired by systems that keep context windows efficient by passing compressed, structured state instead of giant transcripts.
-
-## 3. Artifacts are better than hidden memory
-
-Forge is local-first and artifact-first.
-
-Instead of relying on invisible conversation state, each step writes durable outputs that can be:
-- inspected by humans
-- passed to new agents
-- resumed later
-- debugged when something goes wrong
-
-## 4. Reliability matters more than speed theater
-
-Forge is not trying to look impressive by being hyper-autonomous.
-
-It should be:
-- understandable
-- inspectable
-- resumable
-- debuggable
-- safe to use in real engineering workflows
-
-## 5. Verification should happen before implementation when possible
-
-Some failures should be caught before code is written.
-
-Forge aims to introduce selective pre-implementation verification for:
-- risky coordination logic
-- retries
-- ownership
-- handoffs
-- parallel overlap
-- ordering constraints
-
-This is where Step 3's selective V1 TLA+/TLC lane fits.
-
-## 6. Testing is a first-class requirement
-
-The end of the workflow should not be “the model wrote code.”
-
-The end of the workflow should be:
-- the work is integrated
-- obligations are satisfied
-- validation exists
-- tests reflect the intended behavior
-
----
-
-# What Forge Is
-
-Forge is:
-
-- an open-source CLI
-- a structured execution workflow for AI coding
-- a reliability-first orchestration layer
-- a project that helps developers use coding agents better
-- a learning vehicle for building stronger agent harnesses
-
-Forge is **not**:
-
-- a replacement model
-- a magic autonomous coding company
-- a promise of bug-free code
-- a giant memory platform in V1
-- a SaaS dashboard in V1
-
----
-
-# Target User
-
-Forge is built for:
-
-- developers
-- software engineers
-- technically curious builders
-- people using coding agents like Codex
-- people who want more discipline in agentic development
-
-The primary user is someone who already sees value in AI coding, but wants:
-- more structure
-- more confidence
-- less wasted output
-- cleaner execution
-
----
-
-# The Problem Forge Solves
-
-AI coding agents are often strong at local code generation but weaker at engineering workflow discipline.
-
-Common failure modes include:
-
-- vague task intake
-- incomplete repo grounding
-- hidden ambiguity
-- premature implementation
-- parallel streams editing the same areas
-- weak handoffs between sessions or agents
-- context window rot
-- poor test coverage
-- hard-to-debug failures after implementation
-
-Forge tries to solve this by forcing work through a structured pipeline.
-
----
-
-# V1 Scope
-
-Forge V1 is intentionally narrow.
-
-The goal of V1 is to prove that a structured 6-step workflow improves AI-assisted software work without becoming too heavy.
-
-## V1 Workflow
-
-Forge V1 is built around six commands:
-
-1. `forge intake`
-2. `forge plan`
-3. `forge verify`
-4. `forge split`
-5. `forge execute`
-6. `forge integrate`
-
-These commands are intended to work in order, but each should also write durable artifacts so the workflow can be resumed or inspected between steps.
-
----
-
-# V1 Workflow Overview
-
-## 1. Intake
-Purpose:
-Convert a markdown spec or direct prompt into a normalized task grounded in the real repository, then produce the durable handoff for `forge plan`.
-
-Outputs include:
-- normalized task spec
-- repo context
-- candidate files/modules
-- ambiguity list
-- initial risk zones
-- initial verification targets
-- confidence signals
-- next-step readiness and failure state
-
-Example CLI usage:
-
-```bash
-forge intake --repo /path/to/repo --spec task.md
-forge intake --repo /path/to/repo --prompt "Update src/app.ts" --json-only
-forge intake --repo /path/to/repo --prompt "Update src/app.ts" --report-only
+## Constraints
+- No changes to other Forge commands
+- No network calls
+- No new AI-dependent behavior
 ```
 
-Step 1 defaults to writing both `.forge/intake.json` and `.forge/reports/intake-report.md`.
-`--json-only` and `--report-only` are mutually exclusive.
-`--llm-assist` enriches intake without making optional reasoning authoritative.
-`--fail-on-low-confidence` can escalate weak-but-usable runs when requested.
-Any intake verification output is pointer-only; Step 1 does not run verification work, create workstreams, or emit execution packets.
-This step is the handoff surface for Step 2 planning.
+---
 
-## 2. Plan
-Purpose:
-Consume the persisted Step 1 intake artifact and turn it into a structured, deterministic-first implementation plan that later steps can trust.
+## Installation
 
-Step 2 should treat `.forge/intake.json` as its primary input surface rather than re-running broad intake logic from raw task text or re-grounding the repo from scratch. It should carry forward task structure, repo context, candidate targets, risk analysis, ambiguities, warnings, initial verification targets, confidence, and readiness context so later steps do not have to guess what Intake already learned.
+```bash
+# Global install
+npm install -g @forge-cli/forge
 
-Outputs include:
-- a machine-readable planning artifact
-- a human-readable planning report
-- structured plan items
-- dependency map
-- conflict zones
-- parallelization candidates
-- test obligations
-- carried-forward ambiguity and warning context
-
-Step 2 does not verify correctness directly, split work into execution streams, generate execution packets, or modify code.
-
-## 3. Verify
-Purpose:
-Check risky coordination and workflow logic before coding begins.
-
-V1 verification is selective and bounded. It uses a deterministic structural lane plus a formal TLA+/TLC-backed lane for risky coordination and workflow logic such as:
-- retries
-- ownership
-- migration ordering
-- stream interference
-- handoff safety
-- stale-write and duplicate-execution risk
-- unsafe serialization or ordering assumptions
-
-## 4. Split
-Purpose:
-Convert verified planning output into safe execution-ready workstreams without drifting into actual implementation.
-
-Outputs include:
-- workstreams
-- stream categories
-- ownership boundaries
-- merge ordering guidance
-- blocked-work visibility
-- machine-readable and human-readable split outputs
-
-Batch 1 keeps Split deterministic-first and conservative about regrouping. Execution-packet generation remains deferred to later Step 4 and Step 5 work.
-
-## 5. Execute
-Purpose:
-Prepare or drive implementation work in a structured way.
-
-V1 should begin with:
-- export mode
-- clean execution packets
-- optional worktree setup
-- bounded context per stream
-
-This step should avoid trying to become a giant autonomous agent platform too early.
-
-## 6. Integrate
-Purpose:
-Bring the streams back together with discipline.
-
-This includes:
-- merge order awareness
-- overlap/risk detection
-- test obligation checks
-- acceptance criteria review
-- integration reporting
-- TDD-oriented validation requirements
+# One-off usage (no install)
+npx @forge-cli/forge <command>
+```
 
 ---
 
-# Why This Project Exists
+## AI Model Setup
 
-Forge is not only about building a tool for others.
+Steps 1–4 (Intake, Plan, Verify, Split) are fully deterministic and do **not** require any AI keys.
 
-It also exists to:
-- learn agent harness design
-- improve the builder’s own AI coding workflow
-- understand where LLMs help and where engineering process still matters
-- explore reliability-first agentic development
-- build something resume-worthy and technically meaningful
+Forge uses AI only when it needs to call a model during later execution steps. To connect Forge to a model, set these environment variables:
 
-It is both:
-- a practical tool
-- a systems-thinking project
+```bash
+export FORGE_MODEL_PROVIDER="openai"   # openai | anthropic | google | ollama | glm
+export FORGE_MODEL_NAME="gpt-4o"       # required
+export FORGE_MODEL_API_KEY="..."       # optional; usually required for hosted providers
+export FORGE_MODEL_BASE_URL="..."      # optional; overrides the default provider endpoint
+```
 
----
+Forge's connector reads only the `FORGE_MODEL_*` variables above. It does not look for `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`.
 
-# Key Design Principles
+### Supported providers
 
-## Local-first
-Forge should work on a local repo using local files.
+- `openai` — OpenAI-compatible chat completions API
+- `anthropic` — Anthropic Messages API
+- `google` — Gemini / Generative Language API
+- `ollama` — local Ollama server
+- `glm` — Zhipu AI GLM OpenAI-compatible API
 
-## Inspectable
-Every important step should write artifacts humans can read.
+### Default base URLs
 
-## Resumable
-A later session or agent should be able to continue from saved outputs.
+If `FORGE_MODEL_BASE_URL` is not set, Forge uses:
 
-## Bounded
-Each command should have a clear contract and boundary.
+- `openai` → `https://api.openai.com`
+- `anthropic` → `https://api.anthropic.com`
+- `google` → `https://generativelanguage.googleapis.com`
+- `ollama` → `http://localhost:11434`
+- `glm` → `https://open.bigmodel.cn/api/paas`
 
-## Modular
-The pipeline should allow future upgrades without rewriting the whole system.
+### Example setups
 
-## Lightweight
-V1 should stay thin and useful, not become bloated.
+```bash
+# OpenAI
+export FORGE_MODEL_PROVIDER="openai"
+export FORGE_MODEL_NAME="gpt-4o"
+export FORGE_MODEL_API_KEY="sk-..."
 
-## Engineering-first
-Forge should reward good software process, not agent theatrics.
+# Anthropic
+export FORGE_MODEL_PROVIDER="anthropic"
+export FORGE_MODEL_NAME="claude-3-5-sonnet-4"
+export FORGE_MODEL_API_KEY="..."
 
----
+# Google Gemini
+export FORGE_MODEL_PROVIDER="google"
+export FORGE_MODEL_NAME="gemini-2.5-flash"
+export FORGE_MODEL_API_KEY="..."
 
-# Context Strategy
+# Ollama (local)
+export FORGE_MODEL_PROVIDER="ollama"
+export FORGE_MODEL_NAME="llama3"
+# Usually no API key required
 
-One of Forge’s most important ideas is how it handles context.
+# GLM
+export FORGE_MODEL_PROVIDER="glm"
+export FORGE_MODEL_NAME="glm-4"
+export FORGE_MODEL_API_KEY="..."
+```
 
-## Problem
-Long context windows become noisy, expensive, and brittle.
-
-## Forge approach
-Each phase should hand off:
-- structured summaries
-- decisions
-- constraints
-- candidate targets
-- risks
-- ownership boundaries
-- test obligations
-
-Instead of:
-- giant transcripts
-- vague memory blobs
-- hard-to-trust conversational state
-
-This allows:
-- fresh context windows
-- better reproducibility
-- lower context waste
-- easier debugging
-- safer multi-agent workflows
+Optional: set `FORGE_EXECUTE_AUTO=1` to auto-run unblocked workstreams in `forge execute`.
 
 ---
 
-# Memory Strategy
+Forge V1 is built around a **six-stage workflow** with **four lifecycle commands**.
 
-V1 does **not** require a complex memory platform.
+```mermaid
+flowchart LR
+    subgraph Core Workflow
+        I[Intake] --> P[Plan]
+        P --> V[Verify]
+        V --> S[Split]
+        S --> E[Execute]
+        E --> Ig[Integrate]
+    end
+```
 
-Instead, V1 uses:
-- local artifacts
-- decision logs
-- phase outputs
-- stream packets
-- integration reports
-
-This gives Forge a practical form of memory without adding premature infrastructure complexity.
-
-Potential V2/V3 directions may include:
-- richer project memory
-- cross-run memory
-- external context backends
-- systems inspired by tools like Mem0 or OpenViking
-
-But these are intentionally **not** V1 requirements.
-
----
-
-# Verification Strategy
-
-Verification is one of Forge’s differentiators.
-
-However, Forge should use verification carefully.
-
-## V1 verification should focus on:
-- risky coordination logic
-- retry behavior
-- ownership and leases
-- stale write risk
-- migration or sequencing risk
-- unsafe parallel execution boundaries
-
-## V1 verification should not try to:
-- formally verify all app logic
-- become an academic proof engine
-- over-model ordinary CRUD work
-
-The goal is practical leverage, not theoretical maximalism.
-
-Step 3 V1 includes formal entry points for:
-- state-machine modeling
-- TLA+ generation
-- TLC-based checking
-
-Later versions may support:
-- failure trace interpretation
-- repair suggestions for plan refinement
+```mermaid
+flowchart TD
+    subgraph "1. Intake"
+        I1[--spec or --prompt]
+        I2[Repo context]
+        I3[Task normalization]
+    end
+    subgraph "2. Plan"
+        P1[Plan items]
+        P2[Dependencies]
+        P3[Conflict zones]
+    end
+    subgraph "3. Verify"
+        V1[Structural checks]
+        V2[TLA+/TLC formal lane]
+    end
+    subgraph "4. Split"
+        S1[Workstreams]
+        S2[Merge ordering]
+        S3[Blocking analysis]
+    end
+    subgraph "5. Execute"
+        E1[AI-assisted coding]
+        E2[State machine tracking]
+        E3[Parallel workstreams]
+    end
+    subgraph "6. Integrate"
+        Ig1[Test obligations]
+        Ig2[Integration reporting]
+    end
+    I1 --> P1
+    I3 --> I2 --> P1
+    P2 --> P3 --> V1
+    V1 --> V2 --> S1
+    S1 --> S2 --> S3 --> E1
+    E2 --> E3 --> Ig1 --> Ig2
+```
 
 ---
 
-# TDD and Validation Strategy
+## Commands
 
-Forge treats validation as essential, not optional.
+### Core Workflow Commands
 
-The final phase of the workflow should enforce:
-- test obligations per stream
-- validation tied to acceptance criteria
-- stronger confidence before merge/integration
+| Command | Purpose |
+|---------|---------|
+| `forge intake` | Task specification and repo analysis |
+| `forge plan` | Planning from intake artifacts |
+| `forge verify` | Structural and formal verification (TLA+) |
+| `forge split` | Workstream partitioning |
+| `forge execute` | Parallel workstream execution with AI integration |
+| `forge integrate` | Test generation and integration |
 
-Forge’s view is simple:
+### Lifecycle Commands
 
-> AI output without strong validation is not enough.
-
-V1 integration should reflect this.
-
----
-
-# Current V1 Build Strategy
-
-The project is being designed in layered planning batches before implementation.
-
-That is intentional.
-
-The goal is to reduce ambiguity before coding begins so build time becomes:
-- more creation
-- less rethinking
-- less architectural drift
-- less wasted agent usage
-
-The current planning approach is:
-
-- define command behavior
-- define artifact contracts
-- define implementation expectations
-- define file/module responsibilities
-- build in workflow order
-- keep every phase inspectable
+| Command | Purpose |
+|---------|---------|
+| `forge init` | Initialize Forge in a repository |
+| `forge doctor` | Pre-flight environment checks |
+| `forge update` | Self-update functionality |
+| `forge config` | Configuration management |
 
 ---
 
-# Recommended V1 Build Order
+## Usage
 
-Forge should be implemented in the same order as the workflow:
+```bash
+# Initialize Forge in a repository
+forge init
 
-1. Intake
-2. Plan
-3. Verify
-4. Split
-5. Execute
-6. Integrate
+# Run the full workflow
+cd /path/to/repo
+forge intake --spec task.md --output-dir .forge
+forge plan --repo . --output-dir .forge
+forge verify --repo . --output-dir .forge
+forge split --repo . --output-dir .forge
+forge execute --repo . --auto --output-dir .forge
+forge integrate --repo . --output-dir .forge
 
-Reason:
-- each step produces artifacts the next step depends on
-- each step exposes flaws in the previous step
-- this reduces guessing about future interfaces
-- it keeps complexity under control
+# Quick options
+forge --version
+forge --help
+```
 
 ---
 
-# Current Implementation Status
+## Architecture
 
-Step 1: Intake is implemented and complete.
+```mermaid
+flowchart TD
+    subgraph CLI
+        CLI_ENTRY[commander.js CLI]
+    end
+    subgraph Stages
+        INTAKE[src/intake]
+        PLAN[src/plan]
+        VERIFY[src/verify]
+        SPLIT[src/split]
+        EXECUTE[src/execute]
+        INTEGRATE[src/integrate]
+    end
+    subgraph Artifacts[".forge directory"]
+        A1[intake.json]
+        R1[reports/intake-report.md]
+        A2[plan.json]
+        R2[reports/plan-report.md]
+        A3[verify.json]
+        R3[reports/verify-report.md]
+        A4[split.json]
+        R4[reports/split-report.md]
+        A5[execute.json]
+        R5[execute-report.md]
+        A6[integrate.json]
+        R6[integration-report.md]
+    end
+    CLI_ENTRY --> INTAKE --> A1
+    INTAKE --> R1
+    A1 --> PLAN --> A2
+    PLAN --> R2
+    A2 --> VERIFY --> A3
+    VERIFY --> R3
+    A3 --> SPLIT --> A4
+    SPLIT --> R4
+    A4 --> EXECUTE --> A5
+    EXECUTE --> R5
+    A5 --> INTEGRATE --> A6
+    INTEGRATE --> R6
+```
 
-It now serves as the durable handoff into Step 2 planning. The current intake contract includes:
-- normalized task spec
-- repo context
-- candidate targets
-- risk analysis
-- ambiguities and warnings
-- initial verification targets
-- confidence
-- next-step readiness
+---
+
+## Philosophy
+
+Forge is built around six beliefs:
+
+1. **Better process beats bigger prompting** — Structured intake, planning, and handoff improve outcomes more than prompt engineering alone.
+2. **Fresh context is better than bloated context** — Phase-based execution with summarized handoffs keeps context windows efficient.
+3. **Artifacts are better than hidden memory** — Local, inspectable files at every stage. No invisible state.
+4. **Reliability matters more than speed theater** — Inspectable, resumable, debuggable workflows.
+5. **Verify before implementing** — Catch risky coordination logic (retries, ownership, parallelism, ordering) before code is written.
+6. **Testing is first-class** — The workflow ends with enforced validation, not just code generation.
+
+---
+
+## V1 Feature Summary
+
+### Core Workflow
+- **Intake** — Normalized task specification with repo context, candidate targets, risk analysis, and ambiguity detection
+- **Plan** — Deterministic planning with plan items, dependency maps, conflict zones, and parallelization candidates
+- **Verify** — Structural verification + optional TLA+/TLC formal lane for risky coordination logic
+- **Split** — Workstream partitioning with merge ordering, ownership boundaries, and blocked-work visibility
+- **Execute** — AI-assisted parallel workstream execution with state machine tracking
+- **Integrate** — Test obligation enforcement, integration reporting, and acceptance criteria review
+
+### Deployment
+- **npm Packaging** — `@forge-cli/forge` with `prepublishOnly`, shebang, and executable CLI
+- **Docker** — Multi-stage Dockerfile (`node:20-alpine`, non-root user) + docker-compose.yml
+- **GitHub Actions** — `.github/workflows/forge.yml` with full Forge pipeline
+- **Release Scripts** — `scripts/release.sh`, `scripts/publish.sh`, `CHANGELOG.md`
+- **Environment Variables** — `FORGE_*` configuration override system
+
+### Configuration
+- **Config Management** — `forge config --list | --get | --set | --unset | --edit`
+- **Environment Override** — `FORGE_MODEL_*` (AI connector), `FORGE_LOG_LEVEL`, `FORGE_EXECUTE_AUTO`, `FORGE_MODEL` / `FORGE_DEFAULT_MODEL` (config YAML), etc.
+- **Self-Update** — `forge update [--dry-run] [--yes]`
+- **Doctor** — Pre-flight checks (Node, git, npm, network, config)
+
+---
+
+## Docker Usage
+
+```bash
+# Build
+docker build -t forge .
+
+# Run a command
+docker run --rm -v $(pwd):/repo \
+  -e FORGE_MODEL_PROVIDER=openai \
+  -e FORGE_MODEL_NAME=gpt-4o \
+  -e FORGE_MODEL_API_KEY \
+  forge plan --repo /repo --output-dir /repo/.forge
+
+# Or with docker-compose
+docker-compose run --rm forge plan --repo /repo --output-dir /repo/.forge
+```
+
+---
+
+## GitHub Actions
+
+```yaml
+- uses: actions/checkout@v4
+- uses: actions/setup-node@v4
+  with:
+    node-version: "20"
+- run: npm install -g @forge-cli/forge
+- run: forge doctor --checks node,git,npm,config
+- run: forge intake --repo . --output-dir .forge --prompt "Your task" --no-llm --json-only
+- run: forge plan --repo . --output-dir .forge
+- run: forge verify --repo . --output-dir .forge
+- run: forge split --repo . --output-dir .forge
+- run: forge execute --repo . --auto --output-dir .forge
+  env:
+    FORGE_MODEL_PROVIDER: openai
+    FORGE_MODEL_NAME: gpt-4o
+    FORGE_MODEL_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+- run: forge integrate --repo . --auto --output-dir .forge
+  env:
+    FORGE_MODEL_PROVIDER: openai
+    FORGE_MODEL_NAME: gpt-4o
+    FORGE_MODEL_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+```
+
+Full documentation: [`docs/github-action.md`](docs/github-action.md)
+
+---
+
+## Configuration
+
+Forge reads configuration from three sources in order of precedence:
+
+1. Command-line flags (per subcommand, e.g. `--repo`, `--output-dir`)
+2. Environment variables (`FORGE_*`, including `FORGE_MODEL_PROVIDER`, `FORGE_MODEL_NAME`, `FORGE_MODEL_API_KEY`)
+3. `~/.forge/config.yaml` (managed by `forge config`)
+
+```bash
+forge config --list
+forge config --get forge.default_model
+forge config --set forge.default_model=anthropic/claude-3-5-sonnet-20241022
+forge config --unset forge.default_model
+```
+
+---
+
+## Development
+
+```bash
+# Install dependencies
+npm install
+
+# Build
+npm run build
+
+# Typecheck
+npm run typecheck
+
+# Run all tests
+npm test
+
+# Smoke test
+npm run smoke
+
+# Release (bumps version + tag)
+npm run release patch  # or minor / major
+
+# Publish dry-run
+npm run publish:dry
+```
+
+---
+
+## Release
+
+| Status | Task |
+|--------|------|
+| Complete | All V1 features implemented and frozen |
+| Ready | `npm publish --access public` infrastructure configured |
+| Pending | Manual npm organization setup |
 
 Step 2: Plan is implemented through Batch 3 Part 5.
-
-Batch 3 Part 5 freezes the Step 3 handoff contract by proving the existing `plan.json`, `plan-report.md`, and `planning_readiness` surfaces are the durable inputs into `forge verify` without adding any Step 3 runtime behavior or a new top-level plan artifact section.
-
-Step 2 remains frozen for V1 except for future bug fixes.
-
-`forge plan` now consumes the persisted Step 1 handoff through a Step 2-native normalized planning-input boundary instead of treating the raw intake artifact as the planner's working model. It preserves Step 1 provenance such as input mode, source inputs, runtime options, failure/status context, and planning uncertainty while keeping non-actionable but schema-valid handoffs blocked honestly. The packaged CLI path is proven end to end through ready, warning-heavy, blocked, and missing-input coverage, and the planner builds explicit plan-item foundations with structured source traces before deriving the public plan items, so requirement-source provenance, candidate-target linkage, and conservative low-confidence/fallback planning can carry forward without reopening the public `plan.json` top-level contract.
-
-Step 2 also now emits stronger dependency, conflict-zone, test-obligation, and parallelization modeling, keeps carried-forward concern mapping visible on ready and blocked runs, and can optionally write internal planning debug artifacts behind `FORGE_PLAN_DEBUG=1` without changing the public `plan.json` top-level contract. Batch 3 Part 1 adds a bounded internal planning-assist seam that can tighten wording without changing deterministic structure and removes stale “later Step 2” report/boundary language. Batch 3 Part 2 hardens warning, blocking, partial-failure, and planning-assist diagnostics across the artifact, report, and debug outputs. Batch 3 Part 3 turns `planning_readiness` into a Step 2-owned later-step handoff object, adds `planning-readiness.json` to the optional debug outputs, and hardens ready, warning-heavy, blocked, and persisted-failure reporting so later steps do not have to reinterpret planning quality from scratch.
-
-Batch 3 Part 5 makes that handoff explicit for `forge verify` by naming the verification gate directly in readiness/report wording, adding a dedicated Step 3 handoff-contract suite, and freezing Step 2 as the planning foundation that Step 3 should consume instead of re-planning from prose.
-
-Step 3: Verify now has Batch 1 Part 1 through Part 5, Batch 2 Part 1 through Part 5, and Batch 3 Part 1 through Part 4 implemented.
-
-Part 1 adds `src/verify` foundation modules that consume the persisted Step 2 `plan.json` handoff, normalize verify-input usability, preserve Step 2 uncertainty/readiness context, and freeze the structural lane, formal lane, and TLA+/TLC entry contract for V1.
-
-Part 2 adds the first public `forge verify` CLI path, persists `.forge/verify.json` plus `.forge/reports/verify-report.md`, and freezes the top-level verification artifact/report contract.
-
-Part 3 adds explicit verification target and case construction so Step 3 can deterministically derive structural-only and dual-lane verification work from persisted Step 2 plan signals instead of leaving target selection implicit.
-
-Part 4 makes the formal lane real in V1 by turning formal-case selection into explicit entry criteria, deterministic state-model generation, generated `.tla` / `.cfg` artifacts under the verify output root, TLC execution via `FORGE_TLC_JAR_PATH` when configured, and populated formal findings, traces, errors, and caution notes in the verification artifact/report.
-
-Part 5 makes the structural lane executable in V1, resolves `verification_readiness` from actual structural plus formal outcomes instead of Step 2 input state alone, blocks later steps on structural or formal failures, keeps TLC `not_run` warning-grade, and locks the shipped behavior with a dedicated Batch 1 Part 5 acceptance-gates suite.
-
-Batch 2 Part 1 is a narrow alignment pass over that already real Step 3 runtime. It hardens the explicit Batch 2 mission, ordered implementation priorities, and do-not-touch guardrails in the Step 3 boundary contract so later Batch 2 work stays inside real verify behavior and does not drift into Step 4+ flow, interactive shell behavior, memory backends, execution-packet generation, code editing, unrelated repo cleanup, fuzzy verification reasoning, or fake TLA+/TLC participation.
-
-Batch 2 Part 2 preserves unmatched verification-target traceability and makes the structural lane enforce deterministic category-aware verification rules instead of placeholder support checks.
-
-Batch 2 Part 3 narrows the real formal subset to supported risky workflow categories, adds richer `unsafe_conditions` state-model output, and makes generated TLA+ modules category-specific.
-
-Batch 2 Part 4 keeps the frozen public `forge verify` CLI and top-level `verify.json` / `verify-report.md` contract stable while upgrading nested output quality: top-level findings and constraints are now machine-readable structured records, the report groups findings/constraints by lane, and optional internal verify debug artifacts can be emitted behind `FORGE_VERIFY_DEBUG=1`. Those debug files remain secondary to `verify.json` and `verify-report.md`.
-
-Batch 2 Part 5 closes the runnable milestone and default verification gate without reopening the verify surface. `forge verify` already ran the real Step 3 flow, so Part 5 hardens the shipped milestone by wiring the previously omitted Step 3 Batch 2 suites into `npm.cmd test`, adding a dedicated runnable-milestone regression that proves the packaged CLI can consume persisted Step 2 output, execute structural verification, generate state models and TLA+ specs, run TLC through the external seam for the initial high-value subset, and persist honest on-disk outputs. Batch 2 is now complete for Step 3, with later work reserved for hardening and freeze follow-up rather than first-time milestone wiring.
-
-Batch 3 Part 1 is the finish-and-freeze pass over that already real verify runtime. It makes the Step 3 freeze goal explicit in code, adds explicit finish-line and do-not-touch boundary metadata to the Step 3 boundary contract, adds dedicated Batch 3 Part 1 freeze coverage for grounded, warning-heavy, repeated-run, and debug-output verify runs, and keeps the public `forge verify` CLI plus top-level `verify.json` / `verify-report.md` contracts stable.
-
-Batch 3 Part 2 expands the formal lane from one-case-per-category coverage into deterministic scenario-specific Tier 1 plus Tier 2 formal cases, adds stable nested `scenario_kind` metadata throughout the formal artifact surfaces, hardens TLC status handling with explicit `inconclusive` support, and keeps weak-input caution visible without changing the top-level `verify.json` or `verify-report.md` contract.
-
-Batch 3 Part 3 hardens the shipped verify outputs without reopening the public surface. `verify.json` now keeps carried-forward Step 2 planning diagnostics/readiness under `source_plan`, `verify-report.md` now answers the `forge split` gate directly with recommended actions and constraining concerns while keeping Step 2 versus Step 3 state labeled honestly, and `FORGE_VERIFY_DEBUG=1` now emits `verification-readiness.json` alongside the existing internal debug outputs so Step 4 does not need to reinterpret verification quality from scratch.
-
-Batch 3 Part 4 is the final polish-and-freeze pass for the shipped Step 3 runtime. It keeps the public `forge verify` CLI and the frozen top-level `verify.json` / `verify-report.md` contracts stable while tightening report/status clarity for ready, warning-heavy, blocked, fallback-output, and debug-enabled runs, extending freeze-era coverage for Tier 2 TLC outcomes, and marking the Step 3 runtime frozen for V1 except future bug fixes.
-
-Batch 3 Part 5 closes Step 3 by proving the existing `verify.json`, `verify-report.md`, and `verification_readiness` surfaces are the durable Step 4 inputs for `forge split`, adding a dedicated Step 4 handoff-contract regression suite, and keeping the Step 3 runtime surface unchanged.
-
-Step 3 Batch 3 is complete, and Step 3 is now frozen for V1 except for future bug fixes. Step 4 should consume the persisted Step 3 outputs instead of re-verifying broad planning logic from scratch.
-
-Step 4 Batch 1 is complete. `forge split` now consumes the persisted Step 3 `verify.json` handoff plus the referenced Step 2 `plan.json`, emits real workstreams/categories/merge-order/blocking output, persists `split.json` and `split-report.md`, and keeps optional debug mirrors behind `FORGE_SPLIT_DEBUG=1` without reopening the frozen top-level split contract.
-
-Step 4 Batch 2 Part 1 is a narrow alignment pass over that already real split runtime. It hardens the explicit Batch 2 mission, ordered implementation priorities, and do-not-touch guardrails in the Step 4 boundary contract so later Batch 2 work stays inside the real split path instead of drifting into Step 5 execution behavior, code-edit packet generation, code modification, verification bypass, or broad Step 4 redesign.
-
-Step 4 Batch 2 Part 2 makes the Stage 1 and Stage 2 split foundation materially real without reopening the public split surface. Step 4 now normalizes persisted Step 3 verify output plus the referenced Step 2 plan artifact into indexed per-plan-item evidence bundles, validates that the verify-to-plan handoff stays aligned, and builds structured workstreams from that normalized evidence instead of repeatedly re-deriving context from raw arrays.
-
-Part 2 also introduces bounded real regrouping where it improves execution readiness without weakening auditability: direct source/test pairs can group only on explicit hard dependencies plus a shared dominant surface, same-surface siblings can group only when they share concrete conflict or verification context and have no unsafe outside dependencies, and blocked or migration-order work remains explicit. The public `forge split` CLI, top-level `split.json` keys, and split-report heading order remain unchanged.
-
-Step 4 Batch 2 Part 3 makes Stage 3 and Stage 4 materially real without reopening the public split surface. Split now resolves final stream categories after grouping from real Step 2 and Step 3 evidence instead of only echoing Step 2 parallelization signals: warning-grade carry-forward caution can downgrade work to `protected_merge`, blocked upstream dependencies can block downstream standalone streams, and grouped streams can now expose partially blocked plan items without hiding the rest of the stream.
-
-Part 3 also hardens merge-order and blocking behavior so dependency ordering remains explicit even when a downstream stream stays `safe_parallel`, blocked work stays first-class in `blocked_items`, and the carried-forward stream-constraint detail now preserves base versus final category, category reasons, merge-order reasons, blocking reasons, warning notes, mitigation summaries, blocked-upstream linkage, and blocked-plan-item linkage while keeping the top-level `split.json` contract and split-report heading order stable.
-
-Step 4 Batch 2 Part 4 hardens the shipped split outputs without reopening the public surface. `split_readiness` now exposes explicit execution scope plus blocked-workstream, partially-blocked-item, and merge-order-rule counts so later steps do not have to reverse-engineer execution readiness from raw arrays, `split-report.md` renders those derived readiness fields directly while keeping the frozen heading order, and the optional `FORGE_SPLIT_DEBUG=1` mirrors stay aligned with the primary artifact on ready, warning-heavy, blocked, and fallback-output-failed runs.
-
-Step 4 Batch 2 Part 5 closes the runnable milestone and default verification gate without reopening the split surface. `forge split` already ran the real Step 4 flow, so Part 5 hardens the shipped milestone by wiring a dedicated runnable-milestone regression into `npm.cmd test`, proving the packaged CLI can consume persisted Step 3 output plus the referenced Step 2 plan, build real workstreams/categories/merge-order output, persist honest `split.json` and `split-report.md` files, and keep CLI output minimal. Step 4 Batch 2 is now complete, with later Step 4 work reserved for hardening and freeze follow-up rather than first-time CLI wiring.
-
-Step 4 Batch 3 Part 1 is the finish-and-freeze framing pass over that already real split runtime. It makes the Step 4 freeze goal explicit in code, adds explicit finish-line and do-not-touch boundary metadata to the Step 4 boundary contract, reframes conservative regrouping as hardening the already-shipped aggressive regrouping behavior rather than reinventing it, adds dedicated Batch 3 Part 1 freeze coverage for grounded, warning-heavy, repeated-run, and debug-output split runs, and keeps the public `forge split` CLI plus top-level `split.json` / `split-report.md` contracts stable.
-
-Step 4 Batch 3 Part 2 hardens the real regrouping, blocking, and merge-order semantics without reopening the frozen top-level split contract. `forge split` now preserves structured regrouping rationale and member-level traceability inside `stream_constraint_details`, exposes first-class structured blocking status that distinguishes blocked versus partially blocked grouped work while keeping constraining findings/constraints/concerns inspectable, and carries explicit nested merge-order status plus source-linked rule kinds through the artifact, report, and debug outputs. The default test gate now includes a dedicated Batch 3 Part 2 regression alongside stronger workstream-model and report coverage.
-
-Step 4 Batch 3 Part 3 hardens the actual Step 4 outputs so later stages can consume them without reinterpreting split quality from scratch. `split.json` now carries an explicit later-step gate plus material execution limits inside `split_readiness`, debug output now includes a dedicated `split-readiness.json` mirror alongside the existing split debug files, and `split-report.md` renders the later-step gate, material execution limits, and debug readiness path while keeping the frozen top-level artifact shape and report heading order stable.
-
-Step 4 Batch 3 Part 4 closes the Step 4 freeze pass with final report/output polish, stronger freeze-oriented regression coverage, and explicit frozen-runtime documentation instead of reopening split architecture or sneaking Step 5 behavior forward. `forge split` now states more clearly that `split.json` and `split-report.md` are the authoritative durable outputs, keeps debug mirrors explicitly secondary, carries an explicit frozen-for-V1 boundary note in the shipped artifact/report, and treats the Step 4 runtime surface as being in bug-fix-only maintenance mode after Batch 3 Part 4.
-
-Step 4 Batch 3 Part 5 finishes the Step 4-to-Step 5 handoff contract without implementing `forge execute`. `forge split` now makes the execute-facing contract more explicit by stating that Step 5 should consume `split.json` directly instead of rebuilding workstreams from `verify.json`, by exposing a human-readable `Forge Execute Gate` in `split-report.md`, and by proving through a dedicated regression that grounded, warning-heavy, blocked, and fallback-output runs already provide the workstream, merge-order, blocked-item, carried-forward-constraint, and readiness story that Step 5 needs.
+Step 2 is frozen for V1 except for future bug fixes.
+Step 3: Verify is implemented through Batch 3 Part 4.
+Step 4 Batch 3 Part 4 is complete.
+Step 4 Batch 3 Part 5 closes the Step 5 handoff contract, including the Forge Execute Gate.
+Step 4 is in bug-fix-only maintenance mode for V1.
 
 ---
 
-# Repository Intent
+## What Forge Is
 
-This repository should evolve into a clean open-source developer project.
+- An open-source CLI
+- A structured execution workflow for AI coding
+- A reliability-first orchestration layer
+- A learning vehicle for agent harness design
 
-## Expected repository goals
-- easy to understand
-- easy to inspect
-- easy to iterate on
-- useful for AI-assisted development workflows
-- structured enough for future contributors
+## What Forge Is Not
 
-## High-level future repository areas
+- A replacement for coding agents (complements them)
+- A magic autonomous coding company
+- A promise of bug-free code
+- A SaaS dashboard or hosted service
 
-These are placeholders and will evolve as V1 is built:
+---
 
-```text
-forge/
-  src/
-    cli/
-    commands/
-    core/
-    intake/
-    planning/
-    verify/
-    split/
-    execute/
-    integrate/
-    shared/
-  docs/
-    v1/
-    specs/
-    batches/
-  examples/
-  tests/
-  .forge/
+## Target User
+
+Developers, software engineers, and technically curious builders who:
+- Already see value in AI coding
+- Want more structure, confidence, and discipline
+- Prefer inspectable artifacts over hidden state
+- Care about validation before merge
+
+---
+
+## License
+
+MIT

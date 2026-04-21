@@ -17,8 +17,14 @@ import { classifyError } from "../src/integrate/errors.js";
 // ---------------------------------------------------------------------------
 
 describe("integrate batch 3 freeze criteria", () => {
-  it("docs/S6-B3-Done/FREEZE.md exists and contains all V1 freeze sections", async () => {
-    const freezePath = join(process.cwd(), "docs", "S6-B3-Done", "FREEZE.md");
+  it("docs/Steps&Batches-Completed/S6-B3-Done/FREEZE.md exists and contains all V1 freeze sections", async () => {
+    const freezePath = join(
+      process.cwd(),
+      "docs",
+      "Steps&Batches-Completed",
+      "S6-B3-Done",
+      "FREEZE.md",
+    );
     const content = await readFile(freezePath, "utf-8");
 
     assert.match(content, /V1 FROZEN/, "FREEZE.md must contain 'V1 FROZEN'");
@@ -30,11 +36,17 @@ describe("integrate batch 3 freeze criteria", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // 2. All 5 tasks marked complete in step6_batch3/progress.md
+  // 2. All 5 tasks marked complete in docs/Steps&Batches-Completed/step6_batch3/progress.md
   // ---------------------------------------------------------------------------
 
-  it("step6_batch3/progress.md has all 5 tasks marked complete", async () => {
-    const progressPath = join(process.cwd(), "step6_batch3", "progress.md");
+  it("docs/Steps&Batches-Completed/step6_batch3/progress.md has all 5 tasks marked complete", async () => {
+    const progressPath = join(
+      process.cwd(),
+      "docs",
+      "Steps&Batches-Completed",
+      "step6_batch3",
+      "progress.md",
+    );
     const content = await readFile(progressPath, "utf-8");
 
     assert.match(content, /\[x\].*Task 1/, "Task 1 must be marked [x]");
