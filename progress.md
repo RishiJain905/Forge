@@ -590,4 +590,22 @@
   - Added js-yaml dependency and @types/js-yaml devDependency
   - Added tests/doctor.test.ts (12 tests: 3 runDoctor unit + 5 individual checks + 1 printDoctorResults + 3 CLI integration)
   - Wired doctor.test.js into default npm test script chain
-- Next major target: Step 7 Batch 2 Task 1 (forge update).
+- Step 7 Batch 2 Task 2 (forge config):
+  - Added `src/config.ts` with `resolveConfig()` (merges defaults + `.forge/config.yaml` + source tracking), `getConfigValue()`, `setConfigValue()` (dot-path write), `unsetConfigValue()` (true deletion), `openInEditor()`
+  - Uses `js-yaml` (already a dependency) for YAML parse/serialize — consistent with doctor config check
+  - Defaults match `src/init.ts` config structure
+  - Added `forge config` CLI command with `--list`, `--get`, `--set`, `--unset`, `--edit` options; `--list` is the default fallback
+  - Error handling follows `exitCode = 1` + `stderr.write` pattern
+  - Added `tests/config.test.ts` (19 tests: 2 resolveConfig + 3 getConfigValue + 4 setConfigValue + 3 unsetConfigValue + 7 CLI integration)
+  - Wired config.test.js into default npm test script chain
+- Step 7 Batch 2 Task 3 (env variables):
+  - Added `ENV_VAR_MAP` with declarative mapping of 10 `FORGE_*` env vars to config keys
+  - Added `getEnvOverrides()` with type-aware parsing (string/boolean/number)
+  - `FORGE_MODEL` takes priority over `FORGE_DEFAULT_MODEL` when both are set
+  - Env overrides have highest precedence in `resolveConfig()` (applied after defaults and config.yaml)
+  - Source tracking shows `env:FORGE_VAR_NAME` in `forge config --list`
+  - Added `forge.no_color: false` to DEFAULT_VALUES
+  - Added `tests/config-env.test.ts` (18 tests: 15 unit + 3 CLI integration)
+  - Added `docs/env-variables.md` with quick reference, parsing notes, and usage examples
+  - Wired config-env.test.js into default npm test script chain
+- Next major target: Step 7 Batch 3 Task 1 (GitHub Action workflow).
