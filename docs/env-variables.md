@@ -23,7 +23,9 @@ Priority from lowest to highest:
 | `FORGE_INTEGRATE_TEST_FRAMEWORK` | string | `auto` | `integrate.test_framework` |
 
 ### Boolean parsing
-Set to `"true"` to enable. Any other value (including `"false"`) is treated as `false`.
+
+`FORGE_NO_COLOR` follows presence semantics: any non-empty value disables color.  
+For all other boolean variables, set to `"true"` to enable. Any other value (including `"false"`) is treated as `false`.
 
 ### Number parsing
 Supplied as a decimal string (e.g. `"25"`) and parsed with `parseInt(value, 10)`. Non-numeric strings coerce to `NaN`.
@@ -42,7 +44,7 @@ Supplied as a decimal string (e.g. `"25"`) and parsed with `parseInt(value, 10)`
 
 ## Logging
 
-- **`FORGE_NO_COLOR`** — When `"true"`, disables ANSI color codes in CLI output.
+- **`FORGE_NO_COLOR`** — Any non-empty value disables ANSI color codes in CLI output.
 
 ## Intake
 
