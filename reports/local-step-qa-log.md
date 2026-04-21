@@ -1,24 +1,24 @@
 # Forge Local Step-by-Step QA Log
 
-**Repo:** `/home/trjxter/Forge`  
+**Repo:** `<repo-root>`  
 **Branch:** `dev`  
-**Test input:** `/tmp/forge-step-test-spec.md`  
+**Test input:** `<path-to-spec.md>`  
 **Scope:** Steps 1–4 deterministic; Steps 5–6 attempted without AI model config  
 **Note:** No source files were modified during this QA run.
 
 ## Step 1 — Intake
 
 **Input file**
-- `/tmp/forge-step-test-spec.md`
+- `<path-to-spec.md>`
 
 **Command**
 ```bash
-forge intake --repo /home/trjxter/Forge --spec /tmp/forge-step-test-spec.md --no-llm
+forge intake --repo <repo-root> --spec <path-to-spec.md> --no-llm
 ```
 
 **Output artifacts**
-- `/home/trjxter/Forge/.forge/intake.json`
-- `/home/trjxter/Forge/.forge/reports/intake-report.md`
+- `<repo-root>/.forge/intake.json`
+- `<repo-root>/.forge/reports/intake-report.md`
 
 **Observed result**
 - `Status: warning`
@@ -26,7 +26,7 @@ forge intake --repo /home/trjxter/Forge --spec /tmp/forge-step-test-spec.md --no
 
 **Diagram**
 ```text
-/tmp/forge-step-test-spec.md
+<path-to-spec.md>
         ↓
 forge intake --spec ... --no-llm
         ↓
@@ -37,16 +37,16 @@ forge intake --spec ... --no-llm
 ## Step 2 — Plan
 
 **Input file**
-- `/home/trjxter/Forge/.forge/intake.json`
+- `<repo-root>/.forge/intake.json`
 
 **Command**
 ```bash
-forge plan --repo /home/trjxter/Forge
+forge plan --repo <repo-root>
 ```
 
 **Output artifacts**
-- `/home/trjxter/Forge/.forge/plan.json`
-- `/home/trjxter/Forge/.forge/reports/plan-report.md`
+- `<repo-root>/.forge/plan.json`
+- `<repo-root>/.forge/reports/plan-report.md`
 
 **Observed result**
 - `Status: ready`
@@ -65,16 +65,16 @@ forge plan
 ## Step 3 — Verify
 
 **Input file**
-- `/home/trjxter/Forge/.forge/plan.json`
+- `<repo-root>/.forge/plan.json`
 
 **Command**
 ```bash
-forge verify --repo /home/trjxter/Forge
+forge verify --repo <repo-root>
 ```
 
 **Output artifacts**
-- `/home/trjxter/Forge/.forge/verify.json`
-- `/home/trjxter/Forge/.forge/reports/verify-report.md`
+- `<repo-root>/.forge/verify.json`
+- `<repo-root>/.forge/reports/verify-report.md`
 
 **Observed result**
 - `Status: ready`
@@ -93,16 +93,16 @@ forge verify
 ## Step 4 — Split
 
 **Input file**
-- `/home/trjxter/Forge/.forge/verify.json`
+- `<repo-root>/.forge/verify.json`
 
 **Command**
 ```bash
-forge split --repo /home/trjxter/Forge
+forge split --repo <repo-root>
 ```
 
 **Output artifacts**
-- `/home/trjxter/Forge/.forge/split.json`
-- `/home/trjxter/Forge/.forge/reports/split-report.md`
+- `<repo-root>/.forge/split.json`
+- `<repo-root>/.forge/reports/split-report.md`
 
 **Observed result**
 - `Status: ready`
@@ -121,11 +121,11 @@ forge split
 ## Step 5 — Execute
 
 **Input file**
-- `/home/trjxter/Forge/.forge/split.json`
+- `<repo-root>/.forge/split.json`
 
 **Command**
 ```bash
-forge execute --repo /home/trjxter/Forge
+forge execute --repo <repo-root>
 ```
 
 **Interactive inputs**
@@ -137,8 +137,8 @@ exit
 ```
 
 **Output artifacts**
-- `/home/trjxter/Forge/.forge/execute.json`
-- `/home/trjxter/Forge/.forge/execute-report.md`
+- `<repo-root>/.forge/execute.json`
+- `<repo-root>/.forge/execute-report.md`
 
 **Observed result**
 - `run 1` succeeded and entered `manual mode`
@@ -160,11 +160,11 @@ REPL: done 1 → merge_order blocked
 ## Step 6 — Integrate
 
 **Input file**
-- `/home/trjxter/Forge/.forge/execute.json`
+- `<repo-root>/.forge/execute.json`
 
 **Command**
 ```bash
-forge integrate --repo /home/trjxter/Forge
+forge integrate --repo <repo-root>
 ```
 
 **Output artifacts**

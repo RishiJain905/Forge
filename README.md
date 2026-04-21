@@ -294,7 +294,7 @@ Forge is built around six beliefs:
 
 ### Configuration
 - **Config Management** — `forge config --list | --get | --set | --unset | --edit`
-- **Environment Override** — `FORGE_MODEL`, `FORGE_LOG_LEVEL`, `FORGE_EXECUTE_AUTO`, etc.
+- **Environment Override** — `FORGE_MODEL_*` (AI connector), `FORGE_LOG_LEVEL`, `FORGE_EXECUTE_AUTO`, `FORGE_MODEL` / `FORGE_DEFAULT_MODEL` (config YAML), etc.
 - **Self-Update** — `forge update [--dry-run] [--yes]`
 - **Doctor** — Pre-flight checks (Node, git, npm, network, config)
 
@@ -307,10 +307,14 @@ Forge is built around six beliefs:
 docker build -t forge .
 
 # Run a command
-docker run --rm -v $(pwd):/repo -e OPENAI_API_KEY forge plan --repo /repo
+docker run --rm -v $(pwd):/repo \
+  -e FORGE_MODEL_PROVIDER=openai \
+  -e FORGE_MODEL_NAME=gpt-4o \
+  -e FORGE_MODEL_API_KEY \
+  forge plan --repo /repo --output-dir /repo/.forge
 
 # Or with docker-compose
-docker-compose up forge plan --repo /repo
+docker-compose run --rm forge plan --repo /repo --output-dir /repo/.forge
 ```
 
 ---
@@ -324,10 +328,20 @@ docker-compose up forge plan --repo /repo
     node-version: "20"
 - run: npm install -g @forge-cli/forge
 - run: forge doctor --checks node,git,npm,config
+- run: forge intake --repo . --output-dir .forge --prompt "Your task" --no-llm --json-only
 - run: forge plan --repo . --output-dir .forge
+- run: forge verify --repo . --output-dir .forge
+- run: forge split --repo . --output-dir .forge
 - run: forge execute --repo . --auto --output-dir .forge
   env:
-    OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+    FORGE_MODEL_PROVIDER: openai
+    FORGE_MODEL_NAME: gpt-4o
+    FORGE_MODEL_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+- run: forge integrate --repo . --auto --output-dir .forge
+  env:
+    FORGE_MODEL_PROVIDER: openai
+    FORGE_MODEL_NAME: gpt-4o
+    FORGE_MODEL_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 ```
 
 Full documentation: [`docs/github-action.md`](docs/github-action.md)
@@ -338,15 +352,15 @@ Full documentation: [`docs/github-action.md`](docs/github-action.md)
 
 Forge reads configuration from three sources in order of precedence:
 
-1. Command-line flags (`--repo`, `--model`, etc.)
-2. Environment variables (`FORGE_*`)
+1. Command-line flags (per subcommand, e.g. `--repo`, `--output-dir`)
+2. Environment variables (`FORGE_*`, including `FORGE_MODEL_PROVIDER`, `FORGE_MODEL_NAME`, `FORGE_MODEL_API_KEY`)
 3. `~/.forge/config.yaml` (managed by `forge config`)
 
 ```bash
 forge config --list
-forge config --get model
-forge config --set model=anthropic/claude-3-5-sonnet
-forge config --unset model
+forge config --get forge.default_model
+forge config --set forge.default_model=anthropic/claude-3-5-sonnet-20241022
+forge config --unset forge.default_model
 ```
 
 ---

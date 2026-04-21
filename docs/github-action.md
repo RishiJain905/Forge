@@ -36,7 +36,8 @@ jobs:
       - name: Run Forge
         uses: forge-cli/forge-action@v1
         with:
-          command: "doctor --checks node,git,npm && plan && execute"
+          # Plan and later stages require prior artifacts (e.g. intake.json before plan).
+          command: "doctor --checks node,git,npm && intake --prompt \"CI task\" --no-llm --json-only && plan && verify && split"
           version: "latest"
           token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -86,18 +87,26 @@ Forge respects the following environment variables. Set them via `env:` in your 
 
 | Variable | Source | Purpose |
 |----------|--------|---------|
-| `OPENAI_API_KEY` | Repository secret (`secrets.OPENAI_API_KEY`) | Authenticates with the OpenAI API for AI-driven plan generation |
-| `FORGE_*` | Workflow `env:` or repository variables | Arbitrary `FORGE_`-prefixed variables consumed by Forge commands and plugins |
+| `FORGE_MODEL_PROVIDER` | Workflow `env:` | AI backend for **execute** / **integrate** (`openai`, `anthropic`, `google`, `ollama`, `glm`) |
+| `FORGE_MODEL_NAME` | Workflow `env:` | Model id for that provider (e.g. `gpt-4o`) |
+| `FORGE_MODEL_API_KEY` | Secret or `env:` | API key the execute connector reads (often the same value as your OpenAI/Anthropic secret) |
+| `FORGE_MODEL_BASE_URL` | Optional `env:` | Override API base URL (provider-specific) |
+| `FORGE_LOG_LEVEL` | Workflow `env:` | Log verbosity |
+| Other `FORGE_*` | Workflow `env:` | Additional knobs mapped in `src/config.ts` (e.g. `FORGE_EXECUTE_PARALLEL`) |
+
+`OPENAI_API_KEY` alone is **not** read by the execute AI connector; map it to `FORGE_MODEL_API_KEY` (and set provider/name) for `forge execute` / `forge integrate`.
 
 **Example:**
 
 ```yaml
 - uses: forge-cli/forge-action@v1
   env:
-    OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+    FORGE_MODEL_PROVIDER: openai
+    FORGE_MODEL_NAME: gpt-4o
+    FORGE_MODEL_API_KEY: ${{ secrets.OPENAI_API_KEY }}
     FORGE_LOG_LEVEL: debug
   with:
-    command: "plan"
+    command: "execute --auto"
 ```
 
 ---

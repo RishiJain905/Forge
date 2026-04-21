@@ -176,15 +176,23 @@ describe("docker-compose.yml", () => {
     );
   });
 
-  it("passes API keys from environment", () => {
+  it("passes Forge model configuration from environment", () => {
     if (!existsSync(composePath)) {
       console.log("SKIP: docker-compose.yml does not exist yet");
       return;
     }
     const content = readFileSync(composePath, "utf8");
     assert.ok(
-      /\$\{OPENAI_API_KEY\}/.test(content),
-      "docker-compose.yml should pass OPENAI_API_KEY from env"
+      /\$\{FORGE_MODEL_PROVIDER/.test(content) || /FORGE_MODEL_PROVIDER=/.test(content),
+      "docker-compose.yml should pass FORGE_MODEL_PROVIDER from env"
+    );
+    assert.ok(
+      /\$\{FORGE_MODEL_NAME/.test(content) || /FORGE_MODEL_NAME=/.test(content),
+      "docker-compose.yml should pass FORGE_MODEL_NAME from env"
+    );
+    assert.ok(
+      /FORGE_MODEL_API_KEY/.test(content),
+      "docker-compose.yml should pass FORGE_MODEL_API_KEY for the AI connector"
     );
   });
 });

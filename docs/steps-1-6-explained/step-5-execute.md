@@ -16,7 +16,7 @@ The **Execute** step is the implementation engine of the Forge CLI workflow. It 
 - **Supports `--resume`** to continue execution from an existing `.forge/execute.json` state file, skipping already-completed workstreams.
 - **Outputs**:
   - `.forge/execute.json` — live execution state (updated after every transition).
-  - `.forge/reports/execute-report.md` — human-readable markdown report summarizing all workstream outcomes.
+  - `.forge/execute-report.md` — human-readable markdown report summarizing all workstream outcomes.
 - **Hands off** to Step 6 (Integrate) once every workstream is terminal (`completed`, `failed`, or `cancelled`).
 
 ## Flowchart
@@ -33,7 +33,7 @@ flowchart TD
     G --> H{Unblocked workstream?}
     H -- Yes --> I[Build bounded context]
     H -- No --> J{All terminal?}
-    J -- Yes --> K[Generate execute-report.md]
+    J -- Yes --> K[Generate .forge/execute-report.md]
     J -- No --> L[Mark blocked workstreams]
     L --> M[Wait / Prompt user]
     M --> G
@@ -60,7 +60,7 @@ stateDiagram-v2
     queued --> in_progress: No uncompleted dependencies, execution starts
 
     blocked --> in_progress: All predecessor workstreams completed
-    blocked --> cancelled: User cancels or --cancel flag
+    blocked --> cancelled: User cancels in interactive session
 
     in_progress --> completed: AI pipeline succeeds, changes applied
     in_progress --> failed: AI pipeline errors or apply rejected
@@ -70,8 +70,8 @@ stateDiagram-v2
     failed --> [*]: Terminal state
     cancelled --> [*]: Terminal state
 
-    failed --> queued: --retry resets workstream
-    cancelled --> queued: --retry resets workstream
+    failed --> queued: Interactive / tooling resets workstream to queued
+    cancelled --> queued: Interactive / tooling resets workstream to queued
 ```
 
 ## AI Integration Pipeline
@@ -130,14 +130,14 @@ flowchart TD
 After all workstreams are terminal, Execute finalizes its outputs and signals readiness for Step 6 (Integrate):
 
 1. **Final state validation** — verifies no workstream remains in `queued`, `blocked`, or `in_progress`.
-2. **Report generation** — writes `.forge/reports/execute-report.md` summarizing:
+2. **Report generation** — writes `.forge/execute-report.md` summarizing:
    - Total workstreams
    - Completed count
    - Failed count
    - Cancelled count
    - Per-workstream summary with file changes and error logs
 3. **State file freeze** — `.forge/execute.json` is written with a `ready_for_integrate: true` flag.
-4. **Integrate reads** `execute.json` and `execute-report.md` to produce merge commits, conflict resolution, and final verification.
+4. **Integrate reads** `.forge/execute.json` and `.forge/execute-report.md` alongside other artifacts for the integration gate.
 
 ## CLI Examples
 
@@ -162,21 +162,11 @@ forge execute --resume
 ```
 Skips already-completed workstreams and continues from where execution left off.
 
-### Retry a failed workstream
+### Start fresh (discard prior execute state)
 ```bash
-forge execute --retry <workstream-id>
+forge execute --force
 ```
-Resets the specified workstream from `failed` → `queued`, then re-evaluates merge order and blocks.
+Re-initializes execution from `split.json` even when `.forge/execute.json` already exists.
 
-### Cancel a workstream
-```bash
-forge execute --cancel <workstream-id>
-```
-Transitions the workstream to `cancelled` and re-evaluates downstream blocks.
-
-### Dry run
-```bash
-forge execute --dry-run
-```
-Shows which workstreams would execute and in what order without invoking the AI pipeline or writing state.
+State transitions such as retrying a failed workstream or cancelling one are handled in the **interactive execute session** (not via `--retry` / `--cancel` CLI flags). Use `forge execute --help` for the current flag list.
 

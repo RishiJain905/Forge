@@ -1,6 +1,6 @@
 # Forge Bad vs Good Step-by-Step QA Log
 
-**Repo:** `/home/trjxter/Forge`  
+**Repo:** `<repo-root>`  
 **Branch:** `dev`  
 **Purpose:** Compare a vague spec vs a well-scoped spec across Steps 1–6.  
 **Note:** Steps 5 and 6 were attempted without AI model config.
@@ -14,30 +14,30 @@
 
 ## Bad example
 
-**Spec file:** `/tmp/forge-bad-spec.md`  
+**Spec file:** `<path-to-bad-spec.md>`  
 **Output dir:** `.forge/bad`
 
 ### Step 1 — Intake
 
 **Input**
-- `/tmp/forge-bad-spec.md`
+- `<path-to-bad-spec.md>`
 
 **Command**
 ```bash
-node dist/src/index.js intake --repo /home/trjxter/Forge --spec /tmp/forge-bad-spec.md --no-llm --output-dir .forge/bad
+node dist/src/index.js intake --repo <repo-root> --spec <path-to-bad-spec.md> --no-llm --output-dir .forge/bad
 ```
 
 **Observed output**
 ```text
 Status: warning
 Summary: Forge intake is ready for forge plan with warnings.
-Artifact: /home/trjxter/Forge/.forge/bad/intake.json
-Report: /home/trjxter/Forge/.forge/bad/reports/intake-report.md
+Artifact: <repo-root>/.forge/bad/intake.json
+Report: <repo-root>/.forge/bad/reports/intake-report.md
 ```
 
 **Diagram**
 ```text
-/tmp/forge-bad-spec.md
+<path-to-bad-spec.md>
         ↓
 forge intake --spec ... --no-llm
         ↓
@@ -52,15 +52,15 @@ forge intake --spec ... --no-llm
 
 **Command**
 ```bash
-node dist/src/index.js plan --repo /home/trjxter/Forge --output-dir .forge/bad
+node dist/src/index.js plan --repo <repo-root> --output-dir .forge/bad
 ```
 
 **Observed output**
 ```text
 Status: ready
 Summary: `forge verify` can proceed, but carried-forward warnings still constrain this plan.
-Artifact: /home/trjxter/Forge/.forge/bad/plan.json
-Report: /home/trjxter/Forge/.forge/bad/reports/plan-report.md
+Artifact: <repo-root>/.forge/bad/plan.json
+Report: <repo-root>/.forge/bad/reports/plan-report.md
 ```
 
 **Diagram**
@@ -80,15 +80,15 @@ forge plan
 
 **Command**
 ```bash
-node dist/src/index.js verify --repo /home/trjxter/Forge --output-dir .forge/bad
+node dist/src/index.js verify --repo <repo-root> --output-dir .forge/bad
 ```
 
 **Observed output**
 ```text
 Status: ready
 Summary: `forge split` can proceed with caution: only structural checks ran, no formal cases were modeled for this plan, TLC did not validate any verification case, and 9 structural constraint(s) still need to be carried forward.
-Artifact: /home/trjxter/Forge/.forge/bad/verify.json
-Report: /home/trjxter/Forge/.forge/bad/reports/verify-report.md
+Artifact: <repo-root>/.forge/bad/verify.json
+Report: <repo-root>/.forge/bad/reports/verify-report.md
 ```
 
 **Diagram**
@@ -108,15 +108,15 @@ forge verify
 
 **Command**
 ```bash
-node dist/src/index.js split --repo /home/trjxter/Forge --output-dir .forge/bad
+node dist/src/index.js split --repo <repo-root> --output-dir .forge/bad
 ```
 
 **Observed output**
 ```text
 Status: ready
 Summary: Forge split can proceed with warnings. All items were safely assigned, no blocked streams remain, no partially blocked items remain, merge-order constraints were imposed, and later execution must honor the carried-forward constraint detail.
-Artifact: /home/trjxter/Forge/.forge/bad/split.json
-Report: /home/trjxter/Forge/.forge/bad/reports/split-report.md
+Artifact: <repo-root>/.forge/bad/split.json
+Report: <repo-root>/.forge/bad/reports/split-report.md
 ```
 
 **Diagram**
@@ -139,7 +139,7 @@ exit
 
 **Command**
 ```bash
-node dist/src/index.js execute --repo /home/trjxter/Forge --output-dir .forge/bad
+node dist/src/index.js execute --repo <repo-root> --output-dir .forge/bad
 ```
 
 **Observed output**
@@ -173,7 +173,7 @@ REPL: blocked by merge_order constraints
 
 **Command**
 ```bash
-node dist/src/index.js integrate --repo /home/trjxter/Forge --output-dir .forge/bad
+node dist/src/index.js integrate --repo <repo-root> --output-dir .forge/bad
 ```
 
 **Observed output**
@@ -199,30 +199,30 @@ AI call fails: missing FORGE_MODEL_PROVIDER
 
 ## Good example
 
-**Spec file:** `/tmp/forge-good-spec-v2.md`  
+**Spec file:** `<path-to-good-spec.md>`  
 **Output dir:** `.forge/good2`
 
 ### Step 1 — Intake
 
 **Input**
-- `/tmp/forge-good-spec-v2.md`
+- `<path-to-good-spec.md>`
 
 **Command**
 ```bash
-node dist/src/index.js intake --repo /home/trjxter/Forge --spec /tmp/forge-good-spec-v2.md --no-llm --output-dir .forge/good2
+node dist/src/index.js intake --repo <repo-root> --spec <path-to-good-spec.md> --no-llm --output-dir .forge/good2
 ```
 
 **Observed output**
 ```text
 Status: warning
 Summary: Forge intake is ready for forge plan with warnings.
-Artifact: /home/trjxter/Forge/.forge/good2/intake.json
-Report: /home/trjxter/Forge/.forge/good2/reports/intake-report.md
+Artifact: <repo-root>/.forge/good2/intake.json
+Report: <repo-root>/.forge/good2/reports/intake-report.md
 ```
 
 **Diagram**
 ```text
-/tmp/forge-good-spec-v2.md
+<path-to-good-spec.md>
         ↓
 forge intake --spec ... --no-llm
         ↓
@@ -237,15 +237,15 @@ forge intake --spec ... --no-llm
 
 **Command**
 ```bash
-node dist/src/index.js plan --repo /home/trjxter/Forge --output-dir .forge/good2
+node dist/src/index.js plan --repo <repo-root> --output-dir .forge/good2
 ```
 
 **Observed output**
 ```text
 Status: ready
 Summary: `forge verify` can proceed, but carried-forward warnings still constrain this plan.
-Artifact: /home/trjxter/Forge/.forge/good2/plan.json
-Report: /home/trjxter/Forge/.forge/good2/reports/plan-report.md
+Artifact: <repo-root>/.forge/good2/plan.json
+Report: <repo-root>/.forge/good2/reports/plan-report.md
 ```
 
 **Diagram**
@@ -265,15 +265,15 @@ forge plan
 
 **Command**
 ```bash
-node dist/src/index.js verify --repo /home/trjxter/Forge --output-dir .forge/good2
+node dist/src/index.js verify --repo <repo-root> --output-dir .forge/good2
 ```
 
 **Observed output**
 ```text
 Status: ready
 Summary: `forge split` can proceed with caution: structural checks ran, formal cases were modeled for 1 target(s), but TLC was not run, so the formal lane has not validated those cases yet.
-Artifact: /home/trjxter/Forge/.forge/good2/verify.json
-Report: /home/trjxter/Forge/.forge/good2/reports/verify-report.md
+Artifact: <repo-root>/.forge/good2/verify.json
+Report: <repo-root>/.forge/good2/reports/verify-report.md
 ```
 
 **Diagram**
@@ -293,15 +293,15 @@ forge verify
 
 **Command**
 ```bash
-node dist/src/index.js split --repo /home/trjxter/Forge --output-dir .forge/good2
+node dist/src/index.js split --repo <repo-root> --output-dir .forge/good2
 ```
 
 **Observed output**
 ```text
 Status: ready
 Summary: Forge split can proceed with warnings. All items were safely assigned, no blocked streams remain, no partially blocked items remain, merge-order constraints were imposed, and later execution must honor the carried-forward constraint detail.
-Artifact: /home/trjxter/Forge/.forge/good2/split.json
-Report: /home/trjxter/Forge/.forge/good2/reports/split-report.md
+Artifact: <repo-root>/.forge/good2/split.json
+Report: <repo-root>/.forge/good2/reports/split-report.md
 ```
 
 **Diagram**
@@ -326,7 +326,7 @@ exit
 
 **Command**
 ```bash
-node dist/src/index.js execute --repo /home/trjxter/Forge --output-dir .forge/good2
+node dist/src/index.js execute --repo <repo-root> --output-dir .forge/good2
 ```
 
 **Observed output**
@@ -360,7 +360,7 @@ REPL: blocked by merge_order constraints
 
 **Command**
 ```bash
-node dist/src/index.js integrate --repo /home/trjxter/Forge --output-dir .forge/good2
+node dist/src/index.js integrate --repo <repo-root> --output-dir .forge/good2
 ```
 
 **Observed output**

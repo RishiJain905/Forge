@@ -221,25 +221,25 @@ When the status is `blocked`, Intake exits with a non-zero code and prints the a
 
 ```bash
 # --- Standard usage with a spec file ---
-forge step-1 --spec task.md
+forge intake --spec task.md
 
 # --- Standard usage with a prompt string ---
-forge step-1 --prompt "Add OAuth2 login to the web app"
+forge intake --prompt "Add OAuth2 login to the web app"
 
 # --- JSON-only output (no Markdown report) ---
-forge step-1 --spec task.md --json-only
+forge intake --spec task.md --json-only
 
 # --- Report-only output (no JSON) ---
-forge step-1 --spec task.md --report-only
+forge intake --spec task.md --report-only
 
 # --- Enable LLM assistance for gap-filling ---
-forge step-1 --prompt "Refactor the API layer" --llm-assist
+forge intake --prompt "Refactor the API layer" --llm-assist
 
 # --- Fail the command if confidence is low ---
-forge step-1 --spec task.md --fail-on-low-confidence
+forge intake --spec task.md --fail-on-low-confidence
 
 # --- Combined flags ---
-forge step-1 --spec task.md --llm-assist --fail-on-low-confidence
+forge intake --spec task.md --llm-assist --fail-on-low-confidence
 ```
 
 ---

@@ -42,6 +42,10 @@ services:
     environment:
       - OPENAI_API_KEY
       - ANTHROPIC_API_KEY
+      - FORGE_MODEL_PROVIDER=${FORGE_MODEL_PROVIDER:-openai}
+      - FORGE_MODEL_NAME=${FORGE_MODEL_NAME:-gpt-4o}
+      - FORGE_MODEL_API_KEY=${FORGE_MODEL_API_KEY:-$OPENAI_API_KEY}
+      - FORGE_MODEL_BASE_URL=${FORGE_MODEL_BASE_URL:-}
     command: ["doctor", "--checks", "node,git,npm,config"]
 
 volumes:
@@ -64,9 +68,13 @@ docker-compose run --rm forge plan --repo /repo --output-dir /repo/.forge
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `OPENAI_API_KEY` | Yes (for OpenAI models) | API key for OpenAI. Pass `--env OPENAI_API_KEY` or set in host env. |
-| `ANTHROPIC_API_KEY` | Yes (for Anthropic models) | API key for Anthropic. Pass `--env ANTHROPIC_API_KEY` or set in host env. |
-| `FORGE_*` | Optional | Any environment variable prefixed with `FORGE_` can be forwarded if the CLI or plugins consume it. |
+| `FORGE_MODEL_PROVIDER` | Yes (for `forge execute` / `forge integrate`) | Provider id: `openai`, `anthropic`, `google`, `ollama`, or `glm`. |
+| `FORGE_MODEL_NAME` | Yes (for AI stages) | Model name for that provider (e.g. `gpt-4o`). |
+| `FORGE_MODEL_API_KEY` | Yes (for AI stages) | API key consumed by the execute connector. Often set from the same value as `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`. |
+| `FORGE_MODEL_BASE_URL` | Optional | Override the default API base URL. |
+| `OPENAI_API_KEY` | Optional | Convenience passthrough; set `FORGE_MODEL_API_KEY` (or rely on compose substitution) for Forge’s AI path. |
+| `ANTHROPIC_API_KEY` | Optional | Same pattern for Anthropic-hosted models. |
+| Other `FORGE_*` | Optional | See `src/config.ts` for env → config mappings (`FORGE_LOG_LEVEL`, `FORGE_EXECUTE_PARALLEL`, etc.). |
 
 All sensitive keys are read **at runtime** from the host environment and are **not** baked into the image.
 

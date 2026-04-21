@@ -4,7 +4,7 @@
 
 The Plan step transforms the structured output from Step 1 (Intake) into an actionable, deterministic implementation plan. It does **not** re-run intake logic or re-read raw task text. Instead, it consumes the persisted `intake.json` and produces `plan.json`, along with a human-readable `plan-report.md`.
 
-Plan is deterministic-first: every plan item, dependency, and conflict zone is derived mechanically from the intake data. The optional `--llm-assist` flag may enrich wording, but it **never** changes the deterministic structure.
+Plan is deterministic-first: every plan item, dependency, and conflict zone is derived mechanically from the intake data. The `plan` subcommand does not accept LLM flags; optional LLM assistance is configured at **intake** time (`forge intake --llm-assist`).
 
 ---
 
@@ -27,7 +27,6 @@ Plan is deterministic-first: every plan item, dependency, and conflict zone is d
 
 | Flag | Effect |
 |------|--------|
-| `--llm-assist` | Enriches human-readable wording in reports without altering `plan.json` structure |
 | `FORGE_PLAN_DEBUG=1` | Emits internal debug artifacts alongside normal outputs |
 
 ---
@@ -177,14 +176,6 @@ forge plan
 
 Reads `.forge/intake.json` and produces `.forge/plan.json` plus `.forge/reports/plan-report.md`.
 
-### With LLM Wording Assist
-
-```bash
-forge plan --llm-assist
-```
-
-Same deterministic structure, but human-readable descriptions in `plan-report.md` are polished by an LLM.
-
 ### Debug Mode
 
 ```bash
@@ -193,13 +184,14 @@ FORGE_PLAN_DEBUG=1 forge plan
 
 Emits additional debug artifacts (e.g., intermediate dependency graphs, raw surface overlap matrices) alongside normal outputs.
 
-### Custom Intake Path
+### Custom output directory
+
+`plan` always reads `intake.json` from the output directory (default `.forge/`). To use a different layout, run intake (and later stages) with the same `--output-dir`:
 
 ```bash
-forge plan --intake ./custom-intake.json
+forge intake --repo . --output-dir .forge/custom --spec task.md --no-llm --json-only
+forge plan --repo . --output-dir .forge/custom
 ```
-
-Uses an alternative intake JSON file while still following the same schema and validation rules.
 
 ### Typical Output Check
 

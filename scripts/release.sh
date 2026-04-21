@@ -21,7 +21,7 @@ git diff --cached --quiet || {
 CURRENT_VERSION=$(node -p "require('./package.json').version")
 echo "Current version: $CURRENT_VERSION"
 
-# Bump version (creates git tag automatically from npm version)
+# Bump version without creating a git tag; the script creates the tag later
 npm version "$VERSION_TYPE" --no-git-tag-version
 
 # Get new version

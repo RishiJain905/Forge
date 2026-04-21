@@ -169,9 +169,7 @@ flowchart LR
 **Readiness rules**
 - If the Structural lane fails, readiness is **false**.
 - If the Formal lane returns `fail` or `error`, readiness is **false**.
-- If the Formal lane returns `inconclusive`, readiness is **configurable**:
-  - Default: readiness is **false** (conservative).
-  - With `--allow-inconclusive` (or equivalent flag): readiness is **true** with warnings.
+- If the Formal lane returns `inconclusive`, readiness follows the verify readiness rules encoded in the Step 3 implementation (there is no `forge verify --allow-inconclusive` flag; treat inconclusive formal runs as blocking until the spec or case selection is fixed).
 - If both lanes pass cleanly, readiness is **true**.
 
 `verify.json` schema (minimal representation):
@@ -203,12 +201,6 @@ Run Verify after Step 2 has produced a plan:
 forge verify
 ```
 
-Run Verify with an explicit plan file path:
-
-```bash
-forge verify --plan ./my-plan.json
-```
-
 Run Verify with debug artifacts preserved (retains `.tla`, `.cfg`, and TLC logs):
 
 ```bash
@@ -221,11 +213,7 @@ Run Verify with a custom TLC jar path:
 FORGE_TLC_JAR_PATH=/opt/tla2tools.jar forge verify
 ```
 
-Run Verify allowing inconclusive formal verdicts to yield readiness (use with caution):
-
-```bash
-forge verify --allow-inconclusive
-```
+The `verify` subcommand only accepts `--repo` and `--output-dir`. Formal TLC outcomes (including inconclusive runs) are reflected in `verify.json` and the verify report; adjust formal case selection or fix specs rather than a non-existent CLI bypass flag.
 
 View the human-readable report after Verify completes:
 

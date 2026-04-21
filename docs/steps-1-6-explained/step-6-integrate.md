@@ -30,7 +30,7 @@ Integrate consumes artifacts from previous steps and performs a comprehensive va
 | --test-framework | Specifies the testing framework: jest, vitest, pytest, etc. |
 | --json-only | Skips integration-report.md generation; outputs only integrate.json. |
 | --auto | Runs in non-interactive mode without prompting for user input. |
-| --delay | Adds a delay (in ms) between AI calls to respect rate limits. |
+| --delay | Adds a delay (in **seconds**) between AI calls to respect rate limits. |
 | --max-retries | Sets the maximum number of retries if transient failures occur. |
 
 If Integrate passes, the full Forge workflow is complete for this task.
@@ -167,32 +167,32 @@ The diagram below shows all six Forge CLI steps in sequence, with the artifacts 
 flowchart LR
     subgraph Step1[Step 1: Intake]
         S1A[User submits task]
-        S1B[intake.md - acceptance-criteria.json]
+        S1B[.forge/intake.json]
     end
 
-    subgraph Step2[Step 2: Scope]
-        S2A[Analyze task complexity]
-        S2B[scope.json - effort-estimate.md]
+    subgraph Step2[Step 2: Plan]
+        S2A[Design workstreams and dependencies]
+        S2B[.forge/plan.json]
     end
 
-    subgraph Step3[Step 3: Plan]
-        S3A[Design workstreams and dependencies]
-        S3B[plan.json - workstream-tasks/]
+    subgraph Step3[Step 3: Verify]
+        S3A[Validate the plan and requirements]
+        S3B[.forge/verify.json]
     end
 
-    subgraph Step4[Step 4: Break]
-        S4A[Decompose into atomic PRs]
-        S4B[break.json - pr-specs/]
+    subgraph Step4[Step 4: Split]
+        S4A[Split work into executable streams]
+        S4B[.forge/split.json]
     end
 
     subgraph Step5[Step 5: Execute]
-        S5A[Run workstreams in parallel]
-        S5B[execute.json - modified-codebase/]
+        S5A[Run workstreams]
+        S5B[.forge/execute.json]
     end
 
     subgraph Step6[Step 6: Integrate]
         S6A[Validate all streams together]
-        S6B[integrate.json - integration-report.md]
+        S6B[.forge/integrate.json]
     end
 
     S1A --> S1B --> S2A
@@ -205,14 +205,14 @@ flowchart LR
 
 ### Artifact Summary
 
-| Step | Artifact(s) | Purpose |
-|------|-------------|---------|
-| Intake | intake.md, acceptance-criteria.json | Captures what needs to be done and what success looks like. |
-| Scope | scope.json, effort-estimate.md | Defines the size and boundaries of the work. |
-| Plan | plan.json, workstream-tasks/ | Outlines the workstreams, their tasks, and dependencies. |
-| Break | break.json, pr-specs/ | Breaks workstreams into atomic, reviewable PRs. |
-| Execute | execute.json, modified codebase | Performs the actual code changes across streams. |
-| Integrate | integrate.json, integration-report.md | Validates everything and provides final sign-off. |
+| Step | Primary artifacts | Purpose |
+|------|---------------------|---------|
+| Intake | `.forge/intake.json`, `intake-report.md` under `.forge/reports/` | Normalized task spec and repo context. |
+| Plan | `.forge/plan.json`, `plan-report.md` | Deterministic implementation plan. |
+| Verify | `.forge/verify.json`, `verify-report.md` | Structural + formal verification results. |
+| Split | `.forge/split.json`, `split-report.md` | Workstreams, merge order, execution manifest. |
+| Execute | `.forge/execute.json`, `.forge/execute-report.md` | Per-workstream execution state and report. |
+| Integrate | `.forge/integrate.json`, `.forge/integration-report.md` | Final integration verdict and report. |
 
 ---
 

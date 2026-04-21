@@ -1,6 +1,10 @@
 name: Forge Pipeline
 
+# Deterministic stages (intake → split) run on every trigger. AI stages (execute, integrate)
+# run only when OPENAI_API_KEY is configured, to avoid failing fork PRs and unexpected API spend.
+# Use workflow_dispatch to run the full pipeline manually when secrets are set.
 on:
+  workflow_dispatch:
   push:
     branches: [main, develop]
   pull_request:
@@ -28,25 +32,51 @@ jobs:
       - name: Forge Doctor
         run: forge doctor --checks node,git,npm,config
 
+      - name: Forge Intake
+        run: >
+          forge intake --repo . --output-dir .forge
+          --prompt "CI pipeline wiring validation."
+          --no-llm --json-only
+
       - name: Forge Plan
         run: forge plan --repo . --output-dir .forge
 
+      - name: Forge Verify
+        run: forge verify --repo . --output-dir .forge
+
+      - name: Forge Split
+        run: forge split --repo . --output-dir .forge
+
       - name: Forge Execute
+        if: ${{ secrets.OPENAI_API_KEY != '' }}
         run: forge execute --repo . --auto --output-dir .forge
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          FORGE_MODEL_PROVIDER: openai
+          FORGE_MODEL_NAME: gpt-4o
+          FORGE_MODEL_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
       - name: Forge Integrate
-        run: forge integrate --repo . --output-dir .forge
+        if: ${{ secrets.OPENAI_API_KEY != '' }}
+        run: forge integrate --repo . --auto --output-dir .forge
+        env:
+          FORGE_MODEL_PROVIDER: openai
+          FORGE_MODEL_NAME: gpt-4o
+          FORGE_MODEL_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
+          if-no-files-found: warn
           name: forge-artifacts
           path: |
+            .forge/intake.json
             .forge/plan.json
+            .forge/verify.json
+            .forge/split.json
             .forge/execute.json
             .forge/integrate.json
             .forge/reports/plan-report.md
-            .forge/reports/execute-report.md
-            .forge/reports/integration-report.md
+            .forge/reports/verify-report.md
+            .forge/reports/split-report.md
+            .forge/execute-report.md
+            .forge/integration-report.md

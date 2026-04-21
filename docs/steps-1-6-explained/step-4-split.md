@@ -215,11 +215,6 @@ forge split
 FORGE_SPLIT_DEBUG=1 forge split
 ```
 
-### Force re-split (ignore existing split.json)
-```bash
-forge split --force
-```
-
 ### View the split report
 ```bash
 cat .forge/reports/split-report.md
