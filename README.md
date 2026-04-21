@@ -8,6 +8,36 @@
 
 Forge wraps AI coding agents in a disciplined engineering workflow — converting messy tasks into structured implementation work, preserving clean context handoffs, and enforcing validation before merge.
 
+## Example Forge spec
+
+Use a spec like this when you want the smoothest possible Step 1 intake. It is specific, includes acceptance criteria, and avoids vague goals that usually trigger warnings.
+
+```md
+# Improve `forge doctor` readiness summary
+
+## Goal
+Make `forge doctor` print a short, easy-to-scan readiness summary for local setup checks.
+
+## Summary
+Keep the command fast and deterministic while making pass/fail results clearer.
+
+## Scope
+- Update `forge doctor` output formatting
+- Keep the existing checks and exit behavior
+- Add or update tests for the CLI output
+
+## Acceptance Criteria
+- `forge doctor --help` remains available and unchanged in purpose
+- `forge doctor` prints a concise readiness summary
+- Passing checks are reported as clearly as failing checks
+- Tests cover the main success and failure paths
+
+## Constraints
+- No changes to other Forge commands
+- No network calls
+- No new AI-dependent behavior
+```
+
 ---
 
 ## Installation
