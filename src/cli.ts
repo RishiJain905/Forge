@@ -17,6 +17,7 @@ import { runExecuteCommand } from "./execute/cli.js";
 import type { ExecuteCommandResult } from "./execute/types.js";
 import { runIntegrateCommand } from "./integrate/cli.js";
 import type { IntegrateCommandResult } from "./integrate/types.js";
+import { checkForUpdate, selfUpdate } from "./update.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const packageJson = JSON.parse(
@@ -410,6 +411,30 @@ export async function runCli(argv: string[]): Promise<number> {
       printDoctorResults(results);
 
       if (results.some((r) => r.status === "fail")) {
+        exitCode = 1;
+      }
+    });
+
+  program
+    .command("update")
+    .description("Check for updates and update Forge to the latest version")
+    .option("--dry-run", "Show what would be updated without installing")
+    .option("--yes", "Update without prompting")
+    .action(async (options: { dryRun?: boolean; yes?: boolean }) => {
+      try {
+        if (options.dryRun) {
+          const info = await checkForUpdate();
+          if (info.outdated) {
+            console.log(`Update available: ${info.current} → ${info.latest}`);
+          } else {
+            console.log(`Forge is up to date (${info.current}).`);
+          }
+          return;
+        }
+        await selfUpdate(options.yes);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        process.stderr.write(`Error: ${message}\n`);
         exitCode = 1;
       }
     });
