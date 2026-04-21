@@ -384,7 +384,14 @@ npm run publish:dry
 |--------|------|
 | Complete | All V1 features implemented and frozen |
 | Ready | `npm publish --access public` infrastructure configured |
-| Pending | Manual npm organization setup (see [`docs/NPM-TODO.md`](docs/NPM-TODO.md)) |
+| Pending | Manual npm organization setup |
+
+Step 2: Plan is implemented through Batch 3 Part 5.
+Step 2 is frozen for V1 except for future bug fixes.
+Step 3: Verify is implemented through Batch 3 Part 4.
+Step 4 Batch 3 Part 4 is complete.
+Step 4 Batch 3 Part 5 closes the Step 5 handoff contract, including the Forge Execute Gate.
+Step 4 is in bug-fix-only maintenance mode for V1.
 
 ---
 
