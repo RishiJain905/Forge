@@ -1,5 +1,10 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import { Command } from "commander";
 
+import { initForge } from "./init.js";
+import { runDoctor, printDoctorResults } from "./doctor/index.js";
 import { runIntakeCommand } from "./intake/runner.js";
 import type { IntakeCommandResult } from "./intake/types.js";
 import { runPlanCommand } from "./plan/runner.js";
@@ -12,6 +17,11 @@ import { runExecuteCommand } from "./execute/cli.js";
 import type { ExecuteCommandResult } from "./execute/types.js";
 import { runIntegrateCommand } from "./integrate/cli.js";
 import type { IntegrateCommandResult } from "./integrate/types.js";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const packageJson = JSON.parse(
+  readFileSync(join(__dirname, "..", "..", "package.json"), "utf8")
+);
 
 function hasFlag(argv: string[], flag: string): boolean {
   return argv.includes(flag);
@@ -111,6 +121,7 @@ export async function runCli(argv: string[]): Promise<number> {
   program
     .name("forge")
     .description("Reliability-first CLI for agentic software development.")
+    .version(packageJson.version)
     .showHelpAfterError();
 
   program
@@ -363,6 +374,44 @@ export async function runCli(argv: string[]): Promise<number> {
       }
 
       process.stdout.write(output);
+    });
+
+  program
+    .command("init")
+    .description("Initialize Forge in the current directory.")
+    .option("--dir <path>", "Target directory.")
+    .option("--yes", "Non-interactive, use defaults.")
+    .option("--force", "Overwrite existing .forge/ directory.")
+    .action(async (options: { dir?: string; yes?: boolean; force?: boolean }) => {
+      try {
+        await initForge(options);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        process.stderr.write(`Error: ${message}\n`);
+        exitCode = 1;
+      }
+    });
+
+  program
+    .command("doctor")
+    .description("Run pre-flight environment checks")
+    .option("--fix", "Auto-fix what can be fixed")
+    .option("--checks <list>", "Comma-separated list of checks to run (e.g., node,git,npm)")
+    .action(async (options: { fix?: boolean; checks?: string }) => {
+      const checkNames = options.checks
+        ? options.checks.split(",").map((s: string) => s.trim())
+        : undefined;
+
+      const results = await runDoctor({
+        fix: options.fix,
+        checks: checkNames,
+      });
+
+      printDoctorResults(results);
+
+      if (results.some((r) => r.status === "fail")) {
+        exitCode = 1;
+      }
     });
 
   await program.parseAsync(argv, { from: "user" });

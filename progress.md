@@ -560,8 +560,34 @@
 - Step 6 Batch 3 Part 3, including context size warnings for large prompts, file cap at 20 changed files with overflow note, staged progress output [1/5] through [5/5], color output control, enhanced error suggestions, and stronger output polish coverage while keeping the public integrate surface stable.
 - Step 6 Batch 3 Part 4, including the explicit freeze boundary documentation, full V1 freeze sign-off, updated progress.md, and confirmation that Step 6 integrate is frozen for V1 except future bug fixes.
 - Step 6 Batch 3 is complete and Step 6 integrate is frozen for V1.
+- Step 7 Batch 1 Task 1 (npm Packaging):
+  - Renamed package to @forge-cli/forge, bumped to 1.0.0
+  - Added bin, exports, engines, os, keywords, repository, license, publishConfig
+  - Added scripts/fix-shebang.js build safety net
+  - Added tests/npm-packaging.test.ts (15 tests) wired into default test gate
+  - Kept engines.node >=20 (stricter than spec's >=18)
+  - npm publish --dry-run passes with valid package structure
+- Step 7 Batch 1 Task 2 (forge init):
+  - Added src/init.ts with initForge function (creates .forge/ directory structure)
+  - Added forge init CLI command with --dir, --yes, --force options via Commander
+  - Added forge --version flag via .version(packageJson.version) (deferred from Task 1)
+  - Added postinstall script "forge --init 2>/dev/null || true" (deferred from Task 1)
+  - Added tests/init.test.ts (13 tests: 8 unit + 4 CLI + 1 version) wired into default test gate
+  - Added postinstall assertion to tests/npm-packaging.test.ts (now 16 tests)
+  - Added forge --version smoke test assertion
 
 ## Next
 
 - Step 6 Batch 3 is complete and frozen for V1.
-- Next major target: Step 7 deploy.
+- Step 7 Batch 1 Task 1 (npm Packaging) is complete.
+- Step 7 Batch 1 Task 2 (forge init) is complete.
+- Step 7 Batch 1 Task 3 (forge doctor):
+  - Added src/doctor/ directory with 8 modules: index.ts (runner, interfaces, printDoctorResults), node.ts, git.ts, npm.ts, network.ts, config.ts, permissions.ts, gitClean.ts
+  - Added forge doctor CLI command with --fix and --checks options via Commander
+  - Uses exitCode = 1 pattern on check failures (matching existing CLI convention)
+  - Node version threshold >=20 (matching repo engines.node convention)
+  - Uses js-yaml for config validation (yaml package not installed in repo)
+  - Added js-yaml dependency and @types/js-yaml devDependency
+  - Added tests/doctor.test.ts (12 tests: 3 runDoctor unit + 5 individual checks + 1 printDoctorResults + 3 CLI integration)
+  - Wired doctor.test.js into default npm test script chain
+- Next major target: Step 7 Batch 2 Task 1 (forge update).
