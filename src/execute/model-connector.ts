@@ -230,6 +230,19 @@ function sleep(ms: number): Promise<void> {
 
 export type FetchLike = (url: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
+/** HTTP timeout per model request attempt (retries may run additional attempts). */
+export function getModelCallTimeoutMs(): number {
+  const raw = process.env.FORGE_MODEL_TIMEOUT_MS;
+  if (raw === undefined || raw.trim() === "") {
+    return 120_000;
+  }
+  const n = parseInt(raw, 10);
+  if (!Number.isFinite(n) || n < 10_000) {
+    return 120_000;
+  }
+  return Math.min(n, 900_000);
+}
+
 export async function callModel(
   prompt: string,
   config: ModelConfig,
@@ -237,7 +250,7 @@ export async function callModel(
   timeoutMs?: number
 ): Promise<string> {
   const fetch = fetchFn ?? globalThis.fetch;
-  const timeout = timeoutMs ?? 120_000;
+  const timeout = timeoutMs ?? getModelCallTimeoutMs();
 
   const { url, body, headers } = buildProviderRequest(prompt, config);
 
@@ -662,7 +675,12 @@ export async function executeWorkstream(
   const config = loadModelConfig(repoRoot);
   const promptHash = hashContent(prompt);
 
-  const rawResponse = await callModel(prompt, config, fetchFn);
+  const rawResponse = await callModel(
+    prompt,
+    config,
+    fetchFn,
+    getModelCallTimeoutMs()
+  );
   const parsed = parseModelResponse(rawResponse);
   const changes = await applyChanges(parsed.changes, repoRoot);
 

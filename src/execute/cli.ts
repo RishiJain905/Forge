@@ -25,6 +25,7 @@ import type { SplitArtifact } from "../split/types.js";
 import { buildWorkstreamPrompt } from "./prompt-builder.js";
 import {
   executeWorkstream,
+  getModelCallTimeoutMs,
   getModelConfigError,
   isModelConfigured,
 } from "./model-connector.js";
@@ -376,6 +377,9 @@ export async function runExecuteCommand(
   console.log("  fail <id> [reason]: Mark workstream as failed");
   console.log("  status:            Show dashboard");
   console.log("  exit:              Exit REPL");
+  console.log(
+    "  Note: During an AI run this REPL handles one line at a time — the next `>` appears after the request finishes (see FORGE_MODEL_TIMEOUT_MS)."
+  );
   const modelConfigErr = getModelConfigError(repoRoot);
   if (modelConfigErr) {
     console.log(`\nAI is off: ${modelConfigErr}`);
@@ -478,6 +482,14 @@ export async function runExecuteCommand(
       }
 
       console.log(`[AI] Calling model for workstream: ${ws.workstreamId}...`);
+      {
+        const tmo = getModelCallTimeoutMs();
+        console.log(
+          `(Blocked until the model responds or times out — ~${Math.round(
+            tmo / 1000
+          )}s per attempt. Lines you type now run after this. Set FORGE_MODEL_TIMEOUT_MS to adjust.)`
+        );
+      }
 
       const aiResult = await executeWorkstreamWithAI(found.id, state, repoRoot);
 
@@ -539,6 +551,14 @@ export async function runExecuteCommand(
       }
 
       console.log(`[AI] Calling model for workstream: ${ws.workstreamId}...`);
+      {
+        const tmo = getModelCallTimeoutMs();
+        console.log(
+          `(Blocked until the model responds or times out — ~${Math.round(
+            tmo / 1000
+          )}s per attempt. Lines you type now run after this. Set FORGE_MODEL_TIMEOUT_MS to adjust.)`
+        );
+      }
 
       const aiResult = await executeWorkstreamWithAI(found.id, state, repoRoot);
 
@@ -652,6 +672,14 @@ export async function runExecuteCommand(
         console.log(`✗ ${found.ws.workstreamId} FAILED${reason ? `: ${reason}` : ""}`);
         printDashboard(state, mergeOrderMap);
       }
+      return false;
+    }
+
+    const runNoSpace = trimmed.match(/^(run|aiexecute)\[(\d+)\]$/i);
+    if (runNoSpace) {
+      const verb = runNoSpace[1]!.toLowerCase();
+      const n = runNoSpace[2]!;
+      console.log(`Tip: add a space — use \`${verb} [${n}]\` or \`${verb} ${n}\`, not \`${verb}[${n}]\`.`);
       return false;
     }
 
