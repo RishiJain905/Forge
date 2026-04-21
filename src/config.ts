@@ -1,5 +1,9 @@
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
-import { mkdirSync } from "node:fs";
+import {
+  readFileSync,
+  writeFileSync,
+  existsSync,
+  mkdirSync,
+} from "node:fs";
 import { join } from "node:path";
 import { load, dump } from "js-yaml";
 import { spawn } from "node:child_process";
@@ -315,5 +319,12 @@ export function unsetConfigValue(key: string, cwd?: string): void {
 export function openInEditor(cwd: string = process.cwd()): void {
   const configPath = join(cwd, ".forge", "config.yaml");
   const editor = process.env.EDITOR || "vi";
-  spawn(editor, [configPath], { stdio: "inherit" });
+  const parts = editor.trim().split(/\s+/);
+  const cmd = parts[0]!;
+  const args = parts.length > 1 ? [...parts.slice(1), configPath] : [configPath];
+  const forgeDir = join(cwd, ".forge");
+  if (!existsSync(forgeDir)) {
+    mkdirSync(forgeDir, { recursive: true });
+  }
+  spawn(cmd, args, { stdio: "inherit" });
 }
