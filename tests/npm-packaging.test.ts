@@ -85,9 +85,14 @@ describe("npm packaging contract", () => {
     assert.ok(packageJson.scripts.prepublishOnly);
   });
 
-  it("has postinstall script for forge init", () => {
+  it("has cross-platform postinstall that runs forge init", () => {
     assert.ok(packageJson.scripts.postinstall);
-    assert.match(packageJson.scripts.postinstall, /forge\s+init/);
+    assert.match(packageJson.scripts.postinstall, /postinstall-init\.mjs/);
+    assert.ok(
+      Array.isArray(packageJson.files) &&
+        packageJson.files.includes("scripts/postinstall-init.mjs"),
+      "postinstall helper must be listed in files so publish includes it",
+    );
   });
 });
 
