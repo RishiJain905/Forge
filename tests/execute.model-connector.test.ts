@@ -11,6 +11,7 @@ import {
   parseModelResponse,
   applyChanges,
   executeWorkstream,
+  getModelCallTimeoutMs,
   hashContent,
 } from "../src/execute/model-connector.js";
 import type { ModelConfig, AIModelChange, FetchLike } from "../src/execute/model-connector.js";
@@ -37,13 +38,36 @@ function mockFetch(responseBody: string, status = 200): FetchLike {
   };
 }
 
+function snapshotRequestHeaders(init?: RequestInit): Record<string, string> {
+  if (!init?.headers) return {};
+  const raw = init.headers;
+  if (typeof Headers !== "undefined" && raw instanceof Headers) {
+    const o: Record<string, string> = {};
+    raw.forEach((v, k) => {
+      o[k] = v;
+    });
+    return o;
+  }
+  if (Array.isArray(raw)) {
+    return Object.fromEntries(raw);
+  }
+  return { ...(raw as Record<string, string>) };
+}
+
 /** Create a mock fetch that tracks calls and responds per-call. */
-function mockFetchSequence(responses: Array<{ body: string; status: number }>): { fetch: FetchLike; calls: Array<{ url: string; body: string }> } {
-  const calls: Array<{ url: string; body: string }> = [];
+function mockFetchSequence(responses: Array<{ body: string; status: number }>): {
+  fetch: FetchLike;
+  calls: Array<{ url: string; body: string; headers: Record<string, string> }>;
+} {
+  const calls: Array<{ url: string; body: string; headers: Record<string, string> }> = [];
   let callIndex = 0;
   const fetchFn: FetchLike = async (url: string | URL | Request, init?: RequestInit) => {
     const urlStr = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
-    calls.push({ url: urlStr, body: init?.body?.toString() ?? "" });
+    calls.push({
+      url: urlStr,
+      body: init?.body?.toString() ?? "",
+      headers: snapshotRequestHeaders(init),
+    });
     const resp = responses[callIndex] ?? responses[responses.length - 1];
     callIndex++;
     return new Response(resp.body, { status: resp.status, headers: { "Content-Type": "application/json" } });
@@ -59,6 +83,9 @@ const MODEL_ENV_KEYS = [
   "FORGE_MODEL",
   "FORGE_DEFAULT_MODEL",
   "FORGE_EXECUTE_DEFAULT_MODEL",
+  "FORGE_MODEL_TIMEOUT_MS",
+  "OLLAMA_API_KEY",
+  "FORGE_MODEL_DEBUG",
 ] as const;
 
 /** Clear model-related env vars, then apply overrides (for isolated cwd tests). */
@@ -372,10 +399,53 @@ await runScenario("callModel sends correct request for Ollama provider", async (
     const result = await callModel("test prompt", config, mockFetchFn);
     assert.ok(result.includes("## CHANGES"));
     assert.ok(calls[0]?.url.includes("/api/chat"), `URL should include /api/chat, got: ${calls[0]?.url}`);
+    const h0 = calls[0]?.headers ?? {};
+    assert.equal(h0.Authorization ?? h0.authorization, undefined);
 
     const body = JSON.parse(calls[0]?.body ?? "{}");
     assert.equal(body.model, "llama3");
     assert.equal(body.stream, false);
+  });
+});
+
+await runScenario("callModel maps Ollama Cloud base .../v1 to .../api/chat and sends Bearer", async () => {
+  const { fetch: mockFetchFn, calls } = mockFetchSequence([{
+    body: JSON.stringify({
+      message: { content: "## CHANGES\n```json\n[]\n```" },
+    }),
+    status: 200,
+  }]);
+
+  await withEnv({
+    FORGE_MODEL_PROVIDER: "ollama",
+    FORGE_MODEL_NAME: "kimi-k2.6:cloud",
+    FORGE_MODEL_API_KEY: "cloud-key",
+    FORGE_MODEL_BASE_URL: "https://ollama.com/v1",
+  }, async () => {
+    const config = loadModelConfig();
+    await callModel("hi", config, mockFetchFn);
+    assert.equal(calls[0]?.url, "https://ollama.com/api/chat");
+    const h1 = calls[0]?.headers ?? {};
+    assert.equal(h1.Authorization ?? h1.authorization, "Bearer cloud-key");
+  });
+});
+
+await runScenario("loadModelConfig uses OLLAMA_API_KEY when FORGE_MODEL_API_KEY unset", async () => {
+  await withEnv({
+    FORGE_MODEL_PROVIDER: "ollama",
+    FORGE_MODEL_NAME: "llama3",
+    FORGE_MODEL_API_KEY: undefined,
+    OLLAMA_API_KEY: "from-ollama-env",
+    FORGE_MODEL_BASE_URL: undefined,
+  }, async () => {
+    const config = loadModelConfig();
+    assert.equal(config.apiKey, "from-ollama-env");
+  });
+});
+
+await runScenario("getModelCallTimeoutMs defaults to 300000 when FORGE_MODEL_TIMEOUT_MS unset", async () => {
+  await withEnv(modelEnv({}), async () => {
+    assert.equal(getModelCallTimeoutMs(), 300_000);
   });
 });
 

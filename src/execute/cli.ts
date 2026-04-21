@@ -390,7 +390,10 @@ export async function runExecuteCommand(
     console.log(
       "\nAI execution: model resolved from env / .forge/config.yaml (repo .env is loaded when present)."
     );
-    console.log("Optional: FORGE_MODEL_BASE_URL, FORGE_EXECUTE_AUTO");
+    console.log(
+      "Ollama Cloud: use `ollama/<model>` with FORGE_MODEL_BASE_URL=https://ollama.com (or …/v1 — Forge maps to /api/chat) and FORGE_MODEL_API_KEY or OLLAMA_API_KEY."
+    );
+    console.log("Optional: FORGE_MODEL_BASE_URL, FORGE_MODEL_TIMEOUT_MS, FORGE_MODEL_DEBUG=1, FORGE_EXECUTE_AUTO");
   }
 
   const rl = readline.createInterface({
