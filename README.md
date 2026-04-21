@@ -22,7 +22,47 @@ npx @forge-cli/forge <command>
 
 ---
 
-## V1 Workflow Overview
+## AI Model Setup
+
+Steps 5 (Execute) and 6 (Integrate) use AI to generate code and integration tests. You need at least one model provider configured.
+
+### Required: API Keys
+
+Set one or both of these environment variables:
+
+```bash
+export OPENAI_API_KEY="sk-..."      # For OpenAI models
+export ANTHROPIC_API_KEY="sk-..."   # For Anthropic Claude models
+```
+
+Or set them per-command:
+
+```bash
+OPENAI_API_KEY="sk-..." forge execute --repo . --auto
+```
+
+### Optional: Choose a Model
+
+```bash
+# Set preferred model (default: openai/gpt-4o)
+export FORGE_MODEL="anthropic/claude-3-5-sonnet"
+
+# Or use forge config
+forge config --set model=anthropic/claude-3-5-sonnet
+```
+
+### Key Reference
+
+| Variable | Used By | Required |
+|----------|---------|----------|
+| `OPENAI_API_KEY` | Execute, Integrate | At least one |
+| `ANTHROPIC_API_KEY` | Execute, Integrate | At least one |
+| `FORGE_MODEL` | Execute, Integrate | No (defaults to `openai/gpt-4o`) |
+| `FORGE_EXECUTE_AUTO` | Execute | No (set `1` to auto-run unblocked workstreams) |
+
+Steps 1–4 (Intake, Plan, Verify, Split) are fully deterministic and do **not** require API keys.
+
+---
 
 Forge V1 is built around a **six-stage workflow** with **four lifecycle commands**.
 
