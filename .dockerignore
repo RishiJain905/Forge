@@ -1,0 +1,31 @@
+# Git
+.git
+.gitignore
+
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+
+# Forge data
+.forge/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test
+coverage/
+*.test.*
+*.spec.*
+
+# Documentation
+*.md
+docs/
