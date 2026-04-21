@@ -7,11 +7,58 @@ import type {
 } from "./types.js";
 import type { SplitArtifact } from "../split/types.js";
 
-// Internal map to track mergeOrderRequirements per workstream id
+// Internal map: prerequisite workstream ids that must be completed before this stream runs / merges
 const mergeOrderRequirementsMap = new WeakMap<
   ExecuteStateInternal,
   Map<string, string[]>
 >();
+
+function dedupeWorkstreamIds(ids: readonly string[]): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const id of ids) {
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
+}
+
+/**
+ * Workstream ids that must appear in `mergedWorkstreams` before this workstream can run or complete.
+ * Uses `splitArtifact.merge_order` and `streamDependencies`; only treats `mergeOrderRequirements`
+ * entries as ids when they match a known workstream id (tests / legacy fixtures).
+ */
+export function buildMergePrerequisiteIds(
+  splitArtifact: SplitArtifact
+): Map<string, string[]> {
+  const knownIds = new Set(splitArtifact.workstreams.map((w) => w.id));
+  const result = new Map<string, string[]>();
+
+  for (const ws of splitArtifact.workstreams) {
+    result.set(ws.id, []);
+  }
+
+  for (const entry of splitArtifact.merge_order) {
+    if (!knownIds.has(entry.workstreamId)) continue;
+    const cur = result.get(entry.workstreamId) ?? [];
+    result.set(
+      entry.workstreamId,
+      dedupeWorkstreamIds([...cur, ...entry.mustMergeAfterWorkstreamIds])
+    );
+  }
+
+  for (const sw of splitArtifact.workstreams) {
+    const cur = result.get(sw.id) ?? [];
+    const fromDeps = dedupeWorkstreamIds([...cur, ...sw.streamDependencies]);
+    const fromLegacyMergeReq = sw.mergeOrderRequirements.filter((r) =>
+      knownIds.has(r)
+    );
+    result.set(sw.id, dedupeWorkstreamIds([...fromDeps, ...fromLegacyMergeReq]));
+  }
+
+  return result;
+}
 
 // The public interface plus a hidden slot for our internal bookkeeping
 interface ExecuteStateInternal {
@@ -37,6 +84,7 @@ export function createExecuteState(
 
   const reqMap = new Map<string, string[]>();
   mergeOrderRequirementsMap.set(state, reqMap);
+  const prereqs = buildMergePrerequisiteIds(splitArtifact);
 
   for (const sw of splitArtifact.workstreams) {
     const ws: ExecuteWorkstream = {
@@ -53,7 +101,7 @@ export function createExecuteState(
       aiLinesRemoved: undefined,
     };
     state.workstreams.set(sw.id, ws);
-    reqMap.set(sw.id, [...sw.mergeOrderRequirements]);
+    reqMap.set(sw.id, prereqs.get(sw.id) ?? []);
   }
 
   return state;
@@ -258,7 +306,8 @@ export function buildExecuteArtifact(
  */
 export function restoreExecuteState(
   artifact: ExecuteArtifact,
-  splitSourcePath: string
+  splitSourcePath: string,
+  splitArtifact?: SplitArtifact
 ): ExecuteState {
   const state: ExecuteState = {
     workstreams: new Map(),
@@ -270,11 +319,19 @@ export function restoreExecuteState(
   // Reconstruct the mergeOrderRequirementsMap
   const reqMap = new Map<string, string[]>();
   mergeOrderRequirementsMap.set(state, reqMap);
+  const rebuilt =
+    splitArtifact !== undefined
+      ? buildMergePrerequisiteIds(splitArtifact)
+      : undefined;
 
   for (const ws of artifact.workstreams) {
     state.workstreams.set(ws.workstreamId, { ...ws });
-    const gate = artifact.mergeOrderGates.find(g => g.workstreamId === ws.workstreamId);
-    reqMap.set(ws.workstreamId, gate?.prerequisites ?? []);
+    const gate = artifact.mergeOrderGates.find(
+      (g) => g.workstreamId === ws.workstreamId
+    );
+    const prereqs =
+      rebuilt?.get(ws.workstreamId) ?? gate?.prerequisites ?? [];
+    reqMap.set(ws.workstreamId, prereqs);
     if (ws.state === "completed") {
       state.mergedWorkstreams.add(ws.workstreamId);
     }

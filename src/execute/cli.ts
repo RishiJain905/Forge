@@ -9,6 +9,7 @@ import {
   getBlockedWorkstreams,
   getExecutableWorkstreams,
   restoreExecuteState,
+  buildMergePrerequisiteIds,
 } from "./state-machine.js";
 import { validateSplitArtifact } from "../split/schema.js";
 import type {
@@ -31,36 +32,68 @@ function getWorkstreamIndex(state: ExecuteState, id: string): number {
   return Array.from(state.workstreams.keys()).indexOf(id);
 }
 
+function truncateOneLine(text: string, maxLen: number): string {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (normalized.length <= maxLen) return normalized;
+  return `${normalized.slice(0, Math.max(0, maxLen - 1))}…`;
+}
+
+function formatPrerequisiteLabels(
+  state: ExecuteState,
+  depIds: string[],
+  maxShow: number
+): string {
+  const keys = Array.from(state.workstreams.keys());
+  const labels = depIds.map((depId) => {
+    const idx = keys.indexOf(depId);
+    return idx >= 0 ? `[${idx + 1}]` : depId;
+  });
+  if (labels.length <= maxShow) return labels.join(", ");
+  return `${labels.slice(0, maxShow).join(", ")} (+${labels.length - maxShow} more)`;
+}
+
 function printDashboard(state: ExecuteState, mergeOrderMap: Map<string, string[]>): void {
   console.log("\n=== Workstream Status ===");
-  console.log("[id] workstream_id    state       blocked by / merge order");
+  console.log(
+    "<id> is the number in brackets. Example: run 1  (not the long workstream_id string)."
+  );
+  console.log("[id] state       merge / notes        workstream_id");
+  console.log("     title");
 
   let index = 1;
-  for (const [id, ws] of state.workstreams) {
+  for (const [, ws] of state.workstreams) {
     let blockedInfo: string;
 
     if (ws.state === "queued") {
-      const requirements = getQueuedWorkstreamRequirements(id, mergeOrderMap);
+      const requirements = getQueuedWorkstreamRequirements(
+        ws.workstreamId,
+        mergeOrderMap
+      );
       const unmet = requirements.filter((req) => !state.mergedWorkstreams.has(req));
 
       if (unmet.length === 0) {
-        blockedInfo = "✓ ready";
+        blockedInfo = "ready";
       } else {
-        blockedInfo = `waiting on: [${unmet.join(", ")}]`;
+        blockedInfo = `after ${formatPrerequisiteLabels(state, unmet, 8)}`;
       }
     } else if (ws.state === "completed") {
-      blockedInfo = "✓ merged";
+      blockedInfo = "merged";
     } else if (ws.state === "failed") {
-      blockedInfo = ws.error ? `✗ failed: ${ws.error}` : "✗ failed";
+      blockedInfo = ws.error
+        ? truncateOneLine(`failed: ${ws.error}`, 48)
+        : "failed";
     } else if (ws.state === "running") {
-      blockedInfo = ws.aiModelUsed ? `✓ running (AI: ${ws.aiModelUsed})` : "✓ running (AI)";
+      blockedInfo = ws.aiModelUsed
+        ? truncateOneLine(`running (${ws.aiModelUsed})`, 48)
+        : "running";
     } else {
       blockedInfo = "";
     }
 
     console.log(
-      `[${index}] ${ws.workstreamId.padEnd(14)} ${ws.state.padEnd(10)} ${blockedInfo}`
+      `[${index}] ${ws.state.padEnd(11)} ${truncateOneLine(blockedInfo, 36).padEnd(36)} ${ws.workstreamId}`
     );
+    console.log(`     ${truncateOneLine(ws.title, 100)}`);
     index++;
   }
 }
@@ -248,7 +281,11 @@ export async function runExecuteCommand(
       };
     }
     if (options.resume) {
-      state = restoreExecuteState(existingArtifact, splitJsonPath);
+      state = restoreExecuteState(
+        existingArtifact,
+        splitJsonPath,
+        splitArtifact
+      );
       console.log("Resumed from existing execute.json");
     } else if (options.force) {
       state = createExecuteState(splitArtifact, splitJsonPath);
@@ -282,10 +319,7 @@ export async function runExecuteCommand(
     }
   }
 
-  const mergeOrderMap = new Map<string, string[]>();
-  for (const sw of splitArtifact.workstreams) {
-    mergeOrderMap.set(sw.id, sw.mergeOrderRequirements);
-  }
+  const mergeOrderMap = buildMergePrerequisiteIds(splitArtifact);
 
   if (state.workstreams.size === 0) {
     console.log("No workstreams to execute. All done.");
