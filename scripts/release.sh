@@ -32,9 +32,10 @@ echo "New version: $NEW_VERSION"
 echo "Building..."
 npm run build
 
-# Update changelog header with today's date
+# Update changelog date on the latest version header
 today=$(date +%Y-%m-%d)
-sed -i.bak "s/## \[1.0.0\] - .*/## [1.0.0] - $today/" CHANGELOG.md 2>/dev/null || true
+# Replace date on the first version header only
+sed -i.bak '1,/^## \[/s/## \[\([0-9.]*\)\] - .*/## [\1] - '$today'/' CHANGELOG.md 2>/dev/null || true
 rm -f CHANGELOG.md.bak
 
 # Commit version bump (do NOT add dist/ — it's .gitignored)

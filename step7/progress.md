@@ -10,7 +10,9 @@
 - [x] Batch 2 Task 3 (env variables) ✅
 - [x] Batch 3 Task 1 (GitHub Action) ✅
 - [x] Batch 3 Task 2 (Docker) ✅
-- [ ] Batch 3 Task 3 (release process)
+- [x] Batch 3 Task 3 (release process) ✅
+
+**Step 7 is complete. Forge V1 frozen.**
 
 ## Commit History
 
@@ -28,7 +30,7 @@
 | 2026-04-21 | 684f333 | feat(config): add FORGE_* env var overrides with source tracking |
 | 2026-04-21 | 98d26e5 | feat(step7-b3): GitHub Action workflow, docs, and validation tests |
 | 2026-04-21 | 2d518ee | feat(step7-b3): Docker containerization, docs, and validation tests |
-| TBD | TBD | feat(step7-b3): release process – versioning, changelog, npm publish |
+| 2026-04-21 | 0346e97 | feat(step7-b3): release process — scripts, CHANGELOG, docs, and tests |
 
 ## Current Branch
 
@@ -36,4 +38,4 @@
 
 ## Next Major Target
 
-Batch 3 Task 3 – release process (versioning, changelog, npm publish)
+Step 7 complete. Forge V1 is frozen and ready for publishing whenever you complete the `docs/NPM-TODO.md` checklist.
