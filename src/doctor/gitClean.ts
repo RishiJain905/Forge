@@ -5,7 +5,7 @@ import type { Check } from "./index.js";
 const execAsync = promisify(exec);
 
 export const gitCleanCheck: Check = {
-  name: "gitClean",
+  name: "git-clean",
   async run() {
     try {
       const { stdout } = await execAsync("git status --porcelain", {
@@ -16,7 +16,7 @@ export const gitCleanCheck: Check = {
 
       if (output === "") {
         return {
-          name: "gitClean",
+          name: "git-clean",
           status: "pass" as const,
           message: "Working tree is clean",
         };
@@ -24,13 +24,13 @@ export const gitCleanCheck: Check = {
 
       const fileCount = output.split("\n").filter(Boolean).length;
       return {
-        name: "gitClean",
+        name: "git-clean",
         status: "warn" as const,
         message: `Working tree has ${fileCount} modified/untracked file(s)`,
       };
     } catch {
       return {
-        name: "gitClean",
+        name: "git-clean",
         status: "warn" as const,
         message: "Could not determine git working tree status",
       };

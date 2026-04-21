@@ -87,7 +87,7 @@ describe("npm packaging contract", () => {
 
   it("has postinstall script for forge init", () => {
     assert.ok(packageJson.scripts.postinstall);
-    assert.match(packageJson.scripts.postinstall, /forge.*--init/);
+    assert.match(packageJson.scripts.postinstall, /forge\s+init/);
   });
 });
 

@@ -66,7 +66,7 @@ describe("individual check tests", () => {
   });
 
   it("gitClean check does not crash", async () => {
-    const results = await runDoctor({ checks: ["gitClean"] });
+    const results = await runDoctor({ checks: ["git-clean"] });
     assert.equal(results.length, 1);
     assert.ok(
       results[0].status === "pass" || results[0].status === "warn" || results[0].status === "fail"

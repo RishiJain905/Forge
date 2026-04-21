@@ -7,7 +7,7 @@ export const configCheck: Check = {
   name: "config",
   async run() {
     const yamlPath = join(process.cwd(), ".forge", "config.yaml");
-    const tsPath = join(process.cwd(), "forge.config.ts");
+    const tsPath = join(process.cwd(), ".forge", "forge.config.ts");
 
     if (existsSync(yamlPath)) {
       try {
@@ -33,14 +33,14 @@ export const configCheck: Check = {
       return {
         name: "config",
         status: "pass" as const,
-        message: "forge.config.ts found",
+        message: ".forge/forge.config.ts found",
       };
     }
 
     return {
       name: "config",
       status: "warn" as const,
-      message: "No configuration file found (.forge/config.yaml or forge.config.ts)",
+      message: "No configuration file found (.forge/config.yaml or .forge/forge.config.ts)",
       fix: "Run 'forge init' to create a config file.",
     };
   },

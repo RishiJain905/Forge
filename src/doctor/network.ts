@@ -14,15 +14,23 @@ export const networkCheck: Check = {
   async run() {
     const results = await Promise.allSettled(
       TEST_URLS.map((url) =>
-        execAsync(`curl -sf -o /dev/null -w "%{http_code}" "${url}"`, {
+        execAsync(`curl -s -o /dev/null -w "%{http_code}" "${url}"`, {
           timeout: 10000,
         })
       )
     );
 
-    const reachable = results.filter(
-      (r) => r.status === "fulfilled"
-    ).length;
+    let reachable = 0;
+    for (const r of results) {
+      if (r.status === "fulfilled") {
+        const httpCode = r.value.stdout.trim();
+        // Any non-zero HTTP response code means the server responded
+        // (e.g. 401, 403, 200 are all "reachable" — network works)
+        if (httpCode !== "000") {
+          reachable++;
+        }
+      }
+    }
 
     if (reachable >= 1) {
       return {
