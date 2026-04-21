@@ -6,7 +6,7 @@
 - [x] Batch 1 Task 2 (forge init) ✅
 - [x] Batch 1 Task 3 (forge doctor) ✅
 - [x] Batch 2 Task 1 (forge update) ✅
-- [ ] Batch 2 Task 2 (forge config)
+- [x] Batch 2 Task 2 (forge config) ✅
 - [ ] Batch 2 Task 3 (env variables)
 - [ ] Batch 3 (GitHub Action, Docker, release process)
 
@@ -21,7 +21,8 @@
 | 2026-04-21 | 1de7908 | feat(cli): add forge update command with --dry-run and --yes options |
 | 2026-04-21 | aaa35da | test(update): add unit and CLI entrypoint tests for forge update |
 | 2026-04-21 | 34d8b31 | chore: append update tests to npm test chain |
-| TBD | TBD | feat(step7-b2): forge config — list/get/set/unset/edit with precedence |
+| 2026-04-21 | 7512a46 | docs: S7-B2-P1 closeout — forge update implementation and progress |
+| 2026-04-21 | 674d674 | feat(step7-b2): forge config — resolveConfig, get/set/unset, CLI command, 19 tests |
 | TBD | TBD | feat(step7-b2): environment variable support — FORGE_* env vars |
 | TBD | TBD | feat(step7-b3): GitHub Action workflow — forge-action.yml |
 | TBD | TBD | feat(step7-b3): Docker integration — Dockerfile + docker-compose.yml |
@@ -33,4 +34,4 @@
 
 ## Next Major Target
 
-Batch 2 Task 2 — forge config
+Batch 2 Task 3 — environment variable support (FORGE_* env vars)

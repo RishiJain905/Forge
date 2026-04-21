@@ -590,12 +590,12 @@
   - Added js-yaml dependency and @types/js-yaml devDependency
   - Added tests/doctor.test.ts (12 tests: 3 runDoctor unit + 5 individual checks + 1 printDoctorResults + 3 CLI integration)
   - Wired doctor.test.js into default npm test script chain
-- Step 7 Batch 2 Task 1 (forge update):
-  - Added `src/update.ts` with `checkForUpdate()` (npm view with timeout) and `selfUpdate(yes)` 
-  - Package.json resolution uses `__dirname` path (consistent with existing CLI), not `process.cwd()`
-  - Graceful fallback when npm view fails (offline/no network)
-  - Added `forge update [--dry-run] [--yes]` command to `src/cli.ts` via Commander
-  - Error handling follows existing `exitCode = 1` + `stderr.write` pattern
-  - Added `tests/update.test.ts` (5 tests: 3 unit + 2 CLI spawnSync)
-  - Wired update.test.js into default npm test script chain
-- Next major target: Step 7 Batch 2 Task 2 (forge config).
+- Step 7 Batch 2 Task 2 (forge config):
+  - Added `src/config.ts` with `resolveConfig()` (merges defaults + `.forge/config.yaml` + source tracking), `getConfigValue()`, `setConfigValue()` (dot-path write), `unsetConfigValue()` (true deletion), `openInEditor()`
+  - Uses `js-yaml` (already a dependency) for YAML parse/serialize — consistent with doctor config check
+  - Defaults match `src/init.ts` config structure
+  - Added `forge config` CLI command with `--list`, `--get`, `--set`, `--unset`, `--edit` options; `--list` is the default fallback
+  - Error handling follows `exitCode = 1` + `stderr.write` pattern
+  - Added `tests/config.test.ts` (19 tests: 2 resolveConfig + 3 getConfigValue + 4 setConfigValue + 3 unsetConfigValue + 7 CLI integration)
+  - Wired config.test.js into default npm test script chain
+- Next major target: Step 7 Batch 2 Task 3 (env variables).
