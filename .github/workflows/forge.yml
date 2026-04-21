@@ -1,0 +1,52 @@
+name: Forge Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  forge:
+    name: Forge
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Forge
+        run: npm install -g @forge-cli/forge
+
+      - name: Forge Doctor
+        run: forge doctor --checks node,git,npm,config
+
+      - name: Forge Plan
+        run: forge plan --repo . --output-dir .forge
+
+      - name: Forge Execute
+        run: forge execute --repo . --auto --output-dir .forge
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+      - name: Forge Integrate
+        run: forge integrate --repo . --output-dir .forge
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: forge-artifacts
+          path: |
+            .forge/plan.json
+            .forge/execute.json
+            .forge/integrate.json
+            .forge/reports/plan-report.md
+            .forge/reports/execute-report.md
+            .forge/reports/integration-report.md
