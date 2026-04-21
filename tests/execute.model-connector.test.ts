@@ -11,6 +11,7 @@ import {
   parseModelResponse,
   applyChanges,
   executeWorkstream,
+  getModelCallTimeoutForPrompt,
   getModelCallTimeoutMs,
   hashContent,
 } from "../src/execute/model-connector.js";
@@ -446,6 +447,19 @@ await runScenario("loadModelConfig uses OLLAMA_API_KEY when FORGE_MODEL_API_KEY 
 await runScenario("getModelCallTimeoutMs defaults to 300000 when FORGE_MODEL_TIMEOUT_MS unset", async () => {
   await withEnv(modelEnv({}), async () => {
     assert.equal(getModelCallTimeoutMs(), 300_000);
+  });
+});
+
+await runScenario("getModelCallTimeoutForPrompt scales with prompt when env unset", async () => {
+  await withEnv(modelEnv({}), async () => {
+    assert.equal(getModelCallTimeoutForPrompt(1000), 300_000);
+    assert.equal(getModelCallTimeoutForPrompt(51_626), 619_512);
+  });
+});
+
+await runScenario("getModelCallTimeoutForPrompt uses FORGE_MODEL_TIMEOUT_MS when set", async () => {
+  await withEnv(modelEnv({ FORGE_MODEL_TIMEOUT_MS: "200000" }), async () => {
+    assert.equal(getModelCallTimeoutForPrompt(999_999), 200_000);
   });
 });
 

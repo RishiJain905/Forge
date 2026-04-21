@@ -25,7 +25,7 @@ import type { SplitArtifact } from "../split/types.js";
 import { buildWorkstreamPrompt } from "./prompt-builder.js";
 import {
   executeWorkstream,
-  getModelCallTimeoutMs,
+  getModelCallTimeoutForPrompt,
   getModelConfigError,
   isModelConfigured,
 } from "./model-connector.js";
@@ -183,11 +183,11 @@ async function executeWorkstreamWithAI(
       repoRoot,
     });
 
-    const tmo = getModelCallTimeoutMs();
+    const tmo = getModelCallTimeoutForPrompt(prompt.length);
     console.log(
       `[AI] ${workstreamId}: calling model (${prompt.length} chars; ~${Math.round(
         tmo / 1000
-      )}s HTTP timeout). No git/file updates from this step until the API returns. FORGE_MODEL_DEBUG=1 logs each request on stderr.`
+      )}s HTTP timeout${process.env.FORGE_MODEL_TIMEOUT_MS?.trim() ? " (from FORGE_MODEL_TIMEOUT_MS)" : " (scaled from prompt size; set FORGE_MODEL_TIMEOUT_MS to override)"}). No git/file updates until the API returns. FORGE_MODEL_DEBUG=1 logs each request on stderr.`
     );
 
     const startTime = Date.now();

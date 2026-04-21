@@ -232,17 +232,44 @@ function sleep(ms: number): Promise<void> {
 
 export type FetchLike = (url: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
-/** HTTP timeout per model request attempt (retries may run additional attempts). */
-export function getModelCallTimeoutMs(): number {
+const MIN_HTTP_TIMEOUT_MS = 10_000;
+const MAX_HTTP_TIMEOUT_MS = 3_600_000; // 1h hard cap
+
+function parseExplicitModelTimeoutMs(): number | null {
   const raw = process.env.FORGE_MODEL_TIMEOUT_MS;
   if (raw === undefined || raw.trim() === "") {
-    return 300_000;
+    return null;
   }
   const n = parseInt(raw, 10);
-  if (!Number.isFinite(n) || n < 10_000) {
-    return 300_000;
+  if (!Number.isFinite(n)) {
+    return null;
   }
-  return Math.min(n, 900_000);
+  return Math.min(MAX_HTTP_TIMEOUT_MS, Math.max(MIN_HTTP_TIMEOUT_MS, n));
+}
+
+/**
+ * HTTP timeout when `FORGE_MODEL_TIMEOUT_MS` is set (used for status text and
+ * non-execute callers that do not have a prompt length yet).
+ */
+export function getModelCallTimeoutMs(): number {
+  return parseExplicitModelTimeoutMs() ?? 300_000;
+}
+
+/**
+ * Timeout for one model HTTP attempt. If `FORGE_MODEL_TIMEOUT_MS` is set, that
+ * value wins. Otherwise scales with prompt size so large execute prompts are
+ * not aborted at 5m while the model is still generating.
+ */
+export function getModelCallTimeoutForPrompt(promptCharCount: number): number {
+  const explicit = parseExplicitModelTimeoutMs();
+  if (explicit !== null) {
+    return explicit;
+  }
+  const scaled = Math.max(
+    300_000,
+    Math.min(MAX_HTTP_TIMEOUT_MS, Math.ceil(promptCharCount * 12))
+  );
+  return scaled;
 }
 
 export async function callModel(
@@ -252,7 +279,7 @@ export async function callModel(
   timeoutMs?: number
 ): Promise<string> {
   const fetch = fetchFn ?? globalThis.fetch;
-  const timeout = timeoutMs ?? getModelCallTimeoutMs();
+  const timeout = timeoutMs ?? getModelCallTimeoutForPrompt(prompt.length);
 
   const { url, body, headers } = buildProviderRequest(prompt, config);
   const bodyText = JSON.stringify(body);
@@ -319,7 +346,7 @@ export async function callModel(
         logDebug(`abort/timeout after ${timeout}ms`);
         throw new AIModelError(
           AI_ERROR_CODES.TIMEOUT,
-          `Model call timed out after ${timeout}ms`
+          `Model call timed out after ${timeout}ms (request ~${bodyText.length} chars). Raise FORGE_MODEL_TIMEOUT_MS (up to ${MAX_HTTP_TIMEOUT_MS / 60_000}m), or use FORGE_MODEL_DEBUG=1 to confirm the HTTP call reaches the provider.`
         );
       }
 
@@ -705,12 +732,7 @@ export async function executeWorkstream(
   const config = loadModelConfig(repoRoot);
   const promptHash = hashContent(prompt);
 
-  const rawResponse = await callModel(
-    prompt,
-    config,
-    fetchFn,
-    getModelCallTimeoutMs()
-  );
+  const rawResponse = await callModel(prompt, config, fetchFn);
   const parsed = parseModelResponse(rawResponse);
   const changes = await applyChanges(parsed.changes, repoRoot);
 
