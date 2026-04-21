@@ -6,3 +6,4 @@ coverage/
 .worktrees/
 .DS_Store
 .opencode
+.env

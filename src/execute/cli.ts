@@ -22,7 +22,7 @@ import { writeExecuteArtifact } from "./artifact.js";
 import { createExecuteReport } from "./report.js";
 import type { SplitArtifact } from "../split/types.js";
 import { buildWorkstreamPrompt } from "./prompt-builder.js";
-import { executeWorkstream } from "./model-connector.js";
+import { executeWorkstream, isModelConfigured } from "./model-connector.js";
 
 const SCHEMA_VERSION = "1.0.0";
 const FORGE_VERSION = "0.0.1";
@@ -157,7 +157,7 @@ async function executeWorkstreamWithAI(
       })),
       modelUsed: result.modelUsed,
       promptHash: result.promptHash,
-      provider: process.env.FORGE_MODEL_PROVIDER,
+      provider: result.provider,
       executionDurationMs,
     };
   } catch (err) {
@@ -333,7 +333,9 @@ export async function runExecuteCommand(
   console.log("  fail <id> [reason]: Mark workstream as failed");
   console.log("  status:            Show dashboard");
   console.log("  exit:              Exit REPL");
-  console.log("\nAI execution requires FORGE_MODEL_PROVIDER and FORGE_MODEL_NAME env vars.");
+  console.log(
+    "\nAI execution needs a model: set FORGE_MODEL_PROVIDER + FORGE_MODEL_NAME, or configure execute.default_model / forge.default_model in .forge/config.yaml (or FORGE_MODEL=provider/model)."
+  );
   console.log("Optional: FORGE_MODEL_API_KEY, FORGE_MODEL_BASE_URL, FORGE_EXECUTE_AUTO");
 
   const rl = readline.createInterface({
@@ -397,8 +399,8 @@ export async function runExecuteCommand(
         return false;
       }
 
-      // If no model provider is configured, stay in manual mode (just transition to running)
-      if (!process.env.FORGE_MODEL_PROVIDER) {
+      // If no model is configured, stay in manual mode (just transition to running)
+      if (!isModelConfigured(repoRoot)) {
         console.log(`✓ ${ws.workstreamId} STARTED (manual mode)`);
         printDashboard(state, mergeOrderMap);
         return false;

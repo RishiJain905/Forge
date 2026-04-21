@@ -51,6 +51,28 @@ function mockFetchSequence(responses: Array<{ body: string; status: number }>): 
   return { fetch: fetchFn, calls };
 }
 
+const MODEL_ENV_KEYS = [
+  "FORGE_MODEL_PROVIDER",
+  "FORGE_MODEL_NAME",
+  "FORGE_MODEL_API_KEY",
+  "FORGE_MODEL_BASE_URL",
+  "FORGE_MODEL",
+  "FORGE_DEFAULT_MODEL",
+  "FORGE_EXECUTE_DEFAULT_MODEL",
+] as const;
+
+/** Clear model-related env vars, then apply overrides (for isolated cwd tests). */
+function modelEnv(
+  overrides: Record<string, string | undefined>,
+): Record<string, string | undefined> {
+  const out: Record<string, string | undefined> = {};
+  for (const k of MODEL_ENV_KEYS) {
+    out[k] = undefined;
+  }
+  Object.assign(out, overrides);
+  return out;
+}
+
 /** Temporarily set env vars and restore them after the callback. */
 async function withEnv(env: Record<string, string | undefined>, fn: () => Promise<void>): Promise<void> {
   const saved: Record<string, string | undefined> = {};
@@ -629,6 +651,8 @@ await runScenario("executeWorkstream returns ExecuteWorkstreamResult with all fi
     assert.ok("promptHash" in result);
     assert.ok("rawResponse" in result);
     assert.ok("changes" in result);
+    assert.ok("provider" in result);
+    assert.equal(result.provider, "openai");
     assert.ok(result.rawResponse.length > 0, "rawResponse should not be empty");
   });
 
@@ -659,4 +683,56 @@ await runScenario("loadModelConfig throws MISSING_MODEL_CONFIG for invalid provi
       (err: unknown): err is AIModelError => err instanceof AIModelError && err.code === "MISSING_MODEL_CONFIG"
     );
   });
+});
+
+await runScenario("loadModelConfig throws when no env and no explicit workspace model", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-model-isolated-"));
+  try {
+    await withEnv(modelEnv({}), async () => {
+      assert.throws(
+        () => loadModelConfig(dir),
+        (err: unknown): err is AIModelError => err instanceof AIModelError && err.code === "MISSING_MODEL_CONFIG"
+      );
+    });
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+await runScenario("loadModelConfig reads execute.default_model from .forge/config.yaml", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-model-yaml-"));
+  try {
+    await fs.mkdir(path.join(dir, ".forge"), { recursive: true });
+    await fs.writeFile(
+      path.join(dir, ".forge", "config.yaml"),
+      "execute:\n  default_model: google/gemini-2.0-flash\n",
+      "utf8",
+    );
+    await withEnv(modelEnv({}), async () => {
+      const config = loadModelConfig(dir);
+      assert.equal(config.provider, "google");
+      assert.equal(config.modelName, "gemini-2.0-flash");
+    });
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+await runScenario("loadModelConfig prefers FORGE_MODEL over config file when env model pair unset", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-model-env-pref-"));
+  try {
+    await fs.mkdir(path.join(dir, ".forge"), { recursive: true });
+    await fs.writeFile(
+      path.join(dir, ".forge", "config.yaml"),
+      "execute:\n  default_model: google/gemini-2.0-flash\n",
+      "utf8",
+    );
+    await withEnv(modelEnv({ FORGE_MODEL: "anthropic/claude-3-5-haiku-20241022" }), async () => {
+      const config = loadModelConfig(dir);
+      assert.equal(config.provider, "anthropic");
+      assert.equal(config.modelName, "claude-3-5-haiku-20241022");
+    });
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
 });

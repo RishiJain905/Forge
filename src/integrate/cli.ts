@@ -750,7 +750,7 @@ export async function runIntegrateCommand(
   for (let attempt = 0; attempt <= retryConfig.maxRetries; attempt++) {
     freezeState.attemptCount = attempt + 1;
     try {
-      const config = loadModelConfig();
+      const config = loadModelConfig(repoRoot);
       rawResponse = await callModel(prompt, config);
       modelUsed = `${config.provider}/${config.modelName}`;
       // Success — exit retry loop

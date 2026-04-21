@@ -11,6 +11,7 @@ import {
   getConfigValue,
   setConfigValue,
   unsetConfigValue,
+  getConfiguredModelIdFromWorkspace,
 } from "../src/config.js";
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
@@ -62,6 +63,65 @@ describe("resolveConfig", () => {
     assert.equal(sources["forge.log_level"], ".forge/config.yaml");
     assert.equal(sources["execute.max_workstreams"], ".forge/config.yaml");
     assert.equal(sources["forge.version"], "default");
+  });
+});
+
+describe("getConfiguredModelIdFromWorkspace", () => {
+  let testDir: string;
+  const savedEnv: Record<string, string | undefined> = {};
+
+  beforeEach(async () => {
+    testDir = await mkdtemp(join(tmpdir(), "forge-model-id-test-"));
+    for (const key of [
+      "FORGE_MODEL",
+      "FORGE_DEFAULT_MODEL",
+      "FORGE_EXECUTE_DEFAULT_MODEL",
+    ]) {
+      savedEnv[key] = process.env[key];
+      delete process.env[key];
+    }
+  });
+
+  afterEach(async () => {
+    for (const [key, value] of Object.entries(savedEnv)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+    try {
+      await rm(testDir, { recursive: true, force: true });
+    } catch {
+      // best effort cleanup
+    }
+  });
+
+  it("returns null when no file and no env model", () => {
+    assert.equal(getConfiguredModelIdFromWorkspace(testDir), null);
+  });
+
+  it("returns execute.default_model from config file", async () => {
+    const forgeDir = join(testDir, ".forge");
+    await mkdir(forgeDir, { recursive: true });
+    await writeFile(
+      join(forgeDir, "config.yaml"),
+      "execute:\n  default_model: ollama/llama3\n",
+      "utf8",
+    );
+    assert.equal(getConfiguredModelIdFromWorkspace(testDir), "ollama/llama3");
+  });
+
+  it("prefers FORGE_MODEL env over execute in file", async () => {
+    const forgeDir = join(testDir, ".forge");
+    await mkdir(forgeDir, { recursive: true });
+    await writeFile(
+      join(forgeDir, "config.yaml"),
+      "execute:\n  default_model: ollama/llama3\n",
+      "utf8",
+    );
+    process.env.FORGE_MODEL = "openai/gpt-4o-mini";
+    assert.equal(getConfiguredModelIdFromWorkspace(testDir), "openai/gpt-4o-mini");
   });
 });
 
