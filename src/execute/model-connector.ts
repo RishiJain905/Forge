@@ -328,13 +328,26 @@ interface ProviderRequest {
   body: Record<string, unknown>;
 }
 
+/**
+ * Join `base` (OpenAI-compatible root, often `https://host` or `https://host/v1`)
+ * with an absolute path that normally starts with `/v1/...`, avoiding `/v1/v1/`.
+ */
+function joinOpenAiCompatibleBase(base: string, pathFromRoot: string): string {
+  const b = base.replace(/\/+$/, "");
+  const p = pathFromRoot.startsWith("/") ? pathFromRoot : `/${pathFromRoot}`;
+  if (/\/v1$/i.test(b) && p.toLowerCase().startsWith("/v1/")) {
+    return `${b}${p.slice("/v1".length)}`;
+  }
+  return `${b}${p}`;
+}
+
 function buildProviderRequest(prompt: string, config: ModelConfig): ProviderRequest {
   const base = config.baseUrl ?? PROVIDER_DEFAULT_BASE_URLS[config.provider];
 
   switch (config.provider) {
     case "openai":
       return {
-        url: `${base}/v1/chat/completions`,
+        url: joinOpenAiCompatibleBase(base, "/v1/chat/completions"),
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${config.apiKey ?? ""}`,
@@ -347,7 +360,7 @@ function buildProviderRequest(prompt: string, config: ModelConfig): ProviderRequ
 
     case "anthropic":
       return {
-        url: `${base}/v1/messages`,
+        url: joinOpenAiCompatibleBase(base, "/v1/messages"),
         headers: {
           "Content-Type": "application/json",
           "x-api-key": config.apiKey ?? "",
@@ -386,7 +399,7 @@ function buildProviderRequest(prompt: string, config: ModelConfig): ProviderRequ
 
     case "glm":
       return {
-        url: `${base}/v1/chat/completions`,
+        url: joinOpenAiCompatibleBase(base, "/v1/chat/completions"),
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${config.apiKey ?? ""}`,

@@ -286,6 +286,26 @@ await runScenario("callModel sends correct request for OpenAI provider", async (
   });
 });
 
+await runScenario("callModel does not double /v1 when base URL already ends with /v1", async () => {
+  const { fetch: mockFetchFn, calls } = mockFetchSequence([{
+    body: JSON.stringify({
+      choices: [{ message: { content: "## CHANGES\n```json\n[]\n```" } }],
+    }),
+    status: 200,
+  }]);
+
+  await withEnv({
+    FORGE_MODEL_PROVIDER: "openai",
+    FORGE_MODEL_NAME: "kimi-k2.6:cloud",
+    FORGE_MODEL_API_KEY: "test-key",
+    FORGE_MODEL_BASE_URL: "https://ollama.com/v1",
+  }, async () => {
+    const config = loadModelConfig();
+    await callModel("test prompt", config, mockFetchFn);
+    assert.equal(calls[0]?.url, "https://ollama.com/v1/chat/completions");
+  });
+});
+
 await runScenario("callModel sends correct request for Anthropic provider", async () => {
   const { fetch: mockFetchFn, calls } = mockFetchSequence([{
     body: JSON.stringify({
