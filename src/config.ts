@@ -9,6 +9,7 @@ const DEFAULT_VALUES: Record<string, unknown> = {
     version: "1.0.0",
     log_level: "info",
     default_model: "openai/gpt-4o",
+    no_color: false,
   },
   intake: {
     default_llm_mode: "auto",
@@ -23,6 +24,57 @@ const DEFAULT_VALUES: Record<string, unknown> = {
     test_framework: "auto",
   },
 };
+
+type EnvVarType = "string" | "boolean" | "number";
+
+interface EnvVarEntry {
+  env: string;
+  key: string;
+  type: EnvVarType;
+}
+
+const ENV_VAR_MAP: EnvVarEntry[] = [
+  { env: "FORGE_LOG_LEVEL", key: "forge.log_level", type: "string" },
+  { env: "FORGE_DEFAULT_MODEL", key: "forge.default_model", type: "string" },
+  { env: "FORGE_MODEL", key: "forge.default_model", type: "string" },
+  { env: "FORGE_NO_COLOR", key: "forge.no_color", type: "boolean" },
+  { env: "FORGE_INTAKE_DEFAULT_LLM_MODE", key: "intake.default_llm_mode", type: "string" },
+  { env: "FORGE_EXECUTE_PARALLEL", key: "execute.parallel_workstreams", type: "boolean" },
+  { env: "FORGE_MAX_WORKSTREAMS", key: "execute.max_workstreams", type: "number" },
+  { env: "FORGE_EXECUTE_DEFAULT_MODEL", key: "execute.default_model", type: "string" },
+  { env: "FORGE_INTEGRATE_AUTO_RUN", key: "integrate.auto_run", type: "boolean" },
+  { env: "FORGE_INTEGRATE_TEST_FRAMEWORK", key: "integrate.test_framework", type: "string" },
+];
+
+function parseEnvValue(type: EnvVarType, value: string): unknown {
+  if (type === "boolean") {
+    return value === "true";
+  }
+  if (type === "number") {
+    return parseInt(value, 10);
+  }
+  return value;
+}
+
+export function getEnvOverrides(): Record<string, unknown> {
+  const overrides: Record<string, unknown> = {};
+  const modelKey = "FORGE_MODEL";
+
+  for (const entry of ENV_VAR_MAP) {
+    const raw = process.env[entry.env];
+    if (raw === undefined) {
+      continue;
+    }
+    if (entry.env === "FORGE_DEFAULT_MODEL" && process.env[modelKey] !== undefined) {
+      // FORGE_MODEL takes priority over FORGE_DEFAULT_MODEL
+      continue;
+    }
+    const parsed = parseEnvValue(entry.type, raw);
+    setValueByDotPath(overrides, entry.key, parsed);
+  }
+
+  return overrides;
+}
 
 function getValueByDotPath(
   obj: Record<string, unknown>,
@@ -161,6 +213,30 @@ export function resolveConfig(cwd: string = process.cwd()): ConfigResult {
       for (const key of Object.keys(fileSources)) {
         sources[key] = ".forge/config.yaml";
       }
+    }
+  }
+
+  const envOverrides = getEnvOverrides();
+  if (Object.keys(envOverrides).length > 0) {
+    deepMerge(values, envOverrides);
+    const envSources: Record<string, string> = {};
+    for (const entry of ENV_VAR_MAP) {
+      const raw = process.env[entry.env];
+      if (raw === undefined) {
+        continue;
+      }
+      if (
+        entry.env === "FORGE_DEFAULT_MODEL" &&
+        process.env.FORGE_MODEL !== undefined
+      ) {
+        continue;
+      }
+      const entryOverride: Record<string, unknown> = {};
+      setValueByDotPath(entryOverride, entry.key, parseEnvValue(entry.type, raw));
+      collectSources(entryOverride, "", `env:${entry.env}`, envSources);
+    }
+    for (const key of Object.keys(envSources)) {
+      sources[key] = envSources[key];
     }
   }
 
