@@ -602,7 +602,7 @@
   - Added `ENV_VAR_MAP` with declarative mapping of 10 `FORGE_*` env vars to config keys
   - Added `getEnvOverrides()` with type-aware parsing (string/boolean/number)
   - `FORGE_MODEL` takes priority over `FORGE_DEFAULT_MODEL` when both are set
-  - Env overrides have highest precedence in `resolveConfig()` (after config.yaml, before defaults)
+  - Env overrides have highest precedence in `resolveConfig()` (applied after defaults and config.yaml)
   - Source tracking shows `env:FORGE_VAR_NAME` in `forge config --list`
   - Added `forge.no_color: false` to DEFAULT_VALUES
   - Added `tests/config-env.test.ts` (18 tests: 15 unit + 3 CLI integration)
