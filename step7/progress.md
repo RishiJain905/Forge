@@ -9,7 +9,7 @@
 - [x] Batch 2 Task 2 (forge config) ✅
 - [x] Batch 2 Task 3 (env variables) ✅
 - [x] Batch 3 Task 1 (GitHub Action) ✅
-- [ ] Batch 3 Task 2 (Docker)
+- [x] Batch 3 Task 2 (Docker) ✅
 - [ ] Batch 3 Task 3 (release process)
 
 ## Commit History
@@ -27,7 +27,7 @@
 | 2026-04-21 | 674d674 | feat(step7-b2): forge config – resolveConfig, get/set/unset, CLI command, 19 tests |
 | 2026-04-21 | 684f333 | feat(config): add FORGE_* env var overrides with source tracking |
 | 2026-04-21 | 98d26e5 | feat(step7-b3): GitHub Action workflow, docs, and validation tests |
-| TBD | TBD | feat(step7-b3): Docker integration – Dockerfile + docker-compose.yml |
+| 2026-04-21 | 2d518ee | feat(step7-b3): Docker containerization, docs, and validation tests |
 | TBD | TBD | feat(step7-b3): release process – versioning, changelog, npm publish |
 
 ## Current Branch
@@ -36,4 +36,4 @@
 
 ## Next Major Target
 
-Batch 3 Task 2 – Docker integration (Dockerfile + docker-compose.yml)
+Batch 3 Task 3 – release process (versioning, changelog, npm publish)
