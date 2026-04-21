@@ -153,6 +153,7 @@ async function executeWorkstreamWithAI(
     return { workstreamId, success: false, changes: [], modelUsed: "", error: "Workstream not found" };
   }
 
+  console.log(`[AI] ${workstreamId}: loading plan.json, verify.json, split.json…`);
   const [planArtifact, verifyArtifact] = await Promise.all([
     loadPlanArtifact(repoRoot),
     loadVerifyArtifact(repoRoot),
@@ -173,6 +174,7 @@ async function executeWorkstreamWithAI(
     const splitContent = await fs.readFile(splitJsonPath, "utf-8");
     const splitArtifact = JSON.parse(splitContent) as SplitArtifact;
 
+    console.log(`[AI] ${workstreamId}: building workstream prompt…`);
     const { prompt } = await buildWorkstreamPrompt({
       workstreamId,
       splitArtifact,
@@ -181,9 +183,20 @@ async function executeWorkstreamWithAI(
       repoRoot,
     });
 
+    const tmo = getModelCallTimeoutMs();
+    console.log(
+      `[AI] ${workstreamId}: calling model (${prompt.length} chars; ~${Math.round(
+        tmo / 1000
+      )}s HTTP timeout). No git/file updates from this step until the API returns. FORGE_MODEL_DEBUG=1 logs each request on stderr.`
+    );
+
     const startTime = Date.now();
     const result = await executeWorkstream(prompt, repoRoot);
     const executionDurationMs = Date.now() - startTime;
+
+    console.log(
+      `[AI] ${workstreamId}: model + apply finished in ${executionDurationMs}ms (${result.changes.length} file change(s))`
+    );
 
     return {
       workstreamId,
@@ -484,15 +497,9 @@ export async function runExecuteCommand(
         return false;
       }
 
-      console.log(`[AI] Calling model for workstream: ${ws.workstreamId}...`);
-      {
-        const tmo = getModelCallTimeoutMs();
-        console.log(
-          `(Blocked until the model responds or times out — ~${Math.round(
-            tmo / 1000
-          )}s per attempt. Lines you type now run after this. Set FORGE_MODEL_TIMEOUT_MS to adjust.)`
-        );
-      }
+      console.log(
+        "(REPL: your next line is not read until this workstream finishes — see FORGE_MODEL_TIMEOUT_MS.)"
+      );
 
       const aiResult = await executeWorkstreamWithAI(found.id, state, repoRoot);
 
@@ -553,15 +560,9 @@ export async function runExecuteCommand(
         return false;
       }
 
-      console.log(`[AI] Calling model for workstream: ${ws.workstreamId}...`);
-      {
-        const tmo = getModelCallTimeoutMs();
-        console.log(
-          `(Blocked until the model responds or times out — ~${Math.round(
-            tmo / 1000
-          )}s per attempt. Lines you type now run after this. Set FORGE_MODEL_TIMEOUT_MS to adjust.)`
-        );
-      }
+      console.log(
+        "(REPL: your next line is not read until this workstream finishes — see FORGE_MODEL_TIMEOUT_MS.)"
+      );
 
       const aiResult = await executeWorkstreamWithAI(found.id, state, repoRoot);
 
@@ -730,9 +731,12 @@ export async function runExecuteCommand(
     let executable = getExecutableWorkstreams(state);
     if (executable.length > 0) {
       console.log(`\n[AI] Auto-executing unblocked workstreams...`);
+      console.log(
+        "[AI] Progress: you should see lines for load → build prompt → call model → apply files per workstream. No working-tree changes until after the model returns."
+      );
       while (executable.length > 0) {
         for (const ws of executable) {
-          console.log(`[AI] Executing: ${ws.workstreamId}...`);
+          console.log(`\n[AI] Executing: ${ws.workstreamId}…`);
           const runResult = transitionState(ws.workstreamId, "running", state);
           if (!runResult.success) {
             console.log(`Cannot run ${ws.workstreamId}: ${runResult.error}`);
