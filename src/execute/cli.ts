@@ -55,7 +55,7 @@ function formatPrerequisiteLabels(
 function printDashboard(state: ExecuteState, mergeOrderMap: Map<string, string[]>): void {
   console.log("\n=== Workstream Status ===");
   console.log(
-    "<id> is the number in brackets. Example: run 1  (not the long workstream_id string)."
+    "<id> = dashboard index (1, 2, …), optional brackets ([1]), or full workstream_id (e.g. ws-plan-config-1)."
   );
   console.log("[id] state       merge / notes        workstream_id");
   console.log("     title");
@@ -361,7 +361,9 @@ export async function runExecuteCommand(
 
   printDashboard(state, mergeOrderMap);
 
-  console.log("\nCommands: run <id> | aiexecute <id> | done <id> | fail <id> [reason] | status | exit");
+  console.log(
+    "\nCommands: run <id> | aiexecute <id> | done <id> | fail <id> [reason] | status | exit"
+  );
   console.log("  run/aiexecute <id>: Execute workstream with AI (builds prompt, calls model, applies changes)");
   console.log("  done <id>:         Mark workstream as manually completed");
   console.log("  fail <id> [reason]: Mark workstream as failed");
@@ -394,6 +396,24 @@ export async function runExecuteCommand(
     return { id, ws: state.workstreams.get(id) };
   }
 
+  /** 1-based index, [n], or map key / workstream_id string */
+  function resolveWorkstreamRef(
+    raw: string
+  ): { id: string; ws: ReturnType<typeof state.workstreams.get> } | null {
+    const trimmed = raw.trim();
+    const bracketed = trimmed.match(/^\[(\d+)\]$/);
+    const normalized = bracketed ? bracketed[1]! : trimmed;
+
+    if (/^\d+$/.test(normalized)) {
+      return findWorkstreamByIndex(normalized);
+    }
+
+    const ws = state.workstreams.get(normalized);
+    if (ws) return { id: normalized, ws };
+
+    return null;
+  }
+
   function getUnmet(id: string): string[] {
     const requirements = mergeOrderMap.get(id) ?? [];
     return requirements.filter((req) => !state.mergedWorkstreams.has(req));
@@ -420,9 +440,11 @@ export async function runExecuteCommand(
     }
 
     if (cmd === "run" && parts[1]) {
-      const found = findWorkstreamByIndex(parts[1]);
+      const found = resolveWorkstreamRef(parts[1]);
       if (!found || !found.ws) {
-        console.log(`Unknown workstream: ${parts[1]}`);
+        console.log(
+          `Unknown workstream: ${parts[1]} (use index 1…${state.workstreams.size}, [n], or workstream_id)`
+        );
         return false;
       }
 
@@ -486,9 +508,11 @@ export async function runExecuteCommand(
     }
 
     if (cmd === "aiexecute" && parts[1]) {
-      const found = findWorkstreamByIndex(parts[1]);
+      const found = resolveWorkstreamRef(parts[1]);
       if (!found || !found.ws) {
-        console.log(`Unknown workstream: ${parts[1]}`);
+        console.log(
+          `Unknown workstream: ${parts[1]} (use index 1…${state.workstreams.size}, [n], or workstream_id)`
+        );
         return false;
       }
 
@@ -545,9 +569,11 @@ export async function runExecuteCommand(
     }
 
     if (cmd === "done" && parts[1]) {
-      const found = findWorkstreamByIndex(parts[1]);
+      const found = resolveWorkstreamRef(parts[1]);
       if (!found || !found.ws) {
-        console.log(`Unknown workstream: ${parts[1]}`);
+        console.log(
+          `Unknown workstream: ${parts[1]} (use index 1…${state.workstreams.size}, [n], or workstream_id)`
+        );
         return false;
       }
 
@@ -595,9 +621,11 @@ export async function runExecuteCommand(
     }
 
     if (cmd === "fail" && parts[1]) {
-      const found = findWorkstreamByIndex(parts[1]);
+      const found = resolveWorkstreamRef(parts[1]);
       if (!found || !found.ws) {
-        console.log(`Unknown workstream: ${parts[1]}`);
+        console.log(
+          `Unknown workstream: ${parts[1]} (use index 1…${state.workstreams.size}, [n], or workstream_id)`
+        );
         return false;
       }
 
@@ -613,7 +641,9 @@ export async function runExecuteCommand(
     }
 
     console.log(`Unknown command: ${cmd}`);
-    console.log("Commands: run <id> | aiexecute <id> | done <id> | fail <id> [reason] | status | exit");
+    console.log(
+      "Commands: run <id> | aiexecute <id> | done <id> | fail <id> [reason] | status | exit"
+    );
     return false;
   }
 
