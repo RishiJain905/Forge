@@ -590,4 +590,12 @@
   - Added js-yaml dependency and @types/js-yaml devDependency
   - Added tests/doctor.test.ts (12 tests: 3 runDoctor unit + 5 individual checks + 1 printDoctorResults + 3 CLI integration)
   - Wired doctor.test.js into default npm test script chain
-- Next major target: Step 7 Batch 2 Task 1 (forge update).
+- Step 7 Batch 2 Task 1 (forge update):
+  - Added `src/update.ts` with `checkForUpdate()` (npm view with timeout) and `selfUpdate(yes)` 
+  - Package.json resolution uses `__dirname` path (consistent with existing CLI), not `process.cwd()`
+  - Graceful fallback when npm view fails (offline/no network)
+  - Added `forge update [--dry-run] [--yes]` command to `src/cli.ts` via Commander
+  - Error handling follows existing `exitCode = 1` + `stderr.write` pattern
+  - Added `tests/update.test.ts` (5 tests: 3 unit + 2 CLI spawnSync)
+  - Wired update.test.js into default npm test script chain
+- Next major target: Step 7 Batch 2 Task 2 (forge config).
