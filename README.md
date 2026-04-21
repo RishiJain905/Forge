@@ -54,43 +54,67 @@ npx @forge-cli/forge <command>
 
 ## AI Model Setup
 
-Steps 5 (Execute) and 6 (Integrate) use AI to generate code and integration tests. You need at least one model provider configured.
+Steps 1–4 (Intake, Plan, Verify, Split) are fully deterministic and do **not** require any AI keys.
 
-### Required: API Keys
-
-Set one or both of these environment variables:
+Forge uses AI only when it needs to call a model during later execution steps. To connect Forge to a model, set these environment variables:
 
 ```bash
-export OPENAI_API_KEY="sk-..."      # For OpenAI models
-export ANTHROPIC_API_KEY="sk-..."   # For Anthropic Claude models
+export FORGE_MODEL_PROVIDER="openai"   # openai | anthropic | google | ollama | glm
+export FORGE_MODEL_NAME="gpt-4o"       # required
+export FORGE_MODEL_API_KEY="..."       # optional; usually required for hosted providers
+export FORGE_MODEL_BASE_URL="..."      # optional; overrides the default provider endpoint
 ```
 
-Or set them per-command:
+Forge's connector reads only the `FORGE_MODEL_*` variables above. It does not look for `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`.
+
+### Supported providers
+
+- `openai` — OpenAI-compatible chat completions API
+- `anthropic` — Anthropic Messages API
+- `google` — Gemini / Generative Language API
+- `ollama` — local Ollama server
+- `glm` — Zhipu AI GLM OpenAI-compatible API
+
+### Default base URLs
+
+If `FORGE_MODEL_BASE_URL` is not set, Forge uses:
+
+- `openai` → `https://api.openai.com`
+- `anthropic` → `https://api.anthropic.com`
+- `google` → `https://generativelanguage.googleapis.com`
+- `ollama` → `http://localhost:11434`
+- `glm` → `https://open.bigmodel.cn/api/paas`
+
+### Example setups
 
 ```bash
-OPENAI_API_KEY="sk-..." forge execute --repo . --auto
+# OpenAI
+export FORGE_MODEL_PROVIDER="openai"
+export FORGE_MODEL_NAME="gpt-4o"
+export FORGE_MODEL_API_KEY="sk-..."
+
+# Anthropic
+export FORGE_MODEL_PROVIDER="anthropic"
+export FORGE_MODEL_NAME="claude-3-5-sonnet-4"
+export FORGE_MODEL_API_KEY="..."
+
+# Google Gemini
+export FORGE_MODEL_PROVIDER="google"
+export FORGE_MODEL_NAME="gemini-2.5-flash"
+export FORGE_MODEL_API_KEY="..."
+
+# Ollama (local)
+export FORGE_MODEL_PROVIDER="ollama"
+export FORGE_MODEL_NAME="llama3"
+# Usually no API key required
+
+# GLM
+export FORGE_MODEL_PROVIDER="glm"
+export FORGE_MODEL_NAME="glm-4"
+export FORGE_MODEL_API_KEY="..."
 ```
 
-### Optional: Choose a Model
-
-```bash
-# Set preferred model (default: openai/gpt-4o)
-export FORGE_MODEL="anthropic/claude-3-5-sonnet"
-
-# Or use forge config
-forge config --set model=anthropic/claude-3-5-sonnet
-```
-
-### Key Reference
-
-| Variable | Used By | Required |
-|----------|---------|----------|
-| `OPENAI_API_KEY` | Execute, Integrate | At least one |
-| `ANTHROPIC_API_KEY` | Execute, Integrate | At least one |
-| `FORGE_MODEL` | Execute, Integrate | No (defaults to `openai/gpt-4o`) |
-| `FORGE_EXECUTE_AUTO` | Execute | No (set `1` to auto-run unblocked workstreams) |
-
-Steps 1–4 (Intake, Plan, Verify, Split) are fully deterministic and do **not** require API keys.
+Optional: set `FORGE_EXECUTE_AUTO=1` to auto-run unblocked workstreams in `forge execute`.
 
 ---
 
