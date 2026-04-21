@@ -232,7 +232,7 @@ flowchart TD
         EXECUTE[src/execute]
         INTEGRATE[src/integrate]
     end
-    subgraph Artifacts[/.forge directory]
+    subgraph Artifacts[".forge directory"]
         A1[intake.json]
         R1[reports/intake-report.md]
         A2[plan.json]
@@ -242,9 +242,9 @@ flowchart TD
         A4[split.json]
         R4[reports/split-report.md]
         A5[execute.json]
-        R5[reports/execute-report.md]
+        R5[execute-report.md]
         A6[integrate.json]
-        R6[reports/integration-report.md]
+        R6[integration-report.md]
     end
     CLI_ENTRY --> INTAKE --> A1
     INTAKE --> R1
