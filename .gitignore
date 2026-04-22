@@ -7,3 +7,6 @@ coverage/
 .DS_Store
 .opencode
 .env
+
+# Local-only release notes (kept out of git by request — remove this line to track the file)
+docs/npm-shipping-new-version.md

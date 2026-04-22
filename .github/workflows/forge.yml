@@ -1,12 +1,20 @@
 name: Forge Pipeline
 
-# Deterministic stages (intake → split) run on every trigger. AI stages (execute, integrate)
-# run only when OPENAI_API_KEY is configured, to avoid failing fork PRs and unexpected API spend.
-# Use workflow_dispatch to run the full pipeline manually when secrets are set.
+# What this workflow does (in *this* repository):
+# - Builds the CLI from the checked-out commit (`npm ci` + `npm run build`) and
+#   exposes it with `npm link` so `forge` matches the branch you are testing.
+#   (Installing from npm would test whatever is published, not your PR.)
+# - Runs deterministic stages: doctor → intake → plan → verify → split.
+# - Runs execute + integrate only when OPENAI_API_KEY is set (skips on forks
+#   and avoids surprise API spend).
+#
+# In other projects you usually install from the registry instead, e.g.:
+#   npm install -g @forgecli/forge
+
 on:
   workflow_dispatch:
   push:
-    branches: [main, develop]
+    branches: [main, develop, dev]
   pull_request:
     branches: [main]
 
@@ -14,6 +22,7 @@ jobs:
   forge:
     name: Forge
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -25,9 +34,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: npm
 
-      - name: Install Forge
-        run: npm install -g @forgecli/forge
+      - name: Install dependencies and build Forge from this commit
+        run: |
+          npm ci
+          npm run build
+
+      - name: Link Forge CLI (global `forge` → this checkout)
+        run: npm link
 
       - name: Forge Doctor
         run: forge doctor --checks node,git,npm,config
