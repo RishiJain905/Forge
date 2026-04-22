@@ -346,8 +346,17 @@ describe("Write failures", () => {
     const dir = makeTmpWithSplit(workstreams);
     try {
       const forgeDir = path.join(dir, ".forge");
-      // Make .forge dir read-only so writeExecuteArtifact fails
-      fsSync.chmodSync(forgeDir, 0o555);
+      if (process.platform === "win32") {
+        // chmod on directories is not a reliable write barrier on Windows; a
+        // directory at the execute.json path forces the same exit code 1 when
+        // the CLI cannot use that path as the artifact file.
+        fsSync.mkdirSync(path.join(forgeDir, "execute.json"), {
+          recursive: true,
+        });
+      } else {
+        // Make .forge dir read-only so writeExecuteArtifact fails
+        fsSync.chmodSync(forgeDir, 0o555);
+      }
 
       const result = runForgeExecute(dir);
       assert.strictEqual(
@@ -357,16 +366,25 @@ describe("Write failures", () => {
       );
       assert.ok(
         result.stderr.includes("Error") ||
+          result.stderr.includes("Failure") ||
           result.stderr.includes("permission") ||
           result.stderr.includes("write") ||
-          result.stderr.includes("EACCES"),
-        `Expected error about write failure. Got: ${result.stderr}`,
+          result.stderr.includes("read") ||
+          result.stderr.includes("EACCES") ||
+          result.stderr.includes("EISDIR") ||
+          result.stderr.includes("ENOTDIR") ||
+          result.stderr.includes("directory") ||
+          result.stderr.includes("IO_ERROR") ||
+          result.stderr.includes("execute.json"),
+        `Expected error about execute.json I/O failure. Got: ${result.stderr}`,
       );
     } finally {
-      try {
-        fsSync.chmodSync(path.join(dir, ".forge"), 0o755);
-      } catch {
-        // ignore
+      if (process.platform !== "win32") {
+        try {
+          fsSync.chmodSync(path.join(dir, ".forge"), 0o755);
+        } catch {
+          // ignore
+        }
       }
       rmSync(dir, { recursive: true, force: true });
     }
