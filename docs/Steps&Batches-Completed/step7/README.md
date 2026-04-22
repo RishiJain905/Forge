@@ -2,11 +2,11 @@
 
 ## Overview
 
-Step 7 packages and distributes Forge as an installable CLI tool (`@forge-cli/forge`) so teams can run `npm install -g @forge-cli/forge` or `npx @forge-cli/forge` and use it immediately. This is the final step before V1 is complete.
+Step 7 packages and distributes Forge as an installable CLI tool (`@forgecli/forge`) so teams can run `npm install -g @forgecli/forge` or `npx @forgecli/forge` and use it immediately. This is the final step before V1 is complete.
 
 ## What This Step Does
 
-- Configures `package.json` for npm publishing (`@forge-cli/forge`)
+- Configures `package.json` for npm publishing (`@forgecli/forge`)
 - Adds `forge init` to create `.forge/` directory structure with config
 - Adds `forge doctor` for pre-flight environment checks
 - Adds `forge update` for self-update functionality
@@ -42,7 +42,7 @@ Step 7 packages and distributes Forge as an installable CLI tool (`@forge-cli/fo
 ### Batch 2: Update + Config + Env
 | # | Task | Agent |
 |---|------|-------|
-| 1 | forge update | Self-update via `npm view @forge-cli/forge version` |
+| 1 | forge update | Self-update via `npm view @forgecli/forge version` |
 | 2 | forge config | list/get/set/unset/edit with precedence chain |
 | 3 | Env Variables | FORGE_* env var support for all config keys |
 

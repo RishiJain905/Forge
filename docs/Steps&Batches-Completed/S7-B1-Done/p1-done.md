@@ -6,7 +6,7 @@
 ## What Changed
 
 ### package.json Updates
-- Renamed package from `forge-cli` to `@forge-cli/forge`
+- Renamed package from `forge-cli` to `@forgecli/forge`
 - Bumped version from `0.1.0` to `1.0.0`
 - Added `main`: `dist/src/index.js`
 - Kept `bin.forge`: `./dist/src/index.js` (matches real build output)
@@ -47,7 +47,7 @@
 - `npm run typecheck` — no type errors
 - `npm test` — all tests pass including 15 new npm-packaging tests
 - `npm run smoke` — all existing CLI behavior unchanged
-- `npm publish --dry-run` — valid package structure, `@forge-cli/forge@1.0.0`
+- `npm publish --dry-run` — valid package structure, `@forgecli/forge@1.0.0`
 
 ## Non-Goals Preserved
 - No changes to existing CLI commands (intake, plan, verify, split, execute, integrate)

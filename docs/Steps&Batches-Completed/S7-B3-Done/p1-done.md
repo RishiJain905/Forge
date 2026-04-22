@@ -12,7 +12,7 @@
 - Steps:
   - `actions/checkout@v4` with `fetch-depth: 0`
   - `actions/setup-node@v4` with `node-version: "20"`
-  - Install `@forge-cli/forge` globally via `npm install -g`
+  - Install `@forgecli/forge` globally via `npm install -g`
   - `forge doctor --checks node,git,npm,config`
   - `forge plan --repo . --output-dir .forge`
   - `forge execute --repo . --auto --output-dir .forge` with `OPENAI_API_KEY` from secrets
@@ -61,7 +61,7 @@
 
 ## Non-Goals Preserved
 
-- No actual `@forge-cli/forge-action` published to GitHub Marketplace
+- No actual `@forgecli/forge-action` published to GitHub Marketplace
 - No changes to existing Forge CLI commands (intake, plan, verify, split, execute, integrate)
 - No GitHub-specific features added to CLI itself
 - `release.yml` untouched (intentionally manual-only per existing config)

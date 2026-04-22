@@ -52,7 +52,7 @@ jobs:
 
 ## Reusable Action
 
-The `@forge-cli/forge-action` composite action installs Forge and runs the requested command.
+The `@forgecli/forge-action` composite action installs Forge and runs the requested command.
 
 | Input | Required | Default | Description |
 |-------|----------|---------|-------------|

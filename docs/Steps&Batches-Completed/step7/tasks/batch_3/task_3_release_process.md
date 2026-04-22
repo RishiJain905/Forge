@@ -216,20 +216,20 @@ Forge follows [Semantic Versioning](https://semver.org/):
 
 ## After Publishing
 
-1. Verify on npm: `npm view @forge-cli/forge`
+1. Verify on npm: `npm view @forgecli/forge`
 2. Create GitHub Release at: https://github.com/RishiJain905/Forge/releases/new
 3. Update README with installation instructions
 
 ## npm Access
 
 Publishing requires:
-- npm account with access to `@forge-cli` organization
+- npm account with access to `@forgecli` organization
 - 2FA enabled on npm
 - `npm login` completed locally
 
 To check access:
 ```bash
-npm access ls-collab @forge-cli/forge
+npm access ls-collab @forgecli/forge
 ```
 ```
 

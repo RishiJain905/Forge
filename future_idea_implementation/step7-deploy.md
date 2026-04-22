@@ -1,7 +1,7 @@
 # Forge Step 7 — Deploy
 
 > **Stage:** Post-Step 6 (v2 final step)
-> **Purpose:** Package and distribute Forge as a installable tool so teams can run `npm install -g @forge-cli/forge` or `npx @forge-cli/forge` and use it immediately.
+> **Purpose:** Package and distribute Forge as a installable tool so teams can run `npm install -g @forgecli/forge` or `npx @forgecli/forge` and use it immediately.
 
 ---
 
@@ -11,10 +11,10 @@ Forge is currently a repo you clone and run locally. For broader adoption — es
 
 ```bash
 # Install globally
-npm install -g @forge-cli/forge
+npm install -g @forgecli/forge
 
 # Or run without installing (npx)
-npx @forge-cli/forge --version
+npx @forgecli/forge --version
 
 # After install
 forge --help
@@ -33,7 +33,7 @@ Step 7 is about making Forge a **first-class installable CLI package** — with 
 
 ```json
 {
-  "name": "@forge-cli/forge",
+  "name": "@forgecli/forge",
   "version": "1.0.0",
   "description": "Reliability-first CLI for agentic software development",
   "main": "dist/index.js",
@@ -155,7 +155,7 @@ export async function checkForUpdate(): Promise<{
   const current = packageJson.version;
   try {
     const { stdout } = await execAsync(
-      `npm view @forge-cli/forge version`,
+      `npm view @forgecli/forge version`,
       { timeout: 10000 }
     );
     const latest = stdout.trim();
@@ -172,7 +172,7 @@ export async function selfUpdate(): Promise<void> {
     return;
   }
   console.log(`Updating Forge ${packageJson.version} → ${latest}...`);
-  await execAsync(`npm install -g @forge-cli/forge@${latest}`);
+  await execAsync(`npm install -g @forgecli/forge@${latest}`);
   console.log("Update complete.");
 }
 ```
@@ -272,7 +272,7 @@ jobs:
           node-version: "20"
 
       - name: Install Forge
-        run: npm install -g @forge-cli/forge
+        run: npm install -g @forgecli/forge
 
       - name: Forge Doctor
         run: forge doctor --checks node,git,npm,config
@@ -393,14 +393,14 @@ git push origin v1.1.0
 
 | Method | Command | Best For |
 |--------|---------|----------|
-| Global npm | `npm install -g @forge-cli/forge` | Individual developers |
-| npx (no install) | `npx @forge-cli/forge <cmd>` | One-off usage |
-| Project local | `npm install --save-dev @forge-cli/forge` | Teams with locked versions |
+| Global npm | `npm install -g @forgecli/forge` | Individual developers |
+| npx (no install) | `npx @forgecli/forge <cmd>` | One-off usage |
+| Project local | `npm install --save-dev @forgecli/forge` | Teams with locked versions |
 | Docker | `docker run --rm forge <cmd>` | CI/CD, containers |
 | GitHub Action | `uses: forge-cli/forge-action@v1` | GitHub CI |
 | Homebrew | `brew install forge-cli/tap/forge` | macOS developers |
 
-### 12. `@forge-cli/forge-action` — GitHub Action
+### 12. `@forgecli/forge-action` — GitHub Action
 
 ```yaml
 # github.com/forge-cli/forge-action
@@ -425,9 +425,9 @@ runs:
       run: |
         VERSION=${{ inputs.version }}
         if [ "$VERSION" = "latest" ]; then
-          VERSION=$(npm view @forge-cli/forge version)
+          VERSION=$(npm view @forgecli/forge version)
         fi
-        npx @forge-cli/forge@$VERSION ${{ inputs.command }}
+        npx @forgecli/forge@$VERSION ${{ inputs.command }}
 ```
 
 ---
@@ -482,7 +482,7 @@ forge/
 
 ```json
 {
-  "name": "@forge-cli/forge",
+  "name": "@forgecli/forge",
   "exports": {
     ".": {
       "import": "./dist/index.js",
@@ -529,7 +529,7 @@ forge changelog [--since v1.0.0] [--format md]
 - `forge config --list` — Shows all config values with sources
 - GitHub Action `forge-action` — Works in a real workflow
 - Docker build + run — Works in a container
-- `npx @forge-cli/forge --version` — Works without installing
+- `npx @forgecli/forge --version` — Works without installing
 
 ---
 
@@ -544,7 +544,7 @@ forge changelog [--since v1.0.0] [--format md]
 
 ## Open Questions
 
-1. Should `@forge-cli/forge` publish to both `npm` and `GitHub Packages`?
+1. Should `@forgecli/forge` publish to both `npm` and `GitHub Packages`?
 2. Should there be a `forge login` for storing AI credentials encrypted locally?
 3. Should Forge support auto-update notifications (like `npm` does)?
 4. Should there be a `forge shell` command for interactive REPL-style usage?

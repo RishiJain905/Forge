@@ -3,7 +3,7 @@
 > A reliability-first CLI for agentic software development.
 
 **Version: 1.0.0 (V1 Frozen)**  
-**Package:** `@forge-cli/forge`  
+**Package:** `@forgecli/forge`  
 **License:** MIT
 
 Forge wraps AI coding agents in a disciplined engineering workflow — converting messy tasks into structured implementation work, preserving clean context handoffs, and enforcing validation before merge.
@@ -44,10 +44,10 @@ Keep the command fast and deterministic while making pass/fail results clearer.
 
 ```bash
 # Global install
-npm install -g @forge-cli/forge
+npm install -g @forgecli/forge
 
 # One-off usage (no install)
-npx @forge-cli/forge <command>
+npx @forgecli/forge <command>
 ```
 
 ---
@@ -286,7 +286,7 @@ Forge is built around six beliefs:
 - **Integrate** — Test obligation enforcement, integration reporting, and acceptance criteria review
 
 ### Deployment
-- **npm Packaging** — `@forge-cli/forge` with `prepublishOnly`, shebang, and executable CLI
+- **npm Packaging** — `@forgecli/forge` with `prepublishOnly`, shebang, and executable CLI
 - **Docker** — Multi-stage Dockerfile (`node:20-alpine`, non-root user) + docker-compose.yml
 - **GitHub Actions** — `.github/workflows/forge.yml` with full Forge pipeline
 - **Release Scripts** — `scripts/release.sh`, `scripts/publish.sh`, `CHANGELOG.md`
@@ -326,7 +326,7 @@ docker-compose run --rm forge plan --repo /repo --output-dir /repo/.forge
 - uses: actions/setup-node@v4
   with:
     node-version: "20"
-- run: npm install -g @forge-cli/forge
+- run: npm install -g @forgecli/forge
 - run: forge doctor --checks node,git,npm,config
 - run: forge intake --repo . --output-dir .forge --prompt "Your task" --no-llm --json-only
 - run: forge plan --repo . --output-dir .forge

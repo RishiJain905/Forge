@@ -2,7 +2,7 @@
 
 ## Goal
 
-Add a proper GitHub Action workflow (`.github/workflows/forge.yml`) that demonstrates Forge usage in CI, and define the `@forge-cli/forge-action` for reusable workflow steps.
+Add a proper GitHub Action workflow (`.github/workflows/forge.yml`) that demonstrates Forge usage in CI, and define the `@forgecli/forge-action` for reusable workflow steps.
 
 ## Context
 
@@ -37,7 +37,7 @@ jobs:
           node-version: "20"
 
       - name: Install Forge
-        run: npm install -g @forge-cli/forge
+        run: npm install -g @forgecli/forge
 
       - name: Forge Doctor
         run: forge doctor --checks node,git,npm,config
@@ -116,7 +116,7 @@ jobs:
         run: npm run smoke
 ```
 
-### 3. Create `action.yml` for `@forge-cli/forge-action`
+### 3. Create `action.yml` for `@forgecli/forge-action`
 
 This is the reusable action definition (for publishing to GitHub Marketplace or GitHub Actions marketplace):
 
@@ -143,9 +143,9 @@ runs:
       run: |
         VERSION=${{ inputs.version }}
         if [ "$VERSION" = "latest" ]; then
-          VERSION=$(npm view @forge-cli/forge version)
+          VERSION=$(npm view @forgecli/forge version)
         fi
-        npx @forge-cli/forge@$VERSION ${{ inputs.command }}
+        npx @forgecli/forge@$VERSION ${{ inputs.command }}
 
     - shell: bash
       if: ${{ inputs.token }}
@@ -153,7 +153,7 @@ runs:
         git config --global url."https://${{ inputs.token }}@github.com/".insteadOf "https://github.com/"
 ```
 
-Note: This `action.yml` is for documentation purposes — the actual `@forge-cli/forge-action` would live in a separate repository at `github.com/forge-cli/forge-action`. Document it here for now.
+Note: This `action.yml` is for documentation purposes — the actual `@forgecli/forge-action` would live in a separate repository at `github.com/forge-cli/forge-action`. Document it here for now.
 
 ### 4. Document usage
 
@@ -174,6 +174,6 @@ Add usage examples to the README or a docs file showing how teams can use the Gi
 
 ## Non-Goals
 
-- Do not actually publish `@forge-cli/forge-action` to the GitHub Marketplace (that's a separate repo)
+- Do not actually publish `@forgecli/forge-action` to the GitHub Marketplace (that's a separate repo)
 - Do not change the existing Forge CLI commands
 - Do not add GitHub-specific features to the CLI itself

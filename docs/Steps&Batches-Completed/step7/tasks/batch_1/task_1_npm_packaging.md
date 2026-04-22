@@ -2,7 +2,7 @@
 
 ## Goal
 
-Configure `package.json` for npm publishing under `@forge-cli/forge`, add the CLI bin entry point, and ensure the package is installable globally via `npm install -g` and runnable via `npx @forge-cli/forge`.
+Configure `package.json` for npm publishing under `@forgecli/forge`, add the CLI bin entry point, and ensure the package is installable globally via `npm install -g` and runnable via `npx @forgecli/forge`.
 
 ## Context
 
@@ -20,7 +20,7 @@ Update the following fields in `package.json`:
 
 ```json
 {
-  "name": "@forge-cli/forge",
+  "name": "@forgecli/forge",
   "version": "1.0.0",
   "description": "Reliability-first CLI for agentic software development",
   "main": "dist/index.js",

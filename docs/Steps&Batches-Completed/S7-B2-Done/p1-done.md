@@ -7,13 +7,13 @@
 
 ### `src/update.ts` — NEW
 - `UpdateInfo` interface: `{ current: string; latest: string; outdated: boolean }`
-- `checkForUpdate()`: Runs `npm view @forge-cli/forge version` with 10-second timeout
+- `checkForUpdate()`: Runs `npm view @forgecli/forge version` with 10-second timeout
   - Resolves `package.json` via `__dirname` (consistent with existing CLI entrypoint, not `process.cwd()`)
   - On `npm view` failure, gracefully returns `{ current, latest: current, outdated: false }`
 - `selfUpdate(yes)`: 
   - If up to date: prints "Forge is already up to date." with current version
   - If outdated and no `--yes`: prints upgrade notice and exits cleanly
-  - If outdated and `--yes`: runs `npm install -g @forge-cli/forge@${latest}`
+  - If outdated and `--yes`: runs `npm install -g @forgecli/forge@${latest}`
   - Any install failure is thrown with a descriptive message (caught by CLI handler)
 
 ### `src/cli.ts` — MODIFY

@@ -55,19 +55,19 @@ npm run release major
 ## npm Account Requirements
 
 Publishing requires:
-- npm account with access to `@forge-cli` organization
+- npm account with access to `@forgecli` organization
 - 2FA enabled on npm
 - `npm login` completed locally
 
 To check:
 ```bash
 npm whoami
-npm access ls-collaborators @forge-cli/forge
+npm access ls-collaborators @forgecli/forge
 ```
 
 ## Post-Publish Verification
 
 ```bash
-npm view @forge-cli/forge
-npx @forge-cli/forge --version
+npm view @forgecli/forge
+npx @forgecli/forge --version
 ```

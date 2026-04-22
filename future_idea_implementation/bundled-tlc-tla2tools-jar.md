@@ -1,6 +1,6 @@
 # Bundled TLC (`tla2tools.jar`) with the Forge npm package
 
-This document describes **Idea 1**: ship the TLA+ tools JAR inside `@forge-cli/forge` so `forge verify` can run TLC **without** users manually downloading a jar or setting `FORGE_TLC_JAR_PATH`, while keeping a clear story for licensing, upgrades, and the Java runtime.
+This document describes **Idea 1**: ship the TLA+ tools JAR inside `@forgecli/forge` so `forge verify` can run TLC **without** users manually downloading a jar or setting `FORGE_TLC_JAR_PATH`, while keeping a clear story for licensing, upgrades, and the Java runtime.
 
 **Status:** Future / design only — no implementation commitment in this file.
 
@@ -12,7 +12,7 @@ This document describes **Idea 1**: ship the TLA+ tools JAR inside `@forge-cli/f
 
 | Goal | Detail |
 |------|--------|
-| **Zero-config TLC for npm installs** | After `npm i -g @forge-cli/forge` (or local `npm install`), `forge verify` can run TLC when the formal lane selects cases, without the user hunting for a jar. |
+| **Zero-config TLC for npm installs** | After `npm i -g @forgecli/forge` (or local `npm install`), `forge verify` can run TLC when the formal lane selects cases, without the user hunting for a jar. |
 | **License compatibility** | Rely on upstream **MIT** terms from [tlaplus/tlaplus](https://github.com/tlaplus/tlaplus); reproduce copyright and license text in Forge’s `NOTICE` or third-party attributions as required by MIT. |
 | **Predictable versions** | Pin a **specific** `tla2tools.jar` version (e.g. from a named [GitHub Release](https://github.com/tlaplus/tlaplus/releases)) so support and bug reports are reproducible. |
 | **Override path** | Power users, air-gapped CI, or newer TLC builds can still set **`FORGE_TLC_JAR_PATH`** to override the bundled jar (current behavior: explicit env wins). |
@@ -36,7 +36,7 @@ Non-goals for v1 of this idea:
 
 | Risk | Mitigation idea |
 |------|------------------|
-| **npm package size** | `tla2tools.jar` is large relative to a tiny CLI; monitor `npm pack` / `npm view @forge-cli/forge dist unpackedSize`; consider optional `@forge-cli/forge-tlc` package if size becomes unacceptable. |
+| **npm package size** | `tla2tools.jar` is large relative to a tiny CLI; monitor `npm pack` / `npm view @forgecli/forge dist unpackedSize`; consider optional `@forgecli/forge-tlc` package if size becomes unacceptable. |
 | **Security / supply chain** | Vendor jar only from **official** [tlaplus/tlaplus releases](https://github.com/tlaplus/tlaplus/releases); store **SHA-256** in repo; verify in `prepublishOnly` or a `scripts/vendor-tlc.mjs` gate; document upgrade procedure. |
 | **Release coupling** | Forge patch releases should not silently jump TLC minor versions without changelog entry; pin jar version in `package.json` or `vendor/tlc-version.json`. |
 | **Java not installed** | Clear error when TLC is invoked: “Java 11+ required”; link to Adoptium / Oracle docs; `forge doctor` could optionally check `java -version`. |
@@ -159,13 +159,13 @@ Existing tests under `tests/verify.*` may already assume TLC optional; extend wi
 | **0** | This design doc + legal review checklist (MIT notices). |
 | **1** | Vendor script + checksum gate; jar included in `npm pack`; resolution order in code (env overrides bundle). |
 | **2** | Doctor checks + CI job running TLC on a tiny spec. |
-| **3** | Optional split: `@forge-cli/forge-slim` without jar if npm size complaints dominate (larger ecosystem change). |
+| **3** | Optional split: `@forgecli/forge-slim` without jar if npm size complaints dominate (larger ecosystem change). |
 
 ---
 
 ## 12. Open questions
 
-1. **npm unpacked size budget** — What is the maximum acceptable size for `@forge-cli/forge`?
+1. **npm unpacked size budget** — What is the maximum acceptable size for `@forgecli/forge`?
 2. **Air-gapped installs** — Is Model A (committed jar) mandatory for some users?
 3. **Alpine / musl** — Only Java matters for the jar; any edge cases with `java` binary names on minimal images?
 4. **Windows long paths** — Rare TLC temp paths; worth a smoke test on Windows CI.

@@ -31,7 +31,7 @@ export async function checkForUpdate(): Promise<UpdateInfo> {
   try {
     const { stdout } = await execFileAsync(
       "npm",
-      ["view", "@forge-cli/forge", "version"],
+      ["view", "@forgecli/forge", "version"],
       npmExecOptions({ timeout: 10000 }),
     );
     const latest = stdout.trim();
@@ -67,7 +67,7 @@ export async function selfUpdate(yes: boolean = false): Promise<void> {
   try {
     await execFileAsync(
       "npm",
-      ["install", "-g", `@forge-cli/forge@${latest}`],
+      ["install", "-g", `@forgecli/forge@${latest}`],
       npmExecOptions({ timeout: 60000 }),
     );
     console.log("Update complete.");

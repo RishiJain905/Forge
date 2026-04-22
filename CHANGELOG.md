@@ -20,4 +20,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `forge config` — Configuration management with env var support
 - Docker support with multi-stage Dockerfile
 - GitHub Actions integration
-- npm packaging as `@forge-cli/forge`
+- npm packaging as `@forgecli/forge`

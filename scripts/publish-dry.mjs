@@ -66,5 +66,5 @@ console.log("To publish for real, run:");
 console.log("  npm publish --access public");
 console.log("");
 console.log("Requirements for real publish:");
-console.log("  - npm account with @forge-cli organization access");
+console.log("  - npm account with @forgecli organization access");
 console.log("  - 2FA enabled and OTP ready");

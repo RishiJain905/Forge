@@ -27,7 +27,7 @@ jobs:
           node-version: "20"
 
       - name: Install Forge
-        run: npm install -g @forge-cli/forge
+        run: npm install -g @forgecli/forge
 
       - name: Forge Doctor
         run: forge doctor --checks node,git,npm,config
