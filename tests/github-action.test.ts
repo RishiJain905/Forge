@@ -23,7 +23,7 @@ describe("forge.yml workflow", () => {
     assert.ok(doc && typeof doc === "object", "forge.yml should parse as a YAML object");
   });
 
-  it("has push triggers on main and develop branches", () => {
+  it("has push triggers on main and develop (not feature branches, to avoid duplicate PR+push runs)", () => {
     if (!existsSync(forgeYmlPath)) {
       console.log("SKIP: forge.yml does not exist yet");
       return;
@@ -38,6 +38,7 @@ describe("forge.yml workflow", () => {
     assert.ok(Array.isArray(branches), "push trigger should have branches array");
     assert.ok(branches.includes("main"), "push should trigger on main");
     assert.ok(branches.includes("develop"), "push should trigger on develop");
+    assert.ok(!branches.includes("dev"), "push should not include dev (use pull_request for PR branches)");
   });
 
   it("has pull_request trigger on main branch", () => {
@@ -81,13 +82,15 @@ describe("forge.yml workflow", () => {
     assert.ok(content.includes("node-version: '20'") || content.includes('node-version: "20"') || content.includes("node-version: 20"), "should specify node-version 20");
   });
 
-  it("includes npm install -g @forgecli/forge step", () => {
+  it("builds Forge from checkout and links CLI (npm ci, build, npm link)", () => {
     if (!existsSync(forgeYmlPath)) {
       console.log("SKIP: forge.yml does not exist yet");
       return;
     }
     const content = readFileSync(forgeYmlPath, "utf8");
-    assert.ok(content.includes("npm install -g @forgecli/forge"), "should install @forgecli/forge globally");
+    assert.ok(content.includes("npm ci"), "should install deps with npm ci");
+    assert.ok(content.includes("npm run build"), "should build from checkout");
+    assert.ok(content.includes("npm link"), "should npm link so forge uses this commit");
   });
 
   it("includes forge doctor --checks step", () => {

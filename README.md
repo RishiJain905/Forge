@@ -2,6 +2,31 @@
 
 > A reliability-first CLI for agentic software development.
 
+## Get started
+
+**1. Install Forge** (once per machine):
+
+```bash
+npm install -g @forgecli/forge
+```
+
+Or run a command without installing globally:
+
+```bash
+npx @forgecli/forge <command>
+```
+
+**2. Initialize each repository** (creates `.forge/` with config and defaults):
+
+```bash
+cd /path/to/your-repo
+forge init
+```
+
+Use `forge init --yes` if you also want the optional `forge.config.ts` scaffold.
+
+---
+
 **Version: 1.0.0 (V1 Frozen)**  
 **Package:** `@forgecli/forge`  
 **License:** MIT
@@ -36,18 +61,6 @@ Keep the command fast and deterministic while making pass/fail results clearer.
 - No changes to other Forge commands
 - No network calls
 - No new AI-dependent behavior
-```
-
----
-
-## Installation
-
-```bash
-# Global install
-npm install -g @forgecli/forge
-
-# One-off usage (no install)
-npx @forgecli/forge <command>
 ```
 
 ---
@@ -321,12 +334,20 @@ docker-compose run --rm forge plan --repo /repo --output-dir /repo/.forge
 
 ## GitHub Actions
 
+This repository’s `.github/workflows/forge.yml` builds the CLI from the commit under test (`npm ci`, `npm run build`, `npm link`) so CI always matches your branch. In other projects you typically install from npm instead:
+
+```yaml
+- run: npm install -g @forgecli/forge
+```
+
+Example stages (after `forge` is on `PATH`):
+
 ```yaml
 - uses: actions/checkout@v4
 - uses: actions/setup-node@v4
   with:
     node-version: "20"
-- run: npm install -g @forgecli/forge
+- run: npm ci && npm run build && npm link
 - run: forge doctor --checks node,git,npm,config
 - run: forge intake --repo . --output-dir .forge --prompt "Your task" --no-llm --json-only
 - run: forge plan --repo . --output-dir .forge

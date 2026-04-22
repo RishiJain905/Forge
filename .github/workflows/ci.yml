@@ -2,9 +2,10 @@ name: CI
 
 on:
   push:
-    # Only these branches get CI on push. Add your default integration branch if it differs
-    # from `develop` (e.g. this repo uses `dev`).
-    branches: [main, develop, dev]
+    # Do not list feature branches (e.g. `dev`) here if they also use PRs into `main`:
+    # the same push would fire both `push` and `pull_request`, duplicating every check.
+    # CI for `dev` runs via `pull_request` below when you open/update a PR to `main`.
+    branches: [main, develop]
   pull_request:
 
 concurrency:

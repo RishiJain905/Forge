@@ -1,11 +1,21 @@
 name: Forge Pipeline
 
-# Deterministic stages (intake → split) run on every trigger. AI stages (execute, integrate)
-# run only when OPENAI_API_KEY is configured, to avoid failing fork PRs and unexpected API spend.
-# Use workflow_dispatch to run the full pipeline manually when secrets are set.
+# What this workflow does (in *this* repository):
+# - Builds the CLI from the checked-out commit (`npm ci` + `npm run build`) and
+#   exposes it with `npm link` so `forge` matches the branch you are testing.
+#   (Installing from npm would test whatever is published, not your PR.)
+# - Runs deterministic stages: doctor → intake → plan → verify → split.
+# - Runs execute + integrate only when the OPENAI_API_KEY repo secret is set
+#   (skipped in the shell when unset — GitHub does not allow `secrets` in `if:`).
+#
+# In other projects you usually install from the registry instead, e.g.:
+#   npm install -g @forgecli/forge
+
 on:
   workflow_dispatch:
   push:
+    # Omit `dev` (and other PR-only branches): pushes there + an open PR to `main`
+    # would trigger both `push` and `pull_request`, running this workflow twice.
     branches: [main, develop]
   pull_request:
     branches: [main]
@@ -14,6 +24,7 @@ jobs:
   forge:
     name: Forge
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -25,9 +36,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: npm
 
-      - name: Install Forge
-        run: npm install -g @forgecli/forge
+      - name: Install dependencies and build Forge from this commit
+        run: |
+          npm ci
+          npm run build
+
+      - name: Link Forge CLI (global `forge` → this checkout)
+        run: npm link
 
       - name: Forge Doctor
         run: forge doctor --checks node,git,npm,config
@@ -48,16 +65,24 @@ jobs:
         run: forge split --repo . --output-dir .forge
 
       - name: Forge Execute
-        if: ${{ secrets.OPENAI_API_KEY != '' }}
-        run: forge execute --repo . --auto --output-dir .forge
+        run: |
+          if [ -z "${FORGE_MODEL_API_KEY}" ]; then
+            echo "Skipping Forge Execute (set repository secret OPENAI_API_KEY to run this step)."
+            exit 0
+          fi
+          forge execute --repo . --auto --output-dir .forge
         env:
           FORGE_MODEL_PROVIDER: openai
           FORGE_MODEL_NAME: gpt-4o
           FORGE_MODEL_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
       - name: Forge Integrate
-        if: ${{ secrets.OPENAI_API_KEY != '' }}
-        run: forge integrate --repo . --auto --output-dir .forge
+        run: |
+          if [ -z "${FORGE_MODEL_API_KEY}" ]; then
+            echo "Skipping Forge Integrate (set repository secret OPENAI_API_KEY to run this step)."
+            exit 0
+          fi
+          forge integrate --repo . --auto --output-dir .forge
         env:
           FORGE_MODEL_PROVIDER: openai
           FORGE_MODEL_NAME: gpt-4o
