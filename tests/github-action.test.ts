@@ -23,7 +23,7 @@ describe("forge.yml workflow", () => {
     assert.ok(doc && typeof doc === "object", "forge.yml should parse as a YAML object");
   });
 
-  it("has push triggers on main, develop, and dev branches", () => {
+  it("has push triggers on main and develop (not feature branches, to avoid duplicate PR+push runs)", () => {
     if (!existsSync(forgeYmlPath)) {
       console.log("SKIP: forge.yml does not exist yet");
       return;
@@ -38,7 +38,7 @@ describe("forge.yml workflow", () => {
     assert.ok(Array.isArray(branches), "push trigger should have branches array");
     assert.ok(branches.includes("main"), "push should trigger on main");
     assert.ok(branches.includes("develop"), "push should trigger on develop");
-    assert.ok(branches.includes("dev"), "push should trigger on dev");
+    assert.ok(!branches.includes("dev"), "push should not include dev (use pull_request for PR branches)");
   });
 
   it("has pull_request trigger on main branch", () => {

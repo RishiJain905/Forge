@@ -14,7 +14,9 @@ name: Forge Pipeline
 on:
   workflow_dispatch:
   push:
-    branches: [main, develop, dev]
+    # Omit `dev` (and other PR-only branches): pushes there + an open PR to `main`
+    # would trigger both `push` and `pull_request`, running this workflow twice.
+    branches: [main, develop]
   pull_request:
     branches: [main]
 
