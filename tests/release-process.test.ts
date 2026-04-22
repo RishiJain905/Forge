@@ -25,6 +25,15 @@ function isExecutable(filePath: string): boolean {
   }
 }
 
+/** Git/NTFS on Windows typically does not surface Unix execute bits; still require the file. */
+function assertReleaseScriptPathIsRunnable(filePath: string, label: string): void {
+  const stats = statSync(filePath);
+  assert.ok(stats.isFile(), `${label} should be a regular file`);
+  if (process.platform !== "win32") {
+    assert.ok(isExecutable(filePath), `${label} should be executable`);
+  }
+}
+
 describe("CHANGELOG.md", () => {
   it("exists", () => {
     if (!existsSync(changelogPath)) {
@@ -81,7 +90,7 @@ describe("scripts/release.sh", () => {
       console.log("SKIP: scripts/release.sh does not exist yet");
       return;
     }
-    assert.ok(isExecutable(releaseScriptPath), "scripts/release.sh should be executable");
+    assertReleaseScriptPathIsRunnable(releaseScriptPath, "scripts/release.sh");
   });
 
   it("contains npm version", () => {
@@ -115,7 +124,7 @@ describe("scripts/changelog.sh", () => {
       console.log("SKIP: scripts/changelog.sh does not exist yet");
       return;
     }
-    assert.ok(isExecutable(changelogScriptPath), "scripts/changelog.sh should be executable");
+    assertReleaseScriptPathIsRunnable(changelogScriptPath, "scripts/changelog.sh");
   });
 });
 
@@ -125,7 +134,7 @@ describe("scripts/publish.sh", () => {
       console.log("SKIP: scripts/publish.sh does not exist yet");
       return;
     }
-    assert.ok(isExecutable(publishScriptPath), "scripts/publish.sh should be executable");
+    assertReleaseScriptPathIsRunnable(publishScriptPath, "scripts/publish.sh");
   });
 
   it("contains npm publish --dry-run", () => {
