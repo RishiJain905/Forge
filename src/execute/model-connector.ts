@@ -308,7 +308,9 @@ export async function callModel(
         signal: controller.signal,
       });
 
-      clearTimeout(timeoutId);
+      // Do not clear the timeout until the response body is fully read. `fetch`
+      // can resolve when headers arrive; clearing here would leave `response.text()`
+      // with no deadline and the CLI can appear hung indefinitely.
       logDebug(`response HTTP ${response.status} elapsedMs=${Date.now() - t0}`);
 
       if (response.ok) {
@@ -336,8 +338,6 @@ export async function callModel(
         `API request failed with HTTP ${response.status}: ${errorText}`
       );
     } catch (err) {
-      clearTimeout(timeoutId);
-
       if (err instanceof AIModelError) {
         throw err;
       }
@@ -362,6 +362,8 @@ export async function callModel(
         `API request failed after ${MAX_RETRIES} retries: ${lastError.message}`,
         lastError
       );
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 

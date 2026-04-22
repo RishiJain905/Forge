@@ -41,7 +41,11 @@ import {
   isIntegrateSummaryAllPassed,
   isIntegrateSummaryInconclusive,
 } from "./report.js";
-import { loadModelConfig, callModel } from "../execute/model-connector.js";
+import {
+  loadModelConfig,
+  callModel,
+  getModelCallTimeoutForPrompt,
+} from "../execute/model-connector.js";
 import { loadRepoDotenv } from "../repo-dotenv.js";
 import { extractJsonFromAIResponse } from "./extract-json.js";
 import { classifyError } from "./errors.js";
@@ -741,6 +745,15 @@ export async function runIntegrateCommand(
   // ---- Step 5: Call AI with retry loop (reused model-connector + error classification) ----
 
   console.log(dim("[3/5] Calling AI model..."));
+  {
+    const timeoutMs = getModelCallTimeoutForPrompt(prompt.length);
+    const minutes = Math.max(1, Math.round(timeoutMs / 60_000));
+    console.log(
+      dim(
+        `(prompt ~${prompt.length.toLocaleString()} chars; single-request timeout ~${minutes} min — no progress until the model responds)`
+      )
+    );
+  }
 
   let modelUsed = "";
   let rawResponse = "";
