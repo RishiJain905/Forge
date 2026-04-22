@@ -257,11 +257,12 @@ Long prompts are clamped so execute stays usable across models. Defaults can be 
 
 | Variable | Default | Role |
 |----------|---------|------|
-| `FORGE_EXECUTE_FILE_SNIPPETS_TOTAL_CHARS` | `8000` | **Total** character budget split across all target files that have content (each file also obeys the per-file ceiling). Stops many paths from producing 30k+ prompts. |
-| `FORGE_EXECUTE_FILE_SNIPPET_CHARS` | `1800` | Per-file **ceiling** for an embedded snippet (head + tail + middle omission). |
-| `FORGE_EXECUTE_TEXT_FIELD_MAX_CHARS` | `600` | Max characters for the workstream description (single line, whitespace collapsed); merge-order and other bullets also respect related caps. |
+| `FORGE_EXECUTE_FILE_SNIPPETS_TOTAL_CHARS` | `5000` | **Total** character budget split across all target files that have content (each file also obeys the per-file ceiling). Stops many paths from producing 30k+ prompts. |
+| `FORGE_EXECUTE_FILE_SNIPPET_CHARS` | `1200` | Per-file **ceiling** for an embedded snippet (head + tail + middle omission). |
+| `FORGE_EXECUTE_TEXT_FIELD_MAX_CHARS` | `400` | Max characters for the workstream description (single line, whitespace collapsed); merge-order and other bullets also respect related caps. |
 | `FORGE_EXECUTE_CONSTRAINT_LINES_MAX` | `14` | Max lines in the conflict-zone / finding / constraint block before a “see plan.json / verify.json” footer. |
 | `FORGE_EXECUTE_MAX_CONCERNS` | `6` | Max carried-forward concern bullets. |
+| `FORGE_EXECUTE_PROMPT_MAX_CHARS` | *(unset)* | Optional hard cap on the **entire** assembled prompt. When set (≥ `12000`), text before `# Output` may be truncated so the `## CHANGES` / JSON instructions stay intact. Use only if env snippet caps are not enough. |
 
 See `src/execute/prompt-builder.ts` for exact clamp ranges and helpers (`truncateFileBodyForPrompt`, `truncateOneLine`).
 

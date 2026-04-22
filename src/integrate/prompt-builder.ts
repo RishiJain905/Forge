@@ -18,7 +18,7 @@ import crypto from "node:crypto";
 import type { ExecuteArtifact, ExecuteWorkstream } from "../execute/types.js";
 import type { PlanArtifact, PlanItem } from "../plan/types.js";
 import type { VerifyArtifact } from "../verify/types.js";
-import type { PromptBuildContext, BuiltPrompt } from "./types.js";
+import type { PromptBuildContext, BuiltPrompt, IntegrationTestFile } from "./types.js";
 
 // ---------------------------------------------------------------------------
 // DetectedFramework — result of framework auto-detection
@@ -139,6 +139,85 @@ export async function detectTestFramework(
  * Maps well-known framework names to appropriate language and testCommand
  * values. Falls back to "typescript" / "npm test" for unknown frameworks.
  */
+/**
+ * Models often emit `tests/integration.foo.test.ts` (dot after `integration`) instead of
+ * the directory `tests/integration/foo.test.ts`. Rewrite the former to the latter so files
+ * land under `tests/integration/`.
+ */
+export function normalizeIntegrationTestFilePaths(
+  testFiles: IntegrationTestFile[]
+): IntegrationTestFile[] {
+  return testFiles.map((f) => {
+    const raw = f.path.replace(/\\/g, "/");
+    const mistyped = raw.match(/^tests\/integration\.([^/]+)$/);
+    if (mistyped) {
+      return { ...f, path: `tests/integration/${mistyped[1]}` };
+    }
+    return raw === f.path ? f : { ...f, path: raw };
+  });
+}
+
+/** Quote a repo-relative path for use in a shell test command (POSIX-style slashes). */
+function quoteTestPathForShell(repoRelativePath: string): string {
+  const normalized = repoRelativePath.replace(/\\/g, "/");
+  if (/[\s'"`]/.test(normalized)) {
+    return `"${normalized.replace(/"/g, '\\"')}"`;
+  }
+  return normalized;
+}
+
+/**
+ * After the model returns test files, choose a command that will actually execute them.
+ * Repos like Forge use `npm test` as a fixed `node dist-tests/...` chain — Vitest/Jest-style
+ * files are never run unless we switch to a runner that targets those paths.
+ */
+export function resolveIntegrateTestCommand(
+  testFiles: IntegrationTestFile[],
+  detectedFrameworkName: string
+): string {
+  const name = detectedFrameworkName.trim().toLowerCase();
+  const baseline = deriveFrameworkFromOverride(detectedFrameworkName).testCommand;
+
+  if (name === "pytest" || name === "unittest" || name === "mocha") {
+    return baseline;
+  }
+
+  if (!testFiles.length) {
+    return baseline;
+  }
+
+  const combined = testFiles.map((f) => f.content ?? "").join("\n");
+  const pathArgs = testFiles.map((f) => quoteTestPathForShell(f.path)).join(" ");
+
+  const usesVitestImport = /from\s+["']vitest["']/.test(combined);
+  const usesJestImport = /from\s+["']@jest\/globals["']/.test(combined);
+  const looksLikeVitestGlobals =
+    /\bdescribe\s*\(/.test(combined) &&
+    /\bit\s*\(/.test(combined) &&
+    /\bexpect\s*\(/.test(combined) &&
+    !/from\s+["']node:test["']/.test(combined);
+
+  if (usesVitestImport || name === "vitest") {
+    const cfg = "vitest.config.integration.mts";
+    return pathArgs
+      ? `npx vitest run --config ${cfg} ${pathArgs}`
+      : `npx vitest run --config ${cfg}`;
+  }
+
+  if (usesJestImport || name === "jest") {
+    return pathArgs ? `npx jest ${pathArgs}` : "npx jest";
+  }
+
+  if (looksLikeVitestGlobals) {
+    const cfg = "vitest.config.integration.mts";
+    return pathArgs
+      ? `npx vitest run --config ${cfg} ${pathArgs}`
+      : `npx vitest run --config ${cfg}`;
+  }
+
+  return baseline;
+}
+
 export function deriveFrameworkFromOverride(
   override: string
 ): DetectedFramework {
@@ -303,7 +382,7 @@ export async function discoverExistingTests(repoRoot: string): Promise<string[]>
       } else if (entry.isFile()) {
         const relativePath = path.relative(repoRoot, path.join(dir, entry.name));
         if (TEST_FILE_PATTERNS.some((pattern) => pattern.test(entry.name))) {
-          results.push(relativePath);
+          results.push(relativePath.replace(/\\/g, "/"));
         }
       }
     }
@@ -618,7 +697,11 @@ Produce a JSON array of test file objects with this shape:
 # Rules
 1. Write tests that exercise the goal described above
 2. Respect all constraints from the Verify step
-3. Use the detected test framework (${framework.name})
+3. ${
+    framework.name === "npm"
+      ? `This repository uses a generic "npm test" entry (often a fixed list of files). Write TypeScript integration tests using Vitest-style \`describe\` / \`it\` / \`expect\`. Each \`path\` MUST use a **slash** after \`integration\`: \`tests/integration/<topic>.test.ts\` (directory \`tests/integration/\`). Do NOT use a dot there — wrong: \`tests/integration.<topic>.test.ts\` (that is a single filename in \`tests/\`, not a subfolder). Forge will still fix a mistaken dot, but correct paths are preferred.`
+      : `Use the detected test framework (${framework.name})`
+  }
 4. Test the combined behavior of all workstreams together
 5. Include both happy-path and error-case tests
 6. Each test file must be self-contained and runnable`;

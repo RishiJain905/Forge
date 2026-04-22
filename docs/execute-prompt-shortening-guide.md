@@ -62,15 +62,18 @@ Set these in **repo `.env`**, your shell, or CI. Forge loads repo `.env` when ex
 
 ---
 
-## Step 4 — If env tuning is not enough (optional / code)
+## Step 4 — If env tuning is not enough (implemented in code)
 
-Only if you still need smaller prompts after Step 1:
+`src/execute/prompt-builder.ts` now also:
 
-- **Dedupe** near-duplicate constraint or finding lines in `prompt-builder.ts`.
-- **Compress plan item lines** further (e.g. emphasize `id` + `category/risk`, shorten titles).
-- **Cap total prompt characters** with a final pass (advanced: must not break the required `## CHANGES` / JSON contract).
+- **Dedupes** constraint/finding lines that are identical after whitespace normalization (drops repeats, adds a warning).
+- **Dedupes** carried-forward concerns with the same normalized message.
+- **Compresses plan item lines** to `id: category/risk — shortened-title` (titles truncated more aggressively than before).
+- Optionally caps the **whole** prompt when **`FORGE_EXECUTE_PROMPT_MAX_CHARS`** is set to an integer **≥ 12000**: earlier sections before `# Output` may be truncated so the `## CHANGES` / fenced-json contract stays intact.
 
-Document any new behavior in `docs/step5-ai-execute-flow.md` and add tests under `tests/execute.ai-prompt-builder.test.ts`.
+Defaults when env is unset were tightened toward the “Suggested order” in Step 1 (smaller file and text budgets). Override env vars to increase caps if the model loses signal.
+
+Documented in `docs/step5-ai-execute-flow.md`; tests in `tests/execute.ai-prompt-builder.test.ts`.
 
 ---
 
@@ -85,6 +88,7 @@ Defined in `src/execute/prompt-builder.ts` (subject to change in code; read the 
 | `FORGE_EXECUTE_TEXT_FIELD_MAX_CHARS` | Description-style fields |
 | `FORGE_EXECUTE_CONSTRAINT_LINES_MAX` | Constraint block depth |
 | `FORGE_EXECUTE_MAX_CONCERNS` | Concern bullet count |
+| `FORGE_EXECUTE_PROMPT_MAX_CHARS` | Optional whole-prompt ceiling (see Step 4) |
 
 ---
 

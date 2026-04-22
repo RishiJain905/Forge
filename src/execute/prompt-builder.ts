@@ -31,7 +31,7 @@ function readExecuteInt(
  * Actual per-file budget is also limited by the total budget split across files.
  */
 function getFileSnippetCharLimit(): number {
-  return readExecuteInt("FORGE_EXECUTE_FILE_SNIPPET_CHARS", 1_800, 400, 100_000);
+  return readExecuteInt("FORGE_EXECUTE_FILE_SNIPPET_CHARS", 1_200, 400, 100_000);
 }
 
 /**
@@ -40,12 +40,12 @@ function getFileSnippetCharLimit(): number {
  * Prevents many likelyAffectedPaths from producing 30k+ prompts by default.
  */
 function getTotalFileSnippetsCharBudget(): number {
-  return readExecuteInt("FORGE_EXECUTE_FILE_SNIPPETS_TOTAL_CHARS", 8_000, 1_500, 500_000);
+  return readExecuteInt("FORGE_EXECUTE_FILE_SNIPPETS_TOTAL_CHARS", 5_000, 1_500, 500_000);
 }
 
 /** Max characters for workstream description and long prerequisite lines. */
 function getTextFieldCharLimit(): number {
-  return readExecuteInt("FORGE_EXECUTE_TEXT_FIELD_MAX_CHARS", 600, 200, 50_000);
+  return readExecuteInt("FORGE_EXECUTE_TEXT_FIELD_MAX_CHARS", 400, 200, 50_000);
 }
 
 /** Max lines in the constraints block (conflict zones, findings, constraints). */
@@ -56,6 +56,100 @@ function getConstraintSectionLineLimit(): number {
 /** Max carried-forward concern bullets. */
 function getConcernItemLimit(): number {
   return readExecuteInt("FORGE_EXECUTE_MAX_CONCERNS", 6, 1, 200);
+}
+
+/**
+ * When set, shrink the assembled prompt by dropping text before `# Output` if needed,
+ * so the `## CHANGES` / fenced-json contract always remains parseable.
+ */
+function getOptionalPromptMaxChars(): number | null {
+  const raw = process.env.FORGE_EXECUTE_PROMPT_MAX_CHARS;
+  if (raw === undefined || raw.trim() === "") {
+    return null;
+  }
+  const n = parseInt(raw, 10);
+  if (!Number.isFinite(n) || n < 12_000) {
+    return null;
+  }
+  return Math.min(2_000_000, n);
+}
+
+/**
+ * Remove lines that are duplicates after whitespace-normalization (common when verify
+ * repeats the same finding or constraint text).
+ */
+function dedupeNormalizedLines(
+  lines: string[],
+  warnings: string[],
+  kind: string
+): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const line of lines) {
+    const key = line.replace(/\s+/g, " ").trim().toLowerCase();
+    if (!key) {
+      continue;
+    }
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    out.push(line);
+  }
+  const dropped = lines.length - out.length;
+  if (dropped > 0) {
+    warnings.push(`Omitted ${dropped} duplicate ${kind} line(s) in the execute prompt.`);
+  }
+  return out;
+}
+
+function applyOptionalPromptMaxChars(prompt: string, warnings: string[]): string {
+  const maxChars = getOptionalPromptMaxChars();
+  if (maxChars === null || prompt.length <= maxChars) {
+    return prompt;
+  }
+
+  const anchor = "\n# Output\n";
+  const idx = prompt.indexOf(anchor);
+  if (idx === -1) {
+    warnings.push(
+      "FORGE_EXECUTE_PROMPT_MAX_CHARS is set but the expected \"# Output\" section was not found; prompt was not capped."
+    );
+    return prompt;
+  }
+
+  const invariantTail = prompt.slice(idx + 1);
+  const note =
+    "[Forge: earlier prompt sections were truncated — use .forge/plan.json, .forge/verify.json, and files on disk for full context.]\n\n";
+  const noteLen = note.length;
+  const headBudget = maxChars - invariantTail.length - noteLen - 8;
+  if (headBudget < 500) {
+    warnings.push(
+      `FORGE_EXECUTE_PROMPT_MAX_CHARS=${maxChars} is very small; only part of the tail section is kept.`
+    );
+    return invariantTail.slice(0, maxChars);
+  }
+
+  const head = prompt.slice(0, idx);
+  const trimmedHead =
+    head.length > headBudget ? `${head.slice(0, headBudget)}\n…\n` : head;
+  let next = note + trimmedHead + invariantTail;
+  if (next.length > maxChars) {
+    const trimMore = next.length - maxChars + 100;
+    next =
+      note +
+      (head.length > headBudget + trimMore
+        ? `${head.slice(0, headBudget - trimMore)}\n…\n`
+        : trimmedHead) +
+      invariantTail;
+  }
+  if (next.length > maxChars) {
+    next = invariantTail.slice(0, maxChars);
+  }
+  warnings.push(
+    `Whole execute prompt capped to ~${maxChars} chars (FORGE_EXECUTE_PROMPT_MAX_CHARS); about ${prompt.length - next.length} chars removed from sections before # Output.`
+  );
+  return next;
 }
 
 /**
@@ -116,7 +210,8 @@ export interface BuiltPrompt {
  * Missing files produce warnings instead of crashes.
  *
  * Prompt size: see FORGE_EXECUTE_FILE_SNIPPETS_TOTAL_CHARS, FORGE_EXECUTE_FILE_SNIPPET_CHARS,
- * FORGE_EXECUTE_TEXT_FIELD_MAX_CHARS, FORGE_EXECUTE_CONSTRAINT_LINES_MAX, FORGE_EXECUTE_MAX_CONCERNS.
+ * FORGE_EXECUTE_TEXT_FIELD_MAX_CHARS, FORGE_EXECUTE_CONSTRAINT_LINES_MAX, FORGE_EXECUTE_MAX_CONCERNS,
+ * FORGE_EXECUTE_PROMPT_MAX_CHARS (optional hard cap — preserves `# Output` / ## CHANGES instructions).
  */
 export async function buildWorkstreamPrompt(
   ctx: PromptBuildContext
@@ -171,7 +266,7 @@ export async function buildWorkstreamPrompt(
     );
   }
 
-  const prompt = assemblePrompt(
+  let prompt = assemblePrompt(
     workstream,
     descForPrompt,
     planItems,
@@ -181,6 +276,8 @@ export async function buildWorkstreamPrompt(
     fileSection,
     ctx.repoRoot
   );
+
+  prompt = applyOptionalPromptMaxChars(prompt, warnings);
 
   return { prompt, warnings, fileContents };
 }
@@ -326,6 +423,10 @@ function buildConstraintSection(
     }
   }
 
+  const deduped = dedupeNormalizedLines(lines, warnings, "constraint/finding");
+  lines.length = 0;
+  lines.push(...deduped);
+
   if (lines.length === 0) {
     return "No specific constraints detected for this workstream's files.";
   }
@@ -359,10 +460,26 @@ function buildConcernSection(
     return "No carried-forward concerns apply to this workstream.";
   }
 
-  const slice = concerns.slice(0, maxConcerns);
-  if (concerns.length > maxConcerns) {
+  const seenMsg = new Set<string>();
+  const uniqueConcerns: typeof concerns = [];
+  for (const c of concerns) {
+    const key = c.message.replace(/\s+/g, " ").trim().toLowerCase();
+    if (seenMsg.has(key)) {
+      continue;
+    }
+    seenMsg.add(key);
+    uniqueConcerns.push(c);
+  }
+  if (uniqueConcerns.length < concerns.length) {
     warnings.push(
-      `Carried-forward concerns truncated (${concerns.length - maxConcerns} omitted; FORGE_EXECUTE_MAX_CONCERNS).`
+      `Omitted ${concerns.length - uniqueConcerns.length} duplicate carried-forward concern(s) in the execute prompt.`
+    );
+  }
+
+  const slice = uniqueConcerns.slice(0, maxConcerns);
+  if (uniqueConcerns.length > maxConcerns) {
+    warnings.push(
+      `Carried-forward concerns truncated (${uniqueConcerns.length - maxConcerns} omitted; FORGE_EXECUTE_MAX_CONCERNS).`
     );
   }
 
@@ -431,7 +548,7 @@ function assemblePrompt(
       ? planItems
           .map(
             (p) =>
-              `  - ${truncateOneLine(p.title, 90)}: ${p.category}/${p.riskLevel}`
+              `  - ${p.id}: ${p.category}/${p.riskLevel} — ${truncateOneLine(p.title, 52)}`
           )
           .join("\n")
       : "  (none)";

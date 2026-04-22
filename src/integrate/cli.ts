@@ -28,7 +28,12 @@ import type {
   WorkstreamHealth,
 } from "./types.js";
 
-import { buildIntegrationTestPrompt, deriveFrameworkFromOverride } from "./prompt-builder.js";
+import {
+  buildIntegrationTestPrompt,
+  deriveFrameworkFromOverride,
+  normalizeIntegrationTestFilePaths,
+  resolveIntegrateTestCommand,
+} from "./prompt-builder.js";
 import { runIntegrationTestsParallel, type ParallelTestRunOptions } from "./test-runner.js";
 import {
   buildIntegrateArtifact,
@@ -717,6 +722,7 @@ export async function runIntegrateCommand(
 
   let prompt: string;
   let testCommand: string;
+  let detectedFrameworkName: string;
 
   try {
     const builtPrompt = await buildIntegrationTestPrompt({
@@ -729,8 +735,9 @@ export async function runIntegrateCommand(
       workstreamHealthContext: buildWorkstreamHealthContext(health),
     });
     prompt = builtPrompt.prompt;
+    detectedFrameworkName = builtPrompt.detectedFramework;
     // Derive the framework-specific test command from detected framework name
-    testCommand = deriveFrameworkFromOverride(builtPrompt.detectedFramework).testCommand;
+    testCommand = deriveFrameworkFromOverride(detectedFrameworkName).testCommand;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return makeErrorResult(
@@ -887,6 +894,20 @@ export async function runIntegrateCommand(
     const extractResult = extractJsonFromAIResponse(rawResponse);
     testFiles = extractResult.files;
     console.log(`[AI] Parsed JSON via: ${extractResult.method}`);
+    const pathsBefore = testFiles.map((f) => f.path.replace(/\\/g, "/"));
+    testFiles = normalizeIntegrationTestFilePaths(testFiles);
+    const mistypedPath = (p: string | undefined) =>
+      Boolean(p && /^tests\/integration\.[^/]+$/.test(p));
+    if (testFiles.some((f, i) => mistypedPath(pathsBefore[i]) && f.path !== pathsBefore[i])) {
+      console.log(dim("Rewrote mistyped paths (use tests/integration/… not tests/integration.…):"));
+      for (let i = 0; i < testFiles.length; i++) {
+        const before = pathsBefore[i];
+        const after = testFiles[i]?.path;
+        if (mistypedPath(before) && after !== undefined && after !== before) {
+          console.log(dim(`  ${before} → ${after}`));
+        }
+      }
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return makeErrorResult(
@@ -897,6 +918,12 @@ export async function runIntegrateCommand(
       1
     );
   }
+
+  const resolvedCommand = resolveIntegrateTestCommand(testFiles, detectedFrameworkName);
+  if (resolvedCommand !== testCommand) {
+    console.log(dim(`Adjusting test command for generated files:\n  ${resolvedCommand}`));
+  }
+  testCommand = resolvedCommand;
 
   // ---- Step 7: Run the generated tests ----
 
