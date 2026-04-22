@@ -12,7 +12,7 @@ Forge follows [Semantic Versioning](https://semver.org/):
 1. All tests pass: `npm test && npm run typecheck && npm run build && npm run smoke`
 2. Changelog is updated with all changes since last release
 3. `package.json` version is correct
-4. `npm publish --dry-run` passes without errors
+4. `npm run publish:dry` passes without errors (runs `scripts/publish-dry.mjs`: `npm whoami` then `npm publish --dry-run --access public`; no bash required). On macOS/Linux with bash, `./scripts/publish.sh` is equivalent.
 5. Git working tree is clean
 
 ## Release Steps
@@ -55,19 +55,19 @@ npm run release major
 ## npm Account Requirements
 
 Publishing requires:
-- npm account with access to `@forge-cli` organization
+- npm account with access to `@forgecli` organization
 - 2FA enabled on npm
 - `npm login` completed locally
 
 To check:
 ```bash
 npm whoami
-npm access ls-collaborators @forge-cli/forge
+npm access ls-collaborators @forgecli/forge
 ```
 
 ## Post-Publish Verification
 
 ```bash
-npm view @forge-cli/forge
-npx @forge-cli/forge --version
+npm view @forgecli/forge
+npx @forgecli/forge --version
 ```

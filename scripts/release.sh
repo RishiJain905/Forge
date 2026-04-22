@@ -56,7 +56,7 @@ echo "  4. Create a GitHub Release at https://github.com/RishiJain905/Forge/rele
 echo ""
 echo "If you're not ready to publish yet, the commit and tag are ready whenever you are."
 echo "Make sure you have:"
-echo "  - npm account with access to @forge-cli organization"
+echo "  - npm account with access to @forgecli organization"
 echo "  - npm login completed (npm whoami to verify)"
 echo "  - 2FA enabled on npm"
 echo ""

@@ -561,7 +561,7 @@
 - Step 6 Batch 3 Part 4, including the explicit freeze boundary documentation, full V1 freeze sign-off, updated progress.md, and confirmation that Step 6 integrate is frozen for V1 except future bug fixes.
 - Step 6 Batch 3 is complete and Step 6 integrate is frozen for V1.
 - Step 7 Batch 1 Task 1 (npm Packaging):
-  - Renamed package to @forge-cli/forge, bumped to 1.0.0
+  - Renamed package to @forgecli/forge, bumped to 1.0.0
   - Added bin, exports, engines, os, keywords, repository, license, publishConfig
   - Added scripts/fix-shebang.js build safety net
   - Added tests/npm-packaging.test.ts (15 tests) wired into default test gate

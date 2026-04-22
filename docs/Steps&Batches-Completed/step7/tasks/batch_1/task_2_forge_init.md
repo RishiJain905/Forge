@@ -61,7 +61,7 @@ dist/
 .idea/
 `;
 
-const DEFAULT_FORGE_CONFIG_TS = `import { defineConfig } from "@forge-cli/forge";
+const DEFAULT_FORGE_CONFIG_TS = `import { defineConfig } from "@forgecli/forge";
 
 export default defineConfig({
   forge: {
@@ -234,7 +234,7 @@ Now that Task 2 implements `forge init`, add the postinstall script to `package.
 "postinstall": "forge --init 2>/dev/null || true"
 ```
 
-This script runs automatically after `npm install -g @forge-cli/forge`, creating `.forge/` in the user's project directory with default config. The `2>/dev/null || true` ensures it fails silently if the user is installing globally or in a non-project directory.
+This script runs automatically after `npm install -g @forgecli/forge`, creating `.forge/` in the user's project directory with default config. The `2>/dev/null || true` ensures it fails silently if the user is installing globally or in a non-project directory.
 
 Add a test in `tests/npm-packaging.test.ts` to verify the `postinstall` script is present:
 

@@ -1,6 +1,6 @@
 # npm Publishing Checklist — Forge CLI
 
-This checklist walks you through everything needed to publish `@forge-cli/forge` to npm. Go through each step in order. All steps are manual — none of the scripts in this repo will publish without your explicit action.
+This checklist walks you through everything needed to publish `@forgecli/forge` to npm. Go through each step in order. All steps are manual — none of the scripts in this repo will publish without your explicit action.
 
 ---
 
@@ -14,7 +14,7 @@ This checklist walks you through everything needed to publish `@forge-cli/forge`
 
 ---
 
-## Step 2: Create the `@forge-cli` Organization
+## Step 2: Create the `@forgecli` Organization
 
 1. Log into npm at https://www.npmjs.com/login
 2. Go to **Organizations** and click **Create Organization**
@@ -46,7 +46,7 @@ Expected output: your npm username.
 ## Step 4: Verify Organization Access
 
 ```bash
-npm access ls-collaborators @forge-cli/forge
+npm access ls-collaborators @forgecli/forge
 ```
 
 If you just created the org, this may show an error (package doesn't exist yet). That's okay.
@@ -57,7 +57,7 @@ To verify you can publish scoped packages:
 npm access ls-packages
 ```
 
-You should see `@forge-cli` listed.
+You should see `@forgecli` listed.
 
 ---
 
@@ -103,7 +103,7 @@ npm run publish:dry
 ```
 
 Review the dry-run output:
-- Package name should be `@forge-cli/forge`
+- Package name should be `@forgecli/forge`
 - Version should be correct
 - No sensitive files should be in the tarball
 
@@ -128,7 +128,7 @@ npm publish --access public
 Wait 30-60 seconds, then:
 
 ```bash
-npm view @forge-cli/forge
+npm view @forgecli/forge
 ```
 
 This should show the published package with version, description, and README.
@@ -136,7 +136,7 @@ This should show the published package with version, description, and README.
 Also test npx:
 
 ```bash
-npx @forge-cli/forge --version
+npx @forgecli/forge --version
 ```
 
 This should download and run the package, printing the version.
@@ -173,11 +173,11 @@ git push origin v1.0.0
 
 ### "403 Forbidden — Package name already exists"
 
-Someone else has claimed `@forge-cli/forge`. Try a different scope if needed, or request ownership transfer from npm support.
+Someone else has claimed `@forgecli/forge`. Try a different scope if needed, or request ownership transfer from npm support.
 
 ### "404 Not Found — scope not found"
 
-The `@forge-cli` organization doesn't exist. Create it first (Step 2).
+The `@forgecli` organization doesn't exist. Create it first (Step 2).
 
 ### "ENEEDAUTH — need auth"
 
@@ -199,7 +199,7 @@ Run `git status`. Commit or stash any uncommitted changes before running `npm ru
 # Setup (one-time)
 npm login
 npm whoami
-npm access ls-collaborators @forge-cli/forge
+npm access ls-collaborators @forgecli/forge
 
 # Pre-flight (every time)
 npm test && npm run typecheck && npm run build && npm run smoke
@@ -212,8 +212,8 @@ npm run release patch   # or minor / major
 npm publish --access public
 
 # Verify
-npm view @forge-cli/forge
-npx @forge-cli/forge --version
+npm view @forgecli/forge
+npx @forgecli/forge --version
 
 # Push
 git push && git push origin v1.0.0

@@ -11,6 +11,7 @@ const changelogPath = resolve(projectRoot, "CHANGELOG.md");
 const releaseScriptPath = resolve(projectRoot, "scripts", "release.sh");
 const changelogScriptPath = resolve(projectRoot, "scripts", "changelog.sh");
 const publishScriptPath = resolve(projectRoot, "scripts", "publish.sh");
+const publishDryScriptPath = resolve(projectRoot, "scripts", "publish-dry.mjs");
 const releaseDocsPath = resolve(projectRoot, "docs", "release-process.md");
 const packageJsonPath = resolve(projectRoot, "package.json");
 const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"));
@@ -150,6 +151,26 @@ describe("scripts/publish.sh", () => {
   });
 });
 
+describe("scripts/publish-dry.mjs", () => {
+  it("exists", () => {
+    assert.ok(
+      existsSync(publishDryScriptPath),
+      "scripts/publish-dry.mjs should exist (npm run publish:dry)"
+    );
+  });
+
+  it("mirrors publish.sh: whoami, publish --dry-run, and public access", () => {
+    const content = readFileSync(publishDryScriptPath, "utf8");
+    assert.ok(content.includes("whoami"), "should invoke npm whoami");
+    assert.ok(content.includes("publish"), "should invoke npm publish");
+    assert.ok(content.includes("--dry-run"), "should pass --dry-run");
+    assert.ok(
+      content.includes("--access") && content.includes("public"),
+      "should pass --access public"
+    );
+  });
+});
+
 describe("docs/release-process.md", () => {
   it("exists with Release or Versioning text", () => {
     if (!existsSync(releaseDocsPath)) {
@@ -195,10 +216,13 @@ describe("package.json release scripts", () => {
     );
   });
 
-  it('has "publish:dry" script', () => {
-    assert.ok(
-      packageJson.scripts && packageJson.scripts["publish:dry"],
-      'package.json should have a "publish:dry" script'
+  it('has "publish:dry" script pointing at publish-dry.mjs (no bash required)', () => {
+    const script = packageJson.scripts?.["publish:dry"];
+    assert.ok(typeof script === "string" && script.length > 0);
+    assert.match(
+      script,
+      /node\s+scripts\/publish-dry\.mjs/,
+      'publish:dry should run scripts/publish-dry.mjs for Windows/macOS/Linux'
     );
   });
 });

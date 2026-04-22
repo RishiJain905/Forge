@@ -81,13 +81,13 @@ describe("forge.yml workflow", () => {
     assert.ok(content.includes("node-version: '20'") || content.includes('node-version: "20"') || content.includes("node-version: 20"), "should specify node-version 20");
   });
 
-  it("includes npm install -g @forge-cli/forge step", () => {
+  it("includes npm install -g @forgecli/forge step", () => {
     if (!existsSync(forgeYmlPath)) {
       console.log("SKIP: forge.yml does not exist yet");
       return;
     }
     const content = readFileSync(forgeYmlPath, "utf8");
-    assert.ok(content.includes("npm install -g @forge-cli/forge"), "should install @forge-cli/forge globally");
+    assert.ok(content.includes("npm install -g @forgecli/forge"), "should install @forgecli/forge globally");
   });
 
   it("includes forge doctor --checks step", () => {

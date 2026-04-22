@@ -2,13 +2,13 @@
 
 ## Goal
 
-Package Forge as a first-class installable CLI (`@forge-cli/forge`) so teams can run `npm install -g @forge-cli/forge` or `npx @forge-cli/forge` and use it immediately. After Step 7, Forge has proper versioning, init, doctor, update, config, Docker, GitHub Actions, and release tooling.
+Package Forge as a first-class installable CLI (`@forgecli/forge`) so teams can run `npm install -g @forgecli/forge` or `npx @forgecli/forge` and use it immediately. After Step 7, Forge has proper versioning, init, doctor, update, config, Docker, GitHub Actions, and release tooling.
 
 ---
 
 ## What This Step Does
 
-- Configures `package.json` for npm publishing (`@forge-cli/forge`)
+- Configures `package.json` for npm publishing (`@forgecli/forge`)
 - Adds `forge init` to create `.forge/` directory structure with config
 - Adds `forge doctor` for pre-flight environment checks
 - Adds `forge update` for self-update functionality
@@ -45,7 +45,7 @@ Package Forge as a first-class installable CLI (`@forge-cli/forge`) so teams can
 ```
 forge intake / forge plan / forge verify / forge split / forge execute / forge integrate
                                                                                 ↓
-                                          Package as @forge-cli/forge
+                                          Package as @forgecli/forge
                                                        ↓
                               forge init / forge doctor / forge update / forge config
                                                        ↓
@@ -111,7 +111,7 @@ docker-compose.yml       NEW
 ### Batch 2: Update + Config + Env
 | # | Task | Description |
 |---|------|-------------|
-| 1 | forge update | Self-update via `npm view @forge-cli/forge version` |
+| 1 | forge update | Self-update via `npm view @forgecli/forge version` |
 | 2 | forge config | list/get/set/unset/edit with precedence chain |
 | 3 | Env Variables | FORGE_* env var support for all config keys |
 
@@ -153,7 +153,7 @@ forge config --edit                            # Open in $EDITOR
 - `forge config --list` — Shows all config values with sources
 - GitHub Action `forge-action` — Works in a real workflow
 - Docker build + run — Works in a container
-- `npx @forge-cli/forge --version` — Works without installing
+- `npx @forgecli/forge --version` — Works without installing
 
 ---
 

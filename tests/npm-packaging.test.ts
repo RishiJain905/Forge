@@ -10,8 +10,8 @@ const packageJsonPath = resolve(projectRoot, "package.json");
 const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"));
 
 describe("npm packaging contract", () => {
-  it("has scoped package name @forge-cli/forge", () => {
-    assert.equal(packageJson.name, "@forge-cli/forge");
+  it("has scoped package name @forgecli/forge", () => {
+    assert.equal(packageJson.name, "@forgecli/forge");
   });
 
   it("has version 1.0.0 for V1 release", () => {
