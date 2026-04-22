@@ -5,18 +5,30 @@
  */
 import { spawnSync } from "node:child_process";
 
-const npmCmd = process.platform === "win32" ? "npm.cmd" : "npm";
+const npmExecutable = process.platform === "win32" ? "npm.cmd" : "npm";
 
-function runNpm(args, inherit = true) {
-  return spawnSync(npmCmd, args, {
-    stdio: inherit ? "inherit" : "pipe",
-    encoding: inherit ? undefined : "utf8",
+const spawnOpts = {
+  cwd: process.cwd(),
+  env: process.env,
+  windowsHide: process.platform === "win32",
+};
+
+function runNpm(args, inheritStdio) {
+  return spawnSync(npmExecutable, args, {
+    ...spawnOpts,
+    stdio: inheritStdio ? "inherit" : "pipe",
+    encoding: inheritStdio ? undefined : "utf8",
   });
 }
 
 console.log("=== npm whoami ===");
 const whoami = runNpm(["whoami"], false);
-if (whoami.status !== 0) {
+const whoamiCode = whoami.status === null ? 1 : whoami.status;
+if (whoamiCode !== 0) {
+  const errText = [whoami.stderr, whoami.stdout].filter(Boolean).join("").trim();
+  if (errText) {
+    console.error(errText);
+  }
   console.log("You are not logged into npm. Run: npm login");
   process.exit(1);
 }
@@ -27,7 +39,7 @@ if (whoami.stdout) {
 console.log("");
 console.log("=== npm publish --dry-run ===");
 const dry = runNpm(["publish", "--dry-run", "--access", "public"], true);
-const code = dry.status ?? 1;
+const code = dry.status === null ? 1 : dry.status;
 if (code !== 0) {
   process.exit(code);
 }

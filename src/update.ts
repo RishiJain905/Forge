@@ -6,6 +6,10 @@ import { fileURLToPath } from "node:url";
 
 const execFileAsync = promisify(execFile);
 
+function npmCmd(): string {
+  return process.platform === "win32" ? "npm.cmd" : "npm";
+}
+
 export interface UpdateInfo {
   current: string;
   latest: string;
@@ -23,7 +27,7 @@ export async function checkForUpdate(): Promise<UpdateInfo> {
   const current = getPackageVersion();
   try {
     const { stdout } = await execFileAsync(
-      "npm",
+      npmCmd(),
       ["view", "@forge-cli/forge", "version"],
       { timeout: 10000 },
     );
@@ -59,7 +63,7 @@ export async function selfUpdate(yes: boolean = false): Promise<void> {
   console.log(`Updating Forge ${current} → ${latest}...`);
   try {
     await execFileAsync(
-      "npm",
+      npmCmd(),
       ["install", "-g", `@forge-cli/forge@${latest}`],
       { timeout: 60000 },
     );
