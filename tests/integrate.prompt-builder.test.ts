@@ -10,12 +10,14 @@ import {
   deriveFrameworkFromOverride,
   discoverExistingTests,
   CONTEXT_WARNING_THRESHOLD,
+  resolveIntegrateTestCommand,
+  normalizeIntegrationTestFilePaths,
 } from "../src/integrate/prompt-builder.js";
 import type { DetectedFramework } from "../src/integrate/prompt-builder.js";
 import type { ExecuteArtifact, ExecuteWorkstream, ChangeMade } from "../src/execute/types.js";
 import type { PlanArtifact, PlanItem, PlanCarryForwardConcern } from "../src/plan/types.js";
 import type { VerifyArtifact, VerifyFinding, VerifyConstraint } from "../src/verify/types.js";
-import type { PromptBuildContext, BuiltPrompt } from "../src/integrate/types.js";
+import type { PromptBuildContext, BuiltPrompt, IntegrationTestFile } from "../src/integrate/types.js";
 import crypto from "node:crypto";
 
 async function runScenario(name: string, fn: () => void | Promise<void>): Promise<void> {
@@ -1361,6 +1363,108 @@ await runScenario("buildFileSection shows all files when count is 20 or less", a
       );
     }
   });
+});
+
+function makeIntegrationTestFile(path: string, content: string): IntegrationTestFile {
+  return {
+    path,
+    content,
+    testCount: 1,
+    language: "typescript",
+    framework: "npm",
+  };
+}
+
+// ---------------------------------------------------------------------------
+// normalizeIntegrationTestFilePaths
+// ---------------------------------------------------------------------------
+
+await runScenario(
+  "normalizeIntegrationTestFilePaths fixes tests/integration.Foo → tests/integration/Foo",
+  async () => {
+    const out = normalizeIntegrationTestFilePaths([
+      makeIntegrationTestFile(
+        "tests/integration.dotenv-loading.test.ts",
+        "describe('x', () => { it('y', () => { expect(1).toBe(1); }); });"
+      ),
+    ]);
+    assert.equal(out[0]?.path, "tests/integration/dotenv-loading.test.ts");
+  }
+);
+
+await runScenario(
+  "normalizeIntegrationTestFilePaths leaves correct tests/integration/ paths unchanged",
+  async () => {
+    const out = normalizeIntegrationTestFilePaths([
+      makeIntegrationTestFile(
+        "tests/integration/dotenv-loading.test.ts",
+        "describe('x', () => { it('y', () => { expect(1).toBe(1); }); });"
+      ),
+    ]);
+    assert.equal(out[0]?.path, "tests/integration/dotenv-loading.test.ts");
+  }
+);
+
+await runScenario(
+  "normalizeIntegrationTestFilePaths normalizes backslashes before dot fix",
+  async () => {
+    const out = normalizeIntegrationTestFilePaths([
+      makeIntegrationTestFile(
+        "tests\\integration.cli.test.ts",
+        "x"
+      ),
+    ]);
+    assert.equal(out[0]?.path, "tests/integration/cli.test.ts");
+  }
+);
+
+// ---------------------------------------------------------------------------
+// resolveIntegrateTestCommand
+// ---------------------------------------------------------------------------
+
+await runScenario(
+  "resolveIntegrateTestCommand uses vitest for describe/it/expect when detected npm",
+  async () => {
+    const cmd = resolveIntegrateTestCommand(
+      [
+        makeIntegrationTestFile(
+          "tests/integration/foo.test.ts",
+          "describe('x', () => { it('y', () => { expect(1).toBe(1); }); });"
+        ),
+      ],
+      "npm"
+    );
+    assert.ok(cmd.includes("vitest run"), cmd);
+    assert.ok(cmd.includes("vitest.config.integration.mts"), cmd);
+    assert.ok(cmd.includes("tests/integration/foo.test.ts"), cmd);
+  }
+);
+
+await runScenario("resolveIntegrateTestCommand keeps pytest baseline", async () => {
+  const cmd = resolveIntegrateTestCommand(
+    [
+      makeIntegrationTestFile(
+        "tests/test_a.py",
+        "def test_foo():\n    assert 1\n"
+      ),
+    ],
+    "pytest"
+  );
+  assert.equal(cmd, "pytest");
+});
+
+await runScenario("resolveIntegrateTestCommand uses jest when @jest/globals import present", async () => {
+  const cmd = resolveIntegrateTestCommand(
+    [
+      makeIntegrationTestFile(
+        "tests/a.test.ts",
+        "import { describe, it, expect } from '@jest/globals';\ndescribe('x', () => { it('y', () => expect(1).toBe(1)); });\n"
+      ),
+    ],
+    "npm"
+  );
+  assert.ok(cmd.startsWith("npx jest"), cmd);
+  assert.ok(cmd.includes("tests/a.test.ts"), cmd);
 });
 
 // ---------------------------------------------------------------------------

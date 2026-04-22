@@ -36,7 +36,7 @@ flowchart TB
 
     subgraph AI_EXEC["3. AI EXECUTION PHASE"]
         direction LR
-        C1[/"3a. BUILD PROMPT<br/>workstream desc + file contents<br/>plan context + verify constraints<br/>merge order + carried concerns"/]
+        C1[/"3a. BUILD PROMPT<br/>one prompt per workstreamId<br/>scoped plan/verify + path snippets<br/>merge order + caps (FORGE_EXECUTE_*)/"]
         C2[/"3b. CALL AI MODEL<br/>user-provided cloud model<br/>gpt-5.4 / claude-Opus-4.7 / GLM-5.1<br/>returns code changes"/]
         C3[/"3c. APPLY CHANGES<br/>write files to disk<br/>track: path, hash, lines"/]
         C4[/"3d. VERIFY<br/>typecheck / lint<br/>optional per-workstream"/]
@@ -120,31 +120,81 @@ stateDiagram-v2
 
 ## AI Execution Details
 
-### What Feeds the AI Prompt
+### How the prompt is chosen
+
+There is **no separate prompt catalog.** Each AI run builds **exactly one prompt for one workstream**.
+
+1. **Selection** — Interactive `forge execute`, auto mode (`FORGE_EXECUTE_AUTO=1`), or other CLI paths pick a **`workstreamId`** when a stream enters the `running` state.
+2. **Build** — `executeWorkstreamWithAI` in `src/execute/cli.ts` loads `.forge/split.json`, `.forge/plan.json`, and `.forge/verify.json`, then calls **`buildWorkstreamPrompt`** (`src/execute/prompt-builder.ts`) with `{ workstreamId, splitArtifact, planArtifact, verifyArtifact, repoRoot }`.
+3. **Resolution** — The builder finds the **single workstream** in `split.json` whose `id` matches `workstreamId`. All sections of the prompt are **derived from that object’s fields** (and from artifacts filtered through those fields).
+
+The same assembly code runs for every stream; **only the inputs change** based on which `workstreamId` is active.
 
 ```mermaid
 flowchart LR
-    subgraph INPUTS["AI Prompt Inputs"]
-        W["Workstream Description<br/>title + description + category"]
-        F["Target Files<br/>likelyAffectedPaths contents"]
-        P["Plan Context<br/>requirement → file mapping"]
-        V["Verify Constraints<br/>conflict zones + safety rules"]
-        M["Merge Order<br/>what must complete first"]
-        C["Carried Concerns<br/>from plan + verify"]
+    subgraph inputs [Inputs]
+        WS[workstreamId]
+        S[split.json]
+        P[plan.json]
+        V[verify.json]
+        R[repo files under repoRoot]
+    end
+    subgraph builder [buildWorkstreamPrompt]
+        F[Filter / scope to this stream]
+        T[Truncate / cap prompt size]
+        A[assemblePrompt]
+    end
+    M[Model]
+    WS --> F
+    S --> F
+    P --> F
+    V --> F
+    R --> F
+    F --> T
+    T --> A
+    A --> M
+```
+
+### Why the prompt matches that stream (scoping)
+
+The model does not receive the full plan or verify dump. Content is **scoped** so it applies to **this** workstream only:
+
+| Source | What is included for this stream |
+|--------|-----------------------------------|
+| **`split.json`** (this workstream) | **Title** and **description** (length-limited), **`sourcePlanItemIds`**, **`likelyAffectedPaths`**, **`mergeOrderRequirements`**. |
+| **`plan.json`** | Plan items whose `id` is in **`sourcePlanItemIds`**; **conflict zones** that touch **`likelyAffectedPaths`**; **carried-forward concerns** whose `planItemIds` overlap those plan items. |
+| **`verify.json`** | **Findings** and **constraints** linked (via verification cases) to the same **plan item** set. |
+| **Disk** | Snippets for files listed in **`likelyAffectedPaths`** only (paths resolved under **`repoRoot`**). |
+
+Together with explicit rules (“only modify files listed in Target Files”), this keeps the task **localized**: merge prerequisites, verify/plan signals for the same files and plan items, and editable paths all line up with the chosen stream.
+
+**Note:** `buildWorkstreamPrompt` returns **`warnings`** (e.g. missing files, truncated snippets). The execute CLI currently passes **`prompt`** into the model; surfacing `warnings` on the console or in the artifact is optional future polish.
+
+### What feeds the AI prompt (summary diagram)
+
+```mermaid
+flowchart LR
+    subgraph INPUTS["Scoped inputs"]
+        W["Workstream<br/>title + description"]
+        F["Target paths<br/>likelyAffectedPaths → snippets"]
+        P["Plan items + zones + concerns<br/>filtered by ids/paths"]
+        V["Verify findings + constraints<br/>filtered by plan items"]
+        M["Merge order<br/>mergeOrderRequirements"]
     end
 
-    subgraph PROMPT["Constructed Prompt"]
+    subgraph PROMPT["Constructed prompt"]
         direction TB
-        P1["System Role<br/>skilled software engineer"]
-        P2["Workstream Section<br/>title, description, category"]
-        P3["Prerequisites Section<br/>merge_order prereqs with descriptions"]
-        P4["Constraints Section<br/>conflict zones, findings, carried concerns"]
-        P5["Target Files Section<br/>current file contents (read-only)"]
-        P6["Task + Output Format<br/>make changes, return JSON"]
+        P1["System role"]
+        P2["Workstream + plan item context"]
+        P3["Merge order prerequisites"]
+        P4["Critical constraints"]
+        P5["Carried-forward concerns"]
+        P6["Target file snippets + repo root"]
+        P7["Task + JSON output format + rules"]
     end
 
-    subgraph OUTPUT["AI Output"]
-        O1["JSON: changes array"]
+    subgraph OUTPUT["AI output"]
+        O1["## CHANGES JSON array"]
         O2["file, action, content"]
         O3["Applied to disk"]
     end
@@ -157,47 +207,64 @@ flowchart LR
     style OUTPUT fill:#0f3460,stroke:#06d6a0,color:#ffffff
 ```
 
-### Per-Workstream Prompt Structure
+### Per-workstream prompt layout (actual template)
+
+The following mirrors **`assemblePrompt`** in `src/execute/prompt-builder.ts`. Copy is intentionally **short**; full source lives on disk. Snippet sizes default to a **total** budget across files plus a per-file ceiling (see [Prompt size limits](#prompt-size-limits)).
 
 ```
-# SYSTEM ROLE
-You are a skilled software engineer implementing changes to a codebase.
+# Role
+Senior engineer. Implement changes in the repo below; snippets are hints only.
 
-# WORKSTREAM DESCRIPTION
+# Workstream
 Title: {title}
-Description: {description}
-Category: {category}
+Task: {description_truncated}
 
-# MERGE ORDER PREREQUISITES
-Before this workstream runs, the following must be completed:
-- {prereq_1_title}: {prereq_1_description}
-- {prereq_2_title}: {prereq_2_description}
+Plan items:
+  - {plan_item_title}: {category}/{riskLevel}
+  ...
 
-# IMPLEMENTATION CONSTRAINTS (from Verify step)
-CRITICAL:
-- {constraint_1}
-- {constraint_2}
+# Merge order (complete first)
+(prerequisite bullets or “None — …”)
 
-# CARRIED-FORWARD CONCERNS
-- {concern_1}
+# Constraints (verify + plan)
+(CONFLICT ZONE / FINDING / CONSTRAINT lines, line-capped)
 
-# TARGET FILES (read-only — current contents)
-FILE: {path_1}
+# Concerns (plan carry-forward)
+(filtered concern bullets)
+
+# Target files (truncated snippets — read full files on disk)
+FILE: {path}
 ---
-{current_contents}
+{snippet}
 ---
 
-# YOUR TASK
-Make the necessary changes to the target files above.
+# Repo
+{repoRoot}
 
-# OUTPUT FORMAT
-Return a JSON array of changes:
-```json
-[
-  {"file": "path", "action": "create|modify|delete", "content": "..."}
-]
+# Output
+(## CHANGES plus a fenced JSON code block — must match execute model connector parser)
+
+# Rules
+1. Only paths listed under Target files
+2. …
 ```
-```
+
+The shipped prompt embeds a minimal **## CHANGES** / **```json** example on one line so the model follows the same shape `parseModelResponse` expects in `src/execute/model-connector.ts`.
+
+### Prompt size limits
+
+Long prompts are clamped so execute stays usable across models. Defaults can be overridden with environment variables (parsed as integers, clamped to safe min/max in code):
+
+| Variable | Default | Role |
+|----------|---------|------|
+| `FORGE_EXECUTE_FILE_SNIPPETS_TOTAL_CHARS` | `5000` | **Total** character budget split across all target files that have content (each file also obeys the per-file ceiling). Stops many paths from producing 30k+ prompts. |
+| `FORGE_EXECUTE_FILE_SNIPPET_CHARS` | `1200` | Per-file **ceiling** for an embedded snippet (head + tail + middle omission). |
+| `FORGE_EXECUTE_TEXT_FIELD_MAX_CHARS` | `400` | Max characters for the workstream description (single line, whitespace collapsed); merge-order and other bullets also respect related caps. |
+| `FORGE_EXECUTE_CONSTRAINT_LINES_MAX` | `14` | Max lines in the conflict-zone / finding / constraint block before a “see plan.json / verify.json” footer. |
+| `FORGE_EXECUTE_MAX_CONCERNS` | `6` | Max carried-forward concern bullets. |
+| `FORGE_EXECUTE_PROMPT_MAX_CHARS` | *(unset)* | Optional hard cap on the **entire** assembled prompt. When set (≥ `12000`), text before `# Output` may be truncated so the `## CHANGES` / JSON instructions stay intact. Use only if env snippet caps are not enough. |
+
+See `src/execute/prompt-builder.ts` for exact clamp ranges and helpers (`truncateFileBodyForPrompt`, `truncateOneLine`).
 
 ---
 
@@ -362,6 +429,8 @@ All workstreams complete. Artifact written to .forge/execute.json
 | `FORGE_MODEL_API_KEY` | No | API key (not needed for Ollama) |
 | `FORGE_MODEL_BASE_URL` | No | Proxy or self-hosted endpoint |
 | `FORGE_EXECUTE_AUTO` | No | Set to `1` to auto-execute all unblocked workstreams |
+
+Optional **`FORGE_EXECUTE_*`** variables (file snippet size, description length, constraint line caps, max concerns) tune the **workstream prompt** built for the model. See **Prompt size limits** under [AI Execution Details](#ai-execution-details).
 
 ---
 

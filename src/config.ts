@@ -247,6 +247,48 @@ export function resolveConfig(cwd: string = process.cwd()): ConfigResult {
   return { sources, values };
 }
 
+/**
+ * Returns `provider/model` when it comes from a real source (`.forge/config.yaml`,
+ * or env like `FORGE_MODEL` / `FORGE_EXECUTE_DEFAULT_MODEL`), not from built-in
+ * defaults alone. Used by the AI connector so missing env still errors unless the
+ * user has explicitly configured a model somewhere.
+ */
+export function getConfiguredModelIdFromWorkspace(
+  cwd: string = process.cwd(),
+): string | null {
+  const { values, sources } = resolveConfig(cwd);
+
+  const executeModel = getValueByDotPath(values, "execute.default_model");
+  const executeSource = sources["execute.default_model"] ?? "";
+  const executeStr =
+    typeof executeModel === "string" && executeModel.trim()
+      ? executeModel.trim()
+      : "";
+
+  const forgeModel = getValueByDotPath(values, "forge.default_model");
+  const forgeSource = sources["forge.default_model"] ?? "";
+  const forgeStr =
+    typeof forgeModel === "string" && forgeModel.trim()
+      ? forgeModel.trim()
+      : "";
+
+  // Env wins over `.forge/config.yaml` (merge order in resolveConfig is file then env).
+  if (executeSource.startsWith("env:") && executeStr) {
+    return executeStr;
+  }
+  if (forgeSource.startsWith("env:") && forgeStr) {
+    return forgeStr;
+  }
+  if (executeStr && executeSource !== "default") {
+    return executeStr;
+  }
+  if (forgeStr && forgeSource !== "default") {
+    return forgeStr;
+  }
+
+  return null;
+}
+
 export function getConfigValue(
   key: string,
   cwd?: string,

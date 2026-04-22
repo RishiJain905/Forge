@@ -28,15 +28,30 @@ import type {
   WorkstreamHealth,
 } from "./types.js";
 
-import { buildIntegrationTestPrompt, deriveFrameworkFromOverride } from "./prompt-builder.js";
+import {
+  buildIntegrationTestPrompt,
+  deriveFrameworkFromOverride,
+  normalizeIntegrationTestFilePaths,
+  resolveIntegrateTestCommand,
+} from "./prompt-builder.js";
 import { runIntegrationTestsParallel, type ParallelTestRunOptions } from "./test-runner.js";
 import {
   buildIntegrateArtifact,
   writeIntegrateArtifact,
   buildFrozenArtifact,
 } from "./artifact.js";
-import { createIntegrationReport, createFrozenReport } from "./report.js";
-import { loadModelConfig, callModel } from "../execute/model-connector.js";
+import {
+  createIntegrationReport,
+  createFrozenReport,
+  isIntegrateSummaryAllPassed,
+  isIntegrateSummaryInconclusive,
+} from "./report.js";
+import {
+  loadModelConfig,
+  callModel,
+  getModelCallTimeoutForPrompt,
+} from "../execute/model-connector.js";
+import { loadRepoDotenv } from "../repo-dotenv.js";
 import { extractJsonFromAIResponse } from "./extract-json.js";
 import { classifyError } from "./errors.js";
 import {
@@ -549,7 +564,8 @@ function makeErrorResult(
 export async function runIntegrateCommand(
   options: IntegrateCommandOptions = {}
 ): Promise<IntegrateCommandResult> {
-  const repoRoot = options.repo ?? process.cwd();
+  const repoRoot = path.resolve(options.repo ?? process.cwd());
+  loadRepoDotenv(repoRoot);
   const outputDir = options.outputDir ?? path.join(repoRoot, ".forge");
 
   const useColor = shouldUseColor(options);
@@ -706,6 +722,7 @@ export async function runIntegrateCommand(
 
   let prompt: string;
   let testCommand: string;
+  let detectedFrameworkName: string;
 
   try {
     const builtPrompt = await buildIntegrationTestPrompt({
@@ -718,8 +735,9 @@ export async function runIntegrateCommand(
       workstreamHealthContext: buildWorkstreamHealthContext(health),
     });
     prompt = builtPrompt.prompt;
+    detectedFrameworkName = builtPrompt.detectedFramework;
     // Derive the framework-specific test command from detected framework name
-    testCommand = deriveFrameworkFromOverride(builtPrompt.detectedFramework).testCommand;
+    testCommand = deriveFrameworkFromOverride(detectedFrameworkName).testCommand;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return makeErrorResult(
@@ -734,6 +752,15 @@ export async function runIntegrateCommand(
   // ---- Step 5: Call AI with retry loop (reused model-connector + error classification) ----
 
   console.log(dim("[3/5] Calling AI model..."));
+  {
+    const timeoutMs = getModelCallTimeoutForPrompt(prompt.length);
+    const minutes = Math.max(1, Math.round(timeoutMs / 60_000));
+    console.log(
+      dim(
+        `(prompt ~${prompt.length.toLocaleString()} chars; single-request timeout ~${minutes} min — no progress until the model responds)`
+      )
+    );
+  }
 
   let modelUsed = "";
   let rawResponse = "";
@@ -750,7 +777,7 @@ export async function runIntegrateCommand(
   for (let attempt = 0; attempt <= retryConfig.maxRetries; attempt++) {
     freezeState.attemptCount = attempt + 1;
     try {
-      const config = loadModelConfig();
+      const config = loadModelConfig(repoRoot);
       rawResponse = await callModel(prompt, config);
       modelUsed = `${config.provider}/${config.modelName}`;
       // Success — exit retry loop
@@ -867,6 +894,20 @@ export async function runIntegrateCommand(
     const extractResult = extractJsonFromAIResponse(rawResponse);
     testFiles = extractResult.files;
     console.log(`[AI] Parsed JSON via: ${extractResult.method}`);
+    const pathsBefore = testFiles.map((f) => f.path.replace(/\\/g, "/"));
+    testFiles = normalizeIntegrationTestFilePaths(testFiles);
+    const mistypedPath = (p: string | undefined) =>
+      Boolean(p && /^tests\/integration\.[^/]+$/.test(p));
+    if (testFiles.some((f, i) => mistypedPath(pathsBefore[i]) && f.path !== pathsBefore[i])) {
+      console.log(dim("Rewrote mistyped paths (use tests/integration/… not tests/integration.…):"));
+      for (let i = 0; i < testFiles.length; i++) {
+        const before = pathsBefore[i];
+        const after = testFiles[i]?.path;
+        if (mistypedPath(before) && after !== undefined && after !== before) {
+          console.log(dim(`  ${before} → ${after}`));
+        }
+      }
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return makeErrorResult(
@@ -877,6 +918,12 @@ export async function runIntegrateCommand(
       1
     );
   }
+
+  const resolvedCommand = resolveIntegrateTestCommand(testFiles, detectedFrameworkName);
+  if (resolvedCommand !== testCommand) {
+    console.log(dim(`Adjusting test command for generated files:\n  ${resolvedCommand}`));
+  }
+  testCommand = resolvedCommand;
 
   // ---- Step 7: Run the generated tests ----
 
@@ -942,13 +989,22 @@ export async function runIntegrateCommand(
 
   // ---- Step 10: Return result ----
 
-  const hasFailures = artifact.summary.failed > 0;
+  const s = artifact.summary;
+  const hasFailures = s.failed > 0;
+  const inconclusive = isIntegrateSummaryInconclusive(s);
   const exitCode = hasFailures ? 1 : 0;
   const status: "ready" | "failed" = hasFailures ? "failed" : "ready";
 
-  const resultSummary = hasFailures
-    ? `Integration complete with ${artifact.summary.failed} failure(s) out of ${artifact.summary.total} test(s)`
-    : `All ${artifact.summary.total} integration tests passed`;
+  let resultSummary: string;
+  if (hasFailures) {
+    resultSummary = `Integration complete with ${s.failed} failure(s) out of ${s.total} test(s)`;
+  } else if (inconclusive) {
+    resultSummary = `Integration finished but test results were not verified (${s.total} test case(s); see integration-report.md)`;
+  } else if (isIntegrateSummaryAllPassed(s)) {
+    resultSummary = `All ${s.total} integration tests passed`;
+  } else {
+    resultSummary = `Integration complete: ${s.passed} passed, ${s.failed} failed, ${s.skipped} skipped (${s.total} total)`;
+  }
 
   // Final status summary
   const icon = formatStatusIcon(artifact.summary.failed, useColor);

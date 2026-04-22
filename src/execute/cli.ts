@@ -9,6 +9,7 @@ import {
   getBlockedWorkstreams,
   getExecutableWorkstreams,
   restoreExecuteState,
+  buildMergePrerequisiteIds,
 } from "./state-machine.js";
 import { validateSplitArtifact } from "../split/schema.js";
 import type {
@@ -22,7 +23,13 @@ import { writeExecuteArtifact } from "./artifact.js";
 import { createExecuteReport } from "./report.js";
 import type { SplitArtifact } from "../split/types.js";
 import { buildWorkstreamPrompt } from "./prompt-builder.js";
-import { executeWorkstream } from "./model-connector.js";
+import {
+  executeWorkstream,
+  getModelCallTimeoutForPrompt,
+  getModelConfigError,
+  isModelConfigured,
+} from "./model-connector.js";
+import { loadRepoDotenv } from "../repo-dotenv.js";
 
 const SCHEMA_VERSION = "1.0.0";
 const FORGE_VERSION = "0.0.1";
@@ -31,36 +38,68 @@ function getWorkstreamIndex(state: ExecuteState, id: string): number {
   return Array.from(state.workstreams.keys()).indexOf(id);
 }
 
+function truncateOneLine(text: string, maxLen: number): string {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (normalized.length <= maxLen) return normalized;
+  return `${normalized.slice(0, Math.max(0, maxLen - 1))}…`;
+}
+
+function formatPrerequisiteLabels(
+  state: ExecuteState,
+  depIds: string[],
+  maxShow: number
+): string {
+  const keys = Array.from(state.workstreams.keys());
+  const labels = depIds.map((depId) => {
+    const idx = keys.indexOf(depId);
+    return idx >= 0 ? `[${idx + 1}]` : depId;
+  });
+  if (labels.length <= maxShow) return labels.join(", ");
+  return `${labels.slice(0, maxShow).join(", ")} (+${labels.length - maxShow} more)`;
+}
+
 function printDashboard(state: ExecuteState, mergeOrderMap: Map<string, string[]>): void {
   console.log("\n=== Workstream Status ===");
-  console.log("[id] workstream_id    state       blocked by / merge order");
+  console.log(
+    "<id> = dashboard index (1, 2, …), optional brackets ([1]), or full workstream_id (e.g. ws-plan-config-1)."
+  );
+  console.log("[id] state       merge / notes        workstream_id");
+  console.log("     title");
 
   let index = 1;
-  for (const [id, ws] of state.workstreams) {
+  for (const [, ws] of state.workstreams) {
     let blockedInfo: string;
 
     if (ws.state === "queued") {
-      const requirements = getQueuedWorkstreamRequirements(id, mergeOrderMap);
+      const requirements = getQueuedWorkstreamRequirements(
+        ws.workstreamId,
+        mergeOrderMap
+      );
       const unmet = requirements.filter((req) => !state.mergedWorkstreams.has(req));
 
       if (unmet.length === 0) {
-        blockedInfo = "✓ ready";
+        blockedInfo = "ready";
       } else {
-        blockedInfo = `waiting on: [${unmet.join(", ")}]`;
+        blockedInfo = `after ${formatPrerequisiteLabels(state, unmet, 8)}`;
       }
     } else if (ws.state === "completed") {
-      blockedInfo = "✓ merged";
+      blockedInfo = "merged";
     } else if (ws.state === "failed") {
-      blockedInfo = ws.error ? `✗ failed: ${ws.error}` : "✗ failed";
+      blockedInfo = ws.error
+        ? truncateOneLine(`failed: ${ws.error}`, 48)
+        : "failed";
     } else if (ws.state === "running") {
-      blockedInfo = ws.aiModelUsed ? `✓ running (AI: ${ws.aiModelUsed})` : "✓ running (AI)";
+      blockedInfo = ws.aiModelUsed
+        ? truncateOneLine(`running (${ws.aiModelUsed})`, 48)
+        : "running";
     } else {
       blockedInfo = "";
     }
 
     console.log(
-      `[${index}] ${ws.workstreamId.padEnd(14)} ${ws.state.padEnd(10)} ${blockedInfo}`
+      `[${index}] ${ws.state.padEnd(11)} ${truncateOneLine(blockedInfo, 36).padEnd(36)} ${ws.workstreamId}`
     );
+    console.log(`     ${truncateOneLine(ws.title, 100)}`);
     index++;
   }
 }
@@ -114,6 +153,7 @@ async function executeWorkstreamWithAI(
     return { workstreamId, success: false, changes: [], modelUsed: "", error: "Workstream not found" };
   }
 
+  console.log(`[AI] ${workstreamId}: loading plan.json, verify.json, split.json…`);
   const [planArtifact, verifyArtifact] = await Promise.all([
     loadPlanArtifact(repoRoot),
     loadVerifyArtifact(repoRoot),
@@ -134,6 +174,7 @@ async function executeWorkstreamWithAI(
     const splitContent = await fs.readFile(splitJsonPath, "utf-8");
     const splitArtifact = JSON.parse(splitContent) as SplitArtifact;
 
+    console.log(`[AI] ${workstreamId}: building workstream prompt…`);
     const { prompt } = await buildWorkstreamPrompt({
       workstreamId,
       splitArtifact,
@@ -142,9 +183,20 @@ async function executeWorkstreamWithAI(
       repoRoot,
     });
 
+    const tmo = getModelCallTimeoutForPrompt(prompt.length);
+    console.log(
+      `[AI] ${workstreamId}: calling model (${prompt.length} chars; ~${Math.round(
+        tmo / 1000
+      )}s HTTP timeout${process.env.FORGE_MODEL_TIMEOUT_MS?.trim() ? " (from FORGE_MODEL_TIMEOUT_MS)" : " (scaled from prompt size; set FORGE_MODEL_TIMEOUT_MS to override)"}). No git/file updates until the API returns. FORGE_MODEL_DEBUG=1 logs each request on stderr.`
+    );
+
     const startTime = Date.now();
     const result = await executeWorkstream(prompt, repoRoot);
     const executionDurationMs = Date.now() - startTime;
+
+    console.log(
+      `[AI] ${workstreamId}: model + apply finished in ${executionDurationMs}ms (${result.changes.length} file change(s))`
+    );
 
     return {
       workstreamId,
@@ -157,7 +209,7 @@ async function executeWorkstreamWithAI(
       })),
       modelUsed: result.modelUsed,
       promptHash: result.promptHash,
-      provider: process.env.FORGE_MODEL_PROVIDER,
+      provider: result.provider,
       executionDurationMs,
     };
   } catch (err) {
@@ -174,7 +226,9 @@ async function executeWorkstreamWithAI(
 export async function runExecuteCommand(
   options: ExecuteCommandOptions = {}
 ): Promise<ExecuteCommandResult> {
-  const repoRoot = options.repo ?? process.cwd();
+  const repoRoot = path.resolve(options.repo ?? process.cwd());
+  loadRepoDotenv(repoRoot);
+
   const splitJsonPath = path.join(repoRoot, ".forge", "split.json");
 
   console.log("Welcome to Forge Execute (V1)\n");
@@ -248,7 +302,11 @@ export async function runExecuteCommand(
       };
     }
     if (options.resume) {
-      state = restoreExecuteState(existingArtifact, splitJsonPath);
+      state = restoreExecuteState(
+        existingArtifact,
+        splitJsonPath,
+        splitArtifact
+      );
       console.log("Resumed from existing execute.json");
     } else if (options.force) {
       state = createExecuteState(splitArtifact, splitJsonPath);
@@ -282,10 +340,7 @@ export async function runExecuteCommand(
     }
   }
 
-  const mergeOrderMap = new Map<string, string[]>();
-  for (const sw of splitArtifact.workstreams) {
-    mergeOrderMap.set(sw.id, sw.mergeOrderRequirements);
-  }
+  const mergeOrderMap = buildMergePrerequisiteIds(splitArtifact);
 
   if (state.workstreams.size === 0) {
     console.log("No workstreams to execute. All done.");
@@ -327,14 +382,32 @@ export async function runExecuteCommand(
 
   printDashboard(state, mergeOrderMap);
 
-  console.log("\nCommands: run <id> | aiexecute <id> | done <id> | fail <id> [reason] | status | exit");
+  console.log(
+    "\nCommands: run <id> | aiexecute <id> | done <id> | fail <id> [reason] | status | exit"
+  );
   console.log("  run/aiexecute <id>: Execute workstream with AI (builds prompt, calls model, applies changes)");
   console.log("  done <id>:         Mark workstream as manually completed");
   console.log("  fail <id> [reason]: Mark workstream as failed");
   console.log("  status:            Show dashboard");
   console.log("  exit:              Exit REPL");
-  console.log("\nAI execution requires FORGE_MODEL_PROVIDER and FORGE_MODEL_NAME env vars.");
-  console.log("Optional: FORGE_MODEL_API_KEY, FORGE_MODEL_BASE_URL, FORGE_EXECUTE_AUTO");
+  console.log(
+    "  Note: During an AI run this REPL handles one line at a time — the next `>` appears after the request finishes (see FORGE_MODEL_TIMEOUT_MS)."
+  );
+  const modelConfigErr = getModelConfigError(repoRoot);
+  if (modelConfigErr) {
+    console.log(`\nAI is off: ${modelConfigErr}`);
+    console.log(
+      "Fix: repo-root .env (e.g. FORGE_MODEL_API_KEY, FORGE_MODEL=openai/your-model) and/or .forge/config.yaml `execute.default_model`, then restart this command."
+    );
+  } else {
+    console.log(
+      "\nAI execution: model resolved from env / .forge/config.yaml (repo .env is loaded when present)."
+    );
+    console.log(
+      "Ollama Cloud: use `ollama/<model>` with FORGE_MODEL_BASE_URL=https://ollama.com (or …/v1 — Forge maps to /api/chat) and FORGE_MODEL_API_KEY or OLLAMA_API_KEY."
+    );
+    console.log("Optional: FORGE_MODEL_BASE_URL, FORGE_MODEL_TIMEOUT_MS, FORGE_MODEL_DEBUG=1, FORGE_EXECUTE_AUTO");
+  }
 
   const rl = readline.createInterface({
     input: process.stdin,
@@ -356,6 +429,24 @@ export async function runExecuteCommand(
     if (!id) return null;
 
     return { id, ws: state.workstreams.get(id) };
+  }
+
+  /** 1-based index, [n], or map key / workstream_id string */
+  function resolveWorkstreamRef(
+    raw: string
+  ): { id: string; ws: ReturnType<typeof state.workstreams.get> } | null {
+    const trimmed = raw.trim();
+    const bracketed = trimmed.match(/^\[(\d+)\]$/);
+    const normalized = bracketed ? bracketed[1]! : trimmed;
+
+    if (/^\d+$/.test(normalized)) {
+      return findWorkstreamByIndex(normalized);
+    }
+
+    const ws = state.workstreams.get(normalized);
+    if (ws) return { id: normalized, ws };
+
+    return null;
   }
 
   function getUnmet(id: string): string[] {
@@ -384,9 +475,11 @@ export async function runExecuteCommand(
     }
 
     if (cmd === "run" && parts[1]) {
-      const found = findWorkstreamByIndex(parts[1]);
+      const found = resolveWorkstreamRef(parts[1]);
       if (!found || !found.ws) {
-        console.log(`Unknown workstream: ${parts[1]}`);
+        console.log(
+          `Unknown workstream: ${parts[1]} (use index 1…${state.workstreams.size}, [n], or workstream_id)`
+        );
         return false;
       }
 
@@ -397,14 +490,16 @@ export async function runExecuteCommand(
         return false;
       }
 
-      // If no model provider is configured, stay in manual mode (just transition to running)
-      if (!process.env.FORGE_MODEL_PROVIDER) {
+      // If no model is configured, stay in manual mode (just transition to running)
+      if (!isModelConfigured(repoRoot)) {
         console.log(`✓ ${ws.workstreamId} STARTED (manual mode)`);
         printDashboard(state, mergeOrderMap);
         return false;
       }
 
-      console.log(`[AI] Calling model for workstream: ${ws.workstreamId}...`);
+      console.log(
+        "(REPL: your next line is not read until this workstream finishes — see FORGE_MODEL_TIMEOUT_MS.)"
+      );
 
       const aiResult = await executeWorkstreamWithAI(found.id, state, repoRoot);
 
@@ -450,9 +545,11 @@ export async function runExecuteCommand(
     }
 
     if (cmd === "aiexecute" && parts[1]) {
-      const found = findWorkstreamByIndex(parts[1]);
+      const found = resolveWorkstreamRef(parts[1]);
       if (!found || !found.ws) {
-        console.log(`Unknown workstream: ${parts[1]}`);
+        console.log(
+          `Unknown workstream: ${parts[1]} (use index 1…${state.workstreams.size}, [n], or workstream_id)`
+        );
         return false;
       }
 
@@ -463,7 +560,9 @@ export async function runExecuteCommand(
         return false;
       }
 
-      console.log(`[AI] Calling model for workstream: ${ws.workstreamId}...`);
+      console.log(
+        "(REPL: your next line is not read until this workstream finishes — see FORGE_MODEL_TIMEOUT_MS.)"
+      );
 
       const aiResult = await executeWorkstreamWithAI(found.id, state, repoRoot);
 
@@ -509,9 +608,11 @@ export async function runExecuteCommand(
     }
 
     if (cmd === "done" && parts[1]) {
-      const found = findWorkstreamByIndex(parts[1]);
+      const found = resolveWorkstreamRef(parts[1]);
       if (!found || !found.ws) {
-        console.log(`Unknown workstream: ${parts[1]}`);
+        console.log(
+          `Unknown workstream: ${parts[1]} (use index 1…${state.workstreams.size}, [n], or workstream_id)`
+        );
         return false;
       }
 
@@ -559,9 +660,11 @@ export async function runExecuteCommand(
     }
 
     if (cmd === "fail" && parts[1]) {
-      const found = findWorkstreamByIndex(parts[1]);
+      const found = resolveWorkstreamRef(parts[1]);
       if (!found || !found.ws) {
-        console.log(`Unknown workstream: ${parts[1]}`);
+        console.log(
+          `Unknown workstream: ${parts[1]} (use index 1…${state.workstreams.size}, [n], or workstream_id)`
+        );
         return false;
       }
 
@@ -576,8 +679,18 @@ export async function runExecuteCommand(
       return false;
     }
 
+    const runNoSpace = trimmed.match(/^(run|aiexecute)\[(\d+)\]$/i);
+    if (runNoSpace) {
+      const verb = runNoSpace[1]!.toLowerCase();
+      const n = runNoSpace[2]!;
+      console.log(`Tip: add a space — use \`${verb} [${n}]\` or \`${verb} ${n}\`, not \`${verb}[${n}]\`.`);
+      return false;
+    }
+
     console.log(`Unknown command: ${cmd}`);
-    console.log("Commands: run <id> | aiexecute <id> | done <id> | fail <id> [reason] | status | exit");
+    console.log(
+      "Commands: run <id> | aiexecute <id> | done <id> | fail <id> [reason] | status | exit"
+    );
     return false;
   }
 
@@ -618,9 +731,12 @@ export async function runExecuteCommand(
     let executable = getExecutableWorkstreams(state);
     if (executable.length > 0) {
       console.log(`\n[AI] Auto-executing unblocked workstreams...`);
+      console.log(
+        "[AI] Progress: you should see lines for load → build prompt → call model → apply files per workstream. No working-tree changes until after the model returns."
+      );
       while (executable.length > 0) {
         for (const ws of executable) {
-          console.log(`[AI] Executing: ${ws.workstreamId}...`);
+          console.log(`\n[AI] Executing: ${ws.workstreamId}…`);
           const runResult = transitionState(ws.workstreamId, "running", state);
           if (!runResult.success) {
             console.log(`Cannot run ${ws.workstreamId}: ${runResult.error}`);

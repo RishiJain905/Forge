@@ -1243,6 +1243,39 @@ function buildCarryForwardConcerns(
     }));
   }
 
+  const typedWarningMessages = new Set(
+    foundation.carryForward.riskAnalysis.supporting_analysis.warning_items.map((item) =>
+      normalizeWhitespace(item.message),
+    ),
+  );
+  for (const rawWarning of foundation.carryForward.warnings) {
+    const normalized = normalizeWhitespace(rawWarning);
+    if (!normalized) {
+      continue;
+    }
+    if (typedWarningMessages.has(normalized)) {
+      continue;
+    }
+    concerns.push(createConcern({
+      id: nextId(),
+      source: "warning",
+      code: "step1_string_warning",
+      message: rawWarning.trim(),
+      planItemIds: mapConcernPlanItemIds({
+        source: "warning",
+        code: "step1_string_warning",
+        message: rawWarning,
+        drafts,
+        context,
+      }),
+      effects: buildConcernEffects({
+        source: "warning",
+        code: "step1_string_warning",
+        message: rawWarning,
+      }),
+    }));
+  }
+
   for (const issue of foundation.carryForward.nextStepReadiness.blocking_issues) {
     concerns.push(createConcern({
       id: nextId(),

@@ -338,6 +338,49 @@ await runScenario("Report includes Next Steps section with guidance based on pas
   );
 });
 
+await runScenario(
+  "Report Next Steps and Troubleshooting for inconclusive summary (0 passed, 0 failed, pending tests)",
+  () => {
+    const pendingCases = Array.from({ length: 10 }, (_, i) =>
+      makeTestCase({
+        id: `test-${i + 1}`,
+        name: `Case ${i + 1}`,
+        status: "pending",
+      })
+    );
+    const artifact = makeArtifact({
+      tests: pendingCases,
+      summary: makeSummary({
+        total: 10,
+        passed: 0,
+        failed: 0,
+        skipped: 0,
+        durationMs: 2000,
+        testFilesGenerated: 2,
+      }),
+      recommendations: [],
+    });
+    const report = createIntegrationReport(artifact);
+
+    assert.ok(
+      report.includes("could not be confirmed"),
+      "Next Steps must explain unverified outcomes"
+    );
+    assert.ok(
+      !report.includes("0 integration test(s) failed"),
+      "Next Steps must not claim zero failures as a failure summary"
+    );
+    assert.ok(
+      report.includes("not verified"),
+      "Troubleshooting must flag unverified results"
+    );
+    assert.ok(
+      !report.includes("All tests passed — no troubleshooting needed"),
+      "Troubleshooting must not claim all passed when inconclusive"
+    );
+  }
+);
+
 await runScenario("Report includes Next Steps section with guidance based on pass/fail status - has failures", () => {
   const artifact = makeArtifact({
     tests: [

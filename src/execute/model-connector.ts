@@ -2,6 +2,8 @@ import { promises as fs } from "fs";
 import path from "node:path";
 import crypto from "node:crypto";
 
+import { getConfiguredModelIdFromWorkspace } from "../config.js";
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -38,6 +40,7 @@ export interface ExecuteWorkstreamResult {
   modelUsed: string;
   promptHash: string;
   rawResponse: string;
+  provider: ModelProvider;
 }
 
 // ---------------------------------------------------------------------------
@@ -104,41 +107,111 @@ export function hashContent(content: string): string {
 // loadModelConfig
 // ---------------------------------------------------------------------------
 
-export function loadModelConfig(): ModelConfig {
-  const provider = process.env.FORGE_MODEL_PROVIDER;
-  const modelName = process.env.FORGE_MODEL_NAME;
-  const apiKey = process.env.FORGE_MODEL_API_KEY;
-  const baseUrl = process.env.FORGE_MODEL_BASE_URL;
+function parseProviderModelId(raw: string): { provider: ModelProvider; modelName: string } {
+  const trimmed = raw.trim();
+  /** OpenAI-compatible hosts often configure only the model path segment. */
+  const normalized = trimmed.includes("/")
+    ? trimmed
+    : VALID_PROVIDERS.has(trimmed)
+      ? null
+      : `openai/${trimmed}`;
 
-  if (!provider) {
+  if (normalized === null) {
     throw new AIModelError(
       AI_ERROR_CODES.MISSING_MODEL_CONFIG,
-      "FORGE_MODEL_PROVIDER environment variable is not set. Set it to one of: openai, anthropic, google, ollama, glm"
+      `Invalid model id "${raw}". Use provider/model (e.g. openai/gpt-4o), not a provider name alone.`
     );
   }
 
+  const slash = normalized.indexOf("/");
+  if (slash <= 0 || slash >= normalized.length - 1) {
+    throw new AIModelError(
+      AI_ERROR_CODES.MISSING_MODEL_CONFIG,
+      `Invalid model id "${raw}". Expected provider/model (e.g. openai/gpt-4o).`
+    );
+  }
+  const provider = normalized.slice(0, slash);
+  const modelName = normalized.slice(slash + 1);
   if (!VALID_PROVIDERS.has(provider)) {
     throw new AIModelError(
       AI_ERROR_CODES.MISSING_MODEL_CONFIG,
-      `Invalid FORGE_MODEL_PROVIDER "${provider}". Must be one of: openai, anthropic, google, ollama, glm`
+      `Invalid provider in "${raw}". Must be one of: ${[...VALID_PROVIDERS].join(", ")}`
     );
   }
+  return { provider: provider as ModelProvider, modelName };
+}
 
-  if (!modelName) {
+/**
+ * Resolves model provider, name, API key, and base URL for AI calls.
+ * Prefer `FORGE_MODEL_PROVIDER` + `FORGE_MODEL_NAME` when both are set; otherwise
+ * uses `execute.default_model` / `forge.default_model` from `.forge/config.yaml`
+ * or from `FORGE_EXECUTE_DEFAULT_MODEL` / `FORGE_MODEL` / `FORGE_DEFAULT_MODEL` env
+ * (see `getConfiguredModelIdFromWorkspace`).
+ *
+ * @param cwd Repository root used to resolve `.forge/config.yaml` (default: `process.cwd()`).
+ */
+export function loadModelConfig(cwd: string = process.cwd()): ModelConfig {
+  const forgeKey = process.env.FORGE_MODEL_API_KEY?.trim();
+  const ollamaKey = process.env.OLLAMA_API_KEY?.trim();
+  const apiKey = forgeKey || ollamaKey || undefined;
+  const baseUrl = process.env.FORGE_MODEL_BASE_URL;
+
+  const envProvider = process.env.FORGE_MODEL_PROVIDER;
+  const envName = process.env.FORGE_MODEL_NAME;
+
+  let provider: ModelProvider;
+  let modelName: string;
+
+  if (envProvider && envName) {
+    if (!VALID_PROVIDERS.has(envProvider)) {
+      throw new AIModelError(
+        AI_ERROR_CODES.MISSING_MODEL_CONFIG,
+        `Invalid FORGE_MODEL_PROVIDER "${envProvider}". Must be one of: ${[...VALID_PROVIDERS].join(", ")}`
+      );
+    }
+    provider = envProvider as ModelProvider;
+    modelName = envName;
+  } else if (envProvider || envName) {
     throw new AIModelError(
       AI_ERROR_CODES.MISSING_MODEL_CONFIG,
-      "FORGE_MODEL_NAME environment variable is not set. Set it to the model name (e.g., gpt-4o, claude-3-5-sonnet-4)"
+      "Set both FORGE_MODEL_PROVIDER and FORGE_MODEL_NAME, or omit both and configure execute.default_model / forge.default_model (e.g. in .forge/config.yaml or via FORGE_MODEL)."
     );
+  } else {
+    const fromWorkspace = getConfiguredModelIdFromWorkspace(cwd);
+    if (!fromWorkspace) {
+      throw new AIModelError(
+        AI_ERROR_CODES.MISSING_MODEL_CONFIG,
+        "No model configured. Set FORGE_MODEL_PROVIDER and FORGE_MODEL_NAME, or set execute.default_model / forge.default_model in .forge/config.yaml (e.g. anthropic/claude-3-5-sonnet-20241022), or set FORGE_MODEL=provider/model."
+      );
+    }
+    const parsed = parseProviderModelId(fromWorkspace);
+    provider = parsed.provider;
+    modelName = parsed.modelName;
   }
 
-  const resolvedBaseUrl = baseUrl || PROVIDER_DEFAULT_BASE_URLS[provider as ModelProvider];
+  const resolvedBaseUrl = baseUrl || PROVIDER_DEFAULT_BASE_URLS[provider];
 
   return {
-    provider: provider as ModelProvider,
+    provider,
     modelName,
     apiKey,
     baseUrl: resolvedBaseUrl,
   };
+}
+
+/** Non-null message when {@link loadModelConfig} would throw for this repo root. */
+export function getModelConfigError(cwd: string = process.cwd()): string | null {
+  try {
+    loadModelConfig(cwd);
+    return null;
+  } catch (e) {
+    return e instanceof Error ? e.message : String(e);
+  }
+}
+
+/** True when {@link loadModelConfig} would succeed for the given repo root. */
+export function isModelConfigured(cwd: string = process.cwd()): boolean {
+  return getModelConfigError(cwd) === null;
 }
 
 // ---------------------------------------------------------------------------
@@ -159,6 +232,46 @@ function sleep(ms: number): Promise<void> {
 
 export type FetchLike = (url: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
+const MIN_HTTP_TIMEOUT_MS = 10_000;
+const MAX_HTTP_TIMEOUT_MS = 3_600_000; // 1h hard cap
+
+function parseExplicitModelTimeoutMs(): number | null {
+  const raw = process.env.FORGE_MODEL_TIMEOUT_MS;
+  if (raw === undefined || raw.trim() === "") {
+    return null;
+  }
+  const n = parseInt(raw, 10);
+  if (!Number.isFinite(n)) {
+    return null;
+  }
+  return Math.min(MAX_HTTP_TIMEOUT_MS, Math.max(MIN_HTTP_TIMEOUT_MS, n));
+}
+
+/**
+ * HTTP timeout when `FORGE_MODEL_TIMEOUT_MS` is set (used for status text and
+ * non-execute callers that do not have a prompt length yet).
+ */
+export function getModelCallTimeoutMs(): number {
+  return parseExplicitModelTimeoutMs() ?? 300_000;
+}
+
+/**
+ * Timeout for one model HTTP attempt. If `FORGE_MODEL_TIMEOUT_MS` is set, that
+ * value wins. Otherwise scales with prompt size so large execute prompts are
+ * not aborted at 5m while the model is still generating.
+ */
+export function getModelCallTimeoutForPrompt(promptCharCount: number): number {
+  const explicit = parseExplicitModelTimeoutMs();
+  if (explicit !== null) {
+    return explicit;
+  }
+  const scaled = Math.max(
+    300_000,
+    Math.min(MAX_HTTP_TIMEOUT_MS, Math.ceil(promptCharCount * 12))
+  );
+  return scaled;
+}
+
 export async function callModel(
   prompt: string,
   config: ModelConfig,
@@ -166,9 +279,16 @@ export async function callModel(
   timeoutMs?: number
 ): Promise<string> {
   const fetch = fetchFn ?? globalThis.fetch;
-  const timeout = timeoutMs ?? 120_000;
+  const timeout = timeoutMs ?? getModelCallTimeoutForPrompt(prompt.length);
 
   const { url, body, headers } = buildProviderRequest(prompt, config);
+  const bodyText = JSON.stringify(body);
+  const debugModel = process.env.FORGE_MODEL_DEBUG === "1";
+  const logDebug = (msg: string) => {
+    if (debugModel) {
+      process.stderr.write(`[forge-model] ${msg}\n`);
+    }
+  };
 
   let lastError: Error | undefined;
 
@@ -177,14 +297,21 @@ export async function callModel(
     const timeoutId = setTimeout(() => controller.abort(), timeout);
 
     try {
+      logDebug(
+        `POST ${url} attempt=${attempt + 1}/${MAX_RETRIES} timeoutMs=${timeout} bodyBytes=${bodyText.length} provider=${config.provider}`
+      );
+      const t0 = Date.now();
       const response = await fetch(url, {
         method: "POST",
         headers,
-        body: JSON.stringify(body),
+        body: bodyText,
         signal: controller.signal,
       });
 
-      clearTimeout(timeoutId);
+      // Do not clear the timeout until the response body is fully read. `fetch`
+      // can resolve when headers arrive; clearing here would leave `response.text()`
+      // with no deadline and the CLI can appear hung indefinitely.
+      logDebug(`response HTTP ${response.status} elapsedMs=${Date.now() - t0}`);
 
       if (response.ok) {
         const responseBody = await response.text();
@@ -211,16 +338,15 @@ export async function callModel(
         `API request failed with HTTP ${response.status}: ${errorText}`
       );
     } catch (err) {
-      clearTimeout(timeoutId);
-
       if (err instanceof AIModelError) {
         throw err;
       }
 
       if (err instanceof Error && err.name === "AbortError") {
+        logDebug(`abort/timeout after ${timeout}ms`);
         throw new AIModelError(
           AI_ERROR_CODES.TIMEOUT,
-          `Model call timed out after ${timeout}ms`
+          `Model call timed out after ${timeout}ms (request ~${bodyText.length} chars). Raise FORGE_MODEL_TIMEOUT_MS (up to ${MAX_HTTP_TIMEOUT_MS / 60_000}m), or use FORGE_MODEL_DEBUG=1 to confirm the HTTP call reaches the provider.`
         );
       }
 
@@ -236,6 +362,8 @@ export async function callModel(
         `API request failed after ${MAX_RETRIES} retries: ${lastError.message}`,
         lastError
       );
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 
@@ -257,13 +385,36 @@ interface ProviderRequest {
   body: Record<string, unknown>;
 }
 
+/**
+ * Join `base` (OpenAI-compatible root, often `https://host` or `https://host/v1`)
+ * with an absolute path that normally starts with `/v1/...`, avoiding `/v1/v1/`.
+ */
+/**
+ * Native Ollama chat endpoint is `/api/chat` on the server root. Bases copied from
+ * OpenAI-compat docs often end with `/v1` — strip that so we do not call `/v1/api/chat`.
+ */
+function ollamaNativeChatUrl(base: string): string {
+  const b = base.replace(/\/+$/, "");
+  const root = b.replace(/\/v1$/i, "");
+  return `${root}/api/chat`;
+}
+
+function joinOpenAiCompatibleBase(base: string, pathFromRoot: string): string {
+  const b = base.replace(/\/+$/, "");
+  const p = pathFromRoot.startsWith("/") ? pathFromRoot : `/${pathFromRoot}`;
+  if (/\/v1$/i.test(b) && p.toLowerCase().startsWith("/v1/")) {
+    return `${b}${p.slice("/v1".length)}`;
+  }
+  return `${b}${p}`;
+}
+
 function buildProviderRequest(prompt: string, config: ModelConfig): ProviderRequest {
   const base = config.baseUrl ?? PROVIDER_DEFAULT_BASE_URLS[config.provider];
 
   switch (config.provider) {
     case "openai":
       return {
-        url: `${base}/v1/chat/completions`,
+        url: joinOpenAiCompatibleBase(base, "/v1/chat/completions"),
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${config.apiKey ?? ""}`,
@@ -276,7 +427,7 @@ function buildProviderRequest(prompt: string, config: ModelConfig): ProviderRequ
 
     case "anthropic":
       return {
-        url: `${base}/v1/messages`,
+        url: joinOpenAiCompatibleBase(base, "/v1/messages"),
         headers: {
           "Content-Type": "application/json",
           "x-api-key": config.apiKey ?? "",
@@ -300,22 +451,27 @@ function buildProviderRequest(prompt: string, config: ModelConfig): ProviderRequ
         },
       };
 
-    case "ollama":
+    case "ollama": {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (config.apiKey) {
+        headers.Authorization = `Bearer ${config.apiKey}`;
+      }
       return {
-        url: `${base}/api/chat`,
-        headers: {
-          "Content-Type": "application/json",
-        },
+        url: ollamaNativeChatUrl(base),
+        headers,
         body: {
           model: config.modelName,
           messages: [{ role: "user", content: prompt }],
           stream: false,
         },
       };
+    }
 
     case "glm":
       return {
-        url: `${base}/v1/chat/completions`,
+        url: joinOpenAiCompatibleBase(base, "/v1/chat/completions"),
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${config.apiKey ?? ""}`,
@@ -575,7 +731,7 @@ export async function executeWorkstream(
   repoRoot: string,
   fetchFn?: FetchLike
 ): Promise<ExecuteWorkstreamResult> {
-  const config = loadModelConfig();
+  const config = loadModelConfig(repoRoot);
   const promptHash = hashContent(prompt);
 
   const rawResponse = await callModel(prompt, config, fetchFn);
@@ -587,5 +743,6 @@ export async function executeWorkstream(
     modelUsed: `${config.provider}/${config.modelName}`,
     promptHash,
     rawResponse,
+    provider: config.provider,
   };
 }

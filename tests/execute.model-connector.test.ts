@@ -11,6 +11,8 @@ import {
   parseModelResponse,
   applyChanges,
   executeWorkstream,
+  getModelCallTimeoutForPrompt,
+  getModelCallTimeoutMs,
   hashContent,
 } from "../src/execute/model-connector.js";
 import type { ModelConfig, AIModelChange, FetchLike } from "../src/execute/model-connector.js";
@@ -37,18 +39,66 @@ function mockFetch(responseBody: string, status = 200): FetchLike {
   };
 }
 
+function snapshotRequestHeaders(init?: RequestInit): Record<string, string> {
+  if (!init?.headers) return {};
+  const raw = init.headers;
+  if (typeof Headers !== "undefined" && raw instanceof Headers) {
+    const o: Record<string, string> = {};
+    raw.forEach((v, k) => {
+      o[k] = v;
+    });
+    return o;
+  }
+  if (Array.isArray(raw)) {
+    return Object.fromEntries(raw);
+  }
+  return { ...(raw as Record<string, string>) };
+}
+
 /** Create a mock fetch that tracks calls and responds per-call. */
-function mockFetchSequence(responses: Array<{ body: string; status: number }>): { fetch: FetchLike; calls: Array<{ url: string; body: string }> } {
-  const calls: Array<{ url: string; body: string }> = [];
+function mockFetchSequence(responses: Array<{ body: string; status: number }>): {
+  fetch: FetchLike;
+  calls: Array<{ url: string; body: string; headers: Record<string, string> }>;
+} {
+  const calls: Array<{ url: string; body: string; headers: Record<string, string> }> = [];
   let callIndex = 0;
   const fetchFn: FetchLike = async (url: string | URL | Request, init?: RequestInit) => {
     const urlStr = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
-    calls.push({ url: urlStr, body: init?.body?.toString() ?? "" });
+    calls.push({
+      url: urlStr,
+      body: init?.body?.toString() ?? "",
+      headers: snapshotRequestHeaders(init),
+    });
     const resp = responses[callIndex] ?? responses[responses.length - 1];
     callIndex++;
     return new Response(resp.body, { status: resp.status, headers: { "Content-Type": "application/json" } });
   };
   return { fetch: fetchFn, calls };
+}
+
+const MODEL_ENV_KEYS = [
+  "FORGE_MODEL_PROVIDER",
+  "FORGE_MODEL_NAME",
+  "FORGE_MODEL_API_KEY",
+  "FORGE_MODEL_BASE_URL",
+  "FORGE_MODEL",
+  "FORGE_DEFAULT_MODEL",
+  "FORGE_EXECUTE_DEFAULT_MODEL",
+  "FORGE_MODEL_TIMEOUT_MS",
+  "OLLAMA_API_KEY",
+  "FORGE_MODEL_DEBUG",
+] as const;
+
+/** Clear model-related env vars, then apply overrides (for isolated cwd tests). */
+function modelEnv(
+  overrides: Record<string, string | undefined>,
+): Record<string, string | undefined> {
+  const out: Record<string, string | undefined> = {};
+  for (const k of MODEL_ENV_KEYS) {
+    out[k] = undefined;
+  }
+  Object.assign(out, overrides);
+  return out;
 }
 
 /** Temporarily set env vars and restore them after the callback. */
@@ -264,6 +314,26 @@ await runScenario("callModel sends correct request for OpenAI provider", async (
   });
 });
 
+await runScenario("callModel does not double /v1 when base URL already ends with /v1", async () => {
+  const { fetch: mockFetchFn, calls } = mockFetchSequence([{
+    body: JSON.stringify({
+      choices: [{ message: { content: "## CHANGES\n```json\n[]\n```" } }],
+    }),
+    status: 200,
+  }]);
+
+  await withEnv({
+    FORGE_MODEL_PROVIDER: "openai",
+    FORGE_MODEL_NAME: "kimi-k2.6:cloud",
+    FORGE_MODEL_API_KEY: "test-key",
+    FORGE_MODEL_BASE_URL: "https://ollama.com/v1",
+  }, async () => {
+    const config = loadModelConfig();
+    await callModel("test prompt", config, mockFetchFn);
+    assert.equal(calls[0]?.url, "https://ollama.com/v1/chat/completions");
+  });
+});
+
 await runScenario("callModel sends correct request for Anthropic provider", async () => {
   const { fetch: mockFetchFn, calls } = mockFetchSequence([{
     body: JSON.stringify({
@@ -330,10 +400,66 @@ await runScenario("callModel sends correct request for Ollama provider", async (
     const result = await callModel("test prompt", config, mockFetchFn);
     assert.ok(result.includes("## CHANGES"));
     assert.ok(calls[0]?.url.includes("/api/chat"), `URL should include /api/chat, got: ${calls[0]?.url}`);
+    const h0 = calls[0]?.headers ?? {};
+    assert.equal(h0.Authorization ?? h0.authorization, undefined);
 
     const body = JSON.parse(calls[0]?.body ?? "{}");
     assert.equal(body.model, "llama3");
     assert.equal(body.stream, false);
+  });
+});
+
+await runScenario("callModel maps Ollama Cloud base .../v1 to .../api/chat and sends Bearer", async () => {
+  const { fetch: mockFetchFn, calls } = mockFetchSequence([{
+    body: JSON.stringify({
+      message: { content: "## CHANGES\n```json\n[]\n```" },
+    }),
+    status: 200,
+  }]);
+
+  await withEnv({
+    FORGE_MODEL_PROVIDER: "ollama",
+    FORGE_MODEL_NAME: "kimi-k2.6:cloud",
+    FORGE_MODEL_API_KEY: "cloud-key",
+    FORGE_MODEL_BASE_URL: "https://ollama.com/v1",
+  }, async () => {
+    const config = loadModelConfig();
+    await callModel("hi", config, mockFetchFn);
+    assert.equal(calls[0]?.url, "https://ollama.com/api/chat");
+    const h1 = calls[0]?.headers ?? {};
+    assert.equal(h1.Authorization ?? h1.authorization, "Bearer cloud-key");
+  });
+});
+
+await runScenario("loadModelConfig uses OLLAMA_API_KEY when FORGE_MODEL_API_KEY unset", async () => {
+  await withEnv({
+    FORGE_MODEL_PROVIDER: "ollama",
+    FORGE_MODEL_NAME: "llama3",
+    FORGE_MODEL_API_KEY: undefined,
+    OLLAMA_API_KEY: "from-ollama-env",
+    FORGE_MODEL_BASE_URL: undefined,
+  }, async () => {
+    const config = loadModelConfig();
+    assert.equal(config.apiKey, "from-ollama-env");
+  });
+});
+
+await runScenario("getModelCallTimeoutMs defaults to 300000 when FORGE_MODEL_TIMEOUT_MS unset", async () => {
+  await withEnv(modelEnv({}), async () => {
+    assert.equal(getModelCallTimeoutMs(), 300_000);
+  });
+});
+
+await runScenario("getModelCallTimeoutForPrompt scales with prompt when env unset", async () => {
+  await withEnv(modelEnv({}), async () => {
+    assert.equal(getModelCallTimeoutForPrompt(1000), 300_000);
+    assert.equal(getModelCallTimeoutForPrompt(51_626), 619_512);
+  });
+});
+
+await runScenario("getModelCallTimeoutForPrompt uses FORGE_MODEL_TIMEOUT_MS when set", async () => {
+  await withEnv(modelEnv({ FORGE_MODEL_TIMEOUT_MS: "200000" }), async () => {
+    assert.equal(getModelCallTimeoutForPrompt(999_999), 200_000);
   });
 });
 
@@ -629,6 +755,8 @@ await runScenario("executeWorkstream returns ExecuteWorkstreamResult with all fi
     assert.ok("promptHash" in result);
     assert.ok("rawResponse" in result);
     assert.ok("changes" in result);
+    assert.ok("provider" in result);
+    assert.equal(result.provider, "openai");
     assert.ok(result.rawResponse.length > 0, "rawResponse should not be empty");
   });
 
@@ -659,4 +787,96 @@ await runScenario("loadModelConfig throws MISSING_MODEL_CONFIG for invalid provi
       (err: unknown): err is AIModelError => err instanceof AIModelError && err.code === "MISSING_MODEL_CONFIG"
     );
   });
+});
+
+await runScenario("loadModelConfig throws when no env and no explicit workspace model", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-model-isolated-"));
+  try {
+    await withEnv(modelEnv({}), async () => {
+      assert.throws(
+        () => loadModelConfig(dir),
+        (err: unknown): err is AIModelError => err instanceof AIModelError && err.code === "MISSING_MODEL_CONFIG"
+      );
+    });
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+await runScenario("loadModelConfig reads execute.default_model from .forge/config.yaml", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-model-yaml-"));
+  try {
+    await fs.mkdir(path.join(dir, ".forge"), { recursive: true });
+    await fs.writeFile(
+      path.join(dir, ".forge", "config.yaml"),
+      "execute:\n  default_model: google/gemini-2.0-flash\n",
+      "utf8",
+    );
+    await withEnv(modelEnv({}), async () => {
+      const config = loadModelConfig(dir);
+      assert.equal(config.provider, "google");
+      assert.equal(config.modelName, "gemini-2.0-flash");
+    });
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+await runScenario("loadModelConfig treats bare model id in yaml as openai/<id>", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-model-yaml-bare-"));
+  try {
+    await fs.mkdir(path.join(dir, ".forge"), { recursive: true });
+    await fs.writeFile(
+      path.join(dir, ".forge", "config.yaml"),
+      "execute:\n  default_model: kimi-k2.6:cloud\n",
+      "utf8",
+    );
+    await withEnv(modelEnv({}), async () => {
+      const config = loadModelConfig(dir);
+      assert.equal(config.provider, "openai");
+      assert.equal(config.modelName, "kimi-k2.6:cloud");
+    });
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+await runScenario("loadModelConfig rejects provider-only model id from yaml", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-model-yaml-provider-only-"));
+  try {
+    await fs.mkdir(path.join(dir, ".forge"), { recursive: true });
+    await fs.writeFile(
+      path.join(dir, ".forge", "config.yaml"),
+      "execute:\n  default_model: openai\n",
+      "utf8",
+    );
+    await withEnv(modelEnv({}), async () => {
+      assert.throws(
+        () => loadModelConfig(dir),
+        (err: unknown): err is AIModelError =>
+          err instanceof AIModelError && err.code === "MISSING_MODEL_CONFIG",
+      );
+    });
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+await runScenario("loadModelConfig prefers FORGE_MODEL over config file when env model pair unset", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-model-env-pref-"));
+  try {
+    await fs.mkdir(path.join(dir, ".forge"), { recursive: true });
+    await fs.writeFile(
+      path.join(dir, ".forge", "config.yaml"),
+      "execute:\n  default_model: google/gemini-2.0-flash\n",
+      "utf8",
+    );
+    await withEnv(modelEnv({ FORGE_MODEL: "anthropic/claude-3-5-haiku-20241022" }), async () => {
+      const config = loadModelConfig(dir);
+      assert.equal(config.provider, "anthropic");
+      assert.equal(config.modelName, "claude-3-5-haiku-20241022");
+    });
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
 });

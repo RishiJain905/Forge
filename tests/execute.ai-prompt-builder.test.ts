@@ -260,8 +260,8 @@ await runScenario("prompt includes workstream title, description, and plan item 
 
   assert.ok(result.prompt.includes("Auth Module"), "prompt should contain workstream title");
   assert.ok(result.prompt.includes("Implement JWT authentication"), "prompt should contain workstream description");
-  assert.ok(result.prompt.includes("category=implementation"), "prompt should contain plan item category");
-  assert.ok(result.prompt.includes("risk=low"), "prompt should contain plan item risk level");
+  assert.ok(result.prompt.includes("pi-1"), "prompt should list plan item id");
+  assert.ok(result.prompt.includes("implementation/low"), "prompt should contain plan item category and risk");
 
   await fs.rm(tmpDir, { recursive: true });
 });
@@ -483,7 +483,7 @@ await runScenario("prompt includes carried-forward concerns from plan", async ()
   });
 
   assert.ok(result.prompt.includes("Config values must be validated before use"), "prompt should include carried-forward concern");
-  assert.ok(result.prompt.includes("Carried-Forward"), "prompt should include Carried-Forward Concerns section header");
+  assert.ok(result.prompt.includes("Concerns"), "prompt should include concerns section");
 
   await fs.rm(tmpDir, { recursive: true });
 });
@@ -687,8 +687,267 @@ await runScenario("prompt includes safety rules about only modifying target file
     repoRoot: tmpDir,
   });
 
-  assert.ok(result.prompt.includes("Only modify files listed"), "prompt should include rule about only modifying listed files");
-  assert.ok(result.prompt.includes("Do not touch files outside"), "prompt should include rule about not touching other files");
+  assert.ok(result.prompt.includes("Only paths listed"), "prompt should scope edits to listed target paths");
 
   await fs.rm(tmpDir, { recursive: true });
+});
+
+await runScenario("many target files share total snippet budget so prompt stays bounded", async () => {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-prompt-test-"));
+  await fs.mkdir(path.join(tmpDir, "src"), { recursive: true });
+  const paths: string[] = [];
+  for (let i = 0; i < 10; i++) {
+    const rel = `src/f${i}.ts`;
+    paths.push(rel);
+    await fs.writeFile(path.join(tmpDir, rel), `// file ${i}\n` + "X".repeat(3_000));
+  }
+
+  const split = makeSplitArtifact([
+    {
+      id: "ws-1",
+      title: "Multi",
+      description: "Many files",
+      category: "serial",
+      sourcePlanItemIds: [],
+      sourceVerificationCaseIds: [],
+      sourceFindingIds: [],
+      likelyAffectedPaths: paths,
+      streamDependencies: [],
+      mergeOrderRequirements: [],
+      constraints: [],
+      blockedReason: null,
+    },
+  ]);
+
+  const result = await buildWorkstreamPrompt({
+    workstreamId: "ws-1",
+    splitArtifact: split,
+    planArtifact: makePlanArtifact(),
+    verifyArtifact: makeVerifyArtifact(),
+    repoRoot: tmpDir,
+  });
+
+  assert.ok(result.prompt.length < 18_000, "default total file budget should keep full prompt well under ~35k");
+  assert.ok(
+    result.warnings.some((w) => w.includes("FORGE_EXECUTE_FILE_SNIPPETS_TOTAL_CHARS")),
+    "should note split budget when multiple files share the cap"
+  );
+
+  await fs.rm(tmpDir, { recursive: true });
+});
+
+await runScenario("large target file is truncated in prompt with warning when FORGE_EXECUTE_FILE_SNIPPET_CHARS is low", async () => {
+  const prev = process.env.FORGE_EXECUTE_FILE_SNIPPET_CHARS;
+  process.env.FORGE_EXECUTE_FILE_SNIPPET_CHARS = "2800";
+
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-prompt-test-"));
+  await fs.mkdir(path.join(tmpDir, "src"), { recursive: true });
+  const head = "START_MARKER\n";
+  const tail = "\nEND_MARKER";
+  const middle = "M".repeat(40_000);
+  await fs.writeFile(path.join(tmpDir, "src", "huge.ts"), head + middle + tail);
+
+  const split = makeSplitArtifact([
+    {
+      id: "ws-1",
+      title: "Huge file edit",
+      description: "Touch huge module",
+      category: "serial",
+      sourcePlanItemIds: [],
+      sourceVerificationCaseIds: [],
+      sourceFindingIds: [],
+      likelyAffectedPaths: ["src/huge.ts"],
+      streamDependencies: [],
+      mergeOrderRequirements: [],
+      constraints: [],
+      blockedReason: null,
+    },
+  ]);
+
+  try {
+    const result = await buildWorkstreamPrompt({
+      workstreamId: "ws-1",
+      splitArtifact: split,
+      planArtifact: makePlanArtifact(),
+      verifyArtifact: makeVerifyArtifact(),
+      repoRoot: tmpDir,
+    });
+
+    assert.ok(
+      result.prompt.includes("characters omitted from middle of file"),
+      "prompt should include middle-omission marker for oversized file body"
+    );
+    assert.ok(result.prompt.includes("START_MARKER"), "prompt should retain start of file");
+    assert.ok(result.prompt.includes("END_MARKER"), "prompt should retain end of file");
+    assert.ok(
+      result.warnings.some((w) => w.includes("FORGE_EXECUTE_FILE_SNIPPET_CHARS")),
+      "should warn when file snippet is truncated"
+    );
+    assert.ok(result.prompt.length < 35_000, "prompt should stay bounded when file on disk is large");
+  } finally {
+    if (prev === undefined) {
+      delete process.env.FORGE_EXECUTE_FILE_SNIPPET_CHARS;
+    } else {
+      process.env.FORGE_EXECUTE_FILE_SNIPPET_CHARS = prev;
+    }
+    await fs.rm(tmpDir, { recursive: true });
+  }
+});
+
+await runScenario("duplicate constraint lines with same summary are deduped", async () => {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-prompt-test-"));
+  const split = makeSplitArtifact([
+    {
+      id: "ws-1",
+      title: "API",
+      description: "Work",
+      category: "serial",
+      sourcePlanItemIds: ["pi-1"],
+      sourceVerificationCaseIds: [],
+      sourceFindingIds: [],
+      likelyAffectedPaths: ["src/api.ts"],
+      streamDependencies: [],
+      mergeOrderRequirements: [],
+      constraints: [],
+      blockedReason: null,
+    },
+  ]);
+
+  const plan = makePlanArtifact({
+    plan_items: [
+      {
+        id: "pi-1",
+        title: "API",
+        description: "",
+        category: "implementation",
+        sourceRequirements: [],
+        likelyAffectedPaths: ["src/api.ts"],
+        dependencies: [],
+        riskLevel: "low",
+        testObligations: [],
+        verificationRelevance: { relevant: true, categories: [], notes: [] },
+        parallelization: { signal: "serial_only", reason: "" },
+      },
+    ],
+  });
+
+  const verify = makeVerifyArtifact({
+    verification_cases: [
+      {
+        id: "vc-1",
+        verificationTargetId: "vt-1",
+        title: "Case",
+        category: "dependency_contradiction",
+        sourcePlanItemIds: ["pi-1"],
+        lanes: ["structural"],
+        goal: "g",
+        status: "passed",
+        summary: "",
+        findings: [],
+        mitigations: [],
+        constraints: [],
+        traceabilityNotes: [],
+        formalDetails: null,
+      },
+    ],
+    findings: [],
+    constraints: [
+      {
+        id: "con-1",
+        lane: "structural",
+        verification_case_id: "vc-1",
+        verification_target_id: "vt-1",
+        summary: "Same pool rule text",
+      },
+      {
+        id: "con-2",
+        lane: "structural",
+        verification_case_id: "vc-1",
+        verification_target_id: "vt-1",
+        summary: "Same pool rule text",
+      },
+    ],
+  });
+
+  const result = await buildWorkstreamPrompt({
+    workstreamId: "ws-1",
+    splitArtifact: split,
+    planArtifact: plan,
+    verifyArtifact: verify,
+    repoRoot: tmpDir,
+  });
+
+  const matches = result.prompt.match(/CONSTRAINT: Same pool rule text/g);
+  assert.equal(matches?.length, 1, "duplicate constraint bullets should collapse to one");
+  assert.ok(
+    result.warnings.some((w) => w.includes("duplicate constraint/finding")),
+    "should warn when duplicate lines are removed"
+  );
+
+  await fs.rm(tmpDir, { recursive: true });
+});
+
+await runScenario("FORGE_EXECUTE_PROMPT_MAX_CHARS keeps Output section and CHANGES contract", async () => {
+  const prevTotal = process.env.FORGE_EXECUTE_FILE_SNIPPETS_TOTAL_CHARS;
+  const prevPer = process.env.FORGE_EXECUTE_FILE_SNIPPET_CHARS;
+  const prevCap = process.env.FORGE_EXECUTE_PROMPT_MAX_CHARS;
+  process.env.FORGE_EXECUTE_FILE_SNIPPETS_TOTAL_CHARS = "100000";
+  process.env.FORGE_EXECUTE_FILE_SNIPPET_CHARS = "80000";
+  process.env.FORGE_EXECUTE_PROMPT_MAX_CHARS = "14000";
+
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-prompt-test-"));
+  await fs.mkdir(path.join(tmpDir, "src"), { recursive: true });
+  await fs.writeFile(path.join(tmpDir, "src", "big.ts"), "START\n" + "Q".repeat(45_000) + "\nEND");
+
+  const split = makeSplitArtifact([
+    {
+      id: "ws-1",
+      title: "Big",
+      description: "Edit big file",
+      category: "serial",
+      sourcePlanItemIds: [],
+      sourceVerificationCaseIds: [],
+      sourceFindingIds: [],
+      likelyAffectedPaths: ["src/big.ts"],
+      streamDependencies: [],
+      mergeOrderRequirements: [],
+      constraints: [],
+      blockedReason: null,
+    },
+  ]);
+
+  try {
+    const result = await buildWorkstreamPrompt({
+      workstreamId: "ws-1",
+      splitArtifact: split,
+      planArtifact: makePlanArtifact(),
+      verifyArtifact: makeVerifyArtifact(),
+      repoRoot: tmpDir,
+    });
+
+    assert.ok(result.prompt.includes("# Output"), "capped prompt must retain # Output");
+    assert.ok(result.prompt.includes("## CHANGES"), "capped prompt must retain ## CHANGES instructions");
+    assert.ok(result.prompt.length <= 14_500, "prompt should respect FORGE_EXECUTE_PROMPT_MAX_CHARS");
+    assert.ok(
+      result.warnings.some((w) => w.includes("FORGE_EXECUTE_PROMPT_MAX_CHARS")),
+      "should warn when whole prompt is capped"
+    );
+  } finally {
+    if (prevTotal === undefined) {
+      delete process.env.FORGE_EXECUTE_FILE_SNIPPETS_TOTAL_CHARS;
+    } else {
+      process.env.FORGE_EXECUTE_FILE_SNIPPETS_TOTAL_CHARS = prevTotal;
+    }
+    if (prevPer === undefined) {
+      delete process.env.FORGE_EXECUTE_FILE_SNIPPET_CHARS;
+    } else {
+      process.env.FORGE_EXECUTE_FILE_SNIPPET_CHARS = prevPer;
+    }
+    if (prevCap === undefined) {
+      delete process.env.FORGE_EXECUTE_PROMPT_MAX_CHARS;
+    } else {
+      process.env.FORGE_EXECUTE_PROMPT_MAX_CHARS = prevCap;
+    }
+    await fs.rm(tmpDir, { recursive: true });
+  }
 });
