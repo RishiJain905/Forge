@@ -260,8 +260,7 @@ await runScenario("prompt includes workstream title, description, and plan item 
 
   assert.ok(result.prompt.includes("Auth Module"), "prompt should contain workstream title");
   assert.ok(result.prompt.includes("Implement JWT authentication"), "prompt should contain workstream description");
-  assert.ok(result.prompt.includes("category=implementation"), "prompt should contain plan item category");
-  assert.ok(result.prompt.includes("risk=low"), "prompt should contain plan item risk level");
+  assert.ok(result.prompt.includes("implementation/low"), "prompt should contain plan item category and risk");
 
   await fs.rm(tmpDir, { recursive: true });
 });
@@ -483,7 +482,7 @@ await runScenario("prompt includes carried-forward concerns from plan", async ()
   });
 
   assert.ok(result.prompt.includes("Config values must be validated before use"), "prompt should include carried-forward concern");
-  assert.ok(result.prompt.includes("Carried-Forward"), "prompt should include Carried-Forward Concerns section header");
+  assert.ok(result.prompt.includes("Concerns"), "prompt should include concerns section");
 
   await fs.rm(tmpDir, { recursive: true });
 });
@@ -687,8 +686,51 @@ await runScenario("prompt includes safety rules about only modifying target file
     repoRoot: tmpDir,
   });
 
-  assert.ok(result.prompt.includes("Only modify files listed"), "prompt should include rule about only modifying listed files");
-  assert.ok(result.prompt.includes("Do not touch files outside"), "prompt should include rule about not touching other files");
+  assert.ok(result.prompt.includes("Only paths listed"), "prompt should scope edits to listed target paths");
+
+  await fs.rm(tmpDir, { recursive: true });
+});
+
+await runScenario("many target files share total snippet budget so prompt stays bounded", async () => {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-prompt-test-"));
+  await fs.mkdir(path.join(tmpDir, "src"), { recursive: true });
+  const paths: string[] = [];
+  for (let i = 0; i < 10; i++) {
+    const rel = `src/f${i}.ts`;
+    paths.push(rel);
+    await fs.writeFile(path.join(tmpDir, rel), `// file ${i}\n` + "X".repeat(3_000));
+  }
+
+  const split = makeSplitArtifact([
+    {
+      id: "ws-1",
+      title: "Multi",
+      description: "Many files",
+      category: "serial",
+      sourcePlanItemIds: [],
+      sourceVerificationCaseIds: [],
+      sourceFindingIds: [],
+      likelyAffectedPaths: paths,
+      streamDependencies: [],
+      mergeOrderRequirements: [],
+      constraints: [],
+      blockedReason: null,
+    },
+  ]);
+
+  const result = await buildWorkstreamPrompt({
+    workstreamId: "ws-1",
+    splitArtifact: split,
+    planArtifact: makePlanArtifact(),
+    verifyArtifact: makeVerifyArtifact(),
+    repoRoot: tmpDir,
+  });
+
+  assert.ok(result.prompt.length < 18_000, "default total file budget should keep full prompt well under ~35k");
+  assert.ok(
+    result.warnings.some((w) => w.includes("FORGE_EXECUTE_FILE_SNIPPETS_TOTAL_CHARS")),
+    "should note split budget when multiple files share the cap"
+  );
 
   await fs.rm(tmpDir, { recursive: true });
 });

@@ -26,24 +26,36 @@ function readExecuteInt(
   return Math.min(max, Math.max(min, n));
 }
 
-/** Max characters of each target file body embedded in the prompt (middle truncation). */
+/**
+ * Per-file ceiling for embedded snippets (middle truncation).
+ * Actual per-file budget is also limited by the total budget split across files.
+ */
 function getFileSnippetCharLimit(): number {
-  return readExecuteInt("FORGE_EXECUTE_FILE_SNIPPET_CHARS", 5_000, 1_000, 100_000);
+  return readExecuteInt("FORGE_EXECUTE_FILE_SNIPPET_CHARS", 1_800, 400, 100_000);
+}
+
+/**
+ * Max characters for all target-file bodies combined (split evenly across files
+ * that have content, then clamped per file by FORGE_EXECUTE_FILE_SNIPPET_CHARS).
+ * Prevents many likelyAffectedPaths from producing 30k+ prompts by default.
+ */
+function getTotalFileSnippetsCharBudget(): number {
+  return readExecuteInt("FORGE_EXECUTE_FILE_SNIPPETS_TOTAL_CHARS", 8_000, 1_500, 500_000);
 }
 
 /** Max characters for workstream description and long prerequisite lines. */
 function getTextFieldCharLimit(): number {
-  return readExecuteInt("FORGE_EXECUTE_TEXT_FIELD_MAX_CHARS", 1_500, 200, 50_000);
+  return readExecuteInt("FORGE_EXECUTE_TEXT_FIELD_MAX_CHARS", 600, 200, 50_000);
 }
 
 /** Max lines in the constraints block (conflict zones, findings, constraints). */
 function getConstraintSectionLineLimit(): number {
-  return readExecuteInt("FORGE_EXECUTE_CONSTRAINT_LINES_MAX", 28, 5, 500);
+  return readExecuteInt("FORGE_EXECUTE_CONSTRAINT_LINES_MAX", 14, 5, 500);
 }
 
 /** Max carried-forward concern bullets. */
 function getConcernItemLimit(): number {
-  return readExecuteInt("FORGE_EXECUTE_MAX_CONCERNS", 12, 1, 200);
+  return readExecuteInt("FORGE_EXECUTE_MAX_CONCERNS", 6, 1, 200);
 }
 
 /**
@@ -102,6 +114,9 @@ export interface BuiltPrompt {
  *
  * Reads target file contents from disk (repoRoot + likelyAffectedPaths).
  * Missing files produce warnings instead of crashes.
+ *
+ * Prompt size: see FORGE_EXECUTE_FILE_SNIPPETS_TOTAL_CHARS, FORGE_EXECUTE_FILE_SNIPPET_CHARS,
+ * FORGE_EXECUTE_TEXT_FIELD_MAX_CHARS, FORGE_EXECUTE_CONSTRAINT_LINES_MAX, FORGE_EXECUTE_MAX_CONCERNS.
  */
 export async function buildWorkstreamPrompt(
   ctx: PromptBuildContext
@@ -235,7 +250,7 @@ function buildMergeOrderSection(
   splitArtifact: SplitArtifact,
   warnings: string[]
 ): string {
-  const lineMax = Math.min(800, getTextFieldCharLimit());
+  const lineMax = Math.min(400, getTextFieldCharLimit());
   const prereqs = workstream.mergeOrderRequirements;
   if (prereqs.length === 0) {
     return "None — this workstream has no merge order prerequisites.";
@@ -268,7 +283,7 @@ function buildConstraintSection(
   planArtifact: PlanArtifact,
   warnings: string[]
 ): string {
-  const lineMax = Math.min(600, getTextFieldCharLimit());
+  const lineMax = Math.min(360, getTextFieldCharLimit());
   const maxLines = getConstraintSectionLineLimit();
   const affectedPaths = new Set(workstream.likelyAffectedPaths);
   const lines: string[] = [];
@@ -333,7 +348,7 @@ function buildConcernSection(
   planArtifact: PlanArtifact,
   warnings: string[]
 ): string {
-  const lineMax = Math.min(700, getTextFieldCharLimit());
+  const lineMax = Math.min(400, getTextFieldCharLimit());
   const maxConcerns = getConcernItemLimit();
   const planItemIds = new Set(workstream.sourcePlanItemIds);
   const concerns = planArtifact.carry_forward.concerns.filter((c) =>
@@ -363,21 +378,41 @@ function buildFileSection(
   fileContents: FileContentResult[],
   warnings: string[]
 ): string {
-  const limit = getFileSnippetCharLimit();
-  return fileContents
-    .map((fc) => {
-      if (fc.content !== null) {
-        const body = truncateFileBodyForPrompt(fc.content, limit);
-        if (body.length < fc.content.length) {
-          warnings.push(
-            `File ${fc.path} embedded as truncated snippet (${limit} char budget; FORGE_EXECUTE_FILE_SNIPPET_CHARS).`
-          );
-        }
-        return `FILE: ${fc.path}\n---\n${body}\n---`;
+  const perFileCeiling = getFileSnippetCharLimit();
+  const totalBudget = getTotalFileSnippetsCharBudget();
+  const withContent = fileContents.filter((fc) => fc.content !== null);
+  const n = withContent.length;
+  const splitBudget =
+    n > 0 ? Math.min(perFileCeiling, Math.floor(totalBudget / n)) : perFileCeiling;
+
+  let truncatedFiles = 0;
+  const sections = fileContents.map((fc) => {
+    if (fc.content !== null) {
+      const body = truncateFileBodyForPrompt(fc.content, splitBudget);
+      if (body.length < fc.content.length) {
+        truncatedFiles += 1;
       }
-      return `FILE: ${fc.path}\n---\n[FILE NOT FOUND — may need to be created]\n---`;
-    })
-    .join("\n\n");
+      return `FILE: ${fc.path}\n---\n${body}\n---`;
+    }
+    return `FILE: ${fc.path}\n---\n[FILE NOT FOUND — may need to be created]\n---`;
+  });
+
+  if (truncatedFiles > 0) {
+    warnings.push(
+      `${truncatedFiles} of ${n} target file(s) use truncated snippets (~${splitBudget} chars/file cap; total ${totalBudget} FORGE_EXECUTE_FILE_SNIPPETS_TOTAL_CHARS, per-file ceiling ${perFileCeiling} FORGE_EXECUTE_FILE_SNIPPET_CHARS). Read files on disk for full source.`
+    );
+  } else if (n > 1 && splitBudget < perFileCeiling) {
+    warnings.push(
+      `File snippets split across ${n} paths (~${splitBudget} chars/file; FORGE_EXECUTE_FILE_SNIPPETS_TOTAL_CHARS=${totalBudget}).`
+    );
+  }
+  if (n > 0 && splitBudget < 250) {
+    warnings.push(
+      "Per-file snippet budget is very small; increase FORGE_EXECUTE_FILE_SNIPPETS_TOTAL_CHARS or narrow likelyAffectedPaths."
+    );
+  }
+
+  return sections.join("\n\n");
 }
 
 function assemblePrompt(
@@ -390,67 +425,52 @@ function assemblePrompt(
   fileSection: string,
   repoRoot: string
 ): string {
-  const titleLine = truncateOneLine(workstream.title, 200);
+  const titleLine = truncateOneLine(workstream.title, 120);
   const categoryInfo =
     planItems.length > 0
       ? planItems
           .map(
             (p) =>
-              `  - ${truncateOneLine(p.title, 160)}: category=${p.category}, risk=${p.riskLevel}`
+              `  - ${truncateOneLine(p.title, 90)}: ${p.category}/${p.riskLevel}`
           )
           .join("\n")
-      : "  (no plan item details available)";
+      : "  (none)";
 
-  return `# System Role
-You are a skilled software engineer implementing changes to a codebase.
+  return `# Role
+Senior engineer. Implement changes in the repo below; snippets are hints only.
 
-# Workstream Description
+# Workstream
 Title: ${titleLine}
-Description: ${workstreamDescriptionForPrompt}
+Task: ${workstreamDescriptionForPrompt}
 
-Plan Item Context:
+Plan items:
 ${categoryInfo}
 
-# What Must Complete First (Merge Order)
+# Merge order (complete first)
 ${prerequisiteSection}
 
-# Implementation Constraints (from Verify step)
-CRITICAL CONSTRAINTS:
+# Constraints (verify + plan)
 ${constraintSection}
 
-# Carried-Forward Concerns
+# Concerns (plan carry-forward)
 ${concernSection}
 
-# Target Files
-Below are SNIPPETS of the current files you may modify (large files are truncated for prompt size):
-
+# Target files (truncated snippets — read full files on disk)
 ${fileSection}
 
-# Repository
-Repo root for full context on disk: ${repoRoot}
-Always prefer reading the real files in the workspace over relying only on snippets above.
+# Repo
+${repoRoot}
 
-# Your Task
-Based on the workstream description and constraints above, make the necessary changes to the target files.
-
-# Output Format
-Return your changes in the following format:
+# Output
+Use heading ## CHANGES then a fenced block tagged json (parser requires this exact pattern):
 
 ## CHANGES
 \`\`\`json
-[
-  {
-    "file": "path/to/file.ext",
-    "action": "create" | "modify" | "delete",
-    "content": "full new content (for create/modify)"
-  }
-]
+[{"file":"path/to/file.ext","action":"modify","content":"full new file body"}]
 \`\`\`
 
 # Rules
-1. Only modify files listed in "Target Files" above
-2. Do not touch files outside the target files
-3. Respect all constraints listed
-4. Preserve existing code style and formatting
-5. If a file must be deleted, indicate action: "delete" with no content`;
+1. Only paths listed under Target files
+2. Respect constraints; match local style
+3. action delete → omit content`;
 }

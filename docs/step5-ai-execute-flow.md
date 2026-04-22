@@ -36,7 +36,7 @@ flowchart TB
 
     subgraph AI_EXEC["3. AI EXECUTION PHASE"]
         direction LR
-        C1[/"3a. BUILD PROMPT<br/>workstream desc + file contents<br/>plan context + verify constraints<br/>merge order + carried concerns"/]
+        C1[/"3a. BUILD PROMPT<br/>one prompt per workstreamId<br/>scoped plan/verify + path snippets<br/>merge order + caps (FORGE_EXECUTE_*)/"]
         C2[/"3b. CALL AI MODEL<br/>user-provided cloud model<br/>gpt-5.4 / claude-Opus-4.7 / GLM-5.1<br/>returns code changes"/]
         C3[/"3c. APPLY CHANGES<br/>write files to disk<br/>track: path, hash, lines"/]
         C4[/"3d. VERIFY<br/>typecheck / lint<br/>optional per-workstream"/]
@@ -209,75 +209,59 @@ flowchart LR
 
 ### Per-workstream prompt layout (actual template)
 
-The following mirrors **`assemblePrompt`** in `src/execute/prompt-builder.ts`. Placeholders show dynamic content; headings match the shipped prompt.
+The following mirrors **`assemblePrompt`** in `src/execute/prompt-builder.ts`. Copy is intentionally **short**; full source lives on disk. Snippet sizes default to a **total** budget across files plus a per-file ceiling (see [Prompt size limits](#prompt-size-limits)).
 
 ```
-# System Role
-You are a skilled software engineer implementing changes to a codebase.
+# Role
+Senior engineer. Implement changes in the repo below; snippets are hints only.
 
-# Workstream Description
+# Workstream
 Title: {title}
-Description: {description_truncated_if_needed}
+Task: {description_truncated}
 
-Plan Item Context:
-  - {plan_item_title}: category={category}, risk={riskLevel}
+Plan items:
+  - {plan_item_title}: {category}/{riskLevel}
   ...
 
-# What Must Complete First (Merge Order)
-None — ...   OR   bullet list:
-- {prereq_title} ({prereq_id}): {prereq_description_truncated}
+# Merge order (complete first)
+(prerequisite bullets or “None — …”)
 
-# Implementation Constraints (from Verify step)
-CRITICAL CONSTRAINTS:
-- CONFLICT ZONE: ... (when zone paths intersect likelyAffectedPaths)
-- FINDING: ... (when linked verification case shares sourcePlanItemIds)
-- CONSTRAINT: ... (same)
-(or a single line when nothing applies)
+# Constraints (verify + plan)
+(CONFLICT ZONE / FINDING / CONSTRAINT lines, line-capped)
 
-# Carried-Forward Concerns
-(bullets filtered to this workstream’s plan items, count-capped)
+# Concerns (plan carry-forward)
+(filtered concern bullets)
 
-# Target Files
-Below are SNIPPETS of the current files you may modify (large files are truncated for prompt size):
-
-FILE: {relative_path}
+# Target files (truncated snippets — read full files on disk)
+FILE: {path}
 ---
-{snippet_or_FILE_NOT_FOUND}
+{snippet}
 ---
 
-# Repository
-Repo root for full context on disk: {repoRoot}
-Always prefer reading the real files in the workspace over relying only on snippets above.
+# Repo
+{repoRoot}
 
-# Your Task
-Based on the workstream description and constraints above, make the necessary changes to the target files.
-
-# Output Format
-## CHANGES
-```json
-[
-  { "file": "path/to/file.ext", "action": "create" | "modify" | "delete", "content": "..." }
-]
-```
+# Output
+(## CHANGES plus a fenced JSON code block — must match execute model connector parser)
 
 # Rules
-1. Only modify files listed in "Target Files" above
-2. Do not touch files outside the target files
-3. Respect all constraints listed
-4. Preserve existing code style and formatting
-5. If a file must be deleted, indicate action: "delete" with no content
+1. Only paths listed under Target files
+2. …
 ```
 
-### Prompt size limits (`FORGE_EXECUTE_*`)
+The shipped prompt embeds a minimal **## CHANGES** / **```json** example on one line so the model follows the same shape `parseModelResponse` expects in `src/execute/model-connector.ts`.
+
+### Prompt size limits
 
 Long prompts are clamped so execute stays usable across models. Defaults can be overridden with environment variables (parsed as integers, clamped to safe min/max in code):
 
 | Variable | Default | Role |
 |----------|---------|------|
-| `FORGE_EXECUTE_FILE_SNIPPET_CHARS` | `5000` | Max characters **per file** embedded in the prompt; large files use head + tail with a middle-omission marker. |
-| `FORGE_EXECUTE_TEXT_FIELD_MAX_CHARS` | `1500` | Max characters for the workstream description (single line, whitespace collapsed); merge-order and other bullets also respect related caps. |
-| `FORGE_EXECUTE_CONSTRAINT_LINES_MAX` | `28` | Max lines in the conflict-zone / finding / constraint block before a “see plan.json / verify.json” footer. |
-| `FORGE_EXECUTE_MAX_CONCERNS` | `12` | Max carried-forward concern bullets. |
+| `FORGE_EXECUTE_FILE_SNIPPETS_TOTAL_CHARS` | `8000` | **Total** character budget split across all target files that have content (each file also obeys the per-file ceiling). Stops many paths from producing 30k+ prompts. |
+| `FORGE_EXECUTE_FILE_SNIPPET_CHARS` | `1800` | Per-file **ceiling** for an embedded snippet (head + tail + middle omission). |
+| `FORGE_EXECUTE_TEXT_FIELD_MAX_CHARS` | `600` | Max characters for the workstream description (single line, whitespace collapsed); merge-order and other bullets also respect related caps. |
+| `FORGE_EXECUTE_CONSTRAINT_LINES_MAX` | `14` | Max lines in the conflict-zone / finding / constraint block before a “see plan.json / verify.json” footer. |
+| `FORGE_EXECUTE_MAX_CONCERNS` | `6` | Max carried-forward concern bullets. |
 
 See `src/execute/prompt-builder.ts` for exact clamp ranges and helpers (`truncateFileBodyForPrompt`, `truncateOneLine`).
 
@@ -444,6 +428,8 @@ All workstreams complete. Artifact written to .forge/execute.json
 | `FORGE_MODEL_API_KEY` | No | API key (not needed for Ollama) |
 | `FORGE_MODEL_BASE_URL` | No | Proxy or self-hosted endpoint |
 | `FORGE_EXECUTE_AUTO` | No | Set to `1` to auto-execute all unblocked workstreams |
+
+Optional **`FORGE_EXECUTE_*`** variables (file snippet size, description length, constraint line caps, max concerns) tune the **workstream prompt** built for the model. See **Prompt size limits** under [AI Execution Details](#ai-execution-details).
 
 ---
 
