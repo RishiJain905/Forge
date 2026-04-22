@@ -250,6 +250,31 @@ await runScenario(
 );
 
 await runScenario(
+  "parseTestOutput parses vitest default reporter (passed only, with total)",
+  () => {
+    const output = `
+ Test Files  1 passed (1)
+      Tests  10 passed (10)
+`;
+    const result = parseTestOutput(output);
+    assert.equal(result.passed, 10);
+    assert.equal(result.failed, 0);
+    assert.equal(result.total, 10);
+  }
+);
+
+await runScenario(
+  "parseTestOutput parses vitest default reporter (failed and passed)",
+  () => {
+    const output = `      Tests  2 failed | 8 passed (10)`;
+    const result = parseTestOutput(output);
+    assert.equal(result.passed, 8);
+    assert.equal(result.failed, 2);
+    assert.equal(result.total, 10);
+  }
+);
+
+await runScenario(
   "parseTestOutput parses pytest format with passed and failed",
   () => {
     const output = `

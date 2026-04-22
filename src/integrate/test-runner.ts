@@ -86,8 +86,8 @@ export function estimateTestCount(content: string, framework: string): number {
  * Parse the combined stdout+stderr of a test run to extract pass/fail counts.
  *
  * Recognised patterns:
- *   - jest/vitest: "Tests:  5 passed, 2 failed, 7 total"
- *   - jest/vitest: "Tests: 5 passed, 2 failed, 7 total" (various spacing)
+ *   - jest: "Tests:  5 passed, 2 failed, 7 total" (colon after `Tests`)
+ *   - vitest default reporter: "Tests  10 passed (10)" or "Tests  2 failed | 8 passed (10)" (no colon)
  *   - pytest: "5 passed, 2 failed" or "5 passed, 1 error" or "5 passed"
  *   - Generic: look for "X passed" and "X failed" patterns
  *
@@ -123,6 +123,29 @@ export function parseTestOutput(output: string): {
     const total = parseInt(jestPassedOnly[2], 10);
     failed = Math.max(0, total - passed);
     return { passed, failed, total };
+  }
+
+  // Vitest default reporter (no colon after "Tests"):
+  // "Tests  2 failed | 8 passed (10)" or "Tests  10 passed (10)"
+  const vitestFailPass = output.match(
+    /Tests\s+(\d+)\s+failed\s*\|\s*(\d+)\s+passed(?:\s*\((\d+)\))?/i
+  );
+  if (vitestFailPass) {
+    failed = parseInt(vitestFailPass[1], 10);
+    passed = parseInt(vitestFailPass[2], 10);
+    const total = vitestFailPass[3]
+      ? parseInt(vitestFailPass[3], 10)
+      : passed + failed;
+    return { passed, failed, total };
+  }
+
+  const vitestPassOnly = output.match(/Tests\s+(\d+)\s+passed(?:\s*\((\d+)\))?/i);
+  if (vitestPassOnly) {
+    passed = parseInt(vitestPassOnly[1], 10);
+    const total = vitestPassOnly[2]
+      ? parseInt(vitestPassOnly[2], 10)
+      : passed;
+    return { passed, failed: 0, total };
   }
 
   // pytest style: "5 passed, 2 failed" or "5 passed, 1 error"

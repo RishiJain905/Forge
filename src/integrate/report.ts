@@ -9,8 +9,12 @@
 //   createIntegrationReport(artifact) — returns a Markdown string
 // ---------------------------------------------------------------------------
 
-import type { IntegrateArtifact, IntegrationTestCase } from "./types.js";
-import type { ErrorClassification } from "./types.js";
+import type {
+  ErrorClassification,
+  IntegrateArtifact,
+  IntegrationSummary,
+  IntegrationTestCase,
+} from "./types.js";
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -25,6 +29,20 @@ function renderSection(title: string, lines: string[]): string {
 function renderList(items: string[]): string {
   if (items.length === 0) return "- none";
   return items.map((item) => `- ${item}`).join("\n");
+}
+
+/**
+ * True when the summary has planned tests but none were counted passed or failed.
+ * Usually means the test runner output did not match a known pattern (or those tests
+ * were not executed by the configured command), so every case stayed `pending`.
+ */
+export function isIntegrateSummaryInconclusive(s: IntegrationSummary): boolean {
+  return s.total > 0 && s.passed === 0 && s.failed === 0;
+}
+
+/** True when every recorded integration test passed (no failures, full pass count). */
+export function isIntegrateSummaryAllPassed(s: IntegrationSummary): boolean {
+  return s.total > 0 && s.passed === s.total && s.failed === 0;
 }
 
 /** Format a duration in milliseconds to a human-readable string. */
@@ -107,14 +125,29 @@ function renderHowToReproduce(): string {
 /** Render the Troubleshooting section. */
 function renderTroubleshooting(artifact: IntegrateArtifact): string {
   const lines: string[] = [];
-  if (artifact.summary.failed > 0) {
-    lines.push(`- **${artifact.summary.failed} test(s) failed** — review individual test errors above`);
+  const s = artifact.summary;
+
+  if (s.failed > 0) {
+    lines.push(`- **${s.failed} test(s) failed** — review individual test errors above`);
     lines.push("- Check that all workstream changes were applied correctly");
     lines.push("- Verify the test framework is correctly detected");
     lines.push("- Try `forge integrate --force` to re-run from scratch");
     lines.push("- Check `forge integrate --help` for available flags");
-  } else {
+  } else if (isIntegrateSummaryInconclusive(s)) {
+    lines.push(
+      "- **Integration test results were not verified** — summary shows 0 passed and 0 failed while tests were expected (see Individual Test Results for `pending`)."
+    );
+    lines.push(
+      "- The test command output did not match a known pattern (Jest `Tests: …`, Vitest `Tests … passed`, pytest, etc.), or the generated files were never executed (e.g. `npm test` only runs a fixed list of scripts)."
+    );
+    lines.push(
+      "- Run the generated files explicitly, e.g. `npx vitest run tests/integration` or `npx jest tests/integration`, or set `integrate.test_framework` / `FORGE_INTEGRATE_TEST_FRAMEWORK` so integrate uses a command that executes those paths."
+    );
+    lines.push("- Re-run `forge integrate` after fixing the test command or framework detection.");
+  } else if (isIntegrateSummaryAllPassed(s)) {
     lines.push("- All tests passed — no troubleshooting needed");
+  } else {
+    lines.push("- Review the **Test Results** and **Individual Test Results** sections above.");
   }
   return renderSection("Troubleshooting", lines);
 }
@@ -255,9 +288,9 @@ function renderAIRecommendations(artifact: IntegrateArtifact): string {
 
 /** Render the Next Steps section with guidance based on pass/fail status. */
 function renderNextSteps(artifact: IntegrateArtifact): string {
-  const allPassed = artifact.summary.failed === 0 && artifact.summary.passed > 0;
+  const s = artifact.summary;
 
-  if (allPassed) {
+  if (isIntegrateSummaryAllPassed(s)) {
     return renderSection("Next Steps", [
       "All integration tests passed. You may proceed with confidence:",
       "",
@@ -267,22 +300,41 @@ function renderNextSteps(artifact: IntegrateArtifact): string {
     ]);
   }
 
-  // Some failures exist
-  const lines: string[] = [
-    `${artifact.summary.failed} integration test(s) failed. Recommended actions:`,
-    "",
-    "- Review the **Failed Test Errors** section above for details on each failure",
-    "- Follow the **AI Recommendations** for suggested fixes",
-    "- Fix the underlying issues and re-run `forge integrate`",
-  ];
-
-  if (artifact.summary.skipped > 0) {
-    lines.push(
-      `- ${artifact.summary.skipped} test(s) were skipped — investigate whether they should be enabled`
-    );
+  if (isIntegrateSummaryInconclusive(s)) {
+    return renderSection("Next Steps", [
+      "Integration test outcomes could not be confirmed from the test runner output.",
+      "",
+      "- If Individual Test Results show `pending` for every case, Forge did not parse pass/fail counts from the command output (or the command never ran those files).",
+      "- Point the integrate step at a runner that executes `tests/integration/**` and prints a standard summary (see Troubleshooting).",
+      "- Re-run `forge integrate` after adjusting the test command or framework settings.",
+    ]);
   }
 
-  return renderSection("Next Steps", lines);
+  if (s.failed > 0) {
+    const lines: string[] = [
+      `${s.failed} integration test(s) failed. Recommended actions:`,
+      "",
+      "- Review the **Failed Test Errors** section above for details on each failure",
+      "- Follow the **AI Recommendations** for suggested fixes",
+      "- Fix the underlying issues and re-run `forge integrate`",
+    ];
+
+    if (s.skipped > 0) {
+      lines.push(
+        `- ${s.skipped} test(s) were skipped — investigate whether they should be enabled`
+      );
+    }
+
+    return renderSection("Next Steps", lines);
+  }
+
+  // Partial passes, skips only, or empty total — generic guidance
+  return renderSection("Next Steps", [
+    "Review integration results above.",
+    "",
+    "- Check **Test Results** and **Individual Test Results** for `passed`, `failed`, `skipped`, and `pending` states",
+    "- Re-run `forge integrate` after fixes, or use `forge integrate --force` if you need a clean retry",
+  ]);
 }
 
 // ---------------------------------------------------------------------------

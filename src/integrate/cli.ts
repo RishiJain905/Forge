@@ -35,7 +35,12 @@ import {
   writeIntegrateArtifact,
   buildFrozenArtifact,
 } from "./artifact.js";
-import { createIntegrationReport, createFrozenReport } from "./report.js";
+import {
+  createIntegrationReport,
+  createFrozenReport,
+  isIntegrateSummaryAllPassed,
+  isIntegrateSummaryInconclusive,
+} from "./report.js";
 import { loadModelConfig, callModel } from "../execute/model-connector.js";
 import { loadRepoDotenv } from "../repo-dotenv.js";
 import { extractJsonFromAIResponse } from "./extract-json.js";
@@ -944,13 +949,22 @@ export async function runIntegrateCommand(
 
   // ---- Step 10: Return result ----
 
-  const hasFailures = artifact.summary.failed > 0;
+  const s = artifact.summary;
+  const hasFailures = s.failed > 0;
+  const inconclusive = isIntegrateSummaryInconclusive(s);
   const exitCode = hasFailures ? 1 : 0;
   const status: "ready" | "failed" = hasFailures ? "failed" : "ready";
 
-  const resultSummary = hasFailures
-    ? `Integration complete with ${artifact.summary.failed} failure(s) out of ${artifact.summary.total} test(s)`
-    : `All ${artifact.summary.total} integration tests passed`;
+  let resultSummary: string;
+  if (hasFailures) {
+    resultSummary = `Integration complete with ${s.failed} failure(s) out of ${s.total} test(s)`;
+  } else if (inconclusive) {
+    resultSummary = `Integration finished but test results were not verified (${s.total} test case(s); see integration-report.md)`;
+  } else if (isIntegrateSummaryAllPassed(s)) {
+    resultSummary = `All ${s.total} integration tests passed`;
+  } else {
+    resultSummary = `Integration complete: ${s.passed} passed, ${s.failed} failed, ${s.skipped} skipped (${s.total} total)`;
+  }
 
   // Final status summary
   const icon = formatStatusIcon(artifact.summary.failed, useColor);
