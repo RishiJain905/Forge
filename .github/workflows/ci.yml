@@ -2,7 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    # Only these branches get CI on push. Add your default integration branch if it differs
+    # from `develop` (e.g. this repo uses `dev`).
+    branches: [main, develop, dev]
   pull_request:
 
 concurrency:
