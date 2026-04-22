@@ -6,8 +6,11 @@ import { fileURLToPath } from "node:url";
 
 const execFileAsync = promisify(execFile);
 
-function npmCmd(): string {
-  return process.platform === "win32" ? "npm.cmd" : "npm";
+/** .cmd shims need the shell on Windows; bare `npm` + `shell: true` matches PowerShell. */
+function npmExecOptions(extra: { timeout?: number }): { timeout?: number; shell?: boolean } {
+  return process.platform === "win32"
+    ? { ...extra, shell: true }
+    : extra;
 }
 
 export interface UpdateInfo {
@@ -27,9 +30,9 @@ export async function checkForUpdate(): Promise<UpdateInfo> {
   const current = getPackageVersion();
   try {
     const { stdout } = await execFileAsync(
-      npmCmd(),
+      "npm",
       ["view", "@forge-cli/forge", "version"],
-      { timeout: 10000 },
+      npmExecOptions({ timeout: 10000 }),
     );
     const latest = stdout.trim();
     return { current, latest, outdated: compareSemver(latest, current) > 0 };
@@ -63,9 +66,9 @@ export async function selfUpdate(yes: boolean = false): Promise<void> {
   console.log(`Updating Forge ${current} → ${latest}...`);
   try {
     await execFileAsync(
-      npmCmd(),
+      "npm",
       ["install", "-g", `@forge-cli/forge@${latest}`],
-      { timeout: 60000 },
+      npmExecOptions({ timeout: 60000 }),
     );
     console.log("Update complete.");
     console.log(`Now running Forge ${latest}.`);

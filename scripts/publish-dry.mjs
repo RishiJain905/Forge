@@ -2,19 +2,24 @@
 /**
  * Cross-platform publish dry-run (same behavior as scripts/publish.sh).
  * Used by npm run publish:dry on Windows where bash/WSL may be unavailable.
+ *
+ * On Windows, `spawnSync("npm.cmd", …)` without a shell can fail with EINVAL
+ * (.cmd is not a native PE). PowerShell resolves `npm` via cmd; we match that
+ * by using `npm` + `shell: true` on win32.
  */
 import { spawnSync } from "node:child_process";
 
-const npmExecutable = process.platform === "win32" ? "npm.cmd" : "npm";
+const useShell = process.platform === "win32";
 
 const spawnOpts = {
   cwd: process.cwd(),
   env: process.env,
-  windowsHide: process.platform === "win32",
+  shell: useShell,
+  windowsHide: useShell,
 };
 
 function runNpm(args, inheritStdio) {
-  return spawnSync(npmExecutable, args, {
+  return spawnSync("npm", args, {
     ...spawnOpts,
     stdio: inheritStdio ? "inherit" : "pipe",
     encoding: inheritStdio ? undefined : "utf8",
@@ -25,11 +30,21 @@ console.log("=== npm whoami ===");
 const whoami = runNpm(["whoami"], false);
 const whoamiCode = whoami.status === null ? 1 : whoami.status;
 if (whoamiCode !== 0) {
+  if (whoami.error) {
+    console.error(`Could not run npm: ${whoami.error.message}`);
+    process.exit(1);
+  }
   const errText = [whoami.stderr, whoami.stdout].filter(Boolean).join("").trim();
   if (errText) {
     console.error(errText);
   }
-  console.log("You are not logged into npm. Run: npm login");
+  console.log(
+    "npm whoami failed — npm has no (valid) auth token for the registry you are using.",
+  );
+  console.log("That is expected until you log in once. Run: npm login");
+  console.log(
+    "Then run `npm whoami` in this same terminal; when that prints your username, publish:dry will proceed.",
+  );
   process.exit(1);
 }
 if (whoami.stdout) {
