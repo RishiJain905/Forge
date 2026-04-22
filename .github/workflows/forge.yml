@@ -5,8 +5,8 @@ name: Forge Pipeline
 #   exposes it with `npm link` so `forge` matches the branch you are testing.
 #   (Installing from npm would test whatever is published, not your PR.)
 # - Runs deterministic stages: doctor → intake → plan → verify → split.
-# - Runs execute + integrate only when OPENAI_API_KEY is set (skips on forks
-#   and avoids surprise API spend).
+# - Runs execute + integrate only when the OPENAI_API_KEY repo secret is set
+#   (skipped in the shell when unset — GitHub does not allow `secrets` in `if:`).
 #
 # In other projects you usually install from the registry instead, e.g.:
 #   npm install -g @forgecli/forge
@@ -63,16 +63,24 @@ jobs:
         run: forge split --repo . --output-dir .forge
 
       - name: Forge Execute
-        if: ${{ secrets.OPENAI_API_KEY != '' }}
-        run: forge execute --repo . --auto --output-dir .forge
+        run: |
+          if [ -z "${FORGE_MODEL_API_KEY}" ]; then
+            echo "Skipping Forge Execute (set repository secret OPENAI_API_KEY to run this step)."
+            exit 0
+          fi
+          forge execute --repo . --auto --output-dir .forge
         env:
           FORGE_MODEL_PROVIDER: openai
           FORGE_MODEL_NAME: gpt-4o
           FORGE_MODEL_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
       - name: Forge Integrate
-        if: ${{ secrets.OPENAI_API_KEY != '' }}
-        run: forge integrate --repo . --auto --output-dir .forge
+        run: |
+          if [ -z "${FORGE_MODEL_API_KEY}" ]; then
+            echo "Skipping Forge Integrate (set repository secret OPENAI_API_KEY to run this step)."
+            exit 0
+          fi
+          forge integrate --repo . --auto --output-dir .forge
         env:
           FORGE_MODEL_PROVIDER: openai
           FORGE_MODEL_NAME: gpt-4o
