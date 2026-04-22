@@ -692,3 +692,61 @@ await runScenario("prompt includes safety rules about only modifying target file
 
   await fs.rm(tmpDir, { recursive: true });
 });
+
+await runScenario("large target file is truncated in prompt with warning when FORGE_EXECUTE_FILE_SNIPPET_CHARS is low", async () => {
+  const prev = process.env.FORGE_EXECUTE_FILE_SNIPPET_CHARS;
+  process.env.FORGE_EXECUTE_FILE_SNIPPET_CHARS = "2800";
+
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-prompt-test-"));
+  await fs.mkdir(path.join(tmpDir, "src"), { recursive: true });
+  const head = "START_MARKER\n";
+  const tail = "\nEND_MARKER";
+  const middle = "M".repeat(40_000);
+  await fs.writeFile(path.join(tmpDir, "src", "huge.ts"), head + middle + tail);
+
+  const split = makeSplitArtifact([
+    {
+      id: "ws-1",
+      title: "Huge file edit",
+      description: "Touch huge module",
+      category: "serial",
+      sourcePlanItemIds: [],
+      sourceVerificationCaseIds: [],
+      sourceFindingIds: [],
+      likelyAffectedPaths: ["src/huge.ts"],
+      streamDependencies: [],
+      mergeOrderRequirements: [],
+      constraints: [],
+      blockedReason: null,
+    },
+  ]);
+
+  try {
+    const result = await buildWorkstreamPrompt({
+      workstreamId: "ws-1",
+      splitArtifact: split,
+      planArtifact: makePlanArtifact(),
+      verifyArtifact: makeVerifyArtifact(),
+      repoRoot: tmpDir,
+    });
+
+    assert.ok(
+      result.prompt.includes("characters omitted from middle of file"),
+      "prompt should include middle-omission marker for oversized file body"
+    );
+    assert.ok(result.prompt.includes("START_MARKER"), "prompt should retain start of file");
+    assert.ok(result.prompt.includes("END_MARKER"), "prompt should retain end of file");
+    assert.ok(
+      result.warnings.some((w) => w.includes("FORGE_EXECUTE_FILE_SNIPPET_CHARS")),
+      "should warn when file snippet is truncated"
+    );
+    assert.ok(result.prompt.length < 35_000, "prompt should stay bounded when file on disk is large");
+  } finally {
+    if (prev === undefined) {
+      delete process.env.FORGE_EXECUTE_FILE_SNIPPET_CHARS;
+    } else {
+      process.env.FORGE_EXECUTE_FILE_SNIPPET_CHARS = prev;
+    }
+    await fs.rm(tmpDir, { recursive: true });
+  }
+});

@@ -5,6 +5,73 @@ import type { SplitArtifact, SplitWorkstream } from "../split/types.js";
 import type { PlanArtifact, PlanItem } from "../plan/types.js";
 import type { VerifyArtifact } from "../verify/types.js";
 
+// ---------------------------------------------------------------------------
+// Prompt size limits (override with FORGE_EXECUTE_* env vars)
+// ---------------------------------------------------------------------------
+
+function readExecuteInt(
+  envName: string,
+  defaultVal: number,
+  min: number,
+  max: number
+): number {
+  const raw = process.env[envName];
+  if (raw === undefined || raw.trim() === "") {
+    return defaultVal;
+  }
+  const n = parseInt(raw, 10);
+  if (!Number.isFinite(n)) {
+    return defaultVal;
+  }
+  return Math.min(max, Math.max(min, n));
+}
+
+/** Max characters of each target file body embedded in the prompt (middle truncation). */
+function getFileSnippetCharLimit(): number {
+  return readExecuteInt("FORGE_EXECUTE_FILE_SNIPPET_CHARS", 5_000, 1_000, 100_000);
+}
+
+/** Max characters for workstream description and long prerequisite lines. */
+function getTextFieldCharLimit(): number {
+  return readExecuteInt("FORGE_EXECUTE_TEXT_FIELD_MAX_CHARS", 1_500, 200, 50_000);
+}
+
+/** Max lines in the constraints block (conflict zones, findings, constraints). */
+function getConstraintSectionLineLimit(): number {
+  return readExecuteInt("FORGE_EXECUTE_CONSTRAINT_LINES_MAX", 28, 5, 500);
+}
+
+/** Max carried-forward concern bullets. */
+function getConcernItemLimit(): number {
+  return readExecuteInt("FORGE_EXECUTE_MAX_CONCERNS", 12, 1, 200);
+}
+
+/**
+ * Single-line clamp (whitespace collapsed) for bullets and titles in lists.
+ */
+function truncateOneLine(text: string, maxChars: number): string {
+  const t = text.replace(/\s+/g, " ").trim();
+  if (t.length <= maxChars) return t;
+  return `${t.slice(0, Math.max(0, maxChars - 1))}…`;
+}
+
+/**
+ * Keep start + end of a file so the model sees structure; omit middle when over limit.
+ */
+export function truncateFileBodyForPrompt(text: string, maxChars: number): string {
+  if (text.length <= maxChars) {
+    return text;
+  }
+  const marker = `\n\n… [${text.length - maxChars} characters omitted from middle of file — see repo for full source] …\n\n`;
+  const budget = maxChars - marker.length;
+  if (budget < 200) {
+    return `${text.slice(0, Math.max(0, maxChars - 50))}\n… [truncated]`;
+  }
+  const head = Math.floor(budget / 2);
+  const tail = budget - head;
+  return `${text.slice(0, head)}${marker}${text.slice(text.length - tail)}`;
+}
+
 export interface PromptBuildContext {
   workstreamId: string;
   splitArtifact: SplitArtifact;
@@ -78,15 +145,26 @@ export async function buildWorkstreamPrompt(
     ctx.planArtifact,
     warnings
   );
-  const fileSection = buildFileSection(fileContents);
+  const fileSection = buildFileSection(fileContents, warnings);
+
+  const textLimit = getTextFieldCharLimit();
+  const descNormalized = workstream.description.replace(/\s+/g, " ").trim();
+  const descForPrompt = truncateOneLine(workstream.description, textLimit);
+  if (descNormalized.length > textLimit) {
+    warnings.push(
+      "Workstream description was truncated for prompt size (FORGE_EXECUTE_TEXT_FIELD_MAX_CHARS)."
+    );
+  }
 
   const prompt = assemblePrompt(
     workstream,
+    descForPrompt,
     planItems,
     prerequisiteSection,
     constraintSection,
     concernSection,
-    fileSection
+    fileSection,
+    ctx.repoRoot
   );
 
   return { prompt, warnings, fileContents };
@@ -157,6 +235,7 @@ function buildMergeOrderSection(
   splitArtifact: SplitArtifact,
   warnings: string[]
 ): string {
+  const lineMax = Math.min(800, getTextFieldCharLimit());
   const prereqs = workstream.mergeOrderRequirements;
   if (prereqs.length === 0) {
     return "None — this workstream has no merge order prerequisites.";
@@ -165,7 +244,14 @@ function buildMergeOrderSection(
   for (const prereqId of prereqs) {
     const prereqWs = splitArtifact.workstreams.find((w) => w.id === prereqId);
     if (prereqWs) {
-      lines.push(`- ${prereqWs.title} (${prereqId}): ${prereqWs.description}`);
+      const prereqDescNorm = prereqWs.description.replace(/\s+/g, " ").trim();
+      const detail = truncateOneLine(prereqWs.description, lineMax);
+      if (prereqDescNorm.length > lineMax) {
+        warnings.push(
+          `Merge-order line for ${prereqId} truncated (prompt size limit).`
+        );
+      }
+      lines.push(`- ${truncateOneLine(prereqWs.title, 120)} (${prereqId}): ${detail}`);
     } else {
       warnings.push(
         `Merge order prerequisite ${prereqId} not found in split artifact`
@@ -182,6 +268,8 @@ function buildConstraintSection(
   planArtifact: PlanArtifact,
   warnings: string[]
 ): string {
+  const lineMax = Math.min(600, getTextFieldCharLimit());
+  const maxLines = getConstraintSectionLineLimit();
   const affectedPaths = new Set(workstream.likelyAffectedPaths);
   const lines: string[] = [];
 
@@ -189,9 +277,8 @@ function buildConstraintSection(
   for (const zone of planArtifact.conflict_zones) {
     const touches = zone.paths.some((p) => affectedPaths.has(p));
     if (touches) {
-      lines.push(
-        `- CONFLICT ZONE: ${zone.title} — ${zone.reason} (risk: ${zone.riskLevel})`
-      );
+      const line = `- CONFLICT ZONE: ${zone.title} — ${zone.reason} (risk: ${zone.riskLevel})`;
+      lines.push(truncateOneLine(line, lineMax));
     }
   }
 
@@ -205,7 +292,8 @@ function buildConstraintSection(
       case_ &&
       case_.sourcePlanItemIds.some((pid) => planItemIds.has(pid))
     ) {
-      lines.push(`- FINDING: ${finding.summary} (status: ${finding.status})`);
+      const line = `- FINDING: ${finding.summary} (status: ${finding.status})`;
+      lines.push(truncateOneLine(line, lineMax));
     }
   }
 
@@ -218,12 +306,24 @@ function buildConstraintSection(
       case_ &&
       case_.sourcePlanItemIds.some((pid) => planItemIds.has(pid))
     ) {
-      lines.push(`- CONSTRAINT: ${constraint.summary}`);
+      const line = `- CONSTRAINT: ${constraint.summary}`;
+      lines.push(truncateOneLine(line, lineMax));
     }
   }
 
   if (lines.length === 0) {
     return "No specific constraints detected for this workstream's files.";
+  }
+
+  if (lines.length > maxLines) {
+    const dropped = lines.length - maxLines;
+    warnings.push(
+      `Constraint/finding list truncated (${dropped} lines omitted; FORGE_EXECUTE_CONSTRAINT_LINES_MAX).`
+    );
+    lines.length = maxLines;
+    lines.push(
+      `- … (${dropped} more items omitted — see .forge/plan.json and .forge/verify.json in the repo)`
+    );
   }
   return lines.join("\n");
 }
@@ -231,8 +331,10 @@ function buildConstraintSection(
 function buildConcernSection(
   workstream: SplitWorkstream,
   planArtifact: PlanArtifact,
-  _warnings: string[]
+  warnings: string[]
 ): string {
+  const lineMax = Math.min(700, getTextFieldCharLimit());
+  const maxConcerns = getConcernItemLimit();
   const planItemIds = new Set(workstream.sourcePlanItemIds);
   const concerns = planArtifact.carry_forward.concerns.filter((c) =>
     c.planItemIds.some((pid) => planItemIds.has(pid))
@@ -241,19 +343,37 @@ function buildConcernSection(
   if (concerns.length === 0) {
     return "No carried-forward concerns apply to this workstream.";
   }
-  return concerns
-    .map(
-      (c) =>
-        `- [${c.source}] ${c.message} (effects: ${c.effects.join(", ")})`
-    )
+
+  const slice = concerns.slice(0, maxConcerns);
+  if (concerns.length > maxConcerns) {
+    warnings.push(
+      `Carried-forward concerns truncated (${concerns.length - maxConcerns} omitted; FORGE_EXECUTE_MAX_CONCERNS).`
+    );
+  }
+
+  return slice
+    .map((c) => {
+      const raw = `- [${c.source}] ${c.message} (effects: ${c.effects.join(", ")})`;
+      return truncateOneLine(raw, lineMax);
+    })
     .join("\n");
 }
 
-function buildFileSection(fileContents: FileContentResult[]): string {
+function buildFileSection(
+  fileContents: FileContentResult[],
+  warnings: string[]
+): string {
+  const limit = getFileSnippetCharLimit();
   return fileContents
     .map((fc) => {
       if (fc.content !== null) {
-        return `FILE: ${fc.path}\n---\n${fc.content}\n---`;
+        const body = truncateFileBodyForPrompt(fc.content, limit);
+        if (body.length < fc.content.length) {
+          warnings.push(
+            `File ${fc.path} embedded as truncated snippet (${limit} char budget; FORGE_EXECUTE_FILE_SNIPPET_CHARS).`
+          );
+        }
+        return `FILE: ${fc.path}\n---\n${body}\n---`;
       }
       return `FILE: ${fc.path}\n---\n[FILE NOT FOUND — may need to be created]\n---`;
     })
@@ -262,17 +382,21 @@ function buildFileSection(fileContents: FileContentResult[]): string {
 
 function assemblePrompt(
   workstream: SplitWorkstream,
+  workstreamDescriptionForPrompt: string,
   planItems: PlanItem[],
   prerequisiteSection: string,
   constraintSection: string,
   concernSection: string,
-  fileSection: string
+  fileSection: string,
+  repoRoot: string
 ): string {
+  const titleLine = truncateOneLine(workstream.title, 200);
   const categoryInfo =
     planItems.length > 0
       ? planItems
           .map(
-            (p) => `  - ${p.title}: category=${p.category}, risk=${p.riskLevel}`
+            (p) =>
+              `  - ${truncateOneLine(p.title, 160)}: category=${p.category}, risk=${p.riskLevel}`
           )
           .join("\n")
       : "  (no plan item details available)";
@@ -281,8 +405,8 @@ function assemblePrompt(
 You are a skilled software engineer implementing changes to a codebase.
 
 # Workstream Description
-Title: ${workstream.title}
-Description: ${workstream.description}
+Title: ${titleLine}
+Description: ${workstreamDescriptionForPrompt}
 
 Plan Item Context:
 ${categoryInfo}
@@ -298,9 +422,13 @@ ${constraintSection}
 ${concernSection}
 
 # Target Files
-Below are the CURRENT contents of files you must modify:
+Below are SNIPPETS of the current files you may modify (large files are truncated for prompt size):
 
 ${fileSection}
+
+# Repository
+Repo root for full context on disk: ${repoRoot}
+Always prefer reading the real files in the workspace over relying only on snippets above.
 
 # Your Task
 Based on the workstream description and constraints above, make the necessary changes to the target files.
