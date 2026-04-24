@@ -73,17 +73,28 @@ function normalizeModuleSignal(value: string): string {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
-function tokenizeModuleCandidates(filePath: string): string[] {
+const MODULE_SIGNAL_SPLIT_PATTERN = /[^a-z0-9]+/i;
+
+// Optimization: Return a Set and avoid mapping/flatMapping to avoid temporary allocations.
+// `normalizePathForComparison` and `normalizeFileStem` already lowercase the inputs.
+// Splitting by `[^a-z0-9]+/i` yields segments that are alphanumeric and lowercase,
+// which means we don't need to apply `normalizeModuleSignal` on each segment again.
+function tokenizeModuleCandidates(filePath: string): Set<string> {
   const normalizedPath = normalizePathForComparison(filePath);
   const stem = normalizeFileStem(filePath);
-  const tokens = normalizedPath
-    .split("/")
-    .flatMap((segment) => segment.split(/[^a-z0-9]+/i))
-    .concat(stem.split(/[^a-z0-9]+/i))
-    .map((segment) => normalizeModuleSignal(segment))
-    .filter((segment) => segment.length > 0);
+  const tokens = new Set<string>();
 
-  return [...new Set(tokens)];
+  const segments = normalizedPath.split(MODULE_SIGNAL_SPLIT_PATTERN);
+  for (const seg of segments) {
+    if (seg) tokens.add(seg);
+  }
+
+  const stemSegments = stem.split(MODULE_SIGNAL_SPLIT_PATTERN);
+  for (const seg of stemSegments) {
+    if (seg) tokens.add(seg);
+  }
+
+  return tokens;
 }
 
 function matchesModuleSignal(filePath: string, moduleSignals: string[]): boolean {
@@ -96,13 +107,20 @@ function matchesModuleSignal(filePath: string, moduleSignals: string[]): boolean
   return matchesModuleSignalFast(filePath, targetSignals);
 }
 
+// Optimization: Use an O(1) Set lookup inside a simple loop instead of an O(N) array includes.
 function matchesModuleSignalFast(filePath: string, normalizedTargetSignals: string[]): boolean {
   if (normalizedTargetSignals.length === 0) {
     return false;
   }
 
   const candidateTokens = tokenizeModuleCandidates(filePath);
-  return normalizedTargetSignals.some((signal) => candidateTokens.includes(signal));
+  for (const signal of normalizedTargetSignals) {
+    if (candidateTokens.has(signal)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function isSharedRiskPath(
