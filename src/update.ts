@@ -59,7 +59,7 @@ export async function selfUpdate(yes: boolean = false): Promise<void> {
     return;
   }
 
-  if (!/^\d+\.\d+\.\d+/.test(latest)) {
+  if (!/^\d+\.\d+\.\d+$/.test(latest)) {
     throw new Error(`Invalid latest version: ${latest}`);
   }
 
