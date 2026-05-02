@@ -10,10 +10,16 @@
 npm install -g @forgecli/forge
 ```
 
-Or run a command without installing globally (prefer **`forgecli`** if another `forge` exists on your PATH — common on Windows):
+Or run a command without installing globally (prefer **`forgecli`** if another `forge` exists on your PATH — common on Windows). Use `--` so npm runs the **`forgecli`** binary from this package, not a random `forge` on PATH:
 
 ```bash
-npx --yes @forgecli/forge forgecli <command>
+npm exec --yes --package=@forgecli/forge -- forgecli <command>
+```
+
+Example:
+
+```bash
+npm exec --yes --package=@forgecli/forge -- forgecli --version
 ```
 
 **2. Initialize each repository** (creates `.forge/` with config and defaults):
