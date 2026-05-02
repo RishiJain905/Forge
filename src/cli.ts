@@ -1,7 +1,6 @@
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join, resolve } from "node:path";
+import { createRequire } from "node:module";
 import { Command } from "commander";
+import { resolve } from "node:path";
 
 import { initForge } from "./init.js";
 import { runDoctor, printDoctorResults } from "./doctor/index.js";
@@ -27,10 +26,9 @@ import {
 } from "./config.js";
 import { loadRepoDotenv } from "./repo-dotenv.js";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const packageJson = JSON.parse(
-  readFileSync(join(__dirname, "..", "..", "package.json"), "utf8")
-);
+/** Resolved from dist/src/cli.js → package root (works under npm/npx symlinks). */
+const requireFromCli = createRequire(import.meta.url);
+const packageJson = requireFromCli("../../package.json") as { version: string };
 
 function hasFlag(argv: string[], flag: string): boolean {
   return argv.includes(flag);
