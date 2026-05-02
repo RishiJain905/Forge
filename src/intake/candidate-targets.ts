@@ -108,6 +108,7 @@ function matchesModuleSignal(filePath: string, moduleSignals: string[]): boolean
   return matchesModuleSignalFast(filePath, targetSignals);
 }
 
+// Optimization: Use an O(1) Set lookup inside a simple loop instead of an O(N) array includes.
 function matchesModuleSignalFast(filePath: string, normalizedTargetSignals: string[]): boolean {
   if (normalizedTargetSignals.length === 0) {
     return false;
