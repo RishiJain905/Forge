@@ -14,8 +14,12 @@ describe("npm packaging contract", () => {
     assert.equal(packageJson.name, "@forgecli/forge");
   });
 
-  it("has version 1.0.0 for V1 release", () => {
-    assert.equal(packageJson.version, "1.0.0");
+  it("has semver version on the 1.x release line", () => {
+    assert.match(
+      packageJson.version,
+      /^1\.\d+\.\d+$/,
+      `expected 1.x.y semver, got ${packageJson.version}`,
+    );
   });
 
   it("has a description", () => {
