@@ -26,9 +26,10 @@ describe("npm packaging contract", () => {
     assert.ok(typeof packageJson.description === "string" && packageJson.description.length > 0);
   });
 
-  it("has bin entry pointing to dist/src/index.js", () => {
+  it("has bin entries pointing to dist/src/index.js", () => {
     assert.ok(packageJson.bin);
     assert.equal(packageJson.bin.forge, "./dist/src/index.js");
+    assert.equal(packageJson.bin.forgecli, "./dist/src/index.js");
   });
 
   it("has engines.node >=20", () => {

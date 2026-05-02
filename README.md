@@ -10,20 +10,22 @@
 npm install -g @forgecli/forge
 ```
 
-Or run a command without installing globally:
+Or run a command without installing globally (prefer **`forgecli`** if another `forge` exists on your PATH — common on Windows):
 
 ```bash
-npx @forgecli/forge <command>
+npx --yes @forgecli/forge forgecli <command>
 ```
 
 **2. Initialize each repository** (creates `.forge/` with config and defaults):
 
 ```bash
 cd /path/to/your-repo
-forge init
+forgecli init
 ```
 
-Use `forge init --yes` if you also want the optional `forge.config.ts` scaffold.
+Use `forgecli init --yes` if you also want the optional `forge.config.ts` scaffold.
+
+After a global install, both `forge` and `forgecli` run this package; use **`forgecli`** whenever `forge --version` does not match `npm view @forgecli/forge version` (usually an older global `forge` shim is winning on PATH).
 
 ---
 
