@@ -683,8 +683,14 @@ async function resolveProcessInvocation(
   }
 
   if (/\.(cmd|bat)$/i.test(resolvedCommand)) {
-    const quotedArgs = args.map(quoteWindowsCmdArg).join(" ");
-    const shellCommand = `""${resolvedCommand}"${quotedArgs ? ` ${quotedArgs}` : ""}"`;
+    // SECURITY: Use caret (^) escaping for cmd.exe shell metacharacters when wrapping
+    // in verbatim arguments mode to prevent command injection.
+    const escapedArgs = args.map((arg) => {
+      // Escape cmd metacharacters with ^
+      return arg.replace(/([()\][%!^"<>&|;, *?])/g, "^$1");
+    }).join(" ");
+
+    const shellCommand = `${resolvedCommand} ${escapedArgs}`;
 
     return {
       command: process.env.ComSpec ?? "cmd.exe",
