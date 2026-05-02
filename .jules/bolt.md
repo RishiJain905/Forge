@@ -8,3 +8,7 @@
 ## 2024-04-24 - Pre-compile Regex and Set usage in hot path
 **Learning:** In hot paths doing string matching over many files (like `candidate-targets.ts` resolving module signals against every file), creating multiple temporary arrays via `.split().flatMap().concat().map().filter()` causes massive GC pressure and slows down execution.
 **Action:** Use pre-compiled Regex splitting instead of chaining multiple array methods. Replace `[...new Set(tokens)]` and `.includes()` checks with returning a raw `Set` directly and using `.has()` for O(1) matching against module signals. This yielded roughly a 2.5x speedup for `matchesModuleSignalFast`.
+
+## 2025-05-01 - [Optimize Module Signal Matching]
+**Learning:** In hot paths (like `tokenizeModuleCandidates`), chaining array methods (`.split().flatMap().concat().map().filter()`) generates multiple intermediate arrays, causing significant garbage collection overhead. Additionally, using `includes()` on an array of tokens results in an O(N) lookup.
+**Action:** Replace array chains with explicit `for...of` loops accumulating directly into a `Set`. This avoids intermediate allocations and provides O(1) lookups via `Set.has()`, significantly improving performance during high-volume path matching. Extracting split regular expressions into constants also prevents repeated RegExp compilation overhead.

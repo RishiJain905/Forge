@@ -73,26 +73,27 @@ function normalizeModuleSignal(value: string): string {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
-const MODULE_SIGNAL_SPLIT_PATTERN = /[^a-z0-9]+/i;
+const MODULE_TOKEN_SPLIT_PATTERN = /[^a-z0-9]+/i;
 
-// Optimization: Return a Set and avoid mapping/flatMapping to avoid temporary allocations.
-// `normalizePathForComparison` and `normalizeFileStem` already lowercase the inputs.
-// Splitting by `[^a-z0-9]+/i` yields segments that are alphanumeric and lowercase,
-// which means we don't need to apply `normalizeModuleSignal` on each segment again.
 function tokenizeModuleCandidates(filePath: string): Set<string> {
   const normalizedPath = normalizePathForComparison(filePath);
   const stem = normalizeFileStem(filePath);
   const tokens = new Set<string>();
 
-  const segments = normalizedPath.split(MODULE_SIGNAL_SPLIT_PATTERN);
-  for (const seg of segments) {
-    if (seg) tokens.add(seg);
-  }
+  const processSegment = (segment: string) => {
+    const parts = segment.split(MODULE_TOKEN_SPLIT_PATTERN);
+    for (const part of parts) {
+      if (part.length > 0) {
+        tokens.add(normalizeModuleSignal(part));
+      }
+    }
+  };
 
-  const stemSegments = stem.split(MODULE_SIGNAL_SPLIT_PATTERN);
-  for (const seg of stemSegments) {
-    if (seg) tokens.add(seg);
+  const pathSegments = normalizedPath.split("/");
+  for (const segment of pathSegments) {
+    processSegment(segment);
   }
+  processSegment(stem);
 
   return tokens;
 }
@@ -114,13 +115,7 @@ function matchesModuleSignalFast(filePath: string, normalizedTargetSignals: stri
   }
 
   const candidateTokens = tokenizeModuleCandidates(filePath);
-  for (const signal of normalizedTargetSignals) {
-    if (candidateTokens.has(signal)) {
-      return true;
-    }
-  }
-
-  return false;
+  return normalizedTargetSignals.some((signal) => candidateTokens.has(signal));
 }
 
 function isSharedRiskPath(
