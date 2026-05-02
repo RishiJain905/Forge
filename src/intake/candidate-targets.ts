@@ -73,17 +73,29 @@ function normalizeModuleSignal(value: string): string {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
-function tokenizeModuleCandidates(filePath: string): string[] {
+const MODULE_TOKEN_SPLIT_PATTERN = /[^a-z0-9]+/i;
+
+function tokenizeModuleCandidates(filePath: string): Set<string> {
   const normalizedPath = normalizePathForComparison(filePath);
   const stem = normalizeFileStem(filePath);
-  const tokens = normalizedPath
-    .split("/")
-    .flatMap((segment) => segment.split(/[^a-z0-9]+/i))
-    .concat(stem.split(/[^a-z0-9]+/i))
-    .map((segment) => normalizeModuleSignal(segment))
-    .filter((segment) => segment.length > 0);
+  const tokens = new Set<string>();
 
-  return [...new Set(tokens)];
+  const processSegment = (segment: string) => {
+    const parts = segment.split(MODULE_TOKEN_SPLIT_PATTERN);
+    for (const part of parts) {
+      if (part.length > 0) {
+        tokens.add(normalizeModuleSignal(part));
+      }
+    }
+  };
+
+  const pathSegments = normalizedPath.split("/");
+  for (const segment of pathSegments) {
+    processSegment(segment);
+  }
+  processSegment(stem);
+
+  return tokens;
 }
 
 function matchesModuleSignal(filePath: string, moduleSignals: string[]): boolean {
@@ -96,13 +108,14 @@ function matchesModuleSignal(filePath: string, moduleSignals: string[]): boolean
   return matchesModuleSignalFast(filePath, targetSignals);
 }
 
+// Optimization: Use an O(1) Set lookup inside a simple loop instead of an O(N) array includes.
 function matchesModuleSignalFast(filePath: string, normalizedTargetSignals: string[]): boolean {
   if (normalizedTargetSignals.length === 0) {
     return false;
   }
 
   const candidateTokens = tokenizeModuleCandidates(filePath);
-  return normalizedTargetSignals.some((signal) => candidateTokens.includes(signal));
+  return normalizedTargetSignals.some((signal) => candidateTokens.has(signal));
 }
 
 function isSharedRiskPath(

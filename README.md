@@ -334,12 +334,20 @@ docker-compose run --rm forge plan --repo /repo --output-dir /repo/.forge
 
 ## GitHub Actions
 
+This repository’s `.github/workflows/forge.yml` builds the CLI from the commit under test (`npm ci`, `npm run build`, `npm link`) so CI always matches your branch. In other projects you typically install from npm instead:
+
+```yaml
+- run: npm install -g @forgecli/forge
+```
+
+Example stages (after `forge` is on `PATH`):
+
 ```yaml
 - uses: actions/checkout@v4
 - uses: actions/setup-node@v4
   with:
     node-version: "20"
-- run: npm install -g @forgecli/forge
+- run: npm ci && npm run build && npm link
 - run: forge doctor --checks node,git,npm,config
 - run: forge intake --repo . --output-dir .forge --prompt "Your task" --no-llm --json-only
 - run: forge plan --repo . --output-dir .forge
