@@ -185,11 +185,10 @@ await runScenario("loadModelConfig throws MISSING_MODEL_CONFIG when FORGE_MODEL_
 });
 
 await runScenario("loadModelConfig makes API key optional for Ollama", async () => {
-  await withEnv({
+  await withEnv(modelEnv({
     FORGE_MODEL_PROVIDER: "ollama",
     FORGE_MODEL_NAME: "llama3",
-    FORGE_MODEL_API_KEY: undefined,
-  }, async () => {
+  }), async () => {
     const config = loadModelConfig();
     assert.equal(config.provider, "ollama");
     assert.equal(config.apiKey, undefined);
@@ -390,12 +389,10 @@ await runScenario("callModel sends correct request for Ollama provider", async (
     status: 200,
   }]);
 
-  await withEnv({
+  await withEnv(modelEnv({
     FORGE_MODEL_PROVIDER: "ollama",
     FORGE_MODEL_NAME: "llama3",
-    FORGE_MODEL_API_KEY: undefined,
-    FORGE_MODEL_BASE_URL: undefined,
-  }, async () => {
+  }), async () => {
     const config = loadModelConfig();
     const result = await callModel("test prompt", config, mockFetchFn);
     assert.ok(result.includes("## CHANGES"));
@@ -417,12 +414,12 @@ await runScenario("callModel maps Ollama Cloud base .../v1 to .../api/chat and s
     status: 200,
   }]);
 
-  await withEnv({
+  await withEnv(modelEnv({
     FORGE_MODEL_PROVIDER: "ollama",
     FORGE_MODEL_NAME: "kimi-k2.6:cloud",
     FORGE_MODEL_API_KEY: "cloud-key",
     FORGE_MODEL_BASE_URL: "https://ollama.com/v1",
-  }, async () => {
+  }), async () => {
     const config = loadModelConfig();
     await callModel("hi", config, mockFetchFn);
     assert.equal(calls[0]?.url, "https://ollama.com/api/chat");
@@ -432,13 +429,11 @@ await runScenario("callModel maps Ollama Cloud base .../v1 to .../api/chat and s
 });
 
 await runScenario("loadModelConfig uses OLLAMA_API_KEY when FORGE_MODEL_API_KEY unset", async () => {
-  await withEnv({
+  await withEnv(modelEnv({
     FORGE_MODEL_PROVIDER: "ollama",
     FORGE_MODEL_NAME: "llama3",
-    FORGE_MODEL_API_KEY: undefined,
     OLLAMA_API_KEY: "from-ollama-env",
-    FORGE_MODEL_BASE_URL: undefined,
-  }, async () => {
+  }), async () => {
     const config = loadModelConfig();
     assert.equal(config.apiKey, "from-ollama-env");
   });
