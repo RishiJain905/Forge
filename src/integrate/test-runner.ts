@@ -17,6 +17,7 @@ import { promises as fs } from "fs";
 import path from "node:path";
 import { exec, execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { parseArgsStringToArgv } from "string-argv";
 
 import type { IntegrationTestFile, IntegrationTestCase, TestRunResult } from "./types.js";
 
@@ -286,16 +287,18 @@ async function runIntegrationTestsSequential(
 
   // --- Step 2: Run the test command ---
   const command = testCommand ?? "npm test";
+  const commandParts = parseArgsStringToArgv(command);
 
   let stdout = "";
   let stderr = "";
   let runError: string | undefined;
 
   try {
-    const result = await execAsync(command, {
+    const result = await execFileAsync(commandParts[0]!, commandParts.slice(1), {
       cwd: repoRoot,
       timeout: 300_000, // 5-minute timeout
       maxBuffer: 10 * 1024 * 1024, // 10 MB buffer
+      shell: process.platform === "win32",
     });
     stdout = result.stdout ?? "";
     stderr = result.stderr ?? "";
@@ -577,13 +580,14 @@ async function runSingleTestFile(
   const isNpmTest = options.command.trim() === "npm test";
   const commandParts = isNpmTest
     ? ["npm", "test"]
-    : [...options.command.split(/\s+/), tf.path];
+    : [...parseArgsStringToArgv(options.command), tf.path];
 
   try {
-    const result = await execFileAsync(commandParts[0], commandParts.slice(1), {
+    const result = await execFileAsync(commandParts[0]!, commandParts.slice(1), {
       cwd: options.repoRoot,
       timeout: options.timeoutMs,
       maxBuffer: 10 * 1024 * 1024,
+      shell: process.platform === "win32",
     });
     stdout = result.stdout ?? "";
     stderr = result.stderr ?? "";
