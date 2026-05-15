@@ -1,16 +1,16 @@
-import { exec } from "node:child_process";
+import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { Check } from "./index.js";
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 export const gitCheck: Check = {
   name: "git",
   async run() {
     try {
-      const { stdout } = await execAsync("git --version", { timeout: 5000 });
+      const { stdout } = await execFileAsync("git", ["--version"], { timeout: 5000 });
       const version = stdout.trim();
 
       if (existsSync(join(process.cwd(), ".git"))) {

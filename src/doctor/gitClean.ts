@@ -1,14 +1,14 @@
-import { exec } from "node:child_process";
+import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { Check } from "./index.js";
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 export const gitCleanCheck: Check = {
   name: "git-clean",
   async run() {
     try {
-      const { stdout } = await execAsync("git status --porcelain", {
+      const { stdout } = await execFileAsync("git", ["status", "--porcelain"], {
         timeout: 5000,
       });
 

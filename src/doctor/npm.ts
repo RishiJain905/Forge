@@ -1,14 +1,21 @@
-import { exec } from "node:child_process";
+import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { Check } from "./index.js";
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
+
+/** .cmd shims need the shell on Windows; bare `npm` + `shell: true` matches PowerShell. */
+function npmExecOptions(extra: { timeout?: number }): { timeout?: number; shell?: boolean } {
+  return process.platform === "win32"
+    ? { ...extra, shell: true }
+    : extra;
+}
 
 export const npmCheck: Check = {
   name: "npm",
   async run() {
     try {
-      const { stdout } = await execAsync("npm --version", { timeout: 5000 });
+      const { stdout } = await execFileAsync("npm", ["--version"], npmExecOptions({ timeout: 5000 }));
       const version = stdout.trim();
 
       return {
