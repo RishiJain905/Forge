@@ -12,3 +12,7 @@
 ## 2025-05-01 - [Optimize Module Signal Matching]
 **Learning:** In hot paths (like `tokenizeModuleCandidates`), chaining array methods (`.split().flatMap().concat().map().filter()`) generates multiple intermediate arrays, causing significant garbage collection overhead. Additionally, using `includes()` on an array of tokens results in an O(N) lookup.
 **Action:** Replace array chains with explicit `for...of` loops accumulating directly into a `Set`. This avoids intermediate allocations and provides O(1) lookups via `Set.has()`, significantly improving performance during high-volume path matching. Extracting split regular expressions into constants also prevents repeated RegExp compilation overhead.
+
+## 2024-05-15 - Extract substring matching loop to pre-compiled Regex and avoid intermediate arrays
+**Learning:** Using chained array methods like `.flatMap().filter().map()` to extract a simple list of matching string substrings causes multiple intermediate array allocations that create significant GC overhead.
+**Action:** For string extraction, replace the chained array transformations with a pre-compiled regex `.exec()` loop or use `for...of` loops to accumulate the matches directly.
