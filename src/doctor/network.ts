@@ -1,8 +1,8 @@
-import { exec } from "node:child_process";
+import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { Check } from "./index.js";
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 const TEST_URLS = [
   "https://api.openai.com/v1/models",
@@ -14,7 +14,7 @@ export const networkCheck: Check = {
   async run() {
     const results = await Promise.allSettled(
       TEST_URLS.map((url) =>
-        execAsync(`curl -s -o /dev/null -w "%{http_code}" "${url}"`, {
+        execFileAsync("curl", ["-s", "-o", "/dev/null", "-w", "%{http_code}", url], {
           timeout: 10000,
         })
       )

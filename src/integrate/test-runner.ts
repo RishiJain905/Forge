@@ -17,7 +17,6 @@ import { promises as fs } from "fs";
 import path from "node:path";
 import { exec, execFile } from "node:child_process";
 import { promisify } from "node:util";
-
 import type { IntegrationTestFile, IntegrationTestCase, TestRunResult } from "./types.js";
 
 const execAsync = promisify(exec);
