@@ -567,10 +567,14 @@ export function createVerifyReport(artifact: VerifyArtifact): string {
     ]),
   ];
 
-  const headings = sections
-    .flatMap((section) => section.split("\n"))
-    .filter((line) => line.startsWith("## "))
-    .map((line) => line.replace("## ", ""));
+  // ⚡ Bolt Optimization: Replace multiple array allocations (.flatMap.filter.map) with a single pass over strings
+  const headings: string[] = [];
+  const headingRegex = /^## (.*)$/gm;
+  const combinedSections = sections.join("\n\n");
+  let match;
+  while ((match = headingRegex.exec(combinedSections)) !== null) {
+    headings.push(match[1]!);
+  }
 
   if (headings.join("|") !== REQUIRED_HEADINGS.join("|")) {
     throw new Error("Verify report heading contract drifted from the required order.");
