@@ -442,9 +442,11 @@ function buildProviderRequest(prompt: string, config: ModelConfig): ProviderRequ
 
     case "google":
       return {
-        url: `${base}/v1beta/models/${config.modelName}:generateContent?key=${config.apiKey ?? ""}`,
+        // SECURITY: Pass API key via header instead of URL to prevent logging it in access logs
+        url: `${base}/v1beta/models/${config.modelName}:generateContent`,
         headers: {
           "Content-Type": "application/json",
+          "x-goog-api-key": config.apiKey ?? "",
         },
         body: {
           contents: [{ parts: [{ text: prompt }] }],
