@@ -12,3 +12,7 @@
 ## 2025-05-01 - [Optimize Module Signal Matching]
 **Learning:** In hot paths (like `tokenizeModuleCandidates`), chaining array methods (`.split().flatMap().concat().map().filter()`) generates multiple intermediate arrays, causing significant garbage collection overhead. Additionally, using `includes()` on an array of tokens results in an O(N) lookup.
 **Action:** Replace array chains with explicit `for...of` loops accumulating directly into a `Set`. This avoids intermediate allocations and provides O(1) lookups via `Set.has()`, significantly improving performance during high-volume path matching. Extracting split regular expressions into constants also prevents repeated RegExp compilation overhead.
+
+## 2025-02-14 - [Optimize duplicate array iteration]
+**Learning:** In code executing logic on object properties (like `params.model.cases`), calculating aggregate counts via `.filter(...).length` inside functions can create numerous temporary arrays, which causes unnecessary memory allocation and garbage collection pressure when the exact values are already available in the parent object (e.g. `params.model.structuralCaseCount`). If they are not available on the parent object, `for...of` loops are a cleaner and faster approach.
+**Action:** Replace `array.filter(condition).length` with direct property access if the value was pre-computed elsewhere. If it was not pre-computed, replace with a `for...of` loop accumulating a counter directly, preventing intermediate array creation.
