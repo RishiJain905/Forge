@@ -375,9 +375,11 @@ await runScenario("callModel sends correct request for Google provider", async (
     const config = loadModelConfig();
     const result = await callModel("test prompt", config, mockFetchFn);
     assert.ok(result.includes("## CHANGES"));
-    // Google uses the API key as a query parameter
-    assert.ok(calls[0]?.url.includes("key=google-test"), `URL should include API key as query param`);
+    // Google uses the API key as an HTTP header
+    const h0 = calls[0]?.headers ?? {};
+    assert.equal(h0["x-goog-api-key"], "google-test", `Request should include API key as header`);
     assert.ok(calls[0]?.url.includes("generateContent"), `URL should include generateContent`);
+    assert.ok(!calls[0]?.url.includes("key="), `URL should not include API key as query param`);
   });
 });
 
