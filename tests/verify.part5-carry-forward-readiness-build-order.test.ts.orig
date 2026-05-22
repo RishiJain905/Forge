@@ -632,8 +632,6 @@ await runScenario(
             lanes: ["formal"],
           },
         ],
-        formalCaseCount: 1,
-        structuralCaseCount: 0,
       } as any,
       structuralExecution: {
         structuralVerification: {

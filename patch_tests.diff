@@ -1,0 +1,11 @@
+--- tests/verify.part5-carry-forward-readiness-build-order.test.ts
++++ tests/verify.part5-carry-forward-readiness-build-order.test.ts
+@@ -370,6 +370,8 @@
+             lanes: ["formal"],
+           },
+         ],
++        formalCaseCount: 1,
++        structuralCaseCount: 0,
+       } as any,
+       structuralExecution: {
+         structuralVerification: {
