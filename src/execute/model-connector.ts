@@ -442,9 +442,10 @@ function buildProviderRequest(prompt: string, config: ModelConfig): ProviderRequ
 
     case "google":
       return {
-        url: `${base}/v1beta/models/${config.modelName}:generateContent?key=${config.apiKey ?? ""}`,
+        url: `${base}/v1beta/models/${config.modelName}:generateContent`,
         headers: {
           "Content-Type": "application/json",
+          "x-goog-api-key": config.apiKey ?? "",
         },
         body: {
           contents: [{ parts: [{ text: prompt }] }],
