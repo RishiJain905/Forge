@@ -12,3 +12,6 @@
 ## 2025-05-01 - [Optimize Module Signal Matching]
 **Learning:** In hot paths (like `tokenizeModuleCandidates`), chaining array methods (`.split().flatMap().concat().map().filter()`) generates multiple intermediate arrays, causing significant garbage collection overhead. Additionally, using `includes()` on an array of tokens results in an O(N) lookup.
 **Action:** Replace array chains with explicit `for...of` loops accumulating directly into a `Set`. This avoids intermediate allocations and provides O(1) lookups via `Set.has()`, significantly improving performance during high-volume path matching. Extracting split regular expressions into constants also prevents repeated RegExp compilation overhead.
+## 2025-02-20 - Consolidate array property counting
+**Learning:** Chaining multiple `.filter(...).length` calls on the same array causes unnecessary O(N) passes through the array and allocates intermediate arrays just to compute counts.
+**Action:** Replace multiple `.filter(condition).length` calls with a single `for...of` loop or a `.reduce` that aggregates multiple totals in a single pass.

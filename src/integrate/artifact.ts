@@ -245,8 +245,13 @@ function extractGoal(planArtifact: PlanArtifact, fallback: string = "Unknown goa
 function buildWorkstreamsSummary(executeArtifact: ExecuteArtifact): string {
   const workstreams = executeArtifact.workstreams;
   const total = workstreams.length;
-  const completed = workstreams.filter((w) => w.state === "completed").length;
-  const failed = workstreams.filter((w) => w.state === "failed").length;
+  // Performance optimization: Replace multiple .filter().length calls with a
+  // single pass to avoid O(N) overhead and intermediate array allocations
+  let completed = 0, failed = 0;
+  for (const w of workstreams) {
+    if (w.state === "completed") completed++;
+    else if (w.state === "failed") failed++;
+  }
   const totalChangesMade = workstreams.reduce(
     (sum, w) => sum + (w.changesMade?.length ?? 0),
     0
@@ -283,9 +288,14 @@ function buildSummary(
   aiModelUsed: string
 ): IntegrationSummary {
   const total = testResult.tests.length;
-  const passed = testResult.tests.filter((t) => t.status === "passed").length;
-  const failed = testResult.tests.filter((t) => t.status === "failed").length;
-  const skipped = testResult.tests.filter((t) => t.status === "skipped").length;
+  // Performance optimization: Accumulate stats in a single pass to
+  // avoid O(N) traversals and allocations from multiple .filter() calls
+  let passed = 0, failed = 0, skipped = 0;
+  for (const t of testResult.tests) {
+    if (t.status === "passed") passed++;
+    else if (t.status === "failed") failed++;
+    else if (t.status === "skipped") skipped++;
+  }
 
   return {
     total,

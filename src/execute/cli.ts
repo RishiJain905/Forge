@@ -114,10 +114,15 @@ function getQueuedWorkstreamRequirements(
 function buildSummary(state: ExecuteState): string {
   const workstreams = Array.from(state.workstreams.values());
   const total = workstreams.length;
-  const completed = workstreams.filter((ws) => ws.state === "completed").length;
-  const failed = workstreams.filter((ws) => ws.state === "failed").length;
-  const running = workstreams.filter((ws) => ws.state === "running").length;
-  const queued = workstreams.filter((ws) => ws.state === "queued").length;
+  // Performance optimization: Single pass loop prevents multiple O(N) traversals
+  // and avoids allocating intermediate arrays that multiple .filter() calls would create
+  let completed = 0, failed = 0, running = 0, queued = 0;
+  for (const ws of workstreams) {
+    if (ws.state === "completed") completed++;
+    else if (ws.state === "failed") failed++;
+    else if (ws.state === "running") running++;
+    else if (ws.state === "queued") queued++;
+  }
   const blocked = getBlockedWorkstreams(state).length;
 
   return `Total: ${total}, Completed: ${completed}, Failed: ${failed}, Running: ${running}, Queued: ${queued}, Blocked: ${blocked}`;

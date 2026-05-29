@@ -534,9 +534,12 @@ export async function runIntegrationTestsParallel(
     if (result.error) {
       hasErrors = true;
     }
-    // Count passed and failed from the result
-    totalPassed += result.tests.filter((t) => t.status === "passed").length;
-    totalFailed += result.tests.filter((t) => t.status === "failed").length;
+    // Performance optimization: Count passed and failed in a single pass
+    // rather than allocating intermediate arrays with multiple .filter() calls
+    for (const t of result.tests) {
+      if (t.status === "passed") totalPassed++;
+      else if (t.status === "failed") totalFailed++;
+    }
   }
 
   const elapsed = Date.now() - startTime;
