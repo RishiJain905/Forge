@@ -1,59 +1,31 @@
-import { rm, writeFile, mkdir } from "node:fs/promises";
-import * as path from "node:path";
+import { performance } from "perf_hooks";
 
-async function cleanupPartialWritesBaseline(filePaths: string[]): Promise<void> {
-  for (const filePath of filePaths) {
-    await rm(filePath, { force: true });
+// Array setup
+const items = Array.from({ length: 100000 }, (_, i) => ({
+  state: ["completed", "failed", "running", "queued"][i % 4]
+}));
+
+// Baseline (Multiple filters)
+const start1 = performance.now();
+for (let i = 0; i < 100; i++) {
+  const completed = items.filter((ws) => ws.state === "completed").length;
+  const failed = items.filter((ws) => ws.state === "failed").length;
+  const running = items.filter((ws) => ws.state === "running").length;
+  const queued = items.filter((ws) => ws.state === "queued").length;
+}
+const end1 = performance.now();
+console.log(`Baseline (4x filter): ${(end1 - start1).toFixed(2)}ms`);
+
+// Loop approach
+const start2 = performance.now();
+for (let i = 0; i < 100; i++) {
+  let completed = 0, failed = 0, running = 0, queued = 0;
+  for (const ws of items) {
+    if (ws.state === "completed") completed++;
+    else if (ws.state === "failed") failed++;
+    else if (ws.state === "running") running++;
+    else if (ws.state === "queued") queued++;
   }
 }
-
-async function cleanupPartialWritesOptimized(filePaths: string[]): Promise<void> {
-  await Promise.all(filePaths.map((filePath) => rm(filePath, { force: true })));
-}
-
-async function runBenchmark() {
-  const NUM_FILES = 100;
-  const testDir = path.join(process.cwd(), "benchmark-tmp");
-
-  await mkdir(testDir, { recursive: true });
-
-  // Create dummy files
-  const createFiles = async () => {
-    const files: string[] = [];
-    for (let i = 0; i < NUM_FILES; i++) {
-      const filePath = path.join(testDir, `file-${i}.txt`);
-      await writeFile(filePath, "test data");
-      files.push(filePath);
-    }
-    return files;
-  };
-
-  // Run Baseline
-  let baselineTime = 0;
-  for (let iter = 0; iter < 5; iter++) {
-    const files = await createFiles();
-    const start = performance.now();
-    await cleanupPartialWritesBaseline(files);
-    const end = performance.now();
-    baselineTime += (end - start);
-  }
-  baselineTime /= 5;
-
-  // Run Optimized
-  let optimizedTime = 0;
-  for (let iter = 0; iter < 5; iter++) {
-    const files = await createFiles();
-    const start = performance.now();
-    await cleanupPartialWritesOptimized(files);
-    const end = performance.now();
-    optimizedTime += (end - start);
-  }
-  optimizedTime /= 5;
-
-  console.log(`Baseline (Sequential): ${baselineTime.toFixed(2)}ms`);
-  console.log(`Optimized (Concurrent): ${optimizedTime.toFixed(2)}ms`);
-
-  await rm(testDir, { recursive: true, force: true });
-}
-
-runBenchmark().catch(console.error);
+const end2 = performance.now();
+console.log(`Optimized (1 loop): ${(end2 - start2).toFixed(2)}ms`);
