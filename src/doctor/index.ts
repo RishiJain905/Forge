@@ -69,9 +69,16 @@ export function printDoctorResults(results: CheckResult[]): void {
     }
   }
 
-  const passed = results.filter((r) => r.status === "pass").length;
-  const warnings = results.filter((r) => r.status === "warn").length;
-  const failed = results.filter((r) => r.status === "fail").length;
+  // Optimization: Calculate status counts in a single pass instead of multiple .filter().length
+  let passed = 0;
+  let warnings = 0;
+  let failed = 0;
+
+  for (const r of results) {
+    if (r.status === "pass") passed++;
+    else if (r.status === "warn") warnings++;
+    else if (r.status === "fail") failed++;
+  }
 
   console.log(`\n${passed} passed, ${warnings} warnings, ${failed} failed`);
 }
