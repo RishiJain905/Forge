@@ -104,6 +104,10 @@ function setValueByDotPath(
   let current: Record<string, unknown> = obj;
   for (let i = 0; i < parts.length - 1; i++) {
     const part = parts[i];
+    // Security: prevent prototype pollution
+    if (part === "__proto__" || part === "constructor" || part === "prototype") {
+      return;
+    }
     if (
       !(part in current) ||
       typeof current[part] !== "object" ||
@@ -114,7 +118,13 @@ function setValueByDotPath(
     }
     current = current[part] as Record<string, unknown>;
   }
-  current[parts[parts.length - 1]] = value;
+  const lastPart = parts[parts.length - 1];
+  if (lastPart && (lastPart === "__proto__" || lastPart === "constructor" || lastPart === "prototype")) {
+    return;
+  }
+  if (lastPart) {
+    current[lastPart] = value;
+  }
 }
 
 function deleteValueByDotPath(
@@ -152,6 +162,10 @@ function deepMerge(
   source: Record<string, unknown>,
 ): void {
   for (const key of Object.keys(source)) {
+    // Security: prevent prototype pollution
+    if (key === "__proto__" || key === "constructor" || key === "prototype") {
+      continue;
+    }
     const val = source[key];
     if (
       typeof val === "object" &&
