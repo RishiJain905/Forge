@@ -513,8 +513,18 @@ export async function runExecuteCommand(
       // Populate AI metadata on the workstream
       ws.aiModelUsed = aiResult.modelUsed;
       ws.aiChangesCount = aiResult.changes.length;
-      ws.aiLinesAdded = aiResult.changes.reduce((sum, c) => sum + c.linesAdded, 0);
-      ws.aiLinesRemoved = aiResult.changes.reduce((sum, c) => sum + c.linesRemoved, 0);
+      // Performance optimization: consolidate redundant traversals over the changes array
+      // into a single pass to improve efficiency and memory usage.
+      const { linesAdded, linesRemoved } = aiResult.changes.reduce(
+        (acc, c) => {
+          acc.linesAdded += c.linesAdded;
+          acc.linesRemoved += c.linesRemoved;
+          return acc;
+        },
+        { linesAdded: 0, linesRemoved: 0 }
+      );
+      ws.aiLinesAdded = linesAdded;
+      ws.aiLinesRemoved = linesRemoved;
       if (aiResult.promptHash) ws.aiPromptHash = aiResult.promptHash;
       if (aiResult.provider) ws.aiProvider = aiResult.provider;
       if (aiResult.executionDurationMs !== undefined) ws.aiExecutionDurationMs = aiResult.executionDurationMs;
@@ -538,7 +548,7 @@ export async function runExecuteCommand(
       }
 
       const totalChanges = aiResult.changes.length;
-      const totalLines = aiResult.changes.reduce((sum, c) => sum + c.linesAdded, 0);
+      const totalLines = ws.aiLinesAdded ?? 0;
       console.log(`✓ ${ws.workstreamId} COMPLETED (AI) — ${totalChanges} files changed, +${totalLines} lines`);
       printDashboard(state, mergeOrderMap);
       return false;
@@ -576,8 +586,18 @@ export async function runExecuteCommand(
       // Populate AI metadata on the workstream
       ws.aiModelUsed = aiResult.modelUsed;
       ws.aiChangesCount = aiResult.changes.length;
-      ws.aiLinesAdded = aiResult.changes.reduce((sum, c) => sum + c.linesAdded, 0);
-      ws.aiLinesRemoved = aiResult.changes.reduce((sum, c) => sum + c.linesRemoved, 0);
+      // Performance optimization: consolidate redundant traversals over the changes array
+      // into a single pass to improve efficiency and memory usage.
+      const { linesAdded: aiexecLinesAdded, linesRemoved: aiexecLinesRemoved } = aiResult.changes.reduce(
+        (acc, c) => {
+          acc.linesAdded += c.linesAdded;
+          acc.linesRemoved += c.linesRemoved;
+          return acc;
+        },
+        { linesAdded: 0, linesRemoved: 0 }
+      );
+      ws.aiLinesAdded = aiexecLinesAdded;
+      ws.aiLinesRemoved = aiexecLinesRemoved;
       if (aiResult.promptHash) ws.aiPromptHash = aiResult.promptHash;
       if (aiResult.provider) ws.aiProvider = aiResult.provider;
       if (aiResult.executionDurationMs !== undefined) ws.aiExecutionDurationMs = aiResult.executionDurationMs;
@@ -601,7 +621,7 @@ export async function runExecuteCommand(
       }
 
       const totalChanges = aiResult.changes.length;
-      const totalLines = aiResult.changes.reduce((sum, c) => sum + c.linesAdded, 0);
+      const totalLines = ws.aiLinesAdded ?? 0;
       console.log(`✓ ${ws.workstreamId} COMPLETED (AI) — ${totalChanges} files changed, +${totalLines} lines`);
       printDashboard(state, mergeOrderMap);
       return false;
@@ -752,8 +772,18 @@ export async function runExecuteCommand(
           // Populate AI metadata on the workstream
           ws.aiModelUsed = aiResult.modelUsed;
           ws.aiChangesCount = aiResult.changes.length;
-          ws.aiLinesAdded = aiResult.changes.reduce((sum, c) => sum + c.linesAdded, 0);
-          ws.aiLinesRemoved = aiResult.changes.reduce((sum, c) => sum + c.linesRemoved, 0);
+          // Performance optimization: consolidate redundant traversals over the changes array
+          // into a single pass to improve efficiency and memory usage.
+          const { linesAdded: autoLinesAdded, linesRemoved: autoLinesRemoved } = aiResult.changes.reduce(
+            (acc, c) => {
+              acc.linesAdded += c.linesAdded;
+              acc.linesRemoved += c.linesRemoved;
+              return acc;
+            },
+            { linesAdded: 0, linesRemoved: 0 }
+          );
+          ws.aiLinesAdded = autoLinesAdded;
+          ws.aiLinesRemoved = autoLinesRemoved;
           if (aiResult.promptHash) ws.aiPromptHash = aiResult.promptHash;
           if (aiResult.provider) ws.aiProvider = aiResult.provider;
           if (aiResult.executionDurationMs !== undefined) ws.aiExecutionDurationMs = aiResult.executionDurationMs;
@@ -776,7 +806,7 @@ export async function runExecuteCommand(
             continue;
           }
           const totalChanges = aiResult.changes.length;
-          const totalLines = aiResult.changes.reduce((sum, c) => sum + c.linesAdded, 0);
+          const totalLines = ws.aiLinesAdded ?? 0;
           console.log(`✓ ${ws.workstreamId} COMPLETED (AI) — ${totalChanges} files changed, +${totalLines} lines`);
         }
         // Recompute executable workstreams after completing a batch —

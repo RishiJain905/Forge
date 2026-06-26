@@ -12,3 +12,7 @@
 ## 2025-05-01 - [Optimize Module Signal Matching]
 **Learning:** In hot paths (like `tokenizeModuleCandidates`), chaining array methods (`.split().flatMap().concat().map().filter()`) generates multiple intermediate arrays, causing significant garbage collection overhead. Additionally, using `includes()` on an array of tokens results in an O(N) lookup.
 **Action:** Replace array chains with explicit `for...of` loops accumulating directly into a `Set`. This avoids intermediate allocations and provides O(1) lookups via `Set.has()`, significantly improving performance during high-volume path matching. Extracting split regular expressions into constants also prevents repeated RegExp compilation overhead.
+
+## 2025-05-18 - [Consolidate Redundant Array Traversals]
+**Learning:** In the execution loop processing changes (`src/execute/cli.ts`), chaining multiple `.reduce` loops to calculate separate metrics (`linesAdded`, `linesRemoved`, and `totalLines`) over the same array leads to unnecessary duplicated O(N) traversals.
+**Action:** Consolidate redundant array summations into a single `.reduce` pass that returns an accumulator object with all needed metrics, improving both memory efficiency and performance.
