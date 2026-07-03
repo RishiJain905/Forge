@@ -245,12 +245,18 @@ function extractGoal(planArtifact: PlanArtifact, fallback: string = "Unknown goa
 function buildWorkstreamsSummary(executeArtifact: ExecuteArtifact): string {
   const workstreams = executeArtifact.workstreams;
   const total = workstreams.length;
-  const completed = workstreams.filter((w) => w.state === "completed").length;
-  const failed = workstreams.filter((w) => w.state === "failed").length;
-  const totalChangesMade = workstreams.reduce(
-    (sum, w) => sum + (w.changesMade?.length ?? 0),
-    0
-  );
+
+  let completed = 0;
+  let failed = 0;
+  let totalChangesMade = 0;
+
+  // ⚡ Bolt: Single pass aggregation replaces multiple filter().length and reduce() calls
+  // to eliminate O(N) redundant passes and intermediate array allocations
+  for (const w of workstreams) {
+    if (w.state === "completed") completed++;
+    else if (w.state === "failed") failed++;
+    totalChangesMade += w.changesMade?.length ?? 0;
+  }
 
   return `Total: ${total}, Completed: ${completed}, Failed: ${failed}, Changes: ${totalChangesMade}`;
 }
@@ -283,9 +289,17 @@ function buildSummary(
   aiModelUsed: string
 ): IntegrationSummary {
   const total = testResult.tests.length;
-  const passed = testResult.tests.filter((t) => t.status === "passed").length;
-  const failed = testResult.tests.filter((t) => t.status === "failed").length;
-  const skipped = testResult.tests.filter((t) => t.status === "skipped").length;
+  let passed = 0;
+  let failed = 0;
+  let skipped = 0;
+
+  // ⚡ Bolt: Single pass aggregation replaces multiple filter().length calls
+  // to eliminate O(N) redundant passes and intermediate array allocations
+  for (const t of testResult.tests) {
+    if (t.status === "passed") passed++;
+    else if (t.status === "failed") failed++;
+    else if (t.status === "skipped") skipped++;
+  }
 
   return {
     total,
